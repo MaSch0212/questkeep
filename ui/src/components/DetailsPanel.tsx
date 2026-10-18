@@ -1,5 +1,6 @@
 import EyeOff from "lucide-solid/icons/eye-off";
 import Eye from "lucide-solid/icons/eye";
+import ImageDown from "lucide-solid/icons/image-down";
 import Pencil from "lucide-solid/icons/pencil";
 import Star from "lucide-solid/icons/star";
 import X from "lucide-solid/icons/x";
@@ -9,6 +10,7 @@ import {
   changeCover,
   installGame,
   launchGame,
+  refetchArtwork,
   refreshMetadata,
   removeCover,
   removeGame,
@@ -104,6 +106,12 @@ export function DetailsPanel(props: DetailsPanelProps) {
     const failure = await refreshMetadata(props.game.id);
     if (failure) setError(failure);
     else store.pushToast("info", "Refreshing metadata…");
+  }
+
+  async function refetchGameArtwork() {
+    const failure = await refetchArtwork(props.game.id);
+    if (failure) store.pushToast("error", failure);
+    else store.pushToast("info", "Fetching artwork…");
   }
 
   async function commitName() {
@@ -319,11 +327,16 @@ export function DetailsPanel(props: DetailsPanelProps) {
           </button>
         </div>
 
-        <Show when={isStoreGame()}>
-          <button type="button" class="btn" onClick={() => void refreshStoreMetadata()}>
-            Refresh metadata
+        <div class="details__row">
+          <Show when={isStoreGame()}>
+            <button type="button" class="btn" onClick={() => void refreshStoreMetadata()}>
+              Refresh metadata
+            </button>
+          </Show>
+          <button type="button" class="btn" onClick={() => void refetchGameArtwork()}>
+            <ImageDown class="icon" aria-hidden="true" /> Refetch artwork
           </button>
-        </Show>
+        </div>
 
         <Show when={isManual()}>
           <Show
