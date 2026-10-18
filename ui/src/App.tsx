@@ -2,6 +2,7 @@ import { createSignal, onCleanup, onMount, Show } from "solid-js";
 import { AddGameDialog } from "./components/AddGameDialog";
 import { DetailsPanel } from "./components/DetailsPanel";
 import { GameGrid } from "./components/GameGrid";
+import { GameList } from "./components/GameList";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { Sidebar } from "./components/Sidebar";
 import { Toasts } from "./components/Toasts";
@@ -61,7 +62,9 @@ export function App() {
       <div class="app__main">
         <TopBar inputRef={(el) => (searchInput = el)} />
         <div class="app__content">
-          <GameGrid />
+          <Show when={store.viewMode() === "list"} fallback={<GameGrid />}>
+            <GameList />
+          </Show>
           <Show when={store.detailsOpen() ? store.selectedGame() : undefined}>
             {(game) => <DetailsPanel game={game()} onClose={() => store.closeDetails()} />}
           </Show>

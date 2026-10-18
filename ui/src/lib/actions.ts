@@ -28,6 +28,29 @@ export async function launchWithToast(id: string): Promise<void> {
   if (error) store.pushToast("error", error);
 }
 
+/** Hands the install to the store client. Resolves to an error message, or null on success. */
+export function installGame(id: string): Promise<string | null> {
+  return attempt(() => api.installGame(id));
+}
+
+/** Keyboard/double-click install: failures surface as a toast. */
+export async function installWithToast(id: string): Promise<void> {
+  const error = await installGame(id);
+  if (error) store.pushToast("error", error);
+  else store.pushToast("info", "Install handed to the store client");
+}
+
+/** The primary action of a game: install when it is not installed, otherwise launch. */
+export function activateGame(id: string): Promise<void> {
+  const game = store.games().find((g) => g.id === id);
+  return game && !game.installed ? installWithToast(id) : launchWithToast(id);
+}
+
+/** Re-downloads store metadata; the result arrives later as a `gamesChanged` event. */
+export function refreshMetadata(id: string): Promise<string | null> {
+  return attempt(() => api.refreshMetadata(id));
+}
+
 export function updateGame(id: string, patch: Partial<GameUpdate>): Promise<string | null> {
   return attempt(async () => {
     const update: GameUpdate = {

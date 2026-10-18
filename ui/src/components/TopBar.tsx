@@ -2,6 +2,7 @@ import { createSignal, For, onCleanup } from "solid-js";
 import type { SortField } from "../bindings/SortField";
 import { normalizeSearch } from "../lib/query";
 import { store } from "../lib/store";
+import { GridIcon, ListIcon } from "./Icons";
 
 const SEARCH_DEBOUNCE_MS = 80;
 
@@ -55,6 +56,30 @@ export function TopBar(props: TopBarProps) {
       <span class="topbar__count" aria-live="polite">
         {store.games().length} {store.games().length === 1 ? "game" : "games"}
       </span>
+      <div class="view-toggle" role="group" aria-label="Library view">
+        <button
+          type="button"
+          class="icon-btn icon-btn--bordered"
+          classList={{ "icon-btn--active": store.viewMode() === "grid" }}
+          aria-label="Grid view"
+          aria-pressed={store.viewMode() === "grid"}
+          title="Grid view"
+          onClick={() => store.setViewMode("grid")}
+        >
+          <GridIcon />
+        </button>
+        <button
+          type="button"
+          class="icon-btn icon-btn--bordered"
+          classList={{ "icon-btn--active": store.viewMode() === "list" }}
+          aria-label="List view"
+          aria-pressed={store.viewMode() === "list"}
+          title="List view"
+          onClick={() => store.setViewMode("list")}
+        >
+          <ListIcon />
+        </button>
+      </div>
       <select
         class="input topbar__sort"
         aria-label="Sort by"

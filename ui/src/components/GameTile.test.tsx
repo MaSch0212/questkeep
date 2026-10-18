@@ -51,4 +51,14 @@ describe("GameTile", () => {
     await fireEvent.dblClick(screen.getByRole("gridcell", { name: "Hades" }));
     expect(onLaunch).toHaveBeenCalledWith("g1");
   });
+
+  it("dims not-installed games, badges them and still reports the double click", async () => {
+    const onLaunch = vi.fn<(id: string) => void>();
+    const { container } = renderTile({ installed: false }, onLaunch);
+    const tile = screen.getByRole("gridcell", { name: "Hades (not installed)" });
+    expect(tile).toHaveClass("tile--missing");
+    expect(container.querySelector(".badge--missing")).toHaveTextContent("Not installed");
+    await fireEvent.dblClick(tile);
+    expect(onLaunch).toHaveBeenCalledWith("g1");
+  });
 });

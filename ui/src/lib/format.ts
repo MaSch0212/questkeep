@@ -19,6 +19,36 @@ export function formatDate(iso: string | null): string {
   return Number.isNaN(date.getTime()) ? "Unknown" : date.toLocaleDateString();
 }
 
+const RELEASE_RE = /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/;
+
+/** Release year of a `YYYY[-MM[-DD]]` string, or null when absent or malformed. */
+export function releaseYear(value: string | null): string | null {
+  const match = value ? RELEASE_RE.exec(value.trim()) : null;
+  return match?.[1] ?? null;
+}
+
+/**
+ * Formats `YYYY-MM-DD` as a long date, `YYYY-MM` as "Month YYYY" and `YYYY` as the bare year.
+ * Anything unparseable is shown as-is so odd store data is not hidden.
+ */
+export function formatReleaseDate(value: string | null, locale?: string): string | null {
+  const text = value?.trim();
+  if (!text) return null;
+  const match = RELEASE_RE.exec(text);
+  if (!match) return text;
+  const year = Number(match[1]);
+  if (match[2] === undefined) return String(year);
+  const month = Number(match[2]);
+  if (month < 1 || month > 12) return String(year);
+  // UTC on both sides so the date never shifts with the user's time zone.
+  const date = new Date(Date.UTC(year, month - 1, match[3] === undefined ? 1 : Number(match[3])));
+  const options: Intl.DateTimeFormatOptions =
+    match[3] === undefined
+      ? { year: "numeric", month: "long", timeZone: "UTC" }
+      : { dateStyle: "long", timeZone: "UTC" };
+  return new Intl.DateTimeFormat(locale, options).format(date);
+}
+
 /** "Today", "Yesterday", "3 days ago", otherwise the locale date. */
 export function formatRelativeDate(iso: string | null, now: Date = new Date()): string {
   if (!iso) return "Never";

@@ -1,10 +1,25 @@
-import { createEffect, createSignal, on, onCleanup, onMount, Show } from "solid-js";
+import { createEffect, createSignal, For, on, onCleanup, onMount, Show } from "solid-js";
 import type { Game } from "../bindings/Game";
-import { changeCover, launchGame, removeCover, removeGame, updateGame } from "../lib/actions";
-import { formatDate, formatPlaytime, formatRelativeDate } from "../lib/format";
+import {
+  changeCover,
+  installGame,
+  launchGame,
+  refreshMetadata,
+  removeCover,
+  removeGame,
+  updateGame,
+} from "../lib/actions";
+import { formatDate, formatPlaytime, formatRelativeDate, formatReleaseDate } from "../lib/format";
 import { store } from "../lib/store";
 import { Cover } from "./Cover";
 import { LaunchOptionsForm } from "./LaunchOptionsForm";
+
+const DESCRIPTION_CLAMP_CHARS = 300;
+const DESCRIPTION_CLAMP_LINES = 5;
+
+function isLongText(text: string): boolean {
+  return text.length > DESCRIPTION_CLAMP_CHARS || text.split("\n").length > DESCRIPTION_CLAMP_LINES;
+}
 
 interface DetailsPanelProps {
   game: Game;
@@ -17,10 +32,16 @@ export function DetailsPanel(props: DetailsPanelProps) {
   const [draft, setDraft] = createSignal("");
   const [editingLaunch, setEditingLaunch] = createSignal(false);
   const [confirmingRemove, setConfirmingRemove] = createSignal(false);
+  const [descriptionOpen, setDescriptionOpen] = createSignal(false);
+  const [heroFailed, setHeroFailed] = createSignal(false);
   const [nameInput, setNameInput] = createSignal<HTMLInputElement>();
 
   const running = () => store.isRunning(props.game.id);
   const isManual = () => props.game.source === "manual";
+  const isStoreGame = () => props.game.sourceGameId !== null;
+  const heroUrl = () => (heroFailed() ? null : store.backgroundUrl(props.game));
+  const released = () => formatReleaseDate(props.game.releaseDate);
+  const description = () => props.game.description?.trim() ?? "";
 
   createEffect(
     on(
@@ -30,6 +51,8 @@ export function DetailsPanel(props: DetailsPanelProps) {
         setEditingName(false);
         setEditingLaunch(false);
         setConfirmingRemove(false);
+        setDescriptionOpen(false);
+        setHeroFailed(false);
       },
       { defer: true },
     ),
@@ -62,6 +85,20 @@ export function DetailsPanel(props: DetailsPanelProps) {
     if (failure) setError(failure);
   }
 
+  async function install() {
+    setError(null);
+    const failure = await installGame(props.game.id);
+    if (failure) setError(failure);
+    else store.pushToast("info", "Install handed to the store client");
+  }
+
+  async function refreshStoreMetadata() {
+    setError(null);
+    const failure = await refreshMetadata(props.game.id);
+    if (failure) setError(failure);
+    else store.pushToast("info", "Refreshing metadata…");
+  }
+
   async function commitName() {
     const name = draft().trim();
     if (name === "" || name === props.game.name) {
@@ -88,7 +125,14 @@ export function DetailsPanel(props: DetailsPanelProps) {
       </div>
 
       <div class="details__scroll">
-        <div class="details__cover">
+        <Show when={heroUrl()}>
+          {(src) => (
+            <div class="details__hero">
+              <img src={src()} alt="" draggable={false} onError={() => setHeroFailed(true)} />
+            </div>
+          )}
+        </Show>
+        <div class="details__cover" classList={{ "details__cover--overlap": heroUrl() !== null }}>
           <Cover game={props.game} />
         </div>
 
@@ -130,21 +174,75 @@ export function DetailsPanel(props: DetailsPanelProps) {
           </Show>
         </div>
 
-        <button
-          type="button"
-          class="btn btn--primary btn--play"
-          disabled={running()}
-          onClick={() => void run(() => launchGame(props.game.id))}
+        <Show
+          when={props.game.installed}
+          fallback={
+            <button type="button" class="btn btn--primary btn--play" onClick={() => void install()}>
+              Install
+            </button>
+          }
         >
-          {running() ? "Running…" : "Play"}
-        </button>
+          <button
+            type="button"
+            class="btn btn--primary btn--play"
+            disabled={running()}
+            onClick={() => void run(() => launchGame(props.game.id))}
+          >
+            {running() ? "Running…" : "Play"}
+          </button>
+        </Show>
         <Show when={error()}>
           <p class="error-text" role="alert">
             {error()}
           </p>
         </Show>
 
+        <Show when={description() !== ""}>
+          <div class="description">
+            <p
+              class="description__text"
+              classList={{
+                "description__text--clamped": isLongText(description()) && !descriptionOpen(),
+              }}
+            >
+              {description()}
+            </p>
+            <Show when={isLongText(description())}>
+              <button
+                type="button"
+                class="link-btn"
+                aria-expanded={descriptionOpen()}
+                onClick={() => setDescriptionOpen((open) => !open)}
+              >
+                {descriptionOpen() ? "Show less" : "Show more"}
+              </button>
+            </Show>
+          </div>
+        </Show>
+
+        <Show when={props.game.genres.length > 0}>
+          <ul class="chips" aria-label="Genres">
+            <For each={props.game.genres}>{(genre) => <li class="chip">{genre}</li>}</For>
+          </ul>
+        </Show>
+
         <dl class="facts">
+          <Show when={released()}>
+            {(text) => (
+              <>
+                <dt>Released</dt>
+                <dd>{text()}</dd>
+              </>
+            )}
+          </Show>
+          <Show when={props.game.developers.length > 0}>
+            <dt>{props.game.developers.length === 1 ? "Developer" : "Developers"}</dt>
+            <dd>{props.game.developers.join(", ")}</dd>
+          </Show>
+          <Show when={props.game.publishers.length > 0}>
+            <dt>{props.game.publishers.length === 1 ? "Publisher" : "Publishers"}</dt>
+            <dd>{props.game.publishers.join(", ")}</dd>
+          </Show>
           <dt>Source</dt>
           <dd>
             {store.providers().find((p) => p.id === props.game.source)?.name ?? props.game.source}
@@ -201,6 +299,12 @@ export function DetailsPanel(props: DetailsPanelProps) {
             Remove cover
           </button>
         </div>
+
+        <Show when={isStoreGame()}>
+          <button type="button" class="btn" onClick={() => void refreshStoreMetadata()}>
+            Refresh metadata
+          </button>
+        </Show>
 
         <Show when={isManual()}>
           <Show

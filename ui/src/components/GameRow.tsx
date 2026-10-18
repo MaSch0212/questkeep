@@ -1,0 +1,70 @@
+import { Show } from "solid-js";
+import type { Game } from "../bindings/Game";
+import { formatPlaytime, formatRelativeDate, releaseYear } from "../lib/format";
+import { store } from "../lib/store";
+import { Cover } from "./Cover";
+import { DownloadIcon } from "./Icons";
+
+interface GameRowProps {
+  game: Game;
+  selected: boolean;
+  onSelect: (id: string) => void;
+  onLaunch: (id: string) => void;
+}
+
+export function rowDomId(id: string): string {
+  return `row-${id}`;
+}
+
+/** One fixed-height row of the list view. */
+export function GameRow(props: GameRowProps) {
+  const running = () => store.isRunning(props.game.id);
+  const source = () =>
+    store.providers().find((p) => p.id === props.game.source)?.name ?? props.game.source;
+
+  return (
+    <div
+      role="option"
+      id={rowDomId(props.game.id)}
+      class="list-row"
+      classList={{
+        "list-row--selected": props.selected,
+        "list-row--missing": !props.game.installed,
+      }}
+      aria-selected={props.selected}
+      aria-label={props.game.installed ? props.game.name : `${props.game.name} (not installed)`}
+      onClick={() => props.onSelect(props.game.id)}
+      onDblClick={() => props.onLaunch(props.game.id)}
+    >
+      <div class="list-row__thumb">
+        <Cover game={props.game} />
+      </div>
+      <div class="list-row__name" title={props.game.name}>
+        <span class="list-row__text">{props.game.name}</span>
+        <Show when={props.game.favorite}>
+          <span class="list-row__star" title="Favorite">
+            ★
+          </span>
+        </Show>
+      </div>
+      <div class="list-row__cell">{source()}</div>
+      <div class="list-row__cell list-row__state">
+        <Show
+          when={props.game.installed}
+          fallback={
+            <span class="state state--missing">
+              <DownloadIcon /> Not installed
+            </span>
+          }
+        >
+          <span classList={{ "state state--running": running() }}>
+            {running() ? "Running" : "Installed"}
+          </span>
+        </Show>
+      </div>
+      <div class="list-row__cell">{formatPlaytime(props.game.playtimeSeconds)}</div>
+      <div class="list-row__cell">{formatRelativeDate(props.game.lastPlayed)}</div>
+      <div class="list-row__cell list-row__year">{releaseYear(props.game.releaseDate) ?? ""}</div>
+    </div>
+  );
+}

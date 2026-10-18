@@ -2,6 +2,7 @@ import { Show } from "solid-js";
 import type { Game } from "../bindings/Game";
 import { store } from "../lib/store";
 import { Cover } from "./Cover";
+import { DownloadIcon } from "./Icons";
 
 interface GameTileProps {
   game: Game;
@@ -24,7 +25,7 @@ export function GameTile(props: GameTileProps) {
       class="tile"
       classList={{ "tile--selected": props.selected, "tile--missing": !props.game.installed }}
       aria-selected={props.selected}
-      aria-label={props.game.name}
+      aria-label={props.game.installed ? props.game.name : `${props.game.name} (not installed)`}
       onClick={() => props.onSelect(props.game.id)}
       onDblClick={() => props.onLaunch(props.game.id)}
     >
@@ -34,6 +35,11 @@ export function GameTile(props: GameTileProps) {
           <Show when={props.game.favorite}>
             <span class="badge badge--star" title="Favorite">
               ★
+            </span>
+          </Show>
+          <Show when={!props.game.installed}>
+            <span class="badge badge--missing" title="Not installed. Double-click to install.">
+              <DownloadIcon /> Not installed
             </span>
           </Show>
           <Show when={running()}>
