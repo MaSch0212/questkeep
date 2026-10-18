@@ -3,13 +3,15 @@
 
 // Logic derived from Playnite (MIT), see THIRD_PARTY_NOTICES.md
 
+mod local;
 mod scan;
 pub mod vdf;
+mod web;
 
 use std::path::{Path, PathBuf};
 
 use super::{ImageCandidate, LibraryProvider, ProviderError};
-use crate::model::ImportedGame;
+use crate::model::{GameMetadata, ImportedGame, PlayAction};
 
 pub const STEAM_SOURCE: &str = "steam";
 
@@ -53,51 +55,162 @@ impl LibraryProvider for SteamProvider {
             ));
         }
         let mut games = scan::scan_roots(&self.roots);
+        self.apply_local_stats(&mut games);
         games.sort_by_cached_key(|g| (g.name.to_lowercase(), g.source_game_id.clone()));
         Ok(games)
+    }
+
+    fn can_scan_owned(&self) -> bool {
+        true
+    }
+
+    /// Owned games through the Steam Web API. `config` is `{ "apiKey": string, "steamId"?: string }`;
+    /// without a `steamId` the most recent login of the local Steam client is used.
+    fn scan_owned(&self, config: &serde_json::Value) -> Result<Vec<ImportedGame>, ProviderError> {
+        let (api_key, steam_id) = self.owned_credentials(config)?;
+        web::fetch_owned(&api_key, &steam_id)
+    }
+
+    fn install_action(&self, app_id: &str) -> Option<PlayAction> {
+        is_app_id(app_id).then(|| PlayAction::uri(format!("steam://install/{app_id}")))
+    }
+
+    fn metadata(&self, app_id: &str) -> Result<Option<GameMetadata>, ProviderError> {
+        web::fetch_metadata(app_id)
     }
 
     /// Steam's own library cache first (no network), then the store CDN. Cached file layouts:
     /// `librarycache/<id>_library_600x900.jpg` (older clients) and
     /// `librarycache/<id>/library_600x900.jpg`, and `librarycache/<id>/<hash>/library_600x900.jpg`
-    /// or `.../<hash>/library_capsule.jpg` (newer clients).
+    /// or `.../<hash>/library_capsule.jpg` (newer clients). The CDN works for any app id, so
+    /// owned games that are not installed get covers too.
     fn cover_candidates(&self, app_id: &str) -> Vec<ImageCandidate> {
-        if app_id.is_empty() || !app_id.chars().all(|c| c.is_ascii_digit()) {
+        if !is_app_id(app_id) {
             return Vec::new();
         }
+        // Newest clients store the portrait capsule as `library_capsule.jpg`.
+        let mut candidates =
+            self.cached_art(app_id, &["library_600x900.jpg", "library_capsule.jpg"]);
+        candidates.extend(
+            [
+                format!(
+                    "https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/{app_id}/library_600x900_2x.jpg"
+                ),
+                format!(
+                    "https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/{app_id}/library_600x900.jpg"
+                ),
+                format!(
+                    "https://steamcdn-a.akamaihd.net/steam/apps/{app_id}/library_600x900_2x.jpg"
+                ),
+            ]
+            .map(ImageCandidate::Url),
+        );
+        candidates
+    }
+
+    /// Wide hero art: the local library cache, then the CDN; the small store header only last.
+    fn background_candidates(&self, app_id: &str) -> Vec<ImageCandidate> {
+        if !is_app_id(app_id) {
+            return Vec::new();
+        }
+        let mut candidates = self.cached_art(app_id, &["library_hero.jpg"]);
+        candidates.extend(
+            [
+                format!("https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/library_hero.jpg"),
+                format!(
+                    "https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/{app_id}/library_hero.jpg"
+                ),
+                format!("https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg"),
+            ]
+            .map(ImageCandidate::Url),
+        );
+        candidates
+    }
+}
+
+impl SteamProvider {
+    /// Local library cache files for `app_id`, in every layout Steam has used: the flat
+    /// `<id>_<legacy>` file, `<id>/<name>`, and `<id>/<hash>/<name>`. `names` are tried in order
+    /// within each layout step, e.g. `["library_600x900.jpg", "library_capsule.jpg"]`.
+    fn cached_art(&self, app_id: &str, names: &[&str]) -> Vec<ImageCandidate> {
         let mut candidates = Vec::new();
         for root in &self.roots {
             let cache = root.join("appcache").join("librarycache");
             candidates.push(ImageCandidate::File(
-                cache.join(format!("{app_id}_library_600x900.jpg")),
+                cache.join(format!("{app_id}_{}", names[0])),
             ));
             let app_dir = cache.join(app_id);
             let mut dirs = vec![app_dir.clone()];
             if let Ok(entries) = std::fs::read_dir(&app_dir) {
-                dirs.extend(entries.flatten().map(|e| e.path()).filter(|p| p.is_dir()));
+                let mut hashed: Vec<PathBuf> = entries
+                    .flatten()
+                    .map(|e| e.path())
+                    .filter(|p| p.is_dir())
+                    .collect();
+                hashed.sort();
+                dirs.extend(hashed);
             }
-            // Newest clients store the portrait capsule as `library_capsule.jpg`.
-            for name in ["library_600x900.jpg", "library_capsule.jpg"] {
+            for name in names {
                 for dir in &dirs {
                     candidates.push(ImageCandidate::File(dir.join(name)));
                 }
             }
         }
-        for url in [
-            format!(
-                "https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/{app_id}/library_600x900_2x.jpg"
-            ),
-            format!(
-                "https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/{app_id}/library_600x900.jpg"
-            ),
-            format!("https://steamcdn-a.akamaihd.net/steam/apps/{app_id}/library_600x900_2x.jpg"),
-        ] {
-            candidates.push(ImageCandidate::Url(url));
-        }
         candidates
+    }
+
+    /// Fills playtime and last-played from the local Steam config of the most recent login.
+    fn apply_local_stats(&self, games: &mut [ImportedGame]) {
+        let stats = self.roots.iter().find_map(|root| {
+            let stats = local::local_stats(root);
+            (!stats.is_empty()).then_some(stats)
+        });
+        let Some(stats) = stats else { return };
+        for game in games {
+            if let Some(s) = stats.get(&game.source_game_id) {
+                game.playtime_seconds = Some(s.playtime_seconds);
+                game.last_played = s.last_played;
+            }
+        }
+    }
+
+    /// API key and SteamID64 for [`scan_owned`](LibraryProvider::scan_owned).
+    fn owned_credentials(
+        &self,
+        config: &serde_json::Value,
+    ) -> Result<(String, String), ProviderError> {
+        let text = |key: &str| {
+            config
+                .get(key)
+                .and_then(serde_json::Value::as_str)
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string)
+        };
+        let api_key = text("apiKey").ok_or_else(|| {
+            ProviderError::NotConfigured(
+                "Add a Steam Web API key in Settings to import games you own but haven't installed."
+                    .into(),
+            )
+        })?;
+        let steam_id = text("steamId")
+            .or_else(|| {
+                self.roots
+                    .iter()
+                    .find_map(|r| local::most_recent_steam_id(r))
+            })
+            .ok_or_else(|| {
+                ProviderError::NotConfigured(
+                    "Could not detect your Steam account. Enter your SteamID64 in Settings.".into(),
+                )
+            })?;
+        Ok((api_key, steam_id))
     }
 }
 
+fn is_app_id(id: &str) -> bool {
+    !id.is_empty() && id.bytes().all(|b| b.is_ascii_digit())
+}
 /// Library folders (including the root itself) of one Steam installation.
 pub fn library_folders(root: &Path) -> Vec<PathBuf> {
     scan::library_folders(root)
@@ -363,4 +476,169 @@ mod tests {
         ));
         assert!(provider.cover_candidates("../etc").is_empty());
     }
+
+    #[test]
+    fn installed_games_get_local_playtime() {
+        let l = layout(LIBRARYFOLDERS);
+        let root = &l.root;
+        fs::create_dir_all(root.join("config")).unwrap();
+        fs::write(
+            root.join("config/loginusers.vdf"),
+            r#""users" {
+                "76561197960265730" { "MostRecent" "0" "Timestamp" "5" }
+                "76561197960265729" { "MostRecent" "1" "Timestamp" "1" }
+            }"#,
+        )
+        .unwrap();
+        let config = root.join("userdata/1/config");
+        fs::create_dir_all(&config).unwrap();
+        fs::write(
+            config.join("localconfig.vdf"),
+            r#""UserLocalConfigStore" { "Software" { "Valve" { "Steam" { "Apps" {
+                "620" { "Playtime" "30" "LastPlayed" "1700000000" }
+                "99" { "Playtime" "5" }
+            } } } } }"#,
+        )
+        .unwrap();
+        let games = SteamProvider::with_roots(vec![root.clone()])
+            .scan_installed()
+            .unwrap();
+        let portal = games.iter().find(|g| g.source_game_id == "620").unwrap();
+        assert_eq!(portal.playtime_seconds, Some(1800));
+        assert_eq!(portal.last_played.unwrap().timestamp(), 1_700_000_000);
+        let other = games.iter().find(|g| g.source_game_id == "413150").unwrap();
+        assert_eq!(other.playtime_seconds, None);
+        assert_eq!(games.len(), 4);
+    }
+
+    #[test]
+    fn owned_scan_requires_configuration() {
+        let tmp = tempfile::tempdir().unwrap();
+        let provider = SteamProvider::with_roots(vec![tmp.path().to_path_buf()]);
+        assert!(provider.can_scan_owned());
+        for config in [
+            serde_json::Value::Null,
+            serde_json::json!({}),
+            serde_json::json!({ "apiKey": "   " }),
+        ] {
+            let err = provider.scan_owned(&config).unwrap_err();
+            assert!(
+                matches!(&err, ProviderError::NotConfigured(m) if m.contains("Web API key")),
+                "{err}"
+            );
+        }
+        // Key but no Steam id and nothing to detect it from.
+        let err = provider
+            .scan_owned(&serde_json::json!({ "apiKey": "k" }))
+            .unwrap_err();
+        assert!(matches!(&err, ProviderError::NotConfigured(m) if m.contains("SteamID64")));
+    }
+
+    #[test]
+    fn owned_credentials_prefer_config_then_detect() {
+        let tmp = tempfile::tempdir().unwrap();
+        fs::create_dir_all(tmp.path().join("config")).unwrap();
+        fs::write(
+            tmp.path().join("config/loginusers.vdf"),
+            r#""users" { "76561197960265729" { "MostRecent" "1" } }"#,
+        )
+        .unwrap();
+        let provider = SteamProvider::with_roots(vec![tmp.path().to_path_buf()]);
+        let detected = provider
+            .owned_credentials(&serde_json::json!({ "apiKey": " k " }))
+            .unwrap();
+        assert_eq!(detected, ("k".to_string(), "76561197960265729".to_string()));
+        let explicit = provider
+            .owned_credentials(&serde_json::json!({ "apiKey": "k", "steamId": "42" }))
+            .unwrap();
+        assert_eq!(explicit.1, "42");
+    }
+
+    #[test]
+    fn install_action_is_a_steam_uri() {
+        let p = SteamProvider::default();
+        assert_eq!(
+            p.install_action("440"),
+            Some(PlayAction::uri("steam://install/440"))
+        );
+        assert_eq!(p.install_action("../x"), None);
+        assert_eq!(p.install_action(""), None);
+    }
+
+    #[test]
+    fn background_candidates_prefer_local_cache_then_cdn_with_header_last() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cache = tmp.path().join("appcache/librarycache");
+        let hashed = cache.join("123/abc");
+        fs::create_dir_all(&hashed).unwrap();
+        let provider = SteamProvider::with_roots(vec![tmp.path().to_path_buf()]);
+        let c = provider.background_candidates("123");
+
+        let files: Vec<&ImageCandidate> = c
+            .iter()
+            .filter(|c| matches!(c, ImageCandidate::File(_)))
+            .collect();
+        assert_eq!(
+            files,
+            [
+                &ImageCandidate::File(cache.join("123_library_hero.jpg")),
+                &ImageCandidate::File(cache.join("123").join("library_hero.jpg")),
+                &ImageCandidate::File(hashed.join("library_hero.jpg")),
+            ]
+        );
+        let first_url = c
+            .iter()
+            .position(|c| matches!(c, ImageCandidate::Url(_)))
+            .unwrap();
+        assert_eq!(first_url, 3, "files come before any URL");
+        assert!(matches!(
+            &c[first_url],
+            ImageCandidate::Url(u) if u == "https://cdn.cloudflare.steamstatic.com/steam/apps/123/library_hero.jpg"
+        ));
+        assert!(matches!(
+            c.last().unwrap(),
+            ImageCandidate::Url(u) if u.ends_with("/123/header.jpg")
+        ));
+        assert!(c.iter().all(|c| !matches!(
+            c,
+            ImageCandidate::Url(u) if u.contains("page_bg_generated")
+        )));
+        assert!(provider.background_candidates("x1").is_empty());
+    }
+
+    #[test]
+    fn covers_work_for_apps_that_are_not_installed() {
+        let provider = SteamProvider::with_roots(vec![]);
+        let c = provider.cover_candidates("730");
+        assert!(matches!(
+            &c[0],
+            ImageCandidate::Url(u) if u.contains("/730/library_600x900_2x.jpg")
+        ));
+    }
+
+    /// Prints this machine's installed games with local playtime. No network.
+    /// Run with `cargo test -p questkeep-core -- --ignored --nocapture steam_local_playtime`.
+    #[test]
+    #[ignore]
+    #[allow(clippy::print_stdout)]
+    fn steam_local_playtime_sanity_check() {
+        let provider = SteamProvider::detect();
+        let games = provider.scan_installed().unwrap();
+        let with_playtime = games
+            .iter()
+            .filter(|g| g.playtime_seconds.is_some_and(|s| s > 0))
+            .count();
+        for g in &games {
+            println!(
+                "{:>10}  {:<40} {:>6} min  last played: {}",
+                g.source_game_id,
+                g.name,
+                g.playtime_seconds.unwrap_or(0) / 60,
+                g.last_played
+                    .map_or("-".to_string(), |t| t.format("%Y-%m-%d").to_string())
+            );
+        }
+        println!("installed: {}, with playtime: {with_playtime}", games.len());
+    }
 }
+

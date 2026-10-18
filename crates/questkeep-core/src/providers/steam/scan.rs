@@ -218,6 +218,11 @@ fn is_plain_relative(path: &str) -> bool {
             .all(|c| matches!(c, Component::Normal(_)))
 }
 
+/// Whether an app is a tool/runtime rather than a game, by id or name.
+pub(super) fn is_tool_app(app_id: &str, name: &str) -> bool {
+    app_id == REDISTRIBUTABLES_APP_ID || TOOL_APP_IDS.contains(&app_id) || is_tool_name(name)
+}
+
 fn is_tool_name(name: &str) -> bool {
     TOOL_NAMES.contains(&name) || TOOL_NAME_PREFIXES.iter().any(|p| name.starts_with(p))
 }

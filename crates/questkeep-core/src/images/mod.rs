@@ -10,6 +10,7 @@ use uuid::Uuid;
 use crate::error::{CoreError, Result};
 use crate::paths::DataPaths;
 
+pub(crate) use fetcher::http_agent;
 pub use fetcher::{CoverFetcher, CoverJob, MetadataFetcher, MetadataJob, image_extension};
 
 const ALLOWED_EXTENSIONS: [&str; 5] = ["jpg", "jpeg", "png", "webp", "gif"];
