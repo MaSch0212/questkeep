@@ -2,25 +2,22 @@
 
 Ideas not built yet, roughly in priority order. Not a commitment.
 
-## Done in v0.2
+## Done in v0.1 (first public release)
 
-Epic, GOG and Xbox installed games; Steam owned games, Install action, imported Steam playtime;
-store metadata and backgrounds (Steam, GOG); list view. Linux store support: Heroic/Legendary
-(Epic, GOG) and Lutris installed games. Account sign-in for Epic and GOG (tokens in the OS
-keyring): owned games, Epic playtime, covers, backgrounds and metadata. Tray icon with a native
-popup, start with the system, auto-update and the release workflow.
+Steam, Epic, GOG and Xbox installed games; Steam owned games, Install action, imported Steam
+playtime; store metadata and backgrounds (Steam, GOG); list view. Linux store support:
+Heroic/Legendary (Epic, GOG) and Lutris installed games. Account sign-in for Epic and GOG (tokens
+in the OS keyring): owned games, Epic playtime, covers, backgrounds and metadata. Tray icon with a
+native popup, start with the system, optional GOG launch through Galaxy, signed auto-updates and
+the release workflow.
 
-## Done for v0.3
+## Done for v0.2
 
 Xbox account sign-in (owned PC games, playtime); Xbox covers, backgrounds and descriptions from the
-Microsoft Store catalog; Epic covers without sign-in (public catalog); Uninstall action per store;
-optional GOG launch through Galaxy; tray icons that follow cover changes; a notice when a second
-start hands over to an already-running copy.
+Microsoft Store catalog; Epic covers without sign-in (public catalog); Uninstall action per store.
 
 ## Next
 
-- **Signed updates**: v0.2.0 shipped without updater signatures; set up the signing key (see
-  `docs/RELEASING.md`) before the next release.
 - **Uninstall follow-ups**: per-game Epic uninstall (it only opens the launcher library).
 - **GOG**: use the `Uninstall\<id>_is1` registry key both for installs missing from
   `GOG.com\Games` and as the uninstaller (today only `unins000.exe` in the install folder).
