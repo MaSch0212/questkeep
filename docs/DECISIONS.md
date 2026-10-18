@@ -197,3 +197,12 @@ Short log of choices made while building. Newest at the bottom of each section.
 - **Epic catalog data is cached in memory per run** and fetched in namespace batches of up to 40
   items per request; covers (`DieselGameBoxTall`), backgrounds (`DieselGameBox`, `OfferImageWide`)
   and metadata reuse it. A disk cache is a follow-up.
+- **The Epic login window uses the normal WebView user agent.** With Playnite's
+  `EpicGamesLauncher` user agent, Epic treats the window as its launcher and rejects our redirect
+  URL ("Redirect URL is not known to the client"). Without it, the standard login page redirects
+  to the code page. The launcher-style `localhost/launcher/authorized?code=` redirect is still
+  caught in case Epic sends it.
+- **Install actions open the store's install dialog.** Steam `steam://install/<id>`, GOG Galaxy
+  `goggalaxy://installationScreen/<id>` (Galaxy also handles `installGame`, `openGameView`,
+  `launchGame`), Epic `com.epicgames.launcher://apps/<namespace>%3A<itemId>%3A<appName>?action=install`
+  with the ids from the signed-in library; the bare appName form only opens the launcher.

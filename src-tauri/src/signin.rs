@@ -11,8 +11,10 @@ use questkeep_core::auth::query_param;
 use questkeep_core::providers::gog::LOGIN_SUCCESS_PREFIX;
 use tauri::{AppHandle, Manager, Url, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
-/// Epic's login page only passes its captcha for the launcher's user agent (as Playnite does).
-const EPIC_USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) EpicGamesLauncher";
+/// Where Epic sends the code when it treats the window as its own launcher. We don't send the
+/// launcher's user agent (with it, Epic rejects our redirect URL as "not known to the client"),
+/// but if Epic ever redirects here, the code is in the URL and is caught the same way.
+const EPIC_LAUNCHER_REDIRECT: &str = "https://localhost/launcher/authorized";
 /// Epic's code page cannot be intercepted by URL (it answers with JSON), so a script reads the
 /// JSON and navigates here; the navigation is then caught and cancelled.
 const CAPTURE_PREFIX: &str = "https://questkeep.invalid/";
@@ -62,8 +64,7 @@ fn classify(provider: &str, url: &str) -> Navigation {
         "gog" => url
             .starts_with(LOGIN_SUCCESS_PREFIX)
             .then(|| query_param(url, "code")),
-        "epic" => url
-            .starts_with(EPIC_CAPTURE_URL)
+        "epic" => (url.starts_with(EPIC_CAPTURE_URL) || url.starts_with(EPIC_LAUNCHER_REDIRECT))
             .then(|| query_param(url, "code")),
         _ => None,
     };
@@ -123,9 +124,7 @@ pub async fn run(app: &AppHandle, provider: &str, login_url: &str) -> Result<Out
             }
         });
     if provider == "epic" {
-        builder = builder
-            .user_agent(EPIC_USER_AGENT)
-            .initialization_script(EPIC_SCRIPT);
+        builder = builder.initialization_script(EPIC_SCRIPT);
     }
     let window = builder.build().map_err(|e| {
         tracing::warn!(error = %e, "could not open the sign-in window");
@@ -169,6 +168,13 @@ mod tests {
 
     #[test]
     fn epic_capture_url_is_captured_and_only_for_epic() {
+        assert_eq!(
+            classify(
+                "epic",
+                "https://localhost/launcher/authorized?code=fedcba9876543210"
+            ),
+            Navigation::Capture("fedcba9876543210".into())
+        );
         let url = "https://questkeep.invalid/epic-auth?code=0123456789abcdef";
         assert_eq!(
             classify("epic", url),

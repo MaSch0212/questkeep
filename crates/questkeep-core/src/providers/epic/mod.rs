@@ -195,6 +195,16 @@ fn launch_uri(namespace: &str, item_id: &str, app_name: &str) -> String {
     )
 }
 
+/// `com.epicgames.launcher://apps/<namespace>%3A<catalogItemId>%3A<appName>?action=install`
+fn install_uri(namespace: &str, item_id: &str, app_name: &str) -> String {
+    format!(
+        "com.epicgames.launcher://apps/{}%3A{}%3A{}?action=install",
+        percent_encode(namespace),
+        percent_encode(item_id),
+        percent_encode(app_name)
+    )
+}
+
 fn same_path(a: &str, b: &str) -> bool {
     let norm = |s: &str| s.replace('\\', "/").trim_end_matches('/').to_lowercase();
     norm(a) == norm(b)
@@ -376,18 +386,26 @@ impl LibraryProvider for EpicProvider {
         self.catalog_images(source_game_id, |item| item.background_urls())
     }
 
-    /// Opens the launcher's install page for the id. Whether Epic still honors this is
-    /// unverified (Playnite notes it shows an older dialog), so it is best effort.
+    /// Asks the launcher to install the game. Current launchers only act on the full
+    /// `<namespace>:<catalogItemId>:<appName>` id (the bare appName just opens the launcher), so
+    /// the signed-in library supplies the ids; without them the bare form is the fallback.
     fn install_action(&self, source_game_id: &str) -> Option<PlayAction> {
         // Heroic's protocol handler has no install command (it only offers to install when
         // launching an uninstalled game), so there is nothing to open.
         if self.heroic.is_some() {
             return None;
         }
-        Some(PlayAction::uri(format!(
-            "com.epicgames.launcher://apps/{}?action=install",
-            percent_encode(source_game_id)
-        )))
+        let record = self
+            .account
+            .as_ref()
+            .and_then(|a| a.library_record(source_game_id));
+        Some(PlayAction::uri(match record {
+            Some(r) => install_uri(&r.namespace, &r.catalog_item_id, &r.app_name),
+            None => format!(
+                "com.epicgames.launcher://apps/{}?action=install",
+                percent_encode(source_game_id)
+            ),
+        }))
     }
 }
 
@@ -636,5 +654,9 @@ mod tests {
             "com.epicgames.launcher://apps/Sugar?action=install"
         );
         assert!(!EpicProvider::default().can_scan_owned());
+        assert_eq!(
+            install_uri("ns 1", "item1", "Sugar"),
+            "com.epicgames.launcher://apps/ns%201%3Aitem1%3ASugar?action=install"
+        );
     }
 }

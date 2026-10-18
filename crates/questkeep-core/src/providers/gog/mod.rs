@@ -175,14 +175,15 @@ impl LibraryProvider for GogProvider {
         self.account.as_deref().map(|a| a as &dyn AccountAuth)
     }
 
-    /// Opens the game's page in GOG Galaxy, where it can be installed.
+    /// Opens GOG Galaxy's install dialog for the game (`installationScreen`, one of the protocol
+    /// commands GalaxyClient.exe handles next to `openGameView`, `installGame` and `launchGame`).
     fn install_action(&self, source_game_id: &str) -> Option<PlayAction> {
         // Heroic has no install URI; Galaxy only exists on Windows.
         if matches!(self.installs, Installs::Heroic(_)) {
             return None;
         }
         api::is_product_id(source_game_id)
-            .then(|| PlayAction::uri(format!("goggalaxy://openGameView/{source_game_id}")))
+            .then(|| PlayAction::uri(format!("goggalaxy://installationScreen/{source_game_id}")))
     }
 
     fn metadata(&self, source_game_id: &str) -> Result<Option<GameMetadata>, ProviderError> {
@@ -244,7 +245,7 @@ mod tests {
         let p = GogProvider::with_records(vec![], None);
         let action = p.install_action("1207658924").unwrap();
         assert_eq!(action.kind, ActionKind::Uri);
-        assert_eq!(action.target, "goggalaxy://openGameView/1207658924");
+        assert_eq!(action.target, "goggalaxy://installationScreen/1207658924");
         assert!(p.install_action("1/../x").is_none());
     }
 

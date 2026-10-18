@@ -325,6 +325,29 @@ impl EpicAccount {
             .flatten())
     }
 
+    /// The library record of an owned game (namespace + catalog item id), from the cache or a
+    /// library fetch. `None` when signed out, not owned, or the library can't be fetched.
+    pub fn library_record(&self, app_name: &str) -> Option<LibraryRecord> {
+        if !self.session.is_signed_in() {
+            return None;
+        }
+        let key = app_name.to_lowercase();
+        let cached = self.cache().library.as_ref().map(|l| l.get(&key).cloned());
+        match cached {
+            Some(found) => found,
+            None => {
+                if let Err(err) = self.fetch_library() {
+                    tracing::warn!(%err, "could not fetch the Epic library");
+                    return None;
+                }
+                self.cache()
+                    .library
+                    .as_ref()
+                    .and_then(|l| l.get(&key).cloned())
+            }
+        }
+    }
+
     fn clear_cache(&self) {
         *self.cache() = Cache::default();
     }
