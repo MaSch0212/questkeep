@@ -1,0 +1,58 @@
+{
+  "sugar-item": {
+    "id": "sugar-item",
+    "title": "Sugar Game",
+    "description": "A sweet game.",
+    "longDescription": "A much longer text.",
+    "namespace": "ns-sugar",
+    "creationDate": "2020-01-01T00:00:00.000Z",
+    "developer": "Sugar Studio",
+    "keyImages": [
+      { "type": "Thumbnail", "url": "https://cdn.example/sugar-thumb.jpg" },
+      { "type": "OfferImageWide", "url": "https://cdn.example/sugar-offer-wide.jpg" },
+      { "type": "DieselGameBoxTall", "url": "https://cdn.example/sugar-tall.jpg" },
+      { "type": "DieselGameBox", "url": "https://cdn.example/sugar-wide.jpg" },
+      { "type": "OfferImageTall", "url": "https://cdn.example/sugar-offer-tall.jpg" },
+      { "type": "DieselGameBoxLogo", "url": "ftp://cdn.example/logo.png" }
+    ],
+    "categories": [{ "path": "games" }, { "path": "applications" }],
+    "releaseInfo": [{ "appId": "Sugar", "platform": ["Windows"], "dateAdded": "2020-03-26T00:00:00.000Z" }],
+    "customAttributes": {
+      "publisherName": { "type": "STRING", "value": "Sugar Publishing" },
+      "developerName": { "type": "STRING", "value": "Sugar Studio" }
+    },
+    "mainGameItem": null
+  },
+  "dlc-item": {
+    "id": "dlc-item",
+    "title": "Sugar DLC",
+    "categories": [{ "path": "addons" }, { "path": "applications" }],
+    "mainGameItem": { "id": "sugar-item", "title": "Sugar Game" }
+  },
+  "extra-item": {
+    "id": "extra-item",
+    "title": "Sugar Soundtrack",
+    "categories": [{ "path": "applications" }, { "path": "digitalextras" }]
+  },
+  "plugin-item": {
+    "id": "plugin-item",
+    "title": "An Engine Plugin",
+    "categories": [{ "path": "applications" }, { "path": "plugins" }]
+  },
+  "launch-item": {
+    "id": "launch-item",
+    "title": "Launchable Addon",
+    "categories": [{ "path": "applications" }, { "path": "addons/launchable" }],
+    "mainGameItem": { "id": "sugar-item" }
+  },
+  "noapp": {
+    "id": "noapp",
+    "title": "Not An Application",
+    "longDescription": "  Long text.  ",
+    "creationDate": "2019-01-01T00:00:00.000Z",
+    "categories": [{ "path": "games" }],
+    "keyImages": null,
+    "customAttributes": null
+  },
+  "bogus": "not an object"
+}

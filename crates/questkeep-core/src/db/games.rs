@@ -447,6 +447,15 @@ impl Database {
         Ok(())
     }
 
+    /// Makes games of `source` that have no description eligible for a metadata fetch again
+    /// (used after signing in to a store whose metadata needs the account). Returns the count.
+    pub fn reset_metadata_checked(&self, source: &str) -> Result<usize> {
+        Ok(self.conn().execute(
+            "UPDATE games SET metadata_updated_at = NULL WHERE source = ?1 AND description IS NULL",
+            params![source],
+        )?)
+    }
+
     /// Sets (or clears) the background path, stored relative to the data dir.
     pub fn set_background_path(&self, id: Uuid, relative: Option<&str>) -> Result<()> {
         let changed = self.conn().execute(

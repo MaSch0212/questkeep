@@ -21,6 +21,15 @@ uuid = { version = "1.28.0", features = ["v4", "serde"] }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.56.0"
+keyring = { version = "3.6.3", features = ["windows-native"] }
+
+# Linux uses the Secret Service (libdbus; sign-in tokens never fall back to plain files). The
+# pure-Rust crypto feature avoids an OpenSSL dependency.
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3.6.3", features = ["sync-secret-service", "crypto-rust"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3.6.3", features = ["apple-native"] }
 
 [dev-dependencies]
 tempfile = "3.27.0"

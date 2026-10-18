@@ -1,0 +1,12 @@
+{
+  "records": [
+    {
+      "appName": "Launch",
+      "catalogItemId": "launch-item",
+      "namespace": "ns-sugar",
+      "sandboxType": "PUBLIC",
+      "recordType": "APPLICATION"
+    }
+  ],
+  "responseMetadata": {}
+}

@@ -1,10 +1,11 @@
 //! Epic Games Store provider: finds installed games from the Epic Games Launcher's local data
 //! (`LauncherInstalled.dat` and the `*.item` manifests). No network access and no Epic login.
 //!
-//! Library scanning of owned games (`can_scan_owned`) stays `false` on purpose: it needs an
-//! authenticated Epic account (OAuth), which is a future item. Likewise no covers or metadata:
-//! the manifests only carry a `VaultThumbnailUrl` for a few legacy entries, and Epic offers no
-//! reliable unauthenticated catalog API; scraping the launcher's web cache is not acceptable.
+//! Signing in to an Epic account (`account`, optional) adds the owned-but-not-installed games,
+//! playtime, covers, backgrounds and metadata from Epic's library and catalog services. Without
+//! a session there is no network access and no covers or metadata: the manifests only carry a
+//! `VaultThumbnailUrl` for a few legacy entries, and scraping the launcher's web cache is not
+//! acceptable.
 //!
 //! On Linux the games come from Heroic Games Launcher / Legendary (`super::heroic`), with the same
 //! `AppName` ids as on Windows, and launch through Heroic's `heroic://launch/...` URI.
@@ -12,12 +13,19 @@
 // Logic derived from Playnite (MIT), see THIRD_PARTY_NOTICES.md
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use serde::Deserialize;
 
 use super::heroic::{self, HeroicPaths};
-use super::{LibraryProvider, ProviderError};
-use crate::model::{ImportedGame, PlayAction};
+use super::{ImageCandidate, LibraryProvider, ProviderError};
+use crate::auth::AccountAuth;
+use crate::model::{GameMetadata, ImportedGame, PlayAction};
+
+mod account;
+mod web;
+
+pub use account::{EpicAccount, REDIRECT_URL as CODE_REDIRECT_URL};
 
 pub const EPIC_SOURCE: &str = "epic";
 
@@ -28,6 +36,8 @@ pub struct EpicProvider {
     data_root: Option<PathBuf>,
     /// Heroic/Legendary directories (Linux).
     heroic: Option<HeroicPaths>,
+    /// Signed-in account, when the app supplies token storage.
+    account: Option<Arc<EpicAccount>>,
 }
 
 impl EpicProvider {
@@ -37,7 +47,14 @@ impl EpicProvider {
         Self {
             data_root: default_data_root(),
             heroic: default_heroic(),
+            account: None,
         }
+    }
+
+    /// Enables account sign-in, the owned-games list, covers and metadata.
+    pub fn with_account(mut self, account: Arc<EpicAccount>) -> Self {
+        self.account = Some(account);
+        self
     }
 
     /// Uses the given launcher data directory.
@@ -45,6 +62,7 @@ impl EpicProvider {
         Self {
             data_root: Some(root.into()),
             heroic: None,
+            account: None,
         }
     }
 
@@ -53,6 +71,7 @@ impl EpicProvider {
         Self {
             data_root: None,
             heroic: Some(paths),
+            account: None,
         }
     }
 }
@@ -181,6 +200,26 @@ fn same_path(a: &str, b: &str) -> bool {
     norm(a) == norm(b)
 }
 
+impl EpicProvider {
+    fn catalog_images(
+        &self,
+        source_game_id: &str,
+        pick: impl Fn(&web::CatalogItem) -> Vec<String>,
+    ) -> Vec<ImageCandidate> {
+        let Some(account) = &self.account else {
+            return Vec::new();
+        };
+        match account.catalog_item(source_game_id) {
+            Ok(Some(item)) => pick(&item).into_iter().map(ImageCandidate::Url).collect(),
+            Ok(None) => Vec::new(),
+            Err(err) => {
+                tracing::debug!(game = source_game_id, %err, "Epic image lookup failed");
+                Vec::new()
+            }
+        }
+    }
+}
+
 impl LibraryProvider for EpicProvider {
     fn id(&self) -> &str {
         EPIC_SOURCE
@@ -301,6 +340,40 @@ impl LibraryProvider for EpicProvider {
         }
         games.sort_by_cached_key(|g| (g.name.to_lowercase(), g.source_game_id.clone()));
         Ok(games)
+    }
+
+    fn can_scan_owned(&self) -> bool {
+        self.account.is_some()
+    }
+
+    fn scan_owned(&self, _config: &serde_json::Value) -> Result<Vec<ImportedGame>, ProviderError> {
+        match &self.account {
+            Some(account) => account.scan_owned(),
+            None => Err(ProviderError::Unsupported),
+        }
+    }
+
+    fn account(&self) -> Option<&dyn AccountAuth> {
+        self.account.as_deref().map(|a| a as &dyn AccountAuth)
+    }
+
+    /// Description, developer and release date from the catalog (needs a signed-in account;
+    /// signed out is an error rather than "no data", so the lookup is retried after sign-in).
+    fn metadata(&self, source_game_id: &str) -> Result<Option<GameMetadata>, ProviderError> {
+        match &self.account {
+            Some(account) => Ok(account
+                .catalog_item(source_game_id)?
+                .map(|item| item.metadata())),
+            None => Ok(None),
+        }
+    }
+
+    fn cover_candidates(&self, source_game_id: &str) -> Vec<ImageCandidate> {
+        self.catalog_images(source_game_id, |item| item.cover_urls())
+    }
+
+    fn background_candidates(&self, source_game_id: &str) -> Vec<ImageCandidate> {
+        self.catalog_images(source_game_id, |item| item.background_urls())
     }
 
     /// Opens the launcher's install page for the id. Whether Epic still honors this is

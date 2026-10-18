@@ -33,6 +33,17 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+## Heroic, gogdl, Legendary (facts only)
+
+The GOG and Epic account sign-in uses public protocol facts documented by or visible in these
+GPL-licensed projects: endpoint URLs, parameter and field names, and the public OAuth client
+ids of the GOG Galaxy and Epic Games launcher clients. **No source code from them was copied or
+translated.** Questkeep's implementation is independent.
+
+- https://github.com/Heroic-Games-Launcher/heroic-gogdl (`gogdl/auth.py`)
+- https://github.com/derrod/legendary (`legendary/api/egs.py`)
+- https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher
+
 ## Lucide
 
 Icons come from the Lucide icon set via the `lucide-solid` package.

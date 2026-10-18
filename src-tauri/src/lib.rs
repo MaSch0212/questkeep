@@ -1,10 +1,12 @@
 //! Thin Tauri shell: exposes core functionality as commands and forwards core events to the UI.
 
 mod commands;
+mod signin;
 
 use std::sync::Arc;
 
 use questkeep_core::Library;
+use questkeep_core::auth::KeyringTokenStore;
 use questkeep_core::events::EventBus;
 use std::time::Duration;
 
@@ -127,7 +129,7 @@ fn build_state(app: &tauri::AppHandle) -> Result<(AppState, Option<WorkerGuard>)
         }
     });
 
-    let providers = ProviderRegistry::with_builtin();
+    let providers = ProviderRegistry::with_builtin(Arc::new(KeyringTokenStore::new()));
     let library =
         Library::open(paths, providers.clone(), events.clone()).map_err(|e| e.to_string())?;
     match library.database().recover_open_sessions() {
@@ -199,6 +201,28 @@ fn spawn_startup_tasks(state: Arc<AppState>) {
     });
 }
 
+/// Only the main window may call app commands. Store login windows load remote pages and must
+/// never reach the core, whatever those pages do (they also have no capability, see
+/// capabilities/default.json).
+fn main_window_only(
+    handler: impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Sync + 'static,
+) -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool + Send + Sync + 'static {
+    move |invoke| {
+        if invoke.message.webview().label() != "main" {
+            tracing::warn!(
+                command = %invoke.message.command(),
+                window = %invoke.message.webview().label(),
+                "rejected a command from a non-main window"
+            );
+            invoke
+                .resolver
+                .reject("This window is not allowed to call that command.");
+            return true;
+        }
+        handler(invoke)
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
@@ -217,7 +241,7 @@ pub fn run() {
             spawn_startup_tasks(state);
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![
+        .invoke_handler(main_window_only(tauri::generate_handler![
             commands::list_games,
             commands::get_game,
             commands::add_manual_game,
@@ -237,7 +261,11 @@ pub fn run() {
             commands::seed_fake_library,
             commands::check_update,
             commands::install_update,
-        ])
+            commands::account_status,
+            commands::sign_in,
+            commands::sign_in_with_code,
+            commands::sign_out,
+        ]))
         .build(tauri::generate_context!());
 
     let app = match app {

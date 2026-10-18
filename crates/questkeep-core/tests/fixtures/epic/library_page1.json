@@ -1,0 +1,44 @@
+{
+  "records": [
+    {
+      "appName": "Sugar",
+      "catalogItemId": "sugar-item",
+      "namespace": "ns-sugar",
+      "productId": "p1",
+      "sandboxName": "Live",
+      "sandboxType": "PUBLIC",
+      "recordType": "APPLICATION"
+    },
+    {
+      "appName": "UE_5.3",
+      "catalogItemId": "engine-item",
+      "namespace": "ue",
+      "sandboxType": "PUBLIC",
+      "recordType": "APPLICATION"
+    },
+    {
+      "appName": "Hidden",
+      "catalogItemId": "private-item",
+      "namespace": "ns-private",
+      "sandboxType": "PRIVATE",
+      "recordType": "APPLICATION"
+    },
+    {
+      "appName": "",
+      "catalogItemId": "noname-item",
+      "namespace": "ns-noname",
+      "sandboxType": "PUBLIC",
+      "recordType": "APPLICATION"
+    },
+    {
+      "appName": "Dlc",
+      "catalogItemId": "dlc-item",
+      "namespace": "ns-sugar",
+      "sandboxType": "PUBLIC",
+      "recordType": "APPLICATION"
+    }
+  ],
+  "responseMetadata": {
+    "nextCursor": "cursor-2"
+  }
+}
