@@ -1,4 +1,4 @@
-//! The login window for store accounts (GOG, Epic).
+//! The login window for store accounts (GOG, Epic, Xbox).
 //!
 //! It is a separate window that loads the store's own login page. It has no IPC access: the
 //! capability file only names the `main` window, and `lib.rs` rejects every command that does not
@@ -9,6 +9,7 @@
 
 use questkeep_core::auth::query_param;
 use questkeep_core::providers::gog::LOGIN_SUCCESS_PREFIX;
+use questkeep_core::providers::xbox::LOGIN_REDIRECT_PREFIX as XBOX_REDIRECT_PREFIX;
 use tauri::{AppHandle, Manager, Url, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
 /// Where Epic sends the code when it treats the window as its own launcher. We don't send the
@@ -59,6 +60,12 @@ enum Navigation {
     Capture(String),
 }
 
+/// The Microsoft desktop redirect itself (not a page that merely starts with the same letters).
+fn is_xbox_redirect(url: &str) -> bool {
+    url.strip_prefix(XBOX_REDIRECT_PREFIX)
+        .is_some_and(|rest| rest.is_empty() || rest.starts_with(['?', '#']))
+}
+
 fn classify(provider: &str, url: &str) -> Navigation {
     let captured = match provider {
         "gog" => url
@@ -66,6 +73,8 @@ fn classify(provider: &str, url: &str) -> Navigation {
             .then(|| query_param(url, "code")),
         "epic" => (url.starts_with(EPIC_CAPTURE_URL) || url.starts_with(EPIC_LAUNCHER_REDIRECT))
             .then(|| query_param(url, "code")),
+        // Microsoft ends the login on a blank page at oauth20_desktop.srf?code=....
+        "xbox" => is_xbox_redirect(url).then(|| query_param(url, "code")),
         _ => None,
     };
     if let Some(code) = captured {
@@ -88,6 +97,7 @@ fn title(provider: &str) -> &'static str {
     match provider {
         "gog" => "Sign in to GOG",
         "epic" => "Sign in to Epic Games",
+        "xbox" => "Sign in to Xbox",
         _ => "Sign in",
     }
 }
@@ -191,6 +201,38 @@ mod tests {
         );
     }
 
+    #[test]
+    fn xbox_redirect_is_captured_and_only_for_xbox() {
+        let url = "https://login.live.com/oauth20_desktop.srf?code=M.C507_BAY.2.U.0123abcd&lc=1033";
+        assert_eq!(
+            classify("xbox", url),
+            Navigation::Capture("M.C507_BAY.2.U.0123abcd".into())
+        );
+        // Cancelled or failed: cancel the navigation, never load the blank page.
+        for url in [
+            "https://login.live.com/oauth20_desktop.srf?error=access_denied",
+            "https://login.live.com/oauth20_desktop.srf",
+        ] {
+            assert_eq!(classify("xbox", url), Navigation::Block, "{url}");
+        }
+        // The login pages and look-alikes are not the redirect.
+        for url in [
+            "https://login.live.com/oauth20_authorize.srf?client_id=1",
+            "https://login.live.com/oauth20_desktop.srf.evil.test/?code=12345678",
+            "https://login.live.com/oauth20_desktop.srfx?code=12345678",
+        ] {
+            assert_eq!(classify("xbox", url), Navigation::Allow, "{url}");
+        }
+        assert_eq!(classify("gog", url), Navigation::Allow);
+        assert_eq!(classify("epic", url), Navigation::Allow);
+        assert_eq!(
+            classify(
+                "xbox",
+                "http://login.live.com/oauth20_desktop.srf?code=12345678"
+            ),
+            Navigation::Block
+        );
+    }
     #[test]
     fn only_https_pages_load() {
         for url in [

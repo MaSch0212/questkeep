@@ -1,0 +1,93 @@
+{
+  "Products": [
+    {
+      "LocalizedProperties": [
+        {
+          "ProductTitle": "Halo Infinite",
+          "DeveloperName": "343 Industries",
+          "PublisherName": "Xbox Game Studios",
+          "ProductDescription": "Free-to-Play Multiplayer:  \n\nExperience Halo’s celebrated multiplayer reimagined and free-to-play! With over 70 maps in matchmaking, billions of customization configurations, and countless community Forge creations to experience, Halo Infinite is the franchise’s most expansive multiplayer offering t",
+          "Images": [
+            {
+              "ImageType": null,
+              "ImagePurpose": "Poster",
+              "Uri": "//store-images.s-microsoft.com/image/apps.3823.14330850369313893.a687698c-b891-44f6-9576-fe28978ce915.5aada4fa-d850-4eb5-9100-33a81a5cde09",
+              "Width": 1440,
+              "Height": 2160
+            },
+            {
+              "ImageType": null,
+              "ImagePurpose": "BoxArt",
+              "Uri": "//store-images.s-microsoft.com/image/apps.54714.14330850369313893.a687698c-b891-44f6-9576-fe28978ce915.27742122-f062-410c-84f4-0fcf7b89524e",
+              "Width": 1080,
+              "Height": 1080
+            },
+            {
+              "ImageType": null,
+              "ImagePurpose": "Logo",
+              "Uri": "//store-images.s-microsoft.com/image/apps.52504.14330850369313893.a687698c-b891-44f6-9576-fe28978ce915.95e011f8-5d23-40a4-abde-4ae00a4bb6f7",
+              "Width": 300,
+              "Height": 300
+            },
+            {
+              "ImageType": null,
+              "ImagePurpose": "BrandedKeyArt",
+              "Uri": "//store-images.s-microsoft.com/image/apps.46665.14330850369313893.a687698c-b891-44f6-9576-fe28978ce915.6769543c-29ba-4f2a-a0ea-6d530c350d7d",
+              "Width": 584,
+              "Height": 800
+            },
+            {
+              "ImageType": null,
+              "ImagePurpose": "SuperHeroArt",
+              "Uri": "//store-images.s-microsoft.com/image/apps.47030.14330850369313893.a687698c-b891-44f6-9576-fe28978ce915.ce613c75-aac4-4721-9941-6a254d061488",
+              "Width": 3840,
+              "Height": 2160
+            },
+            {
+              "ImageType": null,
+              "ImagePurpose": "TitledHeroArt",
+              "Uri": "//store-images.s-microsoft.com/image/apps.20857.14330850369313893.a687698c-b891-44f6-9576-fe28978ce915.8d309ca3-e6ec-47e8-8009-a65f7e2e907b",
+              "Width": 1920,
+              "Height": 1080
+            },
+            {
+              "ImageType": null,
+              "ImagePurpose": "FeaturePromotionalSquareArt",
+              "Uri": "//store-images.s-microsoft.com/image/apps.31815.14330850369313893.a687698c-b891-44f6-9576-fe28978ce915.4af92722-204c-4a75-be62-1701d33b5c13",
+              "Width": 1080,
+              "Height": 1080
+            },
+            {
+              "ImageType": null,
+              "ImagePurpose": "Screenshot",
+              "Uri": "//store-images.s-microsoft.com/image/apps.43679.14330850369313893.a687698c-b891-44f6-9576-fe28978ce915.3dc9b86b-d9c3-4ebe-86b7-f564a0f4423b",
+              "Width": 3840,
+              "Height": 2160
+            },
+            {
+              "ImageType": null,
+              "ImagePurpose": "Screenshot",
+              "Uri": "//store-images.s-microsoft.com/image/apps.25655.14330850369313893.a687698c-b891-44f6-9576-fe28978ce915.c18563b4-860f-4571-a2f3-daeba6436bdd",
+              "Width": 3840,
+              "Height": 2160
+            }
+          ]
+        }
+      ],
+      "MarketProperties": [
+        {
+          "OriginalReleaseDate": "2021-11-15T18:00:00Z"
+        }
+      ],
+      "Properties": {
+        "Category": "Shooter",
+        "Categories": [
+          "Shooter"
+        ],
+        "PackageFamilyName": "Microsoft.254428597CFE2_8wekyb3d8bbwe"
+      },
+      "ProductId": "9PP5G1F0C2B6"
+    }
+  ],
+  "TotalResultCount": 1
+}

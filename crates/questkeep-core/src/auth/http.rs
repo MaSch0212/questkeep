@@ -8,6 +8,7 @@ use std::time::Duration;
 pub enum Method {
     Get,
     PostForm,
+    PostJson,
 }
 
 /// A request. `Debug` deliberately omits the query string, headers and form body because they
@@ -18,6 +19,8 @@ pub struct HttpRequest {
     pub url: String,
     pub headers: Vec<(String, String)>,
     pub form: Vec<(String, String)>,
+    /// Body of a [Method::PostJson] request.
+    pub body: String,
 }
 
 impl HttpRequest {
@@ -27,6 +30,7 @@ impl HttpRequest {
             url: url.into(),
             headers: Vec::new(),
             form: Vec::new(),
+            body: String::new(),
         }
     }
 
@@ -36,6 +40,18 @@ impl HttpRequest {
             url: url.into(),
             headers: Vec::new(),
             form,
+            body: String::new(),
+        }
+    }
+
+    /// A POST with a JSON body (json is the serialized document).
+    pub fn post_json(url: impl Into<String>, json: String) -> Self {
+        Self {
+            method: Method::PostJson,
+            url: url.into(),
+            headers: Vec::new(),
+            form: Vec::new(),
+            body: json,
         }
     }
 
@@ -58,6 +74,9 @@ impl HttpRequest {
             }
         }
         out.extend(self.form.iter().map(|(_, v)| v.clone()));
+        if !self.body.is_empty() {
+            out.push(self.body.clone());
+        }
         if let Some((_, query)) = self.url.split_once('?') {
             for pair in query.split('&') {
                 if let Some((_, v)) = pair.split_once('=') {
@@ -161,6 +180,16 @@ impl Http for UreqHttp {
                 }
                 builder.send(body)
             }
+            Method::PostJson => {
+                let mut builder = self
+                    .agent
+                    .post(&request.url)
+                    .header("Content-Type", "application/json");
+                for (name, value) in &request.headers {
+                    builder = builder.header(name, value);
+                }
+                builder.send(request.body.as_str())
+            }
         };
         let mut response = result.map_err(|e| fail(e.to_string()))?;
         let status = response.status().as_u16();
@@ -237,6 +266,16 @@ mod tests {
         for secret in ["SECRETCODE1", "SECRETREFRESH", "SECRETBEARER"] {
             assert!(!text.contains(secret), "{text}");
         }
+    }
+
+    #[test]
+    fn json_bodies_are_hidden_and_redacted() {
+        let body = r#"{"RpsTicket":"d=SECRETTICKET"}"#.to_string();
+        let request = HttpRequest::post_json("https://x.test/auth", body.clone());
+        assert_eq!(request.method, Method::PostJson);
+        assert!(!format!("{request:?}").contains("SECRETTICKET"));
+        let clean = redact_secrets(&format!("failed sending {body}"), &request);
+        assert!(!clean.contains("SECRETTICKET"), "{clean}");
     }
 
     #[test]

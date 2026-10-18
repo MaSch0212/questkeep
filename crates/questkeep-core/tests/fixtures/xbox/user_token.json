@@ -1,0 +1,6 @@
+{
+  "IssueInstant": "2026-10-18T10:00:00.0000000Z",
+  "NotAfter": "2026-11-01T10:00:00.0000000Z",
+  "Token": "xbl-user-token-value",
+  "DisplayClaims": { "xui": [ { "uhs": "1234567890123456789" } ] }
+}

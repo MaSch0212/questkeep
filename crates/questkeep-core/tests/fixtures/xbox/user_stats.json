@@ -1,0 +1,10 @@
+{
+  "groups": [],
+  "statlistscollection": [
+    { "arrangebyfield": "xuid", "arrangebyfieldid": "2535400000000001",
+      "stats": [
+        { "groupproperties": {}, "xuid": "2535400000000001", "scid": "00000000-0000-0000-0000-000000000000", "name": "MinutesPlayed", "type": "Integer", "value": "125", "titleid": "2043073184" },
+        { "xuid": "2535400000000001", "name": "MinutesPlayed", "type": "Integer", "value": "0", "titleid": "1" }
+      ] }
+  ]
+}
