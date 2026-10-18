@@ -208,6 +208,22 @@ impl LibraryProvider for GogProvider {
         }
     }
 
+    /// The store icon, from the same (cached) catalogue entry as the cover.
+    fn icon_candidates(&self, source_game_id: &str) -> Vec<ImageCandidate> {
+        match self.store_game(source_game_id) {
+            Ok(Some(game)) => game
+                .icon_urls()
+                .into_iter()
+                .map(ImageCandidate::Url)
+                .collect(),
+            Ok(None) => Vec::new(),
+            Err(err) => {
+                tracing::debug!("GOG icon lookup for {source_game_id} failed: {err}");
+                Vec::new()
+            }
+        }
+    }
+
     fn background_candidates(&self, source_game_id: &str) -> Vec<ImageCandidate> {
         match self.store_game(source_game_id) {
             Ok(Some(game)) => game

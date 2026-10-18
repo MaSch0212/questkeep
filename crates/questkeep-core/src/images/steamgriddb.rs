@@ -36,6 +36,8 @@ pub(crate) fn checked_key(kind: ImageKind) -> &'static str {
     match kind {
         ImageKind::Cover => "steamGridDbCoverCheckedAt",
         ImageKind::Background => "steamGridDbBackgroundCheckedAt",
+        // Icons are never looked up there; the key only keeps the match exhaustive.
+        ImageKind::Icon => "steamGridDbIconCheckedAt",
     }
 }
 
@@ -192,6 +194,8 @@ impl SteamGridDb {
                 Some(&COVER_SIZES),
             ),
             ImageKind::Background => (format!("/heroes/game/{game_id}?{SAFE_FILTERS}"), None),
+            // Tray icons come from local sources and the stores, never from SteamGridDB.
+            ImageKind::Icon => return Ok(Vec::new()),
         };
         let Some(body) = self.get(&path)? else {
             return Ok(Vec::new());

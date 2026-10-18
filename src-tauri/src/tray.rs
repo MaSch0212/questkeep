@@ -10,9 +10,11 @@ use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
 
 use questkeep_core::events::CoreEvent;
+use questkeep_core::images::load_icon_rgba;
 use questkeep_core::platform::{self, StoreClient};
 use questkeep_core::tray::{TrayGame, TrayGames, menu_label};
-use tauri::menu::{Menu, MenuBuilder, MenuItem, Submenu, SubmenuBuilder};
+use tauri::image::Image;
+use tauri::menu::{IconMenuItem, IsMenuItem, Menu, MenuBuilder, MenuItem, Submenu, SubmenuBuilder};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, Wry};
 use uuid::Uuid;
@@ -117,6 +119,12 @@ fn refresh_loop(app: &AppHandle, state: &AppState, rx: &Receiver<Trigger>) {
                 continue;
             }
         };
+        // Games without an icon get one made in the background (never here); the icon's arrival
+        // is a `GamesChanged` event, which comes back as the next rebuild.
+        let missing = games.missing_icons();
+        if !missing.is_empty() {
+            state.metadata.enqueue_icons(missing);
+        }
         if rescan {
             clients = Some(platform::installed_store_clients());
         }
@@ -151,17 +159,31 @@ fn disabled_item(app: &AppHandle, text: &str) -> tauri::Result<MenuItem<Wry>> {
     MenuItem::with_id(app, format!("disabled:{text}"), text, false, None::<&str>)
 }
 
-fn game_items(app: &AppHandle, games: &[TrayGame]) -> tauri::Result<Vec<MenuItem<Wry>>> {
+/// One entry per game: with its cached icon when there is one, else a plain text item (no
+/// placeholder box). Only the listed games (at most 40) are decoded, from small cached PNGs.
+fn game_items(app: &AppHandle, games: &[TrayGame]) -> tauri::Result<Vec<Box<dyn IsMenuItem<Wry>>>> {
     games
         .iter()
         .map(|g| {
-            MenuItem::with_id(
-                app,
-                format!("{GAME_PREFIX}{}", g.id),
-                menu_label(&g.name),
-                true,
-                None::<&str>,
-            )
+            let id = format!("{GAME_PREFIX}{}", g.id);
+            let label = menu_label(&g.name);
+            let icon = g
+                .icon
+                .as_deref()
+                .and_then(load_icon_rgba)
+                .map(|i| Image::new_owned(i.rgba, i.width, i.height));
+            let item: Box<dyn IsMenuItem<Wry>> = match icon {
+                Some(icon) => Box::new(IconMenuItem::with_id(
+                    app,
+                    id,
+                    label,
+                    true,
+                    Some(icon),
+                    None::<&str>,
+                )?),
+                None => Box::new(MenuItem::with_id(app, id, label, true, None::<&str>)?),
+            };
+            Ok(item)
         })
         .collect()
 }
@@ -172,7 +194,7 @@ fn favorites_submenu(app: &AppHandle, favorites: &[TrayGame]) -> tauri::Result<S
         builder = builder.item(&disabled_item(app, "No favorites")?);
     }
     for item in game_items(app, favorites)? {
-        builder = builder.item(&item);
+        builder = builder.item(item.as_ref());
     }
     builder.build()
 }
@@ -192,7 +214,7 @@ fn build_menu(app: &AppHandle, model: &MenuModel) -> tauri::Result<Menu<Wry>> {
         builder = builder.item(&disabled_item(app, "No recently played games")?);
     }
     for item in &recent {
-        builder = builder.item(item);
+        builder = builder.item(item.as_ref());
     }
     builder = builder
         .separator()

@@ -3,6 +3,7 @@
 
 // Logic derived from Playnite (MIT), see THIRD_PARTY_NOTICES.md
 
+mod icon;
 mod local;
 mod scan;
 pub mod vdf;
@@ -106,6 +107,21 @@ impl LibraryProvider for SteamProvider {
             .map(ImageCandidate::Url),
         );
         candidates
+    }
+
+    /// The small square icon from Steam's local library cache (see [`icon`]). There is no CDN
+    /// fallback: the icon's file name is a hash that only the client knows.
+    fn icon_candidates(&self, app_id: &str) -> Vec<ImageCandidate> {
+        if !is_app_id(app_id) {
+            return Vec::new();
+        }
+        self.roots
+            .iter()
+            .flat_map(|root| {
+                icon::icon_candidates(&root.join("appcache").join("librarycache"), app_id)
+            })
+            .map(ImageCandidate::File)
+            .collect()
     }
 
     /// Wide hero art: the local library cache, then the CDN; the small store header only last.
@@ -454,6 +470,31 @@ mod tests {
         assert_eq!(p.roots(), [PathBuf::from("x")]);
         let game = &expected_games(&layout(LIBRARYFOLDERS))[0];
         assert_eq!(game.play_action.as_ref().unwrap().kind, ActionKind::Uri);
+    }
+
+    #[test]
+    fn icon_candidates_come_from_the_local_cache_only() {
+        let tmp = tempfile::tempdir().unwrap();
+        let app = tmp.path().join("appcache/librarycache/123");
+        fs::create_dir_all(&app).unwrap();
+        let hash = "0123456789abcdef0123456789abcdef01234567";
+        image::RgbImage::new(32, 32)
+            .save_with_format(app.join(format!("{hash}.jpg")), image::ImageFormat::Jpeg)
+            .unwrap();
+        let provider = SteamProvider::with_roots(vec![tmp.path().to_path_buf()]);
+        let candidates = provider.icon_candidates("123");
+        assert!(
+            candidates
+                .iter()
+                .all(|c| matches!(c, ImageCandidate::File(_)))
+        );
+        assert!(candidates.contains(&ImageCandidate::File(app.join(format!("{hash}.jpg")))));
+        assert!(provider.icon_candidates("../etc").is_empty());
+        assert!(
+            SteamProvider::with_roots(vec![])
+                .icon_candidates("123")
+                .is_empty()
+        );
     }
 
     #[test]

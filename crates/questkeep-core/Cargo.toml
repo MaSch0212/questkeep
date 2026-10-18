@@ -9,6 +9,8 @@ repository.workspace = true
 [dependencies]
 chrono = { version = "0.4.45", features = ["serde"] }
 dirs = "7.0.0"
+# Decoding and resizing of icons only; PNG/JPEG/ICO cover everything the sources deliver.
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "ico"] }
 rusqlite = { version = "0.40.2", features = ["bundled", "chrono", "serde_json"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
@@ -21,6 +23,8 @@ uuid = { version = "1.28.0", features = ["v4", "serde"] }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.56.0"
+# Executable icons (USER32 + GDI); the version is the one already locked.
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_UI_WindowsAndMessaging"] }
 keyring = { version = "3.6.3", features = ["windows-native"] }
 
 # Linux uses the Secret Service (libdbus; sign-in tokens never fall back to plain files). The

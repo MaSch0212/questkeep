@@ -6,6 +6,9 @@
 //!
 //! Metadata: a single worker calls store APIs one game at a time with a minimum interval, so we
 //! stay well below store rate limits, then fetches a background image if the game has none.
+//!
+//! Icons (small square PNGs for the tray menu) are produced by the same worker, after metadata and
+//! background, or on demand through [`MetadataFetcher::enqueue_icons`] for games the tray lists.
 
 use std::collections::HashSet;
 use std::io::Read;
@@ -16,11 +19,12 @@ use std::time::{Duration, Instant};
 use chrono::Utc;
 use uuid::Uuid;
 
+use super::icons::{SquareFrom, icon_png_from_bytes, icon_png_from_rgba};
 use super::steamgriddb::{Lookup, SteamGridDb, checked_key};
 use super::{ImageCache, ImageKind, MAX_IMAGE_BYTES};
 use crate::db::Database;
 use crate::events::{CoreEvent, EventBus};
-use crate::model::Game;
+use crate::model::{ActionKind, Game};
 use crate::providers::{ImageCandidate, LibraryProvider, ProviderRegistry};
 
 /// One game whose cover should be fetched.
@@ -213,6 +217,7 @@ fn store(shared: &Shared, game: &Game, kind: ImageKind, ext: &str, bytes: &[u8])
         .and_then(|rel| match kind {
             ImageKind::Cover => shared.db.set_cover_path(game.id, Some(&rel)),
             ImageKind::Background => shared.db.set_background_path(game.id, Some(&rel)),
+            ImageKind::Icon => shared.db.set_icon_path(game.id, Some(&rel)),
         })
         .inspect_err(|err| tracing::warn!(game = %game.id, %err, "could not store image"))
         .is_ok()
@@ -260,6 +265,9 @@ fn steamgriddb_lookup(
     }
 }
 
+/// Icon size requested from Windows for executables; the stored icon is scaled down from it.
+const EXECUTABLE_ICON_SIZE: u32 = 48;
+
 pub(crate) fn http_agent() -> ureq::Agent {
     ureq::Agent::config_builder()
         .timeout_global(Some(Duration::from_secs(20)))
@@ -297,12 +305,22 @@ struct MetadataShared {
     interval: Duration,
     /// Games waiting in the queue, so repeated enqueues don't pile up duplicates.
     queued: Mutex<HashSet<Uuid>>,
+    /// Games whose icon is queued or was already attempted in this run. A failed attempt for a
+    /// game without a cover is forgotten, so it is retried once the cover exists.
+    icons_seen: Mutex<HashSet<Uuid>>,
+}
+
+/// Work of the metadata worker.
+enum Job {
+    Metadata(MetadataJob),
+    /// Make the game's tray icon.
+    Icon(Uuid),
 }
 
 /// Single-worker metadata queue. Like [`CoverFetcher`], closing it stops the worker after its
 /// current job.
 pub struct MetadataFetcher {
-    sender: Mutex<Option<Sender<MetadataJob>>>,
+    sender: Mutex<Option<Sender<Job>>>,
     shared: Arc<MetadataShared>,
 }
 
@@ -325,8 +343,9 @@ impl MetadataFetcher {
             http: http_agent(),
             interval,
             queued: Mutex::new(HashSet::new()),
+            icons_seen: Mutex::new(HashSet::new()),
         });
-        let (sender, receiver) = mpsc::channel::<MetadataJob>();
+        let (sender, receiver) = mpsc::channel::<Job>();
         let worker_shared = shared.clone();
         let spawned = std::thread::Builder::new()
             .name("metadata-fetch".into())
@@ -353,7 +372,29 @@ impl MetadataFetcher {
             .unwrap_or_else(PoisonError::into_inner);
         let mut count = 0;
         for job in jobs {
-            if queued.insert(job.game_id) && sender.send(job).is_ok() {
+            if queued.insert(job.game_id) && sender.send(Job::Metadata(job)).is_ok() {
+                count += 1;
+            }
+        }
+        count
+    }
+
+    /// Queues icon jobs for games that lack an icon, skipping games already queued or attempted
+    /// in this run. Returns how many were queued. Cheap enough for the tray to call whenever it
+    /// lists a game without an icon; the work happens on the worker thread.
+    pub fn enqueue_icons(&self, ids: impl IntoIterator<Item = Uuid>) -> usize {
+        let guard = self.sender.lock().unwrap_or_else(PoisonError::into_inner);
+        let Some(sender) = guard.as_ref() else {
+            return 0;
+        };
+        let mut seen = self
+            .shared
+            .icons_seen
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        let mut count = 0;
+        for id in ids {
+            if seen.insert(id) && sender.send(Job::Icon(id)).is_ok() {
                 count += 1;
             }
         }
@@ -375,46 +416,70 @@ impl Drop for MetadataFetcher {
     }
 }
 
-fn metadata_worker(shared: &MetadataShared, receiver: &Receiver<MetadataJob>) {
+fn metadata_worker(shared: &MetadataShared, receiver: &Receiver<Job>) {
     let mut last_request: Option<Instant> = None;
     while let Ok(job) = receiver.recv() {
-        if let Some(provider) = shared.providers.get(&job.source) {
-            if let Some(elapsed) = last_request.map(|t| t.elapsed())
-                && elapsed < shared.interval
-            {
-                std::thread::sleep(shared.interval - elapsed);
-            }
-            last_request = Some(Instant::now());
-            let mut changed = match provider.metadata(&job.source_game_id) {
-                Ok(Some(meta)) => shared
-                    .db
-                    .set_metadata(job.game_id, &meta, Utc::now())
-                    .is_ok(),
-                Ok(None) => {
-                    if let Err(err) = shared.db.mark_metadata_checked(job.game_id, Utc::now()) {
-                        tracing::warn!(game = %job.game_id, %err, "could not mark metadata");
-                    }
-                    false
+        match job {
+            Job::Metadata(job) => process_metadata(shared, &job, &mut last_request),
+            Job::Icon(id) => {
+                if fetch_icon(shared, id) {
+                    shared
+                        .events
+                        .publish(CoreEvent::GamesChanged { ids: vec![id] });
                 }
-                // Not marked as checked, so it is retried on the next start.
-                Err(err) => {
-                    tracing::debug!(game = %job.game_id, %err, "metadata fetch failed");
-                    false
-                }
-            };
-            changed |= fetch_background(shared, provider.as_ref(), &job);
-            if changed {
-                shared.events.publish(CoreEvent::GamesChanged {
-                    ids: vec![job.game_id],
-                });
             }
         }
+    }
+}
+
+fn process_metadata(
+    shared: &MetadataShared,
+    job: &MetadataJob,
+    last_request: &mut Option<Instant>,
+) {
+    if let Some(provider) = shared.providers.get(&job.source) {
+        if let Some(elapsed) = last_request.map(|t| t.elapsed())
+            && elapsed < shared.interval
+        {
+            std::thread::sleep(shared.interval - elapsed);
+        }
+        *last_request = Some(Instant::now());
+        let mut changed = match provider.metadata(&job.source_game_id) {
+            Ok(Some(meta)) => shared
+                .db
+                .set_metadata(job.game_id, &meta, Utc::now())
+                .is_ok(),
+            Ok(None) => {
+                if let Err(err) = shared.db.mark_metadata_checked(job.game_id, Utc::now()) {
+                    tracing::warn!(game = %job.game_id, %err, "could not mark metadata");
+                }
+                false
+            }
+            // Not marked as checked, so it is retried on the next start.
+            Err(err) => {
+                tracing::debug!(game = %job.game_id, %err, "metadata fetch failed");
+                false
+            }
+        };
+        changed |= fetch_background(shared, provider.as_ref(), job);
+        // Last step: the store data is cached by now, so this adds no request for most stores.
         shared
-            .queued
+            .icons_seen
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
-            .remove(&job.game_id);
+            .insert(job.game_id);
+        changed |= fetch_icon(shared, job.game_id);
+        if changed {
+            shared.events.publish(CoreEvent::GamesChanged {
+                ids: vec![job.game_id],
+            });
+        }
     }
+    shared
+        .queued
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .remove(&job.game_id);
 }
 
 /// Stores a background if the game has none yet. Returns whether one was stored.
@@ -452,6 +517,82 @@ fn fetch_background(
         .and_then(|rel| shared.db.set_background_path(job.game_id, Some(&rel)))
         .inspect_err(|err| tracing::warn!(game = %job.game_id, %err, "could not store background"))
         .is_ok()
+}
+
+/// Makes the game's tray icon if it has none (or its file is gone). Returns whether one was
+/// stored. Sources, best first: the store's icon, the executable's icon (Windows), a square crop
+/// of the cover.
+fn fetch_icon(shared: &MetadataShared, id: Uuid) -> bool {
+    let forget = || {
+        shared
+            .icons_seen
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .remove(&id);
+    };
+    let Ok(Some(game)) = shared.db.find_game(id) else {
+        forget();
+        return false;
+    };
+    let has_file = |path: &Option<String>| {
+        path.as_deref()
+            .is_some_and(|p| shared.images.resolve(p).is_some())
+    };
+    if has_file(&game.icon_path) {
+        return false;
+    }
+    let Some(png) = build_icon(shared, &game) else {
+        tracing::debug!(game = %id, "no icon found");
+        if !has_file(&game.cover_path) {
+            // The cover is the last resort and may still arrive; try again then.
+            forget();
+        }
+        return false;
+    };
+    shared
+        .images
+        .store_image(ImageKind::Icon, id, "png", &png)
+        .and_then(|rel| shared.db.set_icon_path(id, Some(&rel)))
+        .inspect_err(|err| tracing::warn!(game = %id, %err, "could not store icon"))
+        .is_ok()
+}
+
+/// The 32 px icon PNG for a game from the first source that yields a valid image.
+fn build_icon(shared: &MetadataShared, game: &Game) -> Option<Vec<u8>> {
+    let from_provider = || {
+        let source_id = game.source_game_id.as_deref()?;
+        let provider = shared.providers.get(&game.source)?;
+        provider
+            .icon_candidates(source_id)
+            .iter()
+            .find_map(|candidate| {
+                let loaded = match candidate {
+                    ImageCandidate::File(path) => load_file(path),
+                    ImageCandidate::Url(url) => download(&shared.http, url),
+                };
+                icon_png_from_bytes(&loaded?.1, SquareFrom::Icon)
+            })
+    };
+    let from_executable = || {
+        let action = game.play_action.as_ref()?;
+        if action.kind != ActionKind::File {
+            return None;
+        }
+        let path = std::path::Path::new(&action.target);
+        if !path.is_file() {
+            return None;
+        }
+        let icon = crate::platform::executable_icon(path, EXECUTABLE_ICON_SIZE)?;
+        icon_png_from_rgba(&icon, SquareFrom::Icon)
+    };
+    let from_cover = || {
+        let path = shared.images.resolve(game.cover_path.as_deref()?)?;
+        if std::fs::metadata(&path).ok()?.len() > MAX_IMAGE_BYTES {
+            return None;
+        }
+        icon_png_from_bytes(&std::fs::read(path).ok()?, SquareFrom::CoverTop)
+    };
+    from_provider().or_else(from_executable).or_else(from_cover)
 }
 
 fn load_file(path: &std::path::Path) -> Option<(&'static str, Vec<u8>)> {
@@ -688,5 +829,181 @@ mod tests {
         );
         let g3 = db.get_game(games[2].id).unwrap();
         assert!(g3.metadata_updated_at.is_none(), "errors are retried later");
+    }
+
+    struct IconStore(std::path::PathBuf);
+    impl LibraryProvider for IconStore {
+        fn id(&self) -> &str {
+            "icons"
+        }
+        fn name(&self) -> &str {
+            "Icons"
+        }
+        fn scan_installed(&self) -> Result<Vec<ImportedGame>, ProviderError> {
+            Ok(vec![])
+        }
+        fn icon_candidates(&self, id: &str) -> Vec<ImageCandidate> {
+            vec![
+                ImageCandidate::File(self.0.join("missing.png")),
+                // Wide images are not icons and are skipped.
+                ImageCandidate::File(self.0.join("wide.png")),
+                ImageCandidate::File(self.0.join(format!("{id}.png"))),
+            ]
+        }
+    }
+
+    fn png_bytes(w: u32, h: u32, rgb: [u8; 3]) -> Vec<u8> {
+        let mut out = std::io::Cursor::new(Vec::new());
+        image::RgbImage::from_pixel(w, h, image::Rgb(rgb))
+            .write_to(&mut out, image::ImageFormat::Png)
+            .unwrap();
+        out.into_inner()
+    }
+
+    #[test]
+    fn icon_jobs_use_the_store_icon_then_the_cover_and_retry_without_a_cover() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = DataPaths::new(tmp.path().join("data"));
+        paths.ensure_dirs().unwrap();
+        let src = tmp.path().join("icons");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("1.png"), png_bytes(64, 64, [200, 30, 30])).unwrap();
+        std::fs::write(src.join("wide.png"), png_bytes(200, 50, [0, 0, 0])).unwrap();
+
+        let db = Arc::new(Database::open_in_memory().unwrap());
+        let images = ImageCache::new(paths);
+        let mk = |id: &str, source: &str, source_id: Option<&str>| {
+            db.insert_game(
+                &NewGameRecord {
+                    name: id.into(),
+                    source: source.into(),
+                    source_game_id: source_id.map(str::to_string),
+                    ..Default::default()
+                },
+                Utc::now(),
+            )
+            .unwrap()
+        };
+        let from_store = mk("store", "icons", Some("1"));
+        let from_cover = mk("cover", "manual", None);
+        let nothing = mk("nothing", "manual", None);
+        let rel = images
+            .store_image(
+                ImageKind::Cover,
+                from_cover.id,
+                "png",
+                &png_bytes(40, 60, [10, 200, 10]),
+            )
+            .unwrap();
+        db.set_cover_path(from_cover.id, Some(&rel)).unwrap();
+
+        let mut providers = ProviderRegistry::new();
+        providers.register(Arc::new(IconStore(src)));
+        let events = EventBus::new();
+        let (tx, rx) = mpsc::channel();
+        events.subscribe(move |event| {
+            let _ = tx.send(event.clone());
+        });
+        let fetcher = MetadataFetcher::new(
+            db.clone(),
+            images.clone(),
+            providers,
+            events,
+            SteamGridDb::new(None),
+            Duration::ZERO,
+        );
+        let ids = [from_store.id, from_cover.id, nothing.id];
+        assert_eq!(fetcher.enqueue_icons(ids), 3);
+        assert_eq!(fetcher.enqueue_icons([from_store.id]), 0, "queued once");
+
+        let start = Instant::now();
+        loop {
+            let done = |id| db.get_game(id).unwrap().icon_path.is_some();
+            let forgotten = !fetcher
+                .shared
+                .icons_seen
+                .lock()
+                .unwrap()
+                .contains(&nothing.id);
+            if done(from_store.id) && done(from_cover.id) && forgotten {
+                break;
+            }
+            assert!(
+                start.elapsed() < Duration::from_secs(5),
+                "icons were not made"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let pixel = |id: Uuid| {
+            let rel = db.get_game(id).unwrap().icon_path.unwrap();
+            assert_eq!(rel, format!("images/icons/{id}.png"));
+            let img = image::open(images.resolve(&rel).unwrap())
+                .unwrap()
+                .to_rgba8();
+            assert_eq!(img.dimensions(), (32, 32));
+            img.get_pixel(16, 16).0
+        };
+        assert_eq!(pixel(from_store.id), [200, 30, 30, 255]);
+        assert_eq!(pixel(from_cover.id), [10, 200, 10, 255]);
+        assert!(db.get_game(nothing.id).unwrap().icon_path.is_none());
+        // Nothing to make an icon of, and no cover yet: asking again later is allowed.
+        assert_eq!(fetcher.enqueue_icons([nothing.id]), 1);
+        assert_eq!(
+            fetcher.enqueue_icons([from_store.id]),
+            0,
+            "done games stay done"
+        );
+        let changed = std::iter::from_fn(|| rx.try_recv().ok())
+            .filter(|e| matches!(e, CoreEvent::GamesChanged { .. }))
+            .count();
+        assert!(changed >= 2, "icons announce themselves");
+    }
+
+    #[test]
+    fn a_deleted_icon_file_is_made_again() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = DataPaths::new(tmp.path().join("data"));
+        paths.ensure_dirs().unwrap();
+        let db = Arc::new(Database::open_in_memory().unwrap());
+        let images = ImageCache::new(paths);
+        let game = db
+            .insert_game(
+                &NewGameRecord {
+                    name: "g".into(),
+                    source: "manual".into(),
+                    ..Default::default()
+                },
+                Utc::now(),
+            )
+            .unwrap();
+        let cover = images
+            .store_image(
+                ImageKind::Cover,
+                game.id,
+                "png",
+                &png_bytes(60, 90, [1, 2, 3]),
+            )
+            .unwrap();
+        db.set_cover_path(game.id, Some(&cover)).unwrap();
+        let shared = MetadataShared {
+            db: db.clone(),
+            images: images.clone(),
+            providers: ProviderRegistry::new(),
+            events: EventBus::new(),
+            artwork: SteamGridDb::new(None),
+            http: http_agent(),
+            interval: Duration::ZERO,
+            queued: Mutex::new(HashSet::new()),
+            icons_seen: Mutex::new(HashSet::new()),
+        };
+        assert!(fetch_icon(&shared, game.id));
+        assert!(
+            !fetch_icon(&shared, game.id),
+            "present icons are left alone"
+        );
+        let rel = db.get_game(game.id).unwrap().icon_path.unwrap();
+        std::fs::remove_file(images.resolve(&rel).unwrap()).unwrap();
+        assert!(fetch_icon(&shared, game.id));
+        assert!(images.resolve(&rel).is_some());
     }
 }

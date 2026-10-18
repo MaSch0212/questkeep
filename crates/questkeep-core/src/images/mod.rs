@@ -2,6 +2,7 @@
 //! directory, e.g. `images/covers/<game id>.jpg` or `images/backgrounds/<game id>.jpg`.
 
 mod fetcher;
+mod icons;
 mod steamgriddb;
 
 use std::path::{Path, PathBuf};
@@ -13,6 +14,9 @@ use crate::paths::DataPaths;
 
 pub(crate) use fetcher::http_agent;
 pub use fetcher::{CoverFetcher, CoverJob, MetadataFetcher, MetadataJob, image_extension};
+pub use icons::{
+    ICON_SIZE, IconRgba, SquareFrom, icon_png_from_bytes, icon_png_from_rgba, load_icon_rgba,
+};
 pub(crate) use steamgriddb::checked_key;
 pub use steamgriddb::{Lookup, SteamGridDb};
 
@@ -27,15 +31,18 @@ pub enum ImageKind {
     Cover,
     /// Wide background / hero image.
     Background,
+    /// Small square icon for menus (always a 32x32 PNG, see [`icons`]).
+    Icon,
 }
 
 impl ImageKind {
-    const ALL: [ImageKind; 2] = [ImageKind::Cover, ImageKind::Background];
+    const ALL: [ImageKind; 3] = [ImageKind::Cover, ImageKind::Background, ImageKind::Icon];
 
     fn dir_name(self) -> &'static str {
         match self {
             ImageKind::Cover => "covers",
             ImageKind::Background => "backgrounds",
+            ImageKind::Icon => "icons",
         }
     }
 }
