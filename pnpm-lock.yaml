@@ -23,6 +23,9 @@ importers:
       '@tauri-apps/plugin-opener':
         specifier: ^2.0.0
         version: 2.7.2
+      lucide-solid:
+        specifier: ^1.0.0
+        version: 1.58.0(solid-js@1.9.17)
       solid-js:
         specifier: ^1.0.0
         version: 1.9.17
@@ -1097,6 +1100,11 @@ packages:
   lru-cache@5.1.1:
     resolution: {integrity: sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==}
 
+  lucide-solid@1.58.0:
+    resolution: {integrity: sha512-C2+ehdiMtq6OQ2ZMtX0Y32d5lhqjoNkZO62udhFea+UN7FiKbhvhtQ2VDX1R4WWROfzAm6rdP0oSkcd3wJICLg==}
+    peerDependencies:
+      solid-js: ^1.4.7
+
   lz-string@1.5.0:
     resolution: {integrity: sha512-h5bgJWpxJNswbU7qCrV0tIKQCaS3blPDrqKWx+QxzuzL1zGUzij9XCWLrSLsJPu5t+eWA/ycetzYAO5IOMcWAQ==}
     hasBin: true
@@ -2158,6 +2166,10 @@ snapshots:
   lru-cache@5.1.1:
     dependencies:
       yallist: 3.1.1
+
+  lucide-solid@1.58.0(solid-js@1.9.17):
+    dependencies:
+      solid-js: 1.9.17
 
   lz-string@1.5.0: {}
 

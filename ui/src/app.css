@@ -84,6 +84,7 @@ ul {
   position: relative;
   flex: 1;
   min-height: 0;
+  min-width: 0;
   display: flex;
 }
 
@@ -156,6 +157,11 @@ ul {
   background: var(--qk-color-accent-soft);
   color: var(--qk-color-text);
 }
+.nav-item--icon {
+  display: flex;
+  align-items: center;
+  gap: var(--qk-space-2);
+}
 .check {
   display: flex;
   align-items: center;
@@ -169,6 +175,8 @@ ul {
 
 /* Buttons and inputs */
 .btn {
+  font-family: var(--qk-font-family);
+  white-space: nowrap;
   min-height: var(--qk-control-height);
   padding: 0 var(--qk-space-4);
   background: var(--qk-color-surface-raised);
@@ -225,6 +233,31 @@ ul {
 .icon-btn--bordered {
   border-color: var(--qk-color-border);
 }
+.toggle-btn {
+  display: inline-grid;
+  place-items: center;
+  width: var(--qk-control-height);
+  height: var(--qk-control-height);
+  background: var(--qk-color-surface-raised);
+  border: 1px solid var(--qk-color-border);
+  border-radius: var(--qk-radius-md);
+  color: var(--qk-color-text-muted);
+  cursor: pointer;
+  transition: background var(--qk-duration-fast) var(--qk-easing);
+}
+.toggle-btn:hover {
+  background: var(--qk-color-surface-hover);
+  color: var(--qk-color-text);
+}
+.toggle-btn--on,
+.toggle-btn--on:hover {
+  background: var(--qk-color-accent-soft);
+  border-color: var(--qk-color-accent);
+  color: var(--qk-color-star);
+}
+.toggle-btn--on .icon--filled-when-on {
+  fill: currentColor;
+}
 .input {
   min-height: var(--qk-control-height);
   width: 100%;
@@ -246,6 +279,9 @@ ul {
   flex: none;
   padding: 0 var(--qk-space-4);
   border-bottom: 1px solid var(--qk-color-border);
+}
+.topbar__title {
+  font-size: var(--qk-font-size-lg);
 }
 .topbar__search {
   width: var(--qk-search-width);
@@ -320,7 +356,12 @@ ul {
 .tile:hover .tile__cover {
   transform: translateY(calc(var(--qk-space-1) * -0.5));
 }
-.tile--selected .tile__cover {
+/* The keyboard cursor only shows while the grid has focus; "open" is the strong accent border. */
+.grid:focus .tile--selected .tile__cover {
+  outline-color: var(--qk-color-cursor);
+}
+.tile--open .tile__cover,
+.grid:focus .tile--open .tile__cover {
   outline-color: var(--qk-color-accent);
 }
 .tile--missing .cover,
@@ -336,34 +377,47 @@ ul {
   font-size: var(--qk-font-size-sm);
   color: var(--qk-color-text-muted);
 }
-.tile--selected .tile__title {
+.tile--open .tile__title {
   color: var(--qk-color-text);
 }
 .tile__badges {
   position: absolute;
-  top: var(--qk-space-2);
   left: var(--qk-space-2);
   right: var(--qk-space-2);
   display: flex;
+  align-items: center;
   gap: var(--qk-space-1);
   pointer-events: none;
 }
+.tile__badges--top {
+  top: var(--qk-space-2);
+}
+.tile__badges--bottom {
+  bottom: var(--qk-space-2);
+}
 .badge {
-  display: inline-grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--qk-space-1);
   min-width: var(--qk-badge-size);
   height: var(--qk-badge-size);
   padding: 0 var(--qk-space-2);
   background: var(--qk-color-badge-bg);
+  border: 1px solid var(--qk-color-badge-border);
   border-radius: var(--qk-radius-pill);
+  box-shadow: var(--qk-shadow-badge);
+  backdrop-filter: blur(var(--qk-badge-blur));
   font-size: var(--qk-font-size-xs);
   font-weight: var(--qk-font-weight-bold);
+  line-height: 1;
+  white-space: nowrap;
 }
 .badge--star {
   color: var(--qk-color-star);
 }
 .badge--missing {
-  gap: var(--qk-space-1);
+  max-width: 100%;
   color: var(--qk-color-text);
 }
 .badge--running {
@@ -375,8 +429,12 @@ ul {
 .icon {
   width: var(--qk-icon-size);
   height: var(--qk-icon-size);
+  stroke-width: var(--qk-icon-stroke);
   flex: none;
   vertical-align: middle;
+}
+.icon--filled {
+  fill: currentColor;
 }
 .link-btn {
   padding: 0;
@@ -469,8 +527,13 @@ ul {
 .list-row:hover {
   background: var(--qk-color-surface-hover);
 }
-.list-row--selected,
-.list-row--selected:hover {
+/* Keyboard cursor: subtle, only while the list has focus. "Open" is the accent highlight. */
+.list__scroller:focus .list-row--selected {
+  background: var(--qk-color-surface-hover);
+}
+.list-row--open,
+.list-row--open:hover,
+.list__scroller:focus .list-row--open {
   background: var(--qk-color-accent-soft);
 }
 .list-row--missing .list-row__thumb,
@@ -510,6 +573,9 @@ ul {
 }
 .list-row__year {
   text-align: right;
+}
+.list-row__star {
+  display: inline-flex;
 }
 .state--missing {
   display: inline-flex;
@@ -560,6 +626,13 @@ ul {
   border-left: 1px solid var(--qk-color-border);
   box-shadow: var(--qk-shadow-panel);
   animation: qk-slide-in var(--qk-duration-normal) var(--qk-easing);
+}
+/* Wide window: the panel is a regular flex child next to the library. */
+.details--split {
+  position: relative;
+  flex: none;
+  box-shadow: none;
+  animation: none;
 }
 @keyframes qk-slide-in {
   from {
@@ -668,9 +741,18 @@ ul {
   display: flex;
   align-items: center;
   gap: var(--qk-space-2);
-  word-break: break-all;
+  overflow-wrap: anywhere;
   font-family: var(--qk-font-mono);
   font-size: var(--qk-font-size-sm);
+}
+.facts__path-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.facts__path .btn {
+  flex: none;
+  font-size: var(--qk-font-size-md);
 }
 
 /* Forms */
@@ -732,15 +814,49 @@ ul {
   padding: var(--qk-space-4);
   overflow-y: auto;
 }
+.settings {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.settings__body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.settings__nav {
+  flex: none;
+  width: var(--qk-settings-nav-width);
+  padding: var(--qk-space-4) var(--qk-space-3);
+  border-right: 1px solid var(--qk-color-border);
+  overflow-y: auto;
+}
+.settings__scroll {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: var(--qk-space-5);
+}
+.settings__sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-5);
+  max-width: var(--qk-settings-content-width);
+}
 .settings-section {
   display: flex;
   flex-direction: column;
   gap: var(--qk-space-3);
-  padding-bottom: var(--qk-space-4);
+  padding-bottom: var(--qk-space-5);
+  border-bottom: 1px solid var(--qk-color-border);
 }
-.settings-section h3 {
-  font-size: var(--qk-font-size-md);
-  color: var(--qk-color-text-muted);
+.settings-section:last-child {
+  border-bottom: 0;
+}
+.settings-section__title {
+  font-size: var(--qk-font-size-lg);
 }
 .scan-row {
   display: flex;

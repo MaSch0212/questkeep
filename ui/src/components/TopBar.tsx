@@ -1,8 +1,11 @@
-import { createSignal, For, onCleanup } from "solid-js";
+import { createSignal, For, onCleanup, Show } from "solid-js";
 import type { SortField } from "../bindings/SortField";
 import { normalizeSearch } from "../lib/query";
 import { store } from "../lib/store";
-import { GridIcon, ListIcon } from "./Icons";
+import ArrowDown from "lucide-solid/icons/arrow-down";
+import ArrowUp from "lucide-solid/icons/arrow-up";
+import LayoutGrid from "lucide-solid/icons/layout-grid";
+import List from "lucide-solid/icons/list";
 
 const SEARCH_DEBOUNCE_MS = 80;
 
@@ -66,7 +69,7 @@ export function TopBar(props: TopBarProps) {
           title="Grid view"
           onClick={() => store.setViewMode("grid")}
         >
-          <GridIcon />
+          <LayoutGrid class="icon" aria-hidden="true" />
         </button>
         <button
           type="button"
@@ -77,7 +80,7 @@ export function TopBar(props: TopBarProps) {
           title="List view"
           onClick={() => store.setViewMode("list")}
         >
-          <ListIcon />
+          <List class="icon" aria-hidden="true" />
         </button>
       </div>
       <select
@@ -95,7 +98,12 @@ export function TopBar(props: TopBarProps) {
         title={store.query().descending ? "Descending" : "Ascending"}
         onClick={() => store.toggleDirection()}
       >
-        {store.query().descending ? "↓" : "↑"}
+        <Show
+          when={store.query().descending}
+          fallback={<ArrowUp class="icon" aria-hidden="true" />}
+        >
+          <ArrowDown class="icon" aria-hidden="true" />
+        </Show>
       </button>
     </header>
   );

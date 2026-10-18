@@ -1,15 +1,14 @@
 import { createSignal, onCleanup, onMount, Show } from "solid-js";
+import { DEFAULT_SPLIT_BREAKPOINT, isSplitWidth, readSplitBreakpoint } from "./lib/layoutMode";
 import { AddGameDialog } from "./components/AddGameDialog";
 import { DetailsPanel } from "./components/DetailsPanel";
 import { GameGrid } from "./components/GameGrid";
 import { GameList } from "./components/GameList";
-import { SettingsDialog } from "./components/SettingsDialog";
+import { SettingsPage } from "./components/settings/SettingsPage";
 import { Sidebar } from "./components/Sidebar";
 import { Toasts } from "./components/Toasts";
 import { TopBar } from "./components/TopBar";
 import { store } from "./lib/store";
-
-type DialogKind = "add" | "settings" | null;
 
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -22,11 +21,26 @@ function isTypingTarget(target: EventTarget | null): boolean {
 }
 
 export function App() {
-  const [dialog, setDialog] = createSignal<DialogKind>(null);
+  const [adding, setAdding] = createSignal(false);
+  const [contentWidth, setContentWidth] = createSignal(0);
+  const [breakpoint, setBreakpoint] = createSignal(DEFAULT_SPLIT_BREAKPOINT);
   let searchInput: HTMLInputElement | undefined;
 
+  // Wide window: details sit beside the library; narrow: they overlay it as a flyout.
+  const split = () => isSplitWidth(contentWidth(), breakpoint());
+
+  function observeContent(element: HTMLElement) {
+    setBreakpoint(readSplitBreakpoint(element));
+    const observer = new ResizeObserver((entries) => {
+      const rect = entries[0]?.contentRect;
+      if (rect) setContentWidth(rect.width);
+    });
+    observer.observe(element);
+    onCleanup(() => observer.disconnect());
+  }
+
   function onKeyDown(event: KeyboardEvent) {
-    if (dialog() !== null) return;
+    if (adding() || store.page() !== "library") return;
     const wantsSearch =
       (event.ctrlKey && event.key.toLowerCase() === "f") ||
       (event.key === "/" && !event.ctrlKey && !event.metaKey && !isTypingTarget(event.target));
@@ -58,23 +72,34 @@ export function App() {
 
   return (
     <div class="app">
-      <Sidebar onAdd={() => setDialog("add")} onSettings={() => setDialog("settings")} />
+      <Sidebar onAdd={() => setAdding(true)} />
       <div class="app__main">
-        <TopBar inputRef={(el) => (searchInput = el)} />
-        <div class="app__content">
-          <Show when={store.viewMode() === "list"} fallback={<GameGrid />}>
-            <GameList />
-          </Show>
-          <Show when={store.detailsOpen() ? store.selectedGame() : undefined}>
-            {(game) => <DetailsPanel game={game()} onClose={() => store.closeDetails()} />}
-          </Show>
+        {/* Stays mounted (just hidden) on other pages so the search box keeps its text. */}
+        <div hidden={store.page() !== "library"}>
+          <TopBar inputRef={(el) => (searchInput = el)} />
         </div>
+        <Show
+          when={store.page() === "library"}
+          fallback={
+            <div class="app__content">
+              <SettingsPage />
+            </div>
+          }
+        >
+          <div class="app__content" ref={observeContent}>
+            <Show when={store.viewMode() === "list"} fallback={<GameGrid />}>
+              <GameList />
+            </Show>
+            <Show when={store.detailsOpen() ? store.selectedGame() : undefined}>
+              {(game) => (
+                <DetailsPanel game={game()} split={split()} onClose={() => store.closeDetails()} />
+              )}
+            </Show>
+          </div>
+        </Show>
       </div>
-      <Show when={dialog() === "add"}>
-        <AddGameDialog onClose={() => setDialog(null)} />
-      </Show>
-      <Show when={dialog() === "settings"}>
-        <SettingsDialog onClose={() => setDialog(null)} />
+      <Show when={adding()}>
+        <AddGameDialog onClose={() => setAdding(false)} />
       </Show>
       <Toasts />
     </div>

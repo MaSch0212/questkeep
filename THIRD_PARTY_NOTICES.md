@@ -33,5 +33,12 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+## Lucide
+
+Icons come from the Lucide icon set via the `lucide-solid` package.
+
+- https://lucide.dev
+- License: ISC (some icons derived from Feather, MIT)
+
 Other third-party dependencies (Rust crates, npm packages) are used under their own licenses as
 declared in `Cargo.lock` and `pnpm-lock.yaml`.

@@ -76,13 +76,19 @@ export function GameList() {
       });
     };
     element.addEventListener("scroll", onScroll, { passive: true });
-    // Coming from the grid view: bring the selected game into view.
-    if (store.selectedIndex() >= 0) {
-      const target = scrollTopForRow(store.selectedIndex(), 0, height(), layout());
+    // Coming from the grid view or another page: restore the scroll position, then bring the
+    // selected game into view.
+    const saved = store.libraryScroll("list");
+    const target =
+      store.selectedIndex() >= 0
+        ? scrollTopForRow(store.selectedIndex(), saved, height(), layout())
+        : saved;
+    if (target > 0) {
       element.scrollTop = target;
       setScrollTop(target);
     }
     onCleanup(() => {
+      store.rememberLibraryScroll("list", element.scrollTop);
       observer.disconnect();
       element.removeEventListener("scroll", onScroll);
       cancelAnimationFrame(frame);
@@ -178,6 +184,7 @@ export function GameList() {
                     <GameRow
                       game={game()}
                       selected={game().id === store.selectedId()}
+                      open={store.detailsOpen() && game().id === store.selectedId()}
                       onSelect={onSelect}
                       onLaunch={(id) => void activateGame(id)}
                     />

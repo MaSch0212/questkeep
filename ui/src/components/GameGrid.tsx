@@ -97,6 +97,12 @@ export function GameGrid() {
     const element = scroller;
     if (!element) return;
     setMetrics(readMetrics(element));
+    // Coming back from another page: restore the scroll position.
+    const saved = store.libraryScroll("grid");
+    if (saved > 0) {
+      element.scrollTop = saved;
+      setScrollTop(saved);
+    }
     const observer = new ResizeObserver((entries) => {
       const rect = entries[0]?.contentRect;
       if (rect) setSize({ width: rect.width, height: rect.height });
@@ -112,6 +118,7 @@ export function GameGrid() {
     };
     element.addEventListener("scroll", onScroll, { passive: true });
     onCleanup(() => {
+      store.rememberLibraryScroll("grid", element.scrollTop);
       observer.disconnect();
       element.removeEventListener("scroll", onScroll);
       cancelAnimationFrame(frame);
@@ -213,6 +220,7 @@ export function GameGrid() {
                   <GameTile
                     game={game}
                     selected={game.id === store.selectedId()}
+                    open={store.detailsOpen() && game.id === store.selectedId()}
                     onSelect={onSelect}
                     onLaunch={(id) => void activateGame(id)}
                   />

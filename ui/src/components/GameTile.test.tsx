@@ -58,6 +58,8 @@ describe("GameTile", () => {
     const tile = screen.getByRole("gridcell", { name: "Hades (not installed)" });
     expect(tile).toHaveClass("tile--missing");
     expect(container.querySelector(".badge--missing")).toHaveTextContent("Not installed");
+    // Icon and text share one badge element.
+    expect(container.querySelector(".badge--missing svg")).not.toBeNull();
     await fireEvent.dblClick(tile);
     expect(onLaunch).toHaveBeenCalledWith("g1");
   });

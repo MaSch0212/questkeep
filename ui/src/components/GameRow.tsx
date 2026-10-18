@@ -3,11 +3,15 @@ import type { Game } from "../bindings/Game";
 import { formatPlaytime, formatRelativeDate, releaseYear } from "../lib/format";
 import { store } from "../lib/store";
 import { Cover } from "./Cover";
-import { DownloadIcon } from "./Icons";
+import Download from "lucide-solid/icons/download";
+import Star from "lucide-solid/icons/star";
 
 interface GameRowProps {
   game: Game;
+  /** The keyboard cursor is on this row. */
   selected: boolean;
+  /** The details panel is showing this game. */
+  open?: boolean;
   onSelect: (id: string) => void;
   onLaunch: (id: string) => void;
 }
@@ -29,6 +33,7 @@ export function GameRow(props: GameRowProps) {
       class="list-row"
       classList={{
         "list-row--selected": props.selected,
+        "list-row--open": props.open === true,
         "list-row--missing": !props.game.installed,
       }}
       aria-selected={props.selected}
@@ -43,7 +48,7 @@ export function GameRow(props: GameRowProps) {
         <span class="list-row__text">{props.game.name}</span>
         <Show when={props.game.favorite}>
           <span class="list-row__star" title="Favorite">
-            ★
+            <Star class="icon icon--filled" aria-hidden="true" />
           </span>
         </Show>
       </div>
@@ -53,7 +58,8 @@ export function GameRow(props: GameRowProps) {
           when={props.game.installed}
           fallback={
             <span class="state state--missing">
-              <DownloadIcon /> Not installed
+              <Download class="icon" aria-hidden="true" />
+              <span>Not installed</span>
             </span>
           }
         >
