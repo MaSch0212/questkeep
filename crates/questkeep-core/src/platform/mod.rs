@@ -60,7 +60,10 @@ pub fn open_uri(uri: &str) -> io::Result<()> {
 /// so they go through `explorer.exe`; everything else through the registered protocol handler.
 #[cfg(windows)]
 fn windows_uri_parts(uri: &str) -> (&'static str, Vec<String>) {
-    if uri.len() >= 6 && uri[..6].eq_ignore_ascii_case("shell:") {
+    if uri
+        .get(..6)
+        .is_some_and(|p| p.eq_ignore_ascii_case("shell:"))
+    {
         ("explorer.exe", vec![uri.to_string()])
     } else {
         (
@@ -219,6 +222,9 @@ mod tests {
             )
         );
         assert_eq!(windows_uri_parts("sh").0, "rundll32.exe");
+        // Byte 6 inside a multi-byte character must not panic.
+        assert_eq!(windows_uri_parts("sh\u{e9}ll:x").0, "rundll32.exe");
+        assert_eq!(windows_uri_parts("sh{e9}ll:x").0, "rundll32.exe");
     }
 
     #[test]

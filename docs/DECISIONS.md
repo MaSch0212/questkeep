@@ -75,6 +75,21 @@ Short log of choices made while building. Newest at the bottom of each section.
 - **No landscape `header.jpg` fallback**: a 2:3 grid looks worse with letterboxed banners than with
   the placeholder tile.
 
+## Store accounts and metadata
+
+- **Owned games come from the provider's own API, configured per provider** in
+  `settings.providers.<id>` and passed to `scan_owned()` as plain JSON, so providers (and later
+  plugins) define their own settings without schema changes in the core.
+- **The Steam Web API key is stored in plain text** in `settings.json` inside the data folder. It
+  only grants read access to public profile data, the OS keyring would complicate portable mode
+  and Linux setups, and the settings UI says so. Revisit if a provider needs real credentials
+  (OAuth tokens), which should go to the OS keyring.
+- **Store playtime is merged as the maximum**, never added: Questkeep's own tracking and the store
+  usually count the same sessions, so summing would double them.
+- **Metadata is fetched by one worker with at least 1.5 s between requests**: Steam's appdetails
+  endpoint allows roughly 200 requests per 5 minutes. A store without data marks the game as
+  checked; network errors don't, so they're retried on the next start.
+
 ## Frontend
 
 - **Own row virtualization instead of `@tanstack/solid-virtual`.** With `@tanstack/virtual-core`

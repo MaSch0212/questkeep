@@ -63,13 +63,14 @@ impl GogProvider {
     fn new(installs: Installs) -> Self {
         Self {
             installs,
-            use_galaxy: true,
+            use_galaxy: false,
             http: api::http_agent(),
             store_cache: Mutex::new(HashMap::new()),
         }
     }
 
-    /// Chooses between launching through Galaxy (default) and starting the executable directly.
+    /// Chooses between starting the executable directly (default; works for offline-installer
+    /// games Galaxy doesn't know) and launching through Galaxy.
     pub fn with_galaxy_launch(mut self, use_galaxy: bool) -> Self {
         self.use_galaxy = use_galaxy;
         self

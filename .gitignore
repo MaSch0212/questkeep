@@ -30,3 +30,4 @@ desktop.ini
 !.vscode/extensions.json
 *.swp
 *~
+.claude/worktrees/

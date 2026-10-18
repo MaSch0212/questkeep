@@ -30,8 +30,8 @@ those commands and events.
 | `db/` | `Database` (rusqlite connection behind a mutex), ordered migrations with `schema_version`, `games` repository (CRUD, query, upsert of imported games), `sessions` repository. |
 | `providers/` | `LibraryProvider` trait, `ProviderRegistry`, `steam` (VDF/ACF parser, library discovery, tool filter), `manual` helpers. |
 | `launcher/` | Starts games (`file` spawn or `uri` open), tracks sessions on a background thread per game, writes playtime. `ProcessProbe` trait keeps tracking testable. |
-| `images/` | Cover cache under `images/`: local Steam library cache first, then Steam CDN with bounded concurrency; manual cover import. |
-| `settings` | Small `settings.json` (serde, defaults on missing/corrupt file). |
+| `images/` | Image cache under `images/covers` and `images/backgrounds`. `CoverFetcher` (4 workers) tries each provider's cover candidates, local files before CDN URLs. `MetadataFetcher` (1 worker, at least 1.5 s between store requests) stores store metadata and a background per game. |
+| `settings` | Small `settings.json` (serde, defaults on missing/corrupt file), including a per-provider config map (`providers.steam = { apiKey, steamId }`). |
 | `events` | `EventBus` with serializable `CoreEvent` enum; subscribers are callbacks. Plugin hooks attach here later. |
 | `platform/` | OS-specific bits: Steam install dirs (registry on Windows, XDG paths on Linux), opening URIs, process snapshots. Stubs on other targets. |
 | `library` | `Library` facade used by the shell: wires db, providers, images, events. |
@@ -39,7 +39,7 @@ those commands and events.
 
 ## Data model
 
-SQLite tables (migration 1):
+SQLite tables (migrations 1 and 2):
 
 ```sql
 games(
@@ -58,7 +58,10 @@ games(
   date_added TEXT NOT NULL,
   favorite INTEGER NOT NULL DEFAULT 0,
   hidden INTEGER NOT NULL DEFAULT 0,
-  cover_path TEXT, icon_path TEXT, -- relative to the data dir
+  cover_path TEXT, icon_path TEXT, background_path TEXT, -- relative to the data dir
+  description TEXT, release_date TEXT,            -- store metadata (migration 2)
+  developers TEXT, publishers TEXT, genres TEXT,  -- JSON string arrays, default '[]'
+  metadata_updated_at TEXT,       -- NULL = never fetched
   extra TEXT NOT NULL DEFAULT '{}', -- free-form JSON
   UNIQUE(source, source_game_id)
 )
@@ -73,7 +76,13 @@ actions, install directory for `uri` actions.
 Re-scan semantics: `upsert_imported(source, games)` matches on `(source, source_game_id)`,
 updates store-owned fields (install dir, action, installed flag; name only if the user has not
 renamed it, tracked via `extra.user_renamed`), inserts new games, and marks games of that source
-that were not found as `installed = 0` (playtime and favorites are kept).
+that were not found as `installed = 0` (playtime and favorites are kept). Store playtime merges as
+the maximum of the stored and the store value, last played as the later one.
+
+A scan combines `scan_installed()` with `scan_owned(config)` when the provider supports it and is
+configured: owned games missing from the installed list are imported with `installed = false` and
+get the provider's `install_action()` instead of Play. A missing configuration (`NotConfigured`)
+silently falls back to installed games only.
 
 ## Event flow
 
@@ -105,8 +114,10 @@ that were not found as `installed = 0` (playtime and favorites are kept).
 | `update_game(id, update)` | Rename, favorite, hidden, play action, cover. |
 | `remove_game(id)` | Delete game (and its cached images). |
 | `list_providers()` | Registered providers. |
-| `scan_library(provider_id)` | Scan installed games and upsert. |
+| `scan_library(provider_id)` | Scan installed (and owned) games, upsert, queue covers and metadata. |
 | `launch_game(id)` / `running_games()` | Launch and active sessions. |
+| `install_game(id)` | Opens the provider's install action (e.g. `steam://install/440`). |
+| `refresh_metadata(id)` | Queues a metadata (and missing background) download for one game. |
 | `app_info()` | Version, data dir, log path. |
 | `seed_fake_library(count)` | Debug builds only. |
 

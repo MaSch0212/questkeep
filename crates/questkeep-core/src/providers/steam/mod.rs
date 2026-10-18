@@ -641,4 +641,3 @@ mod tests {
         println!("installed: {}, with playtime: {with_playtime}", games.len());
     }
 }
-
