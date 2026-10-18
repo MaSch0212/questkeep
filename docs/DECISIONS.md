@@ -107,6 +107,9 @@ Short log of choices made while building. Newest at the bottom of each section.
   Windows. Building it ourselves allows a dev-only hidden mode (`QUESTKEEP_HIDDEN=1`, see
   `scripts/dev-hidden.ps1`) for testing through the DevTools port without a window or focus change,
   and showing the normal window only after setup avoids a white flash.
+
+## Releases
+
 - **The version comes from git tags, not from a file.** The latest `vX.Y.Z` tag is the current
   version, so there is no number to bump by hand or to disagree between `Cargo.toml`,
   `tauri.conf.json` and `package.json`; the release workflow writes the computed version into
@@ -125,6 +128,7 @@ Short log of choices made while building. Newest at the bottom of each section.
   because `createUpdaterArtifacts` needs the private key; plain builds and CI work without it.
 
 ## Linux stores
+
 - **Same `source` + `source_game_id` on every OS for Epic and GOG.** On Linux the `epic` provider
   reads Legendary/Heroic (`installed.json`, id = AppName) and `gog` reads Heroic's
   `gog_store/installed.json` (id = GOG product id), so a library database moved between systems
