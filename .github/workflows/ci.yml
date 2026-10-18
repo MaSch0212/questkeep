@@ -39,6 +39,9 @@ jobs:
       - name: Install JS dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Release scripts
+        run: node --test scripts/release/*.test.mjs
+
       - name: rustfmt
         run: cargo fmt --all --check
 
@@ -64,7 +67,7 @@ jobs:
         run: pnpm --dir ui test
 
       - name: Build app
-        run: pnpm tauri build
+        run: pnpm tauri build --config src-tauri/tauri.no-updater.conf.json
 
       - name: Upload build output
         uses: actions/upload-artifact@v7
@@ -106,6 +109,9 @@ jobs:
       - name: Install JS dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Release scripts
+        run: node --test scripts/release/*.test.mjs
+
       - name: clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
 
@@ -120,4 +126,28 @@ jobs:
           pnpm --dir ui test
 
       - name: Build app (no bundle)
-        run: pnpm tauri build --no-bundle
+        run: pnpm tauri build --no-bundle --config src-tauri/tauri.no-updater.conf.json
+
+  changeset:
+    name: Changeset reminder
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # Informational only: never fails the build.
+      - name: Warn when a code change has no changeset
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          changed="$(git diff --name-only "origin/${BASE_REF}...HEAD")"
+          code="$(printf '%s\n' "$changed" | grep -Ev '^$|^docs/|^\.github/|\.md$' || true)"
+          if [ -z "$code" ]; then
+            echo "Only docs, workflow or markdown files changed: no changeset needed."
+          elif printf '%s\n' "$changed" | grep -Eq '^\.changeset/.+\.md$'; then
+            echo "Changeset found."
+          else
+            echo "::warning title=No changeset::This pull request changes code but adds no changeset. If the change is user-visible, run 'pnpm changeset add <major|minor|patch> \"summary\"' (see docs/RELEASING.md)."
+          fi

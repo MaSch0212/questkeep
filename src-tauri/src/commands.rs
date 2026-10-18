@@ -165,3 +165,59 @@ pub async fn seed_fake_library(state: State<'_, Arc<AppState>>, count: usize) ->
     })
     .await
 }
+
+/// A newer version found by [`check_update`].
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct UpdateInfo {
+    pub version: String,
+    /// Release notes (markdown) from the update manifest, if any.
+    pub notes: Option<String>,
+    /// Publication date as RFC 3339, if the manifest has one.
+    pub date: Option<String>,
+}
+
+/// Asks the update endpoint for a newer release. Always `None` in debug builds.
+async fn find_update(app: &tauri::AppHandle) -> CmdResult<Option<tauri_plugin_updater::Update>> {
+    use tauri_plugin_updater::UpdaterExt;
+    if cfg!(debug_assertions) {
+        return Ok(None);
+    }
+    let updater = app.updater().map_err(|e| {
+        tracing::warn!(error = %e, "updater is not available");
+        format!("Updates are not available: {e}")
+    })?;
+    updater.check().await.map_err(|e| {
+        tracing::warn!(error = %e, "update check failed");
+        format!("Could not check for updates: {e}")
+    })
+}
+
+#[tauri::command]
+pub async fn check_update(app: tauri::AppHandle) -> CmdResult<Option<UpdateInfo>> {
+    Ok(find_update(&app).await?.map(|update| UpdateInfo {
+        version: update.version.clone(),
+        notes: update.body.clone().filter(|b| !b.trim().is_empty()),
+        date: update
+            .date
+            .and_then(|d| chrono::DateTime::from_timestamp(d.unix_timestamp(), 0))
+            .map(|d| d.to_rfc3339()),
+    }))
+}
+
+/// Downloads and installs the newest release, then restarts the app. Does nothing (and returns
+/// normally) when no newer release exists.
+#[tauri::command]
+pub async fn install_update(app: tauri::AppHandle) -> CmdResult<()> {
+    let Some(update) = find_update(&app).await? else {
+        return Ok(());
+    };
+    tracing::info!(version = %update.version, "installing update");
+    update
+        .download_and_install(|_chunk, _total| {}, || {})
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, "update installation failed");
+            format!("Could not install the update: {e}")
+        })?;
+    app.restart()
+}
