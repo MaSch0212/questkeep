@@ -259,6 +259,18 @@ impl Database {
         Ok(())
     }
 
+    /// Sets (or clears) the icon path, stored relative to the data dir.
+    pub fn set_icon_path(&self, id: Uuid, relative: Option<&str>) -> Result<()> {
+        let changed = self.conn().execute(
+            "UPDATE games SET icon_path = ?2 WHERE id = ?1",
+            params![id.to_string(), relative],
+        )?;
+        if changed == 0 {
+            return Err(CoreError::GameNotFound(id));
+        }
+        Ok(())
+    }
+
     pub fn delete_game(&self, id: Uuid) -> Result<()> {
         let changed = self
             .conn()

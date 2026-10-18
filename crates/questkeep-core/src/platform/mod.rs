@@ -6,6 +6,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 #[cfg(windows)]
+mod exe_icon;
+#[cfg(windows)]
 mod windows;
 
 /// Candidate Steam installation directories, most likely first. Only existing directories that
@@ -28,6 +30,20 @@ pub fn steam_install_dirs() -> Vec<PathBuf> {
     }
 
     existing_unique_dirs(candidates, |p| p.join("steamapps").is_dir())
+}
+
+/// The icon of an executable at about `size` px, as RGBA pixels. Windows only; elsewhere (and
+/// for files without an icon) `None`.
+pub fn executable_icon(path: &Path, size: u32) -> Option<crate::images::IconRgba> {
+    #[cfg(windows)]
+    {
+        exe_icon::executable_icon(path, size)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (path, size);
+        None
+    }
 }
 
 /// A store client that is installed on this machine and can be opened by URI.

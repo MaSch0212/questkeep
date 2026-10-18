@@ -228,12 +228,26 @@ Short log of choices made while building. Newest at the bottom of each section.
   the data directory, which is user-specific and can be portable.
 - **Menu rebuilds are debounced (2 s) and skipped when the model is unchanged**, because cover and
   metadata downloads emit `GamesChanged` continuously during the first scan.
-- **Tray menu without icons**: items are text only; per-game icons would need decoding cached
-  images into menu icons for every rebuild.
+- **Tray game icons are made once and cached as 32x32 PNGs, never during a menu build.** A menu
+  build then only decodes at most 40 tiny files; producing icons (downloads, exe extraction,
+  resizing) happens on the metadata worker and is announced by `GamesChanged`. 32 px stays sharp at
+  150-200 % scaling. Items without an icon are plain text items (no placeholder box).
+- **Icon sources, best first: store icon, executable icon, cover crop.** The store icon is the
+  intended artwork and is free for Steam (local librarycache). The executable icon is what the
+  game shows in Explorer, so it beats a cropped box art for `file` games (manual, GOG, Lutris). The
+  cover crop (top-aligned: the key art sits at the top of 2:3 covers) is the universal fallback.
+  Provider icons must be nearly square, because Epic has no real icon (`Thumbnail` is used when
+  square) and a squashed wide logo looks worse than the fallback.
+- **Steam icons have no CDN fallback**: the icon's file name is a hash only the client knows.
+- **No SteamGridDB for icons**: it would add rate-limited requests for 30 small images; the
+  fallbacks are good enough.
+- **`image` with only png/jpeg/ico** instead of hand-written decoding/resizing: Lanczos3 resampling
+  and robust decoders are not worth re-implementing, and the features keep the dependency small
+  (no WebP/GIF/AVIF; those sources fall through to the next one).
 - **Events go to the `main` window only** (`emit_to`), so the login windows never receive them.
 - **Monochrome tray glyph following the taskbar theme** (`SystemUsesLightTheme`, not the app
   theme): white on dark taskbars, black on light ones, no tile so it fills the tray slot. A thread
-  blocks in `RegNotifyChangeKeyValue` to swap it; this is the only `unsafe` code (scoped
+  blocks in `RegNotifyChangeKeyValue` to swap it; one of the two `unsafe` modules (scoped
   `allow(unsafe_code)` in `tray_theme.rs`), because winreg cannot wait for changes and polling
   would wake the idle tray process.
 - **Window placement in `window.json` in the data folder**, not via `tauri-plugin-window-state`,

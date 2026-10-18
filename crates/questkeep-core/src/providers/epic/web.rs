@@ -178,6 +178,13 @@ impl CatalogItem {
         self.image_url(&["DieselGameBoxTall", "OfferImageTall"])
     }
 
+    /// Square images that can stand in as an icon, best first. Epic has no dedicated icon;
+    /// `Thumbnail` is usually square (the image fetcher rejects it if it is not) while
+    /// `DieselGameBoxLogo` and the box art are not square at all.
+    pub fn icon_urls(&self) -> Vec<String> {
+        self.image_url(&["Thumbnail"])
+    }
+
     /// Wide background images, best first.
     pub fn background_urls(&self) -> Vec<String> {
         self.image_url(&["DieselGameBox", "OfferImageWide", "DieselStoreFrontWide"])
@@ -331,6 +338,17 @@ mod tests {
             ]
         );
         assert!(items["dlc-item"].cover_urls().is_empty());
+    }
+
+    #[test]
+    fn square_thumbnails_are_icon_candidates() {
+        let items = parse_catalog(CATALOG).unwrap();
+        assert_eq!(
+            items["sugar-item"].icon_urls(),
+            ["https://cdn.example/sugar-thumb.jpg"]
+        );
+        // Without a Thumbnail there is no icon candidate (the logo is not square).
+        assert!(items["launch-item"].icon_urls().is_empty());
     }
 
     #[test]

@@ -2,6 +2,8 @@
 //! when the close/minimize buttons hide the app instead, when the process may exit, and how the
 //! `--minimized` launch argument is read. The Tauri shell only applies these decisions.
 
+use std::path::PathBuf;
+
 use uuid::Uuid;
 
 use crate::model::Game;
@@ -22,6 +24,10 @@ pub const MINIMIZED_ARG: &str = "--minimized";
 pub struct TrayGame {
     pub id: Uuid,
     pub name: String,
+    /// The game's cached 32x32 icon. [`tray_games`] copies the stored (data-dir relative) path;
+    /// [`crate::library::Library::tray_games`] makes it absolute and drops icons whose file is
+    /// gone. Part of the comparison, so a newly made icon rebuilds the menu.
+    pub icon: Option<PathBuf>,
 }
 
 /// The game lists of the tray menu. Compared to skip menu rebuilds when nothing changed.
@@ -41,6 +47,7 @@ fn entry(game: &Game) -> TrayGame {
     TrayGame {
         id: game.id,
         name: game.name.clone(),
+        icon: game.icon_path.as_ref().map(PathBuf::from),
     }
 }
 
@@ -76,6 +83,27 @@ pub fn tray_games(games: &[Game]) -> TrayGames {
             .take(FAVORITES_LIMIT)
             .map(entry)
             .collect(),
+    }
+}
+
+impl TrayGames {
+    /// Ids of the listed games that have no icon yet (each once), for the icon fetcher.
+    pub fn missing_icons(&self) -> Vec<Uuid> {
+        let mut ids: Vec<Uuid> = Vec::new();
+        for game in self.recent.iter().chain(&self.favorites) {
+            if game.icon.is_none() && !ids.contains(&game.id) {
+                ids.push(game.id);
+            }
+        }
+        ids
+    }
+
+    /// Replaces every icon path with `resolve(path)` (`None` drops it).
+    pub fn map_icons(mut self, resolve: impl Fn(&std::path::Path) -> Option<PathBuf>) -> Self {
+        for game in self.recent.iter_mut().chain(&mut self.favorites) {
+            game.icon = game.icon.take().and_then(|p| resolve(&p));
+        }
+        self
     }
 }
 
@@ -258,6 +286,39 @@ mod tests {
         let picked = tray_games(&many);
         assert_eq!(picked.favorites.len(), FAVORITES_LIMIT);
         assert_eq!(picked.favorites[0].name, "F00");
+    }
+
+    #[test]
+    fn entries_carry_icon_paths_and_report_missing_ones() {
+        let mut with_icon = played("With icon", 1);
+        with_icon.icon_path = Some("images/icons/a.png".into());
+        let mut fav = game("Fav without icon");
+        fav.favorite = true;
+        // Recent and favorite at once: listed twice, reported once.
+        let mut both = played("Both", 2);
+        both.favorite = true;
+        let games = vec![with_icon, fav.clone(), both.clone()];
+        let picked = tray_games(&games);
+        assert_eq!(
+            picked.recent[0].icon.as_deref(),
+            Some(std::path::Path::new("images/icons/a.png"))
+        );
+        assert_eq!(picked.recent[1].icon, None);
+        assert_eq!(picked.missing_icons(), vec![both.id, fav.id]);
+
+        // A new icon changes the model, so the shell rebuilds the menu.
+        let mut games2 = games.clone();
+        games2[2].icon_path = Some("images/icons/b.png".into());
+        assert_ne!(tray_games(&games2), picked);
+        assert_eq!(tray_games(&games), picked);
+        assert_eq!(tray_games(&games2).missing_icons(), vec![fav.id]);
+
+        let resolved = picked
+            .map_icons(|p| (p.file_name()? == "a.png").then(|| PathBuf::from("C:/data").join(p)));
+        assert_eq!(
+            resolved.recent[0].icon,
+            Some(PathBuf::from("C:/data").join("images/icons/a.png"))
+        );
     }
 
     #[test]

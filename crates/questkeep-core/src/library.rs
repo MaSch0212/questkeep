@@ -127,7 +127,12 @@ impl Library {
             installed_only: true,
             ..GameQuery::default()
         })?;
-        Ok(tray::tray_games(&games))
+        // Icons are shown from their absolute path; files that are gone count as missing, which
+        // makes the shell queue a new icon job.
+        Ok(tray::tray_games(&games).map_icons(|relative| {
+            self.images
+                .resolve(&relative.to_string_lossy().replace('\\', "/"))
+        }))
     }
 
     pub fn settings(&self) -> Settings {

@@ -31,7 +31,7 @@ those commands and events.
 | `providers/` | `LibraryProvider` trait, `ProviderRegistry`, `steam` (VDF/ACF parser, library discovery, tool filter), `manual` helpers, `epic`/`gog` (Windows launchers; Heroic/Legendary on Linux through the shared `heroic` module), `xbox`, `lutris` (Linux, reads `pga.db`). |
 | `auth/` | Store account sign-in. `TokenStore` (`KeyringTokenStore` = system keyring, `MemoryTokenStore` for tests), `AccountSession` (lazy token load, refresh within 60 s of expiry or after a 401 with one retry, sign-out when the store rejects the refresh token), the injectable `Http` trait (`UreqHttp` redacts request secrets from errors), `AccountAuth` (what a provider exposes: status, login URL, code sign-in, sign-out) and `AccountStatus` (UI contract). GOG (`providers/gog/account.rs`) and Epic (`providers/epic/account.rs` + `web.rs`) implement it. |
 | `launcher/` | Starts games (`file` spawn or `uri` open), tracks sessions on a background thread per game, writes playtime. `ProcessProbe` trait keeps tracking testable. |
-| `images/` | Image cache under `images/covers` and `images/backgrounds`. `CoverFetcher` (4 workers) tries each provider's cover candidates, local files before CDN URLs. `MetadataFetcher` (1 worker, at least 1.5 s between store requests) stores store metadata and a background per game. `SteamGridDb` (`images/steamgriddb.rs`) is a fallback source for covers and backgrounds when a user API key is set: used when the provider has no image (or only low-quality ones, see `covers_are_low_quality`), and for manual games. Global limiter of 2 requests/s, "nothing found" remembered in `games.extra`, key shared via `Library::artwork()` and updated by `save_settings`. |
+| `images/` | Image cache under `images/covers`, `images/backgrounds` and `images/icons`. `CoverFetcher` (4 workers) tries each provider's cover candidates, local files before CDN URLs. `MetadataFetcher` (1 worker, at least 1.5 s between store requests) stores store metadata, a background and the tray icon per game (see "Game icons" below). `SteamGridDb` (`images/steamgriddb.rs`) is a fallback source for covers and backgrounds when a user API key is set: used when the provider has no image (or only low-quality ones, see `covers_are_low_quality`), and for manual games. Global limiter of 2 requests/s, "nothing found" remembered in `games.extra`, key shared via `Library::artwork()` and updated by `save_settings`. |
 | `settings` | Small `settings.json` (serde, defaults on missing/corrupt file), including a per-provider config map (`providers.steam = { apiKey, steamId }`). |
 | `events` | `EventBus` with serializable `CoreEvent` enum; subscribers are callbacks. Plugin hooks attach here later. |
 | `platform/` | OS-specific bits: Steam install dirs (registry on Windows, XDG paths on Linux), opening URIs, process snapshots, installed store clients (`installed_store_clients`: Steam, Epic, GOG Galaxy, Xbox). Stubs on other targets. |
@@ -110,6 +110,13 @@ silently falls back to installed games only.
   `LibraryScanned`). After a trigger it waits 2 s, coalesces further triggers, recomputes the menu
   model and skips the rebuild when it is unchanged; menus are applied on the main thread. Idle cost
   is zero: no timers, no polling (the launcher only polls while a game runs).
+- **Game icons.** Entries are `IconMenuItem`s with a 32x32 RGBA icon when the game has a cached
+  one, plain text items otherwise. The menu build only decodes those small PNGs
+  (`images::load_icon_rgba`, at most 10 recent + 30 favorites per rebuild); it never produces an
+  icon. When the model lists a game with no icon, the tray thread queues an icon job
+  (`MetadataFetcher::enqueue_icons`, deduplicated per run); the worker stores the icon, sets
+  `games.icon_path` and emits `GamesChanged`, so the next debounced rebuild shows it. The icon
+  path is part of `TrayGame`, so a new icon counts as a changed model.
 - Hiding **destroys** the main window instead of hiding it. `RunEvent::ExitRequested` with no
   exit code (last window gone) is ignored while the `hidden_to_tray` flag is set and no real exit
   was requested; `app.exit(n)` always goes through. Store login windows (`signin-*`) are neither
@@ -121,6 +128,26 @@ silently falls back to installed games only.
   `startMinimized` on, startup scans run but no window is created.
   `tauri-plugin-single-instance` (release builds) shows the running instance on a second start.
 - Settings: `closeToTray` (default on), `minimizeToTray`, `startWithSystem`, `startMinimized`.
+
+## Game icons (`images/icons.rs`, `MetadataFetcher`)
+
+`images/icons/<game id>.png` is always a 32x32 RGBA PNG. Every source is decoded with the `image`
+crate (PNG, JPEG, ICO only; size and allocation limits), made square, scaled with Lanczos3 on
+premultiplied alpha and re-encoded. Sources, best first (the first valid one wins):
+
+1. The provider: `LibraryProvider::icon_candidates`. Steam: the square `<sha1>.jpg` in
+   `appcache/librarycache/<appid>/` (also the old flat `<appid>_icon.jpg` and hash sub-folders; by
+   name pattern first, else the smallest square image of 16-256 px). GOG: `_links.iconSquare` /
+   `_links.icon` of the cached store entry. Epic: the catalog `Thumbnail` key image. Provider
+   images must be nearly square (ratio <= 1.15), otherwise they are skipped.
+2. The executable's icon for games with a `file` action (Windows: `platform::executable_icon`,
+   `PrivateExtractIconsW` at 48 px, then `GetIconInfo` + `GetDIBits`; the AND mask supplies alpha for
+   icons without an alpha channel). It lives in `platform/exe_icon.rs`, one of the two `unsafe` modules.
+3. A top-aligned square crop of the cached cover.
+
+Jobs run on the metadata worker, as the last step of a metadata job, and on demand for games the
+tray lists (`enqueue_icons`). A game that failed to get an icon and has no cover yet is retried
+when it is queued again (the cover arriving emits `GamesChanged`, the tray requeues it).
 
 ## Launch and playtime
 

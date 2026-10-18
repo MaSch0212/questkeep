@@ -94,6 +94,14 @@ pub trait LibraryProvider: Send + Sync {
     fn background_candidates(&self, _source_game_id: &str) -> Vec<ImageCandidate> {
         Vec::new()
     }
+    /// Where a small square game icon may be found, best first (local files before downloads).
+    /// Called from a background thread, only for games that still lack an icon. The image
+    /// fetcher decodes each candidate, rejects non-square ones and scales the first valid one to
+    /// 32x32, so a candidate that turns out unusable is simply skipped. When this is empty (the
+    /// default) the icon comes from the executable or, last, from the cover.
+    fn icon_candidates(&self, _source_game_id: &str) -> Vec<ImageCandidate> {
+        Vec::new()
+    }
 }
 
 /// A possible source for a game image.

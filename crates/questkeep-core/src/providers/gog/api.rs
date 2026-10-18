@@ -32,6 +32,10 @@ struct Links {
     background_image: Option<Href>,
     #[serde(default)]
     galaxy_background_image: Option<Href>,
+    #[serde(default)]
+    icon_square: Option<Href>,
+    #[serde(default)]
+    icon: Option<Href>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
@@ -105,6 +109,14 @@ impl StoreGame {
     /// Portrait box art.
     pub fn cover_urls(&self) -> Vec<String> {
         image_urls([self.links.box_art_image.as_ref()])
+    }
+
+    /// Small square icons, best first. URLs that are templates (`{formatter}` placeholders) are
+    /// dropped because they cannot be fetched as they are.
+    pub fn icon_urls(&self) -> Vec<String> {
+        let mut urls = image_urls([self.links.icon_square.as_ref(), self.links.icon.as_ref()]);
+        urls.retain(|u| !u.contains('{'));
+        urls
     }
 
     /// Wide background images, best first.
@@ -355,6 +367,34 @@ mod tests {
         let backgrounds = game.background_urls();
         assert_eq!(backgrounds.len(), 2);
         assert!(backgrounds[0].contains("c73009d1"));
+    }
+
+    #[test]
+    fn icon_urls_prefer_the_square_icon_and_skip_templates() {
+        let game = StoreGame::parse(FIXTURE).unwrap();
+        let icons = game.icon_urls();
+        assert_eq!(icons.len(), 1);
+        assert!(icons[0].starts_with("https://images.gog-statics.com/82ecfe"));
+
+        let both = StoreGame::parse(
+            r#"{"_links":{
+                "iconSquare":{"href":"//images.gog-statics.com/sq.png"},
+                "icon":{"href":"https://images.gog-statics.com/ic.png"}}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            both.icon_urls(),
+            [
+                "https://images.gog-statics.com/sq.png",
+                "https://images.gog-statics.com/ic.png"
+            ]
+        );
+        let template = StoreGame::parse(
+            r#"{"_links":{"icon":{"href":"https://images.gog-statics.com/x{formatter}.png"}}}"#,
+        )
+        .unwrap();
+        assert!(template.icon_urls().is_empty());
+        assert!(StoreGame::parse("{}").unwrap().icon_urls().is_empty());
     }
 
     #[test]

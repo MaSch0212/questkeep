@@ -40,7 +40,7 @@ pub fn watch(on_change: impl Fn(bool) + Send + 'static) {
     let _ = on_change;
 }
 
-// The only unsafe code in Questkeep: winreg (used elsewhere) cannot wait for registry changes, and
+// One of two unsafe modules (the other is core's `platform/exe_icon.rs`): winreg (used elsewhere) cannot wait for registry changes, and
 // polling would wake the process while it sits in the tray. Each call is a plain Win32 FFI call
 // with owned buffers; see docs/DECISIONS.md.
 #[cfg(windows)]

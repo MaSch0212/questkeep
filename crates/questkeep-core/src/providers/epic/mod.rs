@@ -386,6 +386,10 @@ impl LibraryProvider for EpicProvider {
         self.catalog_images(source_game_id, |item| item.background_urls())
     }
 
+    fn icon_candidates(&self, source_game_id: &str) -> Vec<ImageCandidate> {
+        self.catalog_images(source_game_id, |item| item.icon_urls())
+    }
+
     /// Asks the launcher to install the game. Current launchers only act on the full
     /// `<namespace>:<catalogItemId>:<appName>` id (the bare appName just opens the launcher), so
     /// the signed-in library supplies the ids; without them the bare form is the fallback.

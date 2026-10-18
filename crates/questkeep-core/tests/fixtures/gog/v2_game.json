@@ -3,6 +3,7 @@
   "_links": {
     "self": { "href": "https://api.gog.com/v2/games/1207658924?locale=en-US" },
     "store": { "href": "https://www.gog.com/en/game/the_witcher" },
+    "icon": { "href": "https://images.gog-statics.com/82ecfe17e7c3fa7fe3252664927ba9b0014ca17039d8ec1b46275677ab7a7898.png" },
     "boxArtImage": { "href": "https://images.gog-statics.com/32385c2c39b8715a9ccfb159ed481b55503b96526b00866f75a4af48461615a5.jpg" },
     "backgroundImage": { "href": "https://images.gog-statics.com/c73009d18e964448b9704ad9d69a7c68bab5f8a10df410254bb511f2f9198a3a.jpg" },
     "galaxyBackgroundImage": { "href": "https://images.gog-statics.com/46d5f76e789d0f335558b4ea79487ef7f1b2864ca67e77e127494882a3571751.jpg" }
