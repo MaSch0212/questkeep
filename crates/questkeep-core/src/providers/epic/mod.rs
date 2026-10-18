@@ -2,18 +2,19 @@
 //! (`LauncherInstalled.dat` and the `*.item` manifests). No network access and no Epic login.
 //!
 //! Signing in to an Epic account (`account`, optional) adds the owned-but-not-installed games,
-//! playtime, covers, backgrounds and metadata from Epic's library and catalog services. Without
-//! a session there is no network access and no covers or metadata: the manifests only carry a
-//! `VaultThumbnailUrl` for a few legacy entries, and scraping the launcher's web cache is not
-//! acceptable.
+//! playtime and metadata from Epic's library and catalog services. Covers, backgrounds and icons
+//! of installed games also work without an account: the manifests carry the catalog namespace
+//! and item id, and `public` asks the catalog with an app-only token (`client_credentials`).
+//! Scanning installed games itself never touches the network.
 //!
 //! On Linux the games come from Heroic Games Launcher / Legendary (`super::heroic`), with the same
 //! `AppName` ids as on Windows, and launch through Heroic's `heroic://launch/...` URI.
 
 // Logic derived from Playnite (MIT), see THIRD_PARTY_NOTICES.md
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, PoisonError};
 
 use serde::Deserialize;
 
@@ -23,11 +24,15 @@ use crate::auth::AccountAuth;
 use crate::model::{GameMetadata, ImportedGame, PlayAction};
 
 mod account;
+mod public;
 mod web;
 
 pub use account::{EpicAccount, REDIRECT_URL as CODE_REDIRECT_URL};
 
 pub const EPIC_SOURCE: &str = "epic";
+
+/// Catalog namespace and item id of an installed game.
+type CatalogIds = (String, String);
 
 /// Reads installed games from an Epic launcher data directory (the `Epic` folder under
 /// `%ProgramData%`, containing `UnrealEngineLauncher` and `EpicGamesLauncher`).
@@ -38,6 +43,10 @@ pub struct EpicProvider {
     heroic: Option<HeroicPaths>,
     /// Signed-in account, when the app supplies token storage.
     account: Option<Arc<EpicAccount>>,
+    /// Account-free catalog access for installed games.
+    public: Arc<public::PublicCatalog>,
+    /// Catalog ids by lowercase appName, read from the installed-game data on demand.
+    ids: Arc<Mutex<HashMap<String, CatalogIds>>>,
 }
 
 impl EpicProvider {
@@ -47,8 +56,15 @@ impl EpicProvider {
         Self {
             data_root: default_data_root(),
             heroic: default_heroic(),
-            account: None,
+            ..Self::default()
         }
+    }
+
+    /// Replaces the account-free catalog access (tests: fake network).
+    #[cfg(test)]
+    fn with_public(mut self, public: public::PublicCatalog) -> Self {
+        self.public = Arc::new(public);
+        self
     }
 
     /// Enables account sign-in, the owned-games list, covers and metadata.
@@ -61,17 +77,15 @@ impl EpicProvider {
     pub fn with_data_root(root: impl Into<PathBuf>) -> Self {
         Self {
             data_root: Some(root.into()),
-            heroic: None,
-            account: None,
+            ..Self::default()
         }
     }
 
     /// Reads Heroic/Legendary data from the given directories (any platform; tests and tools).
     pub fn with_heroic(paths: HeroicPaths) -> Self {
         Self {
-            data_root: None,
             heroic: Some(paths),
-            account: None,
+            ..Self::default()
         }
     }
 }
@@ -216,18 +230,139 @@ impl EpicProvider {
         source_game_id: &str,
         pick: impl Fn(&web::CatalogItem) -> Vec<String>,
     ) -> Vec<ImageCandidate> {
-        let Some(account) = &self.account else {
+        // The signed-in account first (its token, its library); the account-free lookup by the
+        // installed manifest's ids covers signed-out users and games the account does not own.
+        if let Some(account) = self.account.as_ref().filter(|a| a.is_signed_in()) {
+            match account.catalog_item(source_game_id) {
+                Ok(Some(item)) => {
+                    let urls = pick(&item);
+                    if !urls.is_empty() {
+                        return urls.into_iter().map(ImageCandidate::Url).collect();
+                    }
+                }
+                Ok(None) => {}
+                Err(err) => {
+                    tracing::debug!(game = source_game_id, %err, "Epic image lookup failed");
+                }
+            }
+        }
+        let Some((namespace, item_id)) = self.catalog_ids(source_game_id) else {
             return Vec::new();
         };
-        match account.catalog_item(source_game_id) {
+        match self.public.item(&namespace, &item_id) {
             Ok(Some(item)) => pick(&item).into_iter().map(ImageCandidate::Url).collect(),
             Ok(None) => Vec::new(),
             Err(err) => {
-                tracing::debug!(game = source_game_id, %err, "Epic image lookup failed");
+                tracing::debug!(game = source_game_id, %err, "Epic public image lookup failed");
                 Vec::new()
             }
         }
     }
+
+    /// Namespace and catalog item id of an installed game.
+    fn catalog_ids(&self, app_name: &str) -> Option<CatalogIds> {
+        let key = app_name.to_lowercase();
+        let cached = |this: &Self| {
+            this.ids
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .get(&key)
+                .cloned()
+        };
+        if let Some(found) = cached(self) {
+            return Some(found);
+        }
+        let fresh = if let Some(paths) = &self.heroic {
+            legendary_ids(paths, app_name)
+                .map(|ids| HashMap::from([(key.clone(), ids)]))
+                .unwrap_or_default()
+        } else if let Some(root) = &self.data_root {
+            manifest_ids(root)
+        } else {
+            HashMap::new()
+        };
+        self.ids
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .extend(fresh);
+        cached(self)
+    }
+}
+
+/// Namespace and item id of every `*.item` manifest under an Epic data root, by lowercase
+/// appName.
+fn manifest_ids(root: &Path) -> HashMap<String, CatalogIds> {
+    let dir = root
+        .join("EpicGamesLauncher")
+        .join("Data")
+        .join("Manifests");
+    let mut out = HashMap::new();
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return out;
+    };
+    for path in entries.flatten().map(|e| e.path()) {
+        if !path
+            .extension()
+            .is_some_and(|x| x.eq_ignore_ascii_case("item"))
+        {
+            continue;
+        }
+        let Ok(manifest) = read_json::<Manifest>(&path) else {
+            continue;
+        };
+        if let (Some(app), Some(ns), Some(item)) = (
+            non_empty(&manifest.app_name),
+            non_empty(&manifest.catalog_namespace),
+            non_empty(&manifest.catalog_item_id),
+        ) {
+            out.insert(app.to_lowercase(), (ns.to_string(), item.to_string()));
+        }
+    }
+    out
+}
+
+/// Namespace and item id from a Legendary `metadata/<appName>.json`: `metadata.namespace` and
+/// `metadata.id`, or the `catalog_item_id`/`namespace` of an `asset_infos` platform entry.
+fn parse_legendary_ids(json: &str) -> Option<CatalogIds> {
+    let value: serde_json::Value =
+        serde_json::from_str(json.trim_start_matches('\u{feff}')).ok()?;
+    let text = |v: Option<&serde_json::Value>| {
+        v.and_then(serde_json::Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+    };
+    let meta = value.get("metadata");
+    if let (Some(ns), Some(id)) = (
+        text(meta.and_then(|m| m.get("namespace"))),
+        text(meta.and_then(|m| m.get("id"))),
+    ) {
+        return Some((ns, id));
+    }
+    let infos = value.get("asset_infos").and_then(|a| a.as_object());
+    let entries = infos
+        .into_iter()
+        .flat_map(|m| m.values())
+        .chain(value.get("asset_info"));
+    for info in entries {
+        if let (Some(ns), Some(id)) = (
+            text(info.get("namespace")),
+            text(info.get("catalog_item_id")),
+        ) {
+            return Some((ns, id));
+        }
+    }
+    None
+}
+
+fn legendary_ids(paths: &HeroicPaths, app_name: &str) -> Option<CatalogIds> {
+    if app_name.is_empty() || app_name.contains(['/', '\\']) || app_name.contains("..") {
+        return None;
+    }
+    paths.legendary.iter().find_map(|source| {
+        let file = source.dir.join("metadata").join(format!("{app_name}.json"));
+        parse_legendary_ids(&std::fs::read_to_string(file).ok()?)
+    })
 }
 
 impl LibraryProvider for EpicProvider {
@@ -648,6 +783,178 @@ mod tests {
             none.scan_installed(),
             Err(ProviderError::NotFound(_))
         ));
+    }
+
+    const APP_TOKEN: &str = include_str!("../../../tests/fixtures/epic/app_token.json");
+    const CATALOG: &str = include_str!("../../../tests/fixtures/epic/catalog_bulk.json");
+    const WIDE_ONLY: &str = include_str!("../../../tests/fixtures/epic/catalog_wide_only.json");
+
+    /// A provider over `env` whose public catalog talks to a scripted Epic.
+    fn provider_with_fake_epic(env: &Env) -> (EpicProvider, Arc<crate::auth::testing::FakeHttp>) {
+        use crate::auth::testing::{FakeHttp, response};
+        let http = Arc::new(FakeHttp::new(|req| {
+            if req.url.contains("/oauth/token") {
+                response(200, APP_TOKEN)
+            } else if req.url.contains("/ns-wide/") {
+                response(200, WIDE_ONLY)
+            } else if req.url.contains("/ns-sugar/") {
+                response(200, CATALOG)
+            } else {
+                response(404, "")
+            }
+        }));
+        let provider = EpicProvider::with_data_root(env.root())
+            .with_public(public::PublicCatalog::with(http.clone(), Arc::new(|| 10)));
+        (provider, http)
+    }
+
+    fn urls(candidates: Vec<ImageCandidate>) -> Vec<String> {
+        candidates
+            .into_iter()
+            .filter_map(|c| match c {
+                ImageCandidate::Url(u) => Some(u),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn manifests_give_catalog_ids_for_account_free_covers() {
+        let env = Env::new();
+        let dir = env.game_dir("Sugar");
+        env.manifest(
+            "a.item",
+            &item(
+                "Sugar",
+                "Sugar Game",
+                &dir,
+                serde_json::json!({"CatalogNamespace": "ns-sugar", "CatalogItemId": "sugar-item"}),
+            ),
+        );
+        let (provider, http) = provider_with_fake_epic(&env);
+        assert_eq!(
+            provider.catalog_ids("sugar"),
+            Some(("ns-sugar".to_string(), "sugar-item".to_string()))
+        );
+        // No account: tall art first, wide art as background, thumbnail as icon.
+        assert_eq!(
+            urls(provider.cover_candidates("Sugar")),
+            [
+                "https://cdn.example/sugar-tall.jpg",
+                "https://cdn.example/sugar-offer-tall.jpg"
+            ]
+        );
+        assert_eq!(
+            urls(provider.background_candidates("Sugar")),
+            [
+                "https://cdn.example/sugar-wide.jpg",
+                "https://cdn.example/sugar-offer-wide.jpg"
+            ]
+        );
+        assert_eq!(
+            urls(provider.icon_candidates("Sugar")),
+            ["https://cdn.example/sugar-thumb.jpg"]
+        );
+        // One token and one catalog request for all three lookups.
+        assert_eq!(http.urls().len(), 2);
+        assert!(provider.catalog_ids("Unknown").is_none());
+        assert!(provider.cover_candidates("Unknown").is_empty());
+    }
+
+    #[test]
+    fn wide_only_art_gives_no_cover_but_a_background() {
+        let env = Env::new();
+        let dir = env.game_dir("Wide");
+        env.manifest(
+            "w.item",
+            &item(
+                "Wide",
+                "Wide",
+                &dir,
+                serde_json::json!({"CatalogNamespace": "ns-wide", "CatalogItemId": "wide-item"}),
+            ),
+        );
+        let (provider, _) = provider_with_fake_epic(&env);
+        assert!(provider.cover_candidates("Wide").is_empty());
+        assert_eq!(
+            urls(provider.background_candidates("Wide")),
+            [
+                "https://cdn.example/wide-box.jpg",
+                "https://cdn.example/wide-offer.jpg"
+            ]
+        );
+    }
+
+    #[test]
+    fn manifests_without_ids_make_no_requests() {
+        let env = Env::new();
+        let dir = env.game_dir("NoIds");
+        env.manifest(
+            "n.item",
+            &item(
+                "NoIds",
+                "NoIds",
+                &dir,
+                serde_json::json!({"CatalogNamespace": "", "CatalogItemId": null}),
+            ),
+        );
+        let (provider, http) = provider_with_fake_epic(&env);
+        assert!(provider.cover_candidates("NoIds").is_empty());
+        assert!(http.urls().is_empty());
+    }
+
+    #[test]
+    fn network_failure_gives_no_candidates() {
+        use crate::auth::testing::FakeHttp;
+        let env = Env::new();
+        let dir = env.game_dir("Sugar");
+        env.manifest(
+            "a.item",
+            &item(
+                "Sugar",
+                "Sugar",
+                &dir,
+                serde_json::json!({"CatalogNamespace": "ns-sugar", "CatalogItemId": "sugar-item"}),
+            ),
+        );
+        let provider =
+            EpicProvider::with_data_root(env.root()).with_public(public::PublicCatalog::with(
+                Arc::new(FakeHttp::new(|_| Err("offline".into()))),
+                Arc::new(|| 10),
+            ));
+        assert!(provider.cover_candidates("Sugar").is_empty());
+    }
+
+    #[test]
+    fn legendary_metadata_gives_catalog_ids() {
+        let by_metadata = r#"{"app_name":"Sugar","metadata":{"id":"item-1","namespace":"ns-1"}}"#;
+        assert_eq!(
+            parse_legendary_ids(by_metadata),
+            Some(("ns-1".into(), "item-1".into()))
+        );
+        let by_assets =
+            r#"{"asset_infos":{"Windows":{"namespace":"ns-2","catalog_item_id":"item-2"}}}"#;
+        assert_eq!(
+            parse_legendary_ids(by_assets),
+            Some(("ns-2".into(), "item-2".into()))
+        );
+        assert_eq!(parse_legendary_ids("{}"), None);
+        assert_eq!(parse_legendary_ids("nope"), None);
+
+        let tmp = tempfile::tempdir().unwrap();
+        let meta = tmp
+            .path()
+            .join(".config/heroic/legendaryConfig/legendary/metadata");
+        fs::create_dir_all(&meta).unwrap();
+        fs::write(meta.join("Sugar.json"), by_metadata).unwrap();
+        let paths = HeroicPaths::discover(tmp.path(), None, None);
+        let provider = EpicProvider::with_heroic(paths.clone());
+        assert_eq!(
+            provider.catalog_ids("Sugar"),
+            Some(("ns-1".into(), "item-1".into()))
+        );
+        assert!(legendary_ids(&paths, "../Sugar").is_none());
+        assert!(legendary_ids(&paths, "Missing").is_none());
     }
 
     #[test]

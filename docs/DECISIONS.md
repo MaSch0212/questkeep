@@ -197,6 +197,13 @@ Short log of choices made while building. Newest at the bottom of each section.
 - **Epic catalog data is cached in memory per run** and fetched in namespace batches of up to 40
   items per request; covers (`DieselGameBoxTall`), backgrounds (`DieselGameBox`, `OfferImageWide`)
   and metadata reuse it. A disk cache is a follow-up.
+- **Epic artwork works without an account.** The installed manifests (and Legendary's
+  `metadata/<app>.json`) carry namespace + catalog item id; the catalog `bulk/items` endpoint accepts
+  an app-only token from the launcher's public client (`client_credentials`, verified live), so no
+  user token or store GraphQL scraping is needed. The token stays in memory, answers are cached for
+  the run, and a signed-in account is still tried first. Covers are only tall art
+  (`DieselGameBoxTall`, `OfferImageTall`); wide-only listings give no cover, so SteamGridDB or the
+  placeholder is used instead of cropping wide art.
 - **The Epic login window uses the normal WebView user agent.** With Playnite's
   `EpicGamesLauncher` user agent, Epic treats the window as its launcher and rejects our redirect
   URL ("Redirect URL is not known to the client"). Without it, the standard login page redirects

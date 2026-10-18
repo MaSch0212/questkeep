@@ -211,8 +211,10 @@ webview on the store's own login page; the shell cancels the redirect that carri
 code and passes the code to `Library::sign_in_with_code`, which exchanges it, saves the tokens and
 scans the provider. Providers get their `AccountSession` by constructor injection
 (`ProviderRegistry::with_builtin(Arc<dyn TokenStore>)`); signed out, `scan_owned` returns
-`NotConfigured` so `Library::scan` silently stays installed-only, and Epic covers/metadata are
-skipped (metadata returns an error so it is retried after sign-in).
+`NotConfigured` so `Library::scan` silently stays installed-only. Epic metadata then returns an
+error so it is retried after sign-in, but Epic covers, backgrounds and icons of installed games
+still work: `providers/epic/public.rs` looks them up by the manifest's namespace and catalog item
+id with an in-memory app-only token (`client_credentials`); a signed-in account is tried first.
 
 Payload types are generated into `ui/src/bindings/` by `ts-rs` during `cargo test`. The check
 script fails if the generated files differ from what's committed.
