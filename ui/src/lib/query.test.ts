@@ -38,8 +38,8 @@ describe("helpers", () => {
   });
   it("merges providers with seen sources", () => {
     const providers = [
-      { id: "manual", name: "Manual", canScan: false },
-      { id: "steam", name: "Steam", canScan: true },
+      { id: "manual", name: "Manual", canScan: false, canScanOwned: false },
+      { id: "steam", name: "Steam", canScan: true, canScanOwned: true },
     ];
     expect(mergeSources(providers, new Set(["steam", "fake"]))).toEqual([
       { id: "manual", name: "Manual" },

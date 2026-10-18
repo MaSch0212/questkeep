@@ -8,7 +8,7 @@ pub mod vdf;
 
 use std::path::{Path, PathBuf};
 
-use super::{CoverCandidate, LibraryProvider, ProviderError};
+use super::{ImageCandidate, LibraryProvider, ProviderError};
 use crate::model::ImportedGame;
 
 pub const STEAM_SOURCE: &str = "steam";
@@ -61,14 +61,14 @@ impl LibraryProvider for SteamProvider {
     /// `librarycache/<id>_library_600x900.jpg` (older clients) and
     /// `librarycache/<id>/library_600x900.jpg`, and `librarycache/<id>/<hash>/library_600x900.jpg`
     /// or `.../<hash>/library_capsule.jpg` (newer clients).
-    fn cover_candidates(&self, app_id: &str) -> Vec<CoverCandidate> {
+    fn cover_candidates(&self, app_id: &str) -> Vec<ImageCandidate> {
         if app_id.is_empty() || !app_id.chars().all(|c| c.is_ascii_digit()) {
             return Vec::new();
         }
         let mut candidates = Vec::new();
         for root in &self.roots {
             let cache = root.join("appcache").join("librarycache");
-            candidates.push(CoverCandidate::File(
+            candidates.push(ImageCandidate::File(
                 cache.join(format!("{app_id}_library_600x900.jpg")),
             ));
             let app_dir = cache.join(app_id);
@@ -79,7 +79,7 @@ impl LibraryProvider for SteamProvider {
             // Newest clients store the portrait capsule as `library_capsule.jpg`.
             for name in ["library_600x900.jpg", "library_capsule.jpg"] {
                 for dir in &dirs {
-                    candidates.push(CoverCandidate::File(dir.join(name)));
+                    candidates.push(ImageCandidate::File(dir.join(name)));
                 }
             }
         }
@@ -92,7 +92,7 @@ impl LibraryProvider for SteamProvider {
             ),
             format!("https://steamcdn-a.akamaihd.net/steam/apps/{app_id}/library_600x900_2x.jpg"),
         ] {
-            candidates.push(CoverCandidate::Url(url));
+            candidates.push(ImageCandidate::Url(url));
         }
         candidates
     }
@@ -202,8 +202,6 @@ mod tests {
 
     fn expected(library: &Path, id: &str, name: &str, dir: &str) -> ImportedGame {
         ImportedGame {
-            source_game_id: id.into(),
-            name: name.into(),
             install_dir: Some(
                 library
                     .join("steamapps")
@@ -213,6 +211,7 @@ mod tests {
                     .into_owned(),
             ),
             play_action: Some(PlayAction::uri(format!("steam://rungameid/{id}"))),
+            ..ImportedGame::installed(id, name)
         }
     }
 
@@ -351,16 +350,16 @@ mod tests {
         fs::create_dir_all(&hashed).unwrap();
         let provider = SteamProvider::with_roots(vec![tmp.path().to_path_buf()]);
         let candidates = provider.cover_candidates("123");
-        let capsule = CoverCandidate::File(hashed.join("library_capsule.jpg"));
+        let capsule = ImageCandidate::File(hashed.join("library_capsule.jpg"));
         let capsule_pos = candidates.iter().position(|c| *c == capsule).unwrap();
         let first_url = candidates
             .iter()
-            .position(|c| matches!(c, CoverCandidate::Url(_)))
+            .position(|c| matches!(c, ImageCandidate::Url(_)))
             .unwrap();
         assert!(capsule_pos < first_url);
         assert!(matches!(
             &candidates[0],
-            CoverCandidate::File(p) if p.ends_with("123_library_600x900.jpg")
+            ImageCandidate::File(p) if p.ends_with("123_library_600x900.jpg")
         ));
         assert!(provider.cover_candidates("../etc").is_empty());
     }

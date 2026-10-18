@@ -25,6 +25,13 @@ export function makeGame(overrides: Partial<Game> = {}): Game {
     hidden: false,
     coverPath: null,
     iconPath: null,
+    backgroundPath: null,
+    description: null,
+    releaseDate: null,
+    developers: [],
+    publishers: [],
+    genres: [],
+    metadataUpdatedAt: null,
     extra: {},
     ...overrides,
   };

@@ -1,6 +1,7 @@
 //! User settings stored in `settings.json`. A missing or unreadable file yields defaults so a
 //! broken settings file never prevents the app from starting.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -16,6 +17,19 @@ pub struct Settings {
     pub scan_on_startup: bool,
     /// Download missing covers from store CDNs.
     pub download_covers: bool,
+    /// Download descriptions, genres, release dates and backgrounds from stores.
+    pub fetch_metadata: bool,
+    /// Per-provider configuration keyed by provider id, e.g. `steam: { apiKey, steamId }`.
+    /// Passed to the provider as-is; secrets are stored in plain text (see DECISIONS.md).
+    #[ts(type = "Record<string, Record<string, unknown>>")]
+    pub providers: BTreeMap<String, serde_json::Value>,
+}
+
+impl Settings {
+    /// The configuration section of one provider (`null` when absent).
+    pub fn provider_config(&self, id: &str) -> &serde_json::Value {
+        self.providers.get(id).unwrap_or(&serde_json::Value::Null)
+    }
 }
 
 impl Default for Settings {
@@ -23,6 +37,8 @@ impl Default for Settings {
         Self {
             scan_on_startup: true,
             download_covers: true,
+            fetch_metadata: true,
+            providers: BTreeMap::new(),
         }
     }
 }
@@ -84,9 +100,16 @@ mod tests {
         let custom = Settings {
             scan_on_startup: false,
             download_covers: false,
+            fetch_metadata: false,
+            providers: BTreeMap::from([(
+                "steam".to_string(),
+                serde_json::json!({ "apiKey": "k", "steamId": "1" }),
+            )]),
         };
         store.save(&custom).unwrap();
         assert_eq!(store.load(), custom);
+        assert_eq!(custom.provider_config("steam")["steamId"], "1");
+        assert!(custom.provider_config("gog").is_null());
     }
 
     #[test]

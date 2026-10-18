@@ -95,7 +95,7 @@ pub async fn scan_library(
 ) -> CmdResult<ScanSummary> {
     blocking(state, move |s| {
         let summary = s.library.scan(&provider_id)?;
-        s.queue_missing_covers();
+        s.queue_downloads();
         Ok(summary)
     })
     .await
@@ -106,6 +106,24 @@ pub async fn launch_game(state: State<'_, Arc<AppState>>, id: String) -> CmdResu
     blocking(state, move |s| {
         let game = s.library.get_game(parse_id(&id)?)?;
         s.launcher.launch(&game)
+    })
+    .await
+}
+
+/// Starts installing an owned game through its store client.
+#[tauri::command]
+pub async fn install_game(state: State<'_, Arc<AppState>>, id: String) -> CmdResult<()> {
+    blocking(state, move |s| s.library.install_game(parse_id(&id)?)).await
+}
+
+/// Re-downloads store metadata (and a missing background) for one game in the background.
+#[tauri::command]
+pub async fn refresh_metadata(state: State<'_, Arc<AppState>>, id: String) -> CmdResult<()> {
+    blocking(state, move |s| {
+        if let Some(job) = s.library.metadata_job(parse_id(&id)?)? {
+            s.metadata.enqueue([job]);
+        }
+        Ok(())
     })
     .await
 }

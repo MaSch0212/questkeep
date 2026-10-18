@@ -42,6 +42,16 @@ const MIGRATIONS: &[&str] = &[
     );
     CREATE INDEX play_sessions_open ON play_sessions (game_id) WHERE ended_at IS NULL;
     "#,
+    // 2: store metadata and background images
+    r#"
+    ALTER TABLE games ADD COLUMN description TEXT;
+    ALTER TABLE games ADD COLUMN release_date TEXT;
+    ALTER TABLE games ADD COLUMN developers TEXT NOT NULL DEFAULT '[]';
+    ALTER TABLE games ADD COLUMN publishers TEXT NOT NULL DEFAULT '[]';
+    ALTER TABLE games ADD COLUMN genres TEXT NOT NULL DEFAULT '[]';
+    ALTER TABLE games ADD COLUMN background_path TEXT;
+    ALTER TABLE games ADD COLUMN metadata_updated_at TEXT;
+    "#,
 ];
 
 /// Latest schema version this build knows.
@@ -105,6 +115,34 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM schema_version", [], |r| r.get(0))
             .unwrap();
         assert_eq!(rows, 1);
+    }
+
+    #[test]
+    fn upgrades_a_version_1_database_keeping_rows() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE schema_version (version INTEGER NOT NULL);
+             INSERT INTO schema_version VALUES (0);",
+        )
+        .unwrap();
+        // Apply only step 1, insert a row, then migrate the rest.
+        let tx = conn.transaction().unwrap();
+        tx.execute_batch(MIGRATIONS[0]).unwrap();
+        tx.execute("UPDATE schema_version SET version = 1", [])
+            .unwrap();
+        tx.execute(
+            "INSERT INTO games (id, name, sorting_name, search_key, source, date_added) \
+             VALUES ('a', 'A', 'A', 'a', 'manual', '2026-01-01T00:00:00Z')",
+            [],
+        )
+        .unwrap();
+        tx.commit().unwrap();
+
+        assert_eq!(migrate(&mut conn).unwrap(), LATEST_VERSION);
+        let genres: String = conn
+            .query_row("SELECT genres FROM games WHERE id = 'a'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(genres, "[]");
     }
 
     #[test]

@@ -8,4 +8,13 @@ scanOnStartup: boolean,
 /**
  * Download missing covers from store CDNs.
  */
-downloadCovers: boolean, };
+downloadCovers: boolean, 
+/**
+ * Download descriptions, genres, release dates and backgrounds from stores.
+ */
+fetchMetadata: boolean, 
+/**
+ * Per-provider configuration keyed by provider id, e.g. `steam: { apiKey, steamId }`.
+ * Passed to the provider as-is; secrets are stored in plain text (see DECISIONS.md).
+ */
+providers: Record<string, Record<string, unknown>>, };

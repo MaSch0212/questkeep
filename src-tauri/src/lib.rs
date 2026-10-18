@@ -6,7 +6,9 @@ use std::sync::Arc;
 
 use questkeep_core::Library;
 use questkeep_core::events::EventBus;
-use questkeep_core::images::CoverFetcher;
+use std::time::Duration;
+
+use questkeep_core::images::{CoverFetcher, MetadataFetcher};
 use questkeep_core::launcher::Launcher;
 use questkeep_core::paths::DataPaths;
 use questkeep_core::providers::ProviderRegistry;
@@ -19,12 +21,15 @@ use tracing_subscriber::prelude::*;
 const CORE_EVENT: &str = "core-event";
 /// Concurrent cover downloads.
 const COVER_WORKERS: usize = 4;
+/// Minimum time between two store metadata requests.
+const METADATA_INTERVAL: Duration = Duration::from_millis(1500);
 
 /// Shared state behind every command.
 pub struct AppState {
     pub library: Library,
     pub launcher: Launcher,
     pub covers: CoverFetcher,
+    pub metadata: MetadataFetcher,
 }
 
 impl AppState {
@@ -42,6 +47,28 @@ impl AppState {
             }
             Err(err) => tracing::warn!(%err, "could not list games without covers"),
         }
+    }
+
+    /// Queues metadata downloads for games never checked, if enabled in settings.
+    pub fn queue_missing_metadata(&self) {
+        if !self.library.settings().fetch_metadata {
+            return;
+        }
+        match self.library.missing_metadata_jobs() {
+            Ok(jobs) => {
+                let queued = self.metadata.enqueue(jobs);
+                if queued > 0 {
+                    tracing::info!(queued, "queued metadata downloads");
+                }
+            }
+            Err(err) => tracing::warn!(%err, "could not list games without metadata"),
+        }
+    }
+
+    /// Follow-up downloads after the library changed (a scan or startup).
+    pub fn queue_downloads(&self) {
+        self.queue_missing_covers();
+        self.queue_missing_metadata();
     }
 }
 
@@ -114,15 +141,23 @@ fn build_state(app: &tauri::AppHandle) -> Result<(AppState, Option<WorkerGuard>)
     let covers = CoverFetcher::new(
         library.database().clone(),
         library.images().clone(),
+        providers.clone(),
+        events.clone(),
+        COVER_WORKERS,
+    );
+    let metadata = MetadataFetcher::new(
+        library.database().clone(),
+        library.images().clone(),
         providers,
         events,
-        COVER_WORKERS,
+        METADATA_INTERVAL,
     );
     Ok((
         AppState {
             library,
             launcher,
             covers,
+            metadata,
         },
         guard,
     ))
@@ -152,13 +187,13 @@ fn create_main_window(app: &tauri::App) -> tauri::Result<()> {
     Ok(())
 }
 
-/// Startup work that must not delay the window: provider scans and cover downloads.
+/// Startup work that must not delay the window: provider scans and image/metadata downloads.
 fn spawn_startup_tasks(state: Arc<AppState>) {
     tauri::async_runtime::spawn_blocking(move || {
         if state.library.settings().scan_on_startup {
             state.library.scan_all();
         }
-        state.queue_missing_covers();
+        state.queue_downloads();
     });
 }
 
@@ -189,6 +224,8 @@ pub fn run() {
             commands::list_providers,
             commands::scan_library,
             commands::launch_game,
+            commands::install_game,
+            commands::refresh_metadata,
             commands::running_games,
             commands::app_info,
             commands::get_settings,
@@ -211,6 +248,7 @@ pub fn run() {
         {
             tracing::info!("shutting down");
             state.covers.close();
+            state.metadata.close();
             // Stops trackers and saves the elapsed time of running games.
             state.launcher.shutdown();
         }

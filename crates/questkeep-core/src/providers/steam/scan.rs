@@ -204,10 +204,9 @@ fn game_from_manifest(steamapps: &Path, state: &Vdf) -> Option<ImportedGame> {
     }
 
     Some(ImportedGame {
-        source_game_id: app_id.to_string(),
-        name,
         install_dir: Some(install_dir.to_string_lossy().into_owned()),
         play_action: Some(PlayAction::uri(format!("steam://rungameid/{app_id}"))),
+        ..ImportedGame::installed(app_id, name)
     })
 }
 

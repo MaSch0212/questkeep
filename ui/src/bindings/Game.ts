@@ -34,6 +34,22 @@ coverPath: string | null,
  */
 iconPath: string | null, 
 /**
+ * Absolute path of the cached background (hero) image when returned by the library API.
+ */
+backgroundPath: string | null, 
+/**
+ * Plain-text description from store metadata.
+ */
+description: string | null, 
+/**
+ * Release date as `YYYY-MM-DD`, `YYYY-MM` or `YYYY`.
+ */
+releaseDate: string | null, developers: Array<string>, publishers: Array<string>, genres: Array<string>, 
+/**
+ * When store metadata was last fetched; `None` means never.
+ */
+metadataUpdatedAt: string | null, 
+/**
  * Free-form data for future fields and plugins.
  */
 extra: Record<string, unknown>, };

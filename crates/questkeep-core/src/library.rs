@@ -11,13 +11,13 @@ use uuid::Uuid;
 use crate::db::{Database, NewGameRecord};
 use crate::error::{CoreError, Result};
 use crate::events::{CoreEvent, EventBus};
-use crate::images::{CoverJob, ImageCache};
+use crate::images::{CoverJob, ImageCache, ImageKind, MetadataJob};
 use crate::model::{
-    Game, GameQuery, GameUpdate, MANUAL_SOURCE, NewManualGame, PlayAction, ScanSummary,
-    display_name_from_path,
+    ActionKind, Game, GameQuery, GameUpdate, ImportedGame, MANUAL_SOURCE, NewManualGame,
+    PlayAction, ScanSummary, display_name_from_path,
 };
 use crate::paths::DataPaths;
-use crate::providers::{ProviderInfo, ProviderRegistry};
+use crate::providers::{ProviderError, ProviderInfo, ProviderRegistry};
 use crate::settings::{Settings, SettingsStore};
 
 /// Static information about the running app, shown in settings.
@@ -107,16 +107,14 @@ impl Library {
 
     /// Converts stored relative image paths into absolute ones for the UI; drops missing files.
     fn resolve_images(&self, mut game: Game) -> Game {
-        game.cover_path = game
-            .cover_path
-            .as_deref()
-            .and_then(|p| self.images.resolve(p))
-            .map(|p| p.display().to_string());
-        game.icon_path = game
-            .icon_path
-            .as_deref()
-            .and_then(|p| self.images.resolve(p))
-            .map(|p| p.display().to_string());
+        let resolve = |p: Option<String>| {
+            p.as_deref()
+                .and_then(|p| self.images.resolve(p))
+                .map(|p| p.display().to_string())
+        };
+        game.cover_path = resolve(game.cover_path.take());
+        game.icon_path = resolve(game.icon_path.take());
+        game.background_path = resolve(game.background_path.take());
         game
     }
 
@@ -173,7 +171,10 @@ impl Library {
         let game = self.db.insert_game(&record, Utc::now())?;
         if let Some(cover) = non_empty(&input.cover_image) {
             // A bad cover must not lose the game the user just added; report and continue.
-            match self.images.import_cover(game.id, Path::new(&cover)) {
+            match self
+                .images
+                .import_image(ImageKind::Cover, game.id, Path::new(&cover))
+            {
                 Ok(rel) => self.db.set_cover_path(game.id, Some(&rel))?,
                 Err(err) => tracing::warn!(%err, "could not import cover image"),
             }
@@ -194,9 +195,9 @@ impl Library {
     pub fn set_cover(&self, id: Uuid, image: Option<&Path>) -> Result<Game> {
         self.db.get_game(id)?;
         let relative = match image {
-            Some(path) => Some(self.images.import_cover(id, path)?),
+            Some(path) => Some(self.images.import_image(ImageKind::Cover, id, path)?),
             None => {
-                self.images.remove_covers(id)?;
+                self.images.remove_image(ImageKind::Cover, id)?;
                 None
             }
         };
@@ -208,8 +209,8 @@ impl Library {
 
     pub fn remove_game(&self, id: Uuid) -> Result<()> {
         self.db.delete_game(id)?;
-        if let Err(err) = self.images.remove_covers(id) {
-            tracing::warn!(%err, %id, "could not delete cached covers");
+        if let Err(err) = self.images.remove_all(id) {
+            tracing::warn!(%err, %id, "could not delete cached images");
         }
         self.events.publish(CoreEvent::GameRemoved { id });
         Ok(())
@@ -219,18 +220,44 @@ impl Library {
         self.providers.infos()
     }
 
-    /// Runs a provider's installed-games scan and merges the result into the library.
+    /// Runs a provider's installed-games scan, plus its owned-games scan when supported and
+    /// configured, and merges the result into the library. Fails only when nothing could be
+    /// scanned.
     pub fn scan(&self, provider_id: &str) -> Result<ScanSummary> {
         let provider = self
             .providers
             .get(provider_id)
             .ok_or_else(|| CoreError::UnknownProvider(provider_id.to_string()))?;
-        let games = provider
-            .scan_installed()
-            .map_err(|err| CoreError::Provider {
-                provider: provider.name().to_string(),
-                message: err.to_string(),
-            })?;
+        let owned = if provider.can_scan_owned() {
+            match provider.scan_owned(self.settings().provider_config(provider_id)) {
+                Ok(games) => Some(games),
+                Err(ProviderError::NotConfigured(reason)) => {
+                    tracing::debug!(provider = provider_id, %reason, "owned scan skipped");
+                    None
+                }
+                Err(err) => {
+                    tracing::warn!(provider = provider_id, %err, "owned scan failed");
+                    None
+                }
+            }
+        } else {
+            None
+        };
+        let installed = match provider.scan_installed() {
+            Ok(games) => games,
+            // The store client may be missing while the account is still readable online.
+            Err(err) if owned.is_some() => {
+                tracing::warn!(provider = provider_id, %err, "installed scan failed");
+                Vec::new()
+            }
+            Err(err) => {
+                return Err(CoreError::Provider {
+                    provider: provider.name().to_string(),
+                    message: err.to_string(),
+                });
+            }
+        };
+        let games = merge_owned(installed, owned.unwrap_or_default());
         let summary = self.db.upsert_imported(provider.id(), &games, Utc::now())?;
         tracing::info!(
             provider = provider_id,
@@ -283,6 +310,69 @@ impl Library {
             .collect())
     }
 
+    /// Metadata jobs for store games whose metadata was never fetched.
+    pub fn missing_metadata_jobs(&self) -> Result<Vec<MetadataJob>> {
+        Ok(self
+            .db
+            .games_needing_metadata()?
+            .into_iter()
+            .filter(|(_, source, _)| self.providers.get(source).is_some())
+            .map(|(game_id, source, source_game_id)| MetadataJob {
+                game_id,
+                source,
+                source_game_id,
+            })
+            .collect())
+    }
+
+    /// Metadata job for one game (to refresh it on demand); `None` for games without a store.
+    pub fn metadata_job(&self, id: Uuid) -> Result<Option<MetadataJob>> {
+        let game = self.db.get_game(id)?;
+        Ok(match game.source_game_id {
+            Some(source_game_id) if self.providers.get(&game.source).is_some() => {
+                Some(MetadataJob {
+                    game_id: id,
+                    source: game.source,
+                    source_game_id,
+                })
+            }
+            _ => None,
+        })
+    }
+
+    /// The store action that installs a game that is owned but not installed. The caller opens
+    /// it; installation itself happens in the store client.
+    pub fn install_action(&self, id: Uuid) -> Result<PlayAction> {
+        let game = self.db.get_game(id)?;
+        let not_installable = || {
+            CoreError::Invalid(format!(
+                "'{}' can't be installed from Questkeep.",
+                game.name
+            ))
+        };
+        let provider = self
+            .providers
+            .get(&game.source)
+            .ok_or_else(not_installable)?;
+        let source_game_id = game.source_game_id.as_deref().ok_or_else(not_installable)?;
+        provider
+            .install_action(source_game_id)
+            .ok_or_else(not_installable)
+    }
+
+    /// Hands the install over to the store client (e.g. opens `steam://install/440`). The next
+    /// scan picks the game up as installed.
+    pub fn install_game(&self, id: Uuid) -> Result<()> {
+        let action = self.install_action(id)?;
+        let started = match action.kind {
+            ActionKind::Uri => crate::platform::open_uri(&action.target),
+            ActionKind::File => std::process::Command::new(&action.target)
+                .spawn()
+                .map(|_| ()),
+        };
+        started.map_err(|err| CoreError::Launch(format!("Could not start the install: {err}")))
+    }
+
     /// Dev tool: inserts `count` fake games to test performance.
     pub fn seed_fake_library(&self, count: usize) -> Result<usize> {
         let records = crate::seed::fake_games(count);
@@ -293,13 +383,36 @@ impl Library {
     }
 }
 
+/// Combines an installed scan with an owned scan: installed entries win, owned-only games are
+/// added as not installed, and store playtime from the owned scan fills gaps.
+fn merge_owned(mut installed: Vec<ImportedGame>, owned: Vec<ImportedGame>) -> Vec<ImportedGame> {
+    let index: std::collections::HashMap<String, usize> = installed
+        .iter()
+        .enumerate()
+        .map(|(i, g)| (g.source_game_id.clone(), i))
+        .collect();
+    for game in owned {
+        match index.get(&game.source_game_id) {
+            Some(&i) => {
+                let target = &mut installed[i];
+                target.playtime_seconds = target.playtime_seconds.max(game.playtime_seconds);
+                target.last_played = target.last_played.max(game.last_played);
+            }
+            None => installed.push(ImportedGame {
+                installed: false,
+                ..game
+            }),
+        }
+    }
+    installed
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Mutex;
 
     use super::*;
-    use crate::model::ImportedGame;
-    use crate::providers::{LibraryProvider, ProviderError};
+    use crate::providers::LibraryProvider;
 
     struct FakeStore(Vec<ImportedGame>);
     impl LibraryProvider for FakeStore {
@@ -381,10 +494,8 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let mut providers = ProviderRegistry::new();
         providers.register(Arc::new(FakeStore(vec![ImportedGame {
-            source_game_id: "1".into(),
-            name: "Fake Game".into(),
-            install_dir: None,
             play_action: Some(PlayAction::uri("fake://1")),
+            ..ImportedGame::installed("1", "Fake Game")
         }])));
         let (lib, seen) = library(tmp.path(), providers);
         let summary = lib.scan("fake").unwrap();
@@ -399,6 +510,79 @@ mod tests {
             lib.scan("nope"),
             Err(CoreError::UnknownProvider(_))
         ));
+    }
+
+    /// Store whose client is missing but whose account lists owned games when configured.
+    struct AccountStore;
+    impl LibraryProvider for AccountStore {
+        fn id(&self) -> &str {
+            "acct"
+        }
+        fn name(&self) -> &str {
+            "Account"
+        }
+        fn scan_installed(&self) -> Result<Vec<ImportedGame>, ProviderError> {
+            Ok(vec![ImportedGame {
+                playtime_seconds: Some(10),
+                ..ImportedGame::installed("1", "Installed")
+            }])
+        }
+        fn can_scan_owned(&self) -> bool {
+            true
+        }
+        fn scan_owned(
+            &self,
+            config: &serde_json::Value,
+        ) -> Result<Vec<ImportedGame>, ProviderError> {
+            if config["key"].as_str().is_none() {
+                return Err(ProviderError::NotConfigured("no key".into()));
+            }
+            Ok(vec![
+                ImportedGame {
+                    playtime_seconds: Some(600),
+                    ..ImportedGame::installed("1", "Installed")
+                },
+                ImportedGame::installed("2", "Owned"),
+            ])
+        }
+        fn install_action(&self, id: &str) -> Option<PlayAction> {
+            Some(PlayAction::uri(format!("acct://install/{id}")))
+        }
+    }
+
+    #[test]
+    fn owned_scan_adds_uninstalled_games_when_configured() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut providers = ProviderRegistry::new();
+        providers.register(Arc::new(AccountStore));
+        let (lib, _) = library(tmp.path(), providers);
+
+        assert_eq!(
+            lib.scan("acct").unwrap().added,
+            1,
+            "unconfigured: installed only"
+        );
+
+        let mut settings = lib.settings();
+        settings
+            .providers
+            .insert("acct".into(), serde_json::json!({ "key": "k" }));
+        lib.save_settings(&settings).unwrap();
+        assert_eq!(lib.scan("acct").unwrap().added, 1);
+
+        let games = lib.list_games(&GameQuery::default()).unwrap();
+        let installed = games.iter().find(|g| g.name == "Installed").unwrap();
+        let owned = games.iter().find(|g| g.name == "Owned").unwrap();
+        assert!(installed.installed && !owned.installed);
+        assert_eq!(installed.playtime_seconds, 600, "store playtime merged");
+        assert_eq!(
+            lib.install_action(owned.id).unwrap().target,
+            "acct://install/2"
+        );
+        let jobs = lib.missing_metadata_jobs().unwrap();
+        assert_eq!(jobs.len(), 2);
+        assert_eq!(jobs[0].game_id, installed.id, "installed games first");
+        assert!(lib.metadata_job(owned.id).unwrap().is_some());
     }
 
     #[test]

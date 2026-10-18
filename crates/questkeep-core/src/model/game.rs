@@ -36,9 +36,34 @@ pub struct Game {
     pub cover_path: Option<String>,
     /// Absolute path of the cached icon when returned by the library API.
     pub icon_path: Option<String>,
+    /// Absolute path of the cached background (hero) image when returned by the library API.
+    pub background_path: Option<String>,
+    /// Plain-text description from store metadata.
+    pub description: Option<String>,
+    /// Release date as `YYYY-MM-DD`, `YYYY-MM` or `YYYY`.
+    pub release_date: Option<String>,
+    pub developers: Vec<String>,
+    pub publishers: Vec<String>,
+    pub genres: Vec<String>,
+    /// When store metadata was last fetched; `None` means never.
+    pub metadata_updated_at: Option<DateTime<Utc>>,
     /// Free-form data for future fields and plugins.
     #[ts(type = "Record<string, unknown>")]
     pub extra: serde_json::Value,
+}
+
+/// Store metadata for one game, as returned by a provider.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct GameMetadata {
+    /// Plain text (providers strip HTML).
+    pub description: Option<String>,
+    /// `YYYY-MM-DD`, `YYYY-MM` or `YYYY`.
+    pub release_date: Option<String>,
+    pub developers: Vec<String>,
+    pub publishers: Vec<String>,
+    pub genres: Vec<String>,
 }
 
 /// How a game is started.
@@ -117,8 +142,37 @@ impl PlayAction {
 pub struct ImportedGame {
     pub source_game_id: String,
     pub name: String,
+    /// `false` for games that are owned but not installed (from `scan_owned`).
+    #[serde(default = "default_true")]
+    pub installed: bool,
     pub install_dir: Option<String>,
     pub play_action: Option<PlayAction>,
+    /// Playtime known to the store. Merged as the maximum with Questkeep's own tracking.
+    #[serde(default)]
+    #[ts(type = "number | null")]
+    pub playtime_seconds: Option<u64>,
+    /// Last played according to the store. Merged as the later of both values.
+    #[serde(default)]
+    pub last_played: Option<DateTime<Utc>>,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+impl ImportedGame {
+    /// An installed game with the required fields; everything else empty.
+    pub fn installed(source_game_id: impl Into<String>, name: impl Into<String>) -> Self {
+        Self {
+            source_game_id: source_game_id.into(),
+            name: name.into(),
+            installed: true,
+            install_dir: None,
+            play_action: None,
+            playtime_seconds: None,
+            last_played: None,
+        }
+    }
 }
 
 /// Input for adding a game by hand.

@@ -9,13 +9,13 @@ use uuid::Uuid;
 use super::Database;
 use crate::error::{CoreError, Result};
 use crate::model::{
-    Game, GameQuery, GameUpdate, HiddenFilter, ImportedGame, PlayAction, ScanSummary, SortField,
-    sorting_name,
+    Game, GameMetadata, GameQuery, GameUpdate, HiddenFilter, ImportedGame, PlayAction, ScanSummary,
+    SortField, sorting_name,
 };
 
 const COLUMNS: &str = "id, name, sorting_name, source, source_game_id, installed, install_dir, \
     play_action, playtime_seconds, play_count, last_played, date_added, favorite, hidden, \
-    cover_path, icon_path, extra";
+    cover_path, icon_path, background_path, description, release_date, developers, publishers,     genres, metadata_updated_at, extra";
 
 /// `extra` key set when the user renamed a store game, so re-scans keep their name.
 const USER_RENAMED: &str = "userRenamed";
@@ -60,8 +60,24 @@ fn row_to_game(row: &Row<'_>) -> rusqlite::Result<Game> {
         hidden: row.get("hidden")?,
         cover_path: row.get("cover_path")?,
         icon_path: row.get("icon_path")?,
+        background_path: row.get("background_path")?,
+        description: row.get("description")?,
+        release_date: row.get("release_date")?,
+        developers: string_list(row.get("developers")?),
+        publishers: string_list(row.get("publishers")?),
+        genres: string_list(row.get("genres")?),
+        metadata_updated_at: row.get("metadata_updated_at")?,
         extra: serde_json::from_str(&extra).unwrap_or_else(|_| serde_json::json!({})),
     })
+}
+
+/// Parses a JSON string array column; malformed data yields an empty list.
+fn string_list(json: String) -> Vec<String> {
+    serde_json::from_str(&json).unwrap_or_default()
+}
+
+fn list_json(list: &[String]) -> Result<String> {
+    Ok(serde_json::to_string(list)?)
 }
 
 fn action_json(action: Option<&PlayAction>) -> Result<Option<String>> {
@@ -271,6 +287,8 @@ impl Database {
             installed: bool,
             install_dir: Option<String>,
             play_action: Option<String>,
+            playtime_seconds: i64,
+            last_played: Option<DateTime<Utc>>,
             user_renamed: bool,
         }
 
@@ -281,8 +299,7 @@ impl Database {
         let mut existing: HashMap<String, Existing> = HashMap::new();
         {
             let mut stmt = tx.prepare(
-                "SELECT id, name, installed, install_dir, play_action, extra, source_game_id \
-                 FROM games WHERE source = ?1 AND source_game_id IS NOT NULL",
+                "SELECT id, name, installed, install_dir, play_action, extra, source_game_id,                  playtime_seconds, last_played                  FROM games WHERE source = ?1 AND source_game_id IS NOT NULL",
             )?;
             let rows = stmt.query_map([source], |r| {
                 let extra: String = r.get(5)?;
@@ -298,6 +315,8 @@ impl Database {
                         installed: r.get(2)?,
                         install_dir: r.get(3)?,
                         play_action: r.get(4)?,
+                        playtime_seconds: r.get(7)?,
+                        last_played: r.get(8)?,
                         user_renamed,
                     },
                 ))
@@ -311,46 +330,57 @@ impl Database {
         let mut seen: HashSet<&str> = HashSet::new();
         for game in games {
             if !seen.insert(game.source_game_id.as_str()) {
-                continue; // duplicate within one scan: first one wins
+                continue; // duplicate within one scan: first one wins (installed before owned)
             }
             let action = action_json(game.play_action.as_ref())?;
+            let store_playtime =
+                i64::try_from(game.playtime_seconds.unwrap_or_default()).unwrap_or(i64::MAX);
             match existing.get(&game.source_game_id) {
                 Some(row) => {
-                    let name_changed = !row.user_renamed && row.name != game.name;
-                    let changed = name_changed
-                        || !row.installed
+                    let name = if row.user_renamed {
+                        &row.name
+                    } else {
+                        &game.name
+                    };
+                    // Store playtime and last played merge as maximum with our own tracking.
+                    let playtime = row.playtime_seconds.max(store_playtime);
+                    let last_played = row.last_played.max(game.last_played);
+                    let changed = *name != row.name
+                        || row.installed != game.installed
                         || row.install_dir != game.install_dir
-                        || row.play_action != action;
-                    if changed {
-                        let name = if row.user_renamed {
-                            &row.name
-                        } else {
-                            &game.name
-                        };
-                        tx.execute(
-                            "UPDATE games SET name = ?2, sorting_name = ?3, search_key = ?4, \
-                             installed = 1, install_dir = ?5, play_action = ?6 WHERE id = ?1",
-                            params![
-                                row.id,
-                                name,
-                                sorting_name(name),
-                                search_key(name),
-                                game.install_dir,
-                                action
-                            ],
-                        )?;
+                        || row.play_action != action
+                        || playtime != row.playtime_seconds
+                        || last_played != row.last_played;
+                    if !changed {
+                        continue;
+                    }
+                    tx.execute(
+                        "UPDATE games SET name = ?2, sorting_name = ?3, search_key = ?4,                          installed = ?5, install_dir = ?6, play_action = ?7,                          playtime_seconds = ?8, last_played = ?9 WHERE id = ?1",
+                        params![
+                            row.id,
+                            name,
+                            sorting_name(name),
+                            search_key(name),
+                            game.installed,
+                            game.install_dir,
+                            action,
+                            playtime,
+                            last_played
+                        ],
+                    )?;
+                    if row.installed && !game.installed {
+                        summary.uninstalled += 1;
+                    } else {
                         summary.updated += 1;
-                        if let Ok(id) = Uuid::parse_str(&row.id) {
-                            summary.changed_ids.push(id);
-                        }
+                    }
+                    if let Ok(id) = Uuid::parse_str(&row.id) {
+                        summary.changed_ids.push(id);
                     }
                 }
                 None => {
                     let id = Uuid::new_v4();
                     tx.execute(
-                        "INSERT INTO games (id, name, sorting_name, search_key, source, \
-                         source_game_id, install_dir, play_action, date_added) \
-                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                        "INSERT INTO games (id, name, sorting_name, search_key, source,                          source_game_id, installed, install_dir, play_action, date_added,                          playtime_seconds, last_played)                          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
                         params![
                             id.to_string(),
                             game.name,
@@ -358,9 +388,12 @@ impl Database {
                             search_key(&game.name),
                             source,
                             game.source_game_id,
+                            game.installed,
                             game.install_dir,
                             action,
-                            now
+                            now,
+                            store_playtime,
+                            game.last_played
                         ],
                     )?;
                     summary.added += 1;
@@ -383,13 +416,66 @@ impl Database {
         Ok(summary)
     }
 
+    /// Stores fetched metadata and marks the game as checked.
+    pub fn set_metadata(&self, id: Uuid, meta: &GameMetadata, now: DateTime<Utc>) -> Result<()> {
+        let changed = self.conn().execute(
+            "UPDATE games SET description = ?2, release_date = ?3, developers = ?4, \
+             publishers = ?5, genres = ?6, metadata_updated_at = ?7 WHERE id = ?1",
+            params![
+                id.to_string(),
+                meta.description,
+                meta.release_date,
+                list_json(&meta.developers)?,
+                list_json(&meta.publishers)?,
+                list_json(&meta.genres)?,
+                now
+            ],
+        )?;
+        if changed == 0 {
+            return Err(CoreError::GameNotFound(id));
+        }
+        Ok(())
+    }
+
+    /// Marks metadata as checked without data (the store had none), so it isn't re-fetched on
+    /// every start.
+    pub fn mark_metadata_checked(&self, id: Uuid, now: DateTime<Utc>) -> Result<()> {
+        self.conn().execute(
+            "UPDATE games SET metadata_updated_at = ?2 WHERE id = ?1",
+            params![id.to_string(), now],
+        )?;
+        Ok(())
+    }
+
+    /// Sets (or clears) the background path, stored relative to the data dir.
+    pub fn set_background_path(&self, id: Uuid, relative: Option<&str>) -> Result<()> {
+        let changed = self.conn().execute(
+            "UPDATE games SET background_path = ?2 WHERE id = ?1",
+            params![id.to_string(), relative],
+        )?;
+        if changed == 0 {
+            return Err(CoreError::GameNotFound(id));
+        }
+        Ok(())
+    }
+
+    /// Store games whose metadata was never fetched: `(id, source, source_game_id)`.
+    pub fn games_needing_metadata(&self) -> Result<Vec<(Uuid, String, String)>> {
+        self.store_game_keys("metadata_updated_at IS NULL")
+    }
+
     /// Store games that have no cover yet: `(id, source, source_game_id)`.
     pub fn games_without_cover(&self) -> Result<Vec<(Uuid, String, String)>> {
+        self.store_game_keys("cover_path IS NULL")
+    }
+
+    /// `(id, source, source_game_id)` of store games matching a fixed SQL condition.
+    fn store_game_keys(&self, condition: &'static str) -> Result<Vec<(Uuid, String, String)>> {
         let conn = self.conn();
-        let mut stmt = conn.prepare(
+        let mut stmt = conn.prepare(&format!(
             "SELECT id, source, source_game_id FROM games \
-             WHERE cover_path IS NULL AND source_game_id IS NOT NULL ORDER BY sorting_name",
-        )?;
+             WHERE {condition} AND source_game_id IS NOT NULL ORDER BY installed DESC, sorting_name"
+        ))?;
         let rows = stmt.query_map([], |r| {
             Ok((
                 r.get::<_, String>(0)?,
@@ -463,10 +549,9 @@ mod tests {
 
     fn imported(id: &str, name: &str) -> ImportedGame {
         ImportedGame {
-            source_game_id: id.into(),
-            name: name.into(),
             install_dir: Some(format!("/steam/common/{name}")),
             play_action: Some(PlayAction::uri(format!("steam://rungameid/{id}"))),
+            ..ImportedGame::installed(id, name)
         }
     }
 
@@ -839,5 +924,97 @@ mod tests {
         let g = db.get_game(g.id).unwrap();
         assert!(g.play_action.is_none());
         assert_eq!(g.extra, serde_json::json!({}));
+    }
+
+    #[test]
+    fn owned_games_import_as_not_installed_and_flip_on_install() {
+        let db = db();
+        let now = Utc::now();
+        let owned = ImportedGame {
+            installed: false,
+            ..ImportedGame::installed("7", "Owned")
+        };
+        let s = db
+            .upsert_imported("steam", std::slice::from_ref(&owned), now)
+            .unwrap();
+        assert_eq!(s.added, 1);
+        let g = db.list_games(&GameQuery::default()).unwrap().remove(0);
+        assert!(!g.installed);
+
+        // Installed list first, then the owned list repeating it: installed wins.
+        let s = db
+            .upsert_imported("steam", &[imported("7", "Owned"), owned.clone()], now)
+            .unwrap();
+        assert_eq!((s.added, s.updated, s.uninstalled), (0, 1, 0));
+        assert!(db.get_game(g.id).unwrap().installed);
+
+        // Uninstalled again but still owned: counted as uninstalled, row kept.
+        let s = db.upsert_imported("steam", &[owned], now).unwrap();
+        assert_eq!((s.updated, s.uninstalled), (0, 1));
+        assert!(!db.get_game(g.id).unwrap().installed);
+    }
+
+    #[test]
+    fn store_playtime_merges_as_maximum() {
+        let db = db();
+        let now = Utc::now();
+        let earlier = now - chrono::Duration::days(3);
+        let with_stats = |secs: u64, last| ImportedGame {
+            playtime_seconds: Some(secs),
+            last_played: Some(last),
+            ..imported("1", "G")
+        };
+        db.upsert_imported("steam", &[with_stats(600, earlier)], now)
+            .unwrap();
+        let g = db.list_games(&GameQuery::default()).unwrap().remove(0);
+        assert_eq!(g.playtime_seconds, 600);
+        assert_eq!(g.last_played, Some(earlier));
+
+        // Our own session pushes beyond the store value; a stale store value doesn't lower it.
+        let s = db.begin_session(g.id, now).unwrap();
+        db.finish_session(s, now, 1000).unwrap();
+        db.upsert_imported("steam", &[with_stats(900, earlier)], now)
+            .unwrap();
+        let g = db.get_game(g.id).unwrap();
+        assert_eq!(g.playtime_seconds, 1600);
+        assert_eq!(g.last_played, Some(now));
+
+        // The store catching up raises it.
+        db.upsert_imported("steam", &[with_stats(5000, earlier)], now)
+            .unwrap();
+        assert_eq!(db.get_game(g.id).unwrap().playtime_seconds, 5000);
+    }
+
+    #[test]
+    fn metadata_and_background_roundtrip() {
+        let db = db();
+        let now = Utc::now();
+        db.upsert_imported("steam", &[imported("1", "G")], now)
+            .unwrap();
+        let g = db.list_games(&GameQuery::default()).unwrap().remove(0);
+        assert_eq!(db.games_needing_metadata().unwrap().len(), 1);
+        let meta = GameMetadata {
+            description: Some("A game.".into()),
+            release_date: Some("2020-05-01".into()),
+            developers: vec!["Dev".into()],
+            publishers: vec!["Pub".into()],
+            genres: vec!["Action".into(), "Indie".into()],
+        };
+        db.set_metadata(g.id, &meta, now).unwrap();
+        db.set_background_path(g.id, Some("images/backgrounds/x.jpg"))
+            .unwrap();
+        let g = db.get_game(g.id).unwrap();
+        assert_eq!(g.genres, vec!["Action", "Indie"]);
+        assert_eq!(g.release_date.as_deref(), Some("2020-05-01"));
+        assert_eq!(g.metadata_updated_at, Some(now));
+        assert_eq!(
+            g.background_path.as_deref(),
+            Some("images/backgrounds/x.jpg")
+        );
+        assert!(db.games_needing_metadata().unwrap().is_empty());
+
+        let other = db.insert_game(&manual("Manual"), now).unwrap();
+        db.mark_metadata_checked(other.id, now).unwrap();
+        assert!(db.get_game(other.id).unwrap().genres.is_empty());
     }
 }

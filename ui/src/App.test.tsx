@@ -20,8 +20,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   store.reset();
   vi.mocked(api.listProviders).mockResolvedValue([
-    { id: "manual", name: "Manual", canScan: false },
-    { id: "steam", name: "Steam", canScan: true },
+    { id: "manual", name: "Manual", canScan: false, canScanOwned: false },
+    { id: "steam", name: "Steam", canScan: true, canScanOwned: true },
   ]);
   vi.mocked(api.appInfo).mockResolvedValue({
     version: "0.1.0",

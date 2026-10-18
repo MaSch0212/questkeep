@@ -10,7 +10,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::model::ImportedGame;
+use crate::model::{GameMetadata, ImportedGame, PlayAction};
 
 /// Errors a provider can report. Messages are shown to users.
 #[derive(Debug, thiserror::Error)]
@@ -28,6 +28,11 @@ pub enum ProviderError {
     Parse(String),
     #[error("this provider does not support that operation")]
     Unsupported,
+    /// The operation needs user configuration (e.g. an API key) that is missing.
+    #[error("{0}")]
+    NotConfigured(String),
+    #[error("network error: {0}")]
+    Network(String),
 }
 
 /// A store integration that reports games. Implementations must be plain data in, plain data out
@@ -43,20 +48,41 @@ pub trait LibraryProvider: Send + Sync {
     }
     /// Games currently installed on this machine.
     fn scan_installed(&self) -> Result<Vec<ImportedGame>, ProviderError>;
-    /// Games owned in the store account (installed or not). Not implemented by any v0.1 provider.
-    fn scan_owned(&self) -> Result<Vec<ImportedGame>, ProviderError> {
+    /// Whether [`scan_owned`](Self::scan_owned) is implemented.
+    fn can_scan_owned(&self) -> bool {
+        false
+    }
+    /// Games owned in the store account, installed or not. Entries for games that are not
+    /// installed must have `installed: false`. `config` is this provider's section of the user
+    /// settings (`settings.providers.<id>`, `null` when absent), e.g. an API key. Return
+    /// `NotConfigured` when required configuration is missing.
+    fn scan_owned(&self, _config: &serde_json::Value) -> Result<Vec<ImportedGame>, ProviderError> {
         Err(ProviderError::Unsupported)
     }
-    /// Where a portrait cover for the game may be found, best first. Local files are preferred
-    /// over downloads by convention.
-    fn cover_candidates(&self, _source_game_id: &str) -> Vec<CoverCandidate> {
+    /// How to install a game that is owned but not installed (usually a store URI such as
+    /// `steam://install/440`). `None` when the provider can't install games.
+    fn install_action(&self, _source_game_id: &str) -> Option<PlayAction> {
+        None
+    }
+    /// Store metadata (description, genres, ...). Called from a background thread with at most
+    /// one request in flight per provider; `Ok(None)` means the store has no data for this game.
+    fn metadata(&self, _source_game_id: &str) -> Result<Option<GameMetadata>, ProviderError> {
+        Ok(None)
+    }
+    /// Where a portrait cover (2:3) for the game may be found, best first. Local files are
+    /// preferred over downloads by convention.
+    fn cover_candidates(&self, _source_game_id: &str) -> Vec<ImageCandidate> {
+        Vec::new()
+    }
+    /// Where a wide background / hero image for the game may be found, best first.
+    fn background_candidates(&self, _source_game_id: &str) -> Vec<ImageCandidate> {
         Vec::new()
     }
 }
 
-/// A possible source for a game's cover image.
+/// A possible source for a game image.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CoverCandidate {
+pub enum ImageCandidate {
     File(std::path::PathBuf),
     Url(String),
 }
@@ -69,6 +95,7 @@ pub struct ProviderInfo {
     pub id: String,
     pub name: String,
     pub can_scan: bool,
+    pub can_scan_owned: bool,
 }
 
 /// Providers looked up by id.
@@ -106,6 +133,7 @@ impl ProviderRegistry {
                 id: p.id().to_string(),
                 name: p.name().to_string(),
                 can_scan: p.can_scan(),
+                can_scan_owned: p.can_scan_owned(),
             })
             .collect()
     }
@@ -145,11 +173,15 @@ mod tests {
             vec![ProviderInfo {
                 id: "fake".into(),
                 name: "Fake Store".into(),
-                can_scan: true
+                can_scan: true,
+                can_scan_owned: false
             }]
         );
         assert!(matches!(
-            registry.get("fake").unwrap().scan_owned(),
+            registry
+                .get("fake")
+                .unwrap()
+                .scan_owned(&serde_json::Value::Null),
             Err(ProviderError::Unsupported)
         ));
     }

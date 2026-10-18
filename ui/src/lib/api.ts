@@ -21,6 +21,8 @@ export const listProviders = () => invoke<ProviderInfo[]>("list_providers");
 export const scanLibrary = (providerId: string) =>
   invoke<ScanSummary>("scan_library", { providerId });
 export const launchGame = (id: string) => invoke<void>("launch_game", { id });
+export const installGame = (id: string) => invoke<void>("install_game", { id });
+export const refreshMetadata = (id: string) => invoke<void>("refresh_metadata", { id });
 export const runningGames = () => invoke<string[]>("running_games");
 export const appInfo = () => invoke<AppInfo>("app_info");
 export const getSettings = () => invoke<Settings>("get_settings");

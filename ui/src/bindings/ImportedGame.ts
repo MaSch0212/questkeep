@@ -5,4 +5,16 @@ import type { PlayAction } from "./PlayAction";
  * A game as reported by a library provider scan. Plain data so providers can later run as
  * sandboxed plugins.
  */
-export type ImportedGame = { sourceGameId: string, name: string, installDir: string | null, playAction: PlayAction | null, };
+export type ImportedGame = { sourceGameId: string, name: string, 
+/**
+ * `false` for games that are owned but not installed (from `scan_owned`).
+ */
+installed: boolean, installDir: string | null, playAction: PlayAction | null, 
+/**
+ * Playtime known to the store. Merged as the maximum with Questkeep's own tracking.
+ */
+playtimeSeconds: number | null, 
+/**
+ * Last played according to the store. Merged as the later of both values.
+ */
+lastPlayed: string | null, };
