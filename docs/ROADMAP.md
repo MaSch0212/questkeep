@@ -6,27 +6,31 @@ Ideas not built yet, roughly in priority order. Not a commitment.
 
 Epic, GOG and Xbox installed games; Steam owned games, Install action, imported Steam playtime;
 store metadata and backgrounds (Steam, GOG); list view. Linux store support: Heroic/Legendary
-(Epic, GOG) and Lutris installed games.
+(Epic, GOG) and Lutris installed games. Account sign-in for Epic and GOG (tokens in the OS
+keyring): owned games, Epic playtime, covers, backgrounds and metadata. Tray icon with a native
+popup, start with the system, auto-update and the release workflow.
 
-## Done in v0.3
+## Done for v0.3
 
-Account sign-in for Epic and GOG (tokens in the OS keyring): owned games, Epic playtime, covers,
-backgrounds and metadata.
+Xbox account sign-in (owned PC games, playtime); Xbox covers, backgrounds and descriptions from the
+Microsoft Store catalog; Epic covers without sign-in (public catalog); Uninstall action per store;
+optional GOG launch through Galaxy; tray icons that follow cover changes; a notice when a second
+start hands over to an already-running copy.
 
 ## Next
 
-- **Xbox account sign-in** (Microsoft OAuth + Xbox Live token chain) for owned games, covers and
-  metadata; reuse `auth/` (`TokenStore`, `AccountSession`).
+- **Signed updates**: v0.2.0 shipped without updater signatures; set up the signing key (see
+  `docs/RELEASING.md`) before the next release.
+- **Uninstall follow-ups**: per-game Epic uninstall (it only opens the launcher library).
+- **GOG**: use the `Uninstall\<id>_is1` registry key both for installs missing from
+  `GOG.com\Games` and as the uninstaller (today only `unins000.exe` in the install folder).
+- **Covers**: per-game `covers_are_low_quality` (Xbox games without a Poster still get a logo
+  before SteamGridDB).
 - **Sign-in follow-ups**: persist the Epic catalog cache on disk, GOG playtime and covers from the
-  signed-in library, Epic genres.
+  signed-in library, Epic genres, an option to hide Game Pass titles from Xbox title history.
 - **Linux stores, follow-ups**: Heroic Amazon (Nile) and sideloaded games, owned-but-not-installed
   games from Heroic/Lutris service libraries.
-- **Real covers for Epic and Xbox** (store catalog APIs or SteamGridDB); Xbox currently falls back
-  to square package logos.
-- **GOG: optional launch through Galaxy** (setting; the provider supports it) and the
-  `Uninstall\<id>_is1` registry fallback for installs missing from `GOG.com\Games`.
 - **IGDB metadata** for manual games and stores without a public API.
-- Uninstall action per provider.
 
 ## Later
 
@@ -35,6 +39,5 @@ backgrounds and metadata.
 - Fullscreen / controller mode (the grid keyboard navigation is the groundwork).
 - Multiple play actions per game, emulator profiles, pre/post scripts.
 - Roman numeral support in sorting names (Playnite's converter handles many edge cases).
-- Tray icon, minimize while playing.
-- Auto-update and release automation (signed installers).
+- Minimize while playing.
 - Cloud sync of the library database.
