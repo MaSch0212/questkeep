@@ -6,7 +6,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use questkeep_core::tray::{self, CloseAction};
-use tauri::{AppHandle, Manager, WindowEvent};
+use questkeep_core::window_placement::{MonitorArea, PlacementStore, WindowPlacement};
+use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize, WebviewWindow, WindowEvent};
 
 use crate::AppState;
 
@@ -24,6 +25,9 @@ pub struct Lifecycle {
     quit_requested: AtomicBool,
     /// Serializes window creation (a double click on the tray icon must not build two).
     window_lock: Mutex<()>,
+    /// Last normal rectangle and maximized state, tracked while the window moves so a minimized
+    /// window (whose position is off-screen) still saves where it was.
+    placement: Mutex<Option<WindowPlacement>>,
 }
 
 impl Lifecycle {
@@ -72,9 +76,114 @@ pub fn create_main_window(app: &AppHandle) -> tauri::Result<()> {
     }
     let window = builder.build()?;
     if !keep_hidden {
+        restore_placement(app, &window);
         window.show()?;
     }
     Ok(())
+}
+
+fn placement_store(app: &AppHandle) -> Option<PlacementStore> {
+    let state = app.try_state::<Arc<AppState>>()?;
+    Some(PlacementStore::new(state.library.paths().window_file()))
+}
+
+/// Moves the (still invisible) window to where it was last closed, if that spot is still on a
+/// monitor; otherwise it keeps the default size, centered by the OS.
+fn restore_placement(app: &AppHandle, window: &WebviewWindow) {
+    let Some(saved) = placement_store(app).and_then(|store| store.load()) else {
+        return;
+    };
+    let monitors: Vec<MonitorArea> = window
+        .available_monitors()
+        .unwrap_or_default()
+        .iter()
+        .map(|m| {
+            let area = m.work_area();
+            MonitorArea {
+                x: area.position.x,
+                y: area.position.y,
+                width: area.size.width,
+                height: area.size.height,
+            }
+        })
+        .collect();
+    let Some(placement) = saved.fit(&monitors) else {
+        tracing::debug!("saved window position is off-screen, using the default");
+        return;
+    };
+    let position = PhysicalPosition::new(placement.x, placement.y);
+    // Position first so the size applies at the target monitor's scale; again afterwards in case
+    // the move across monitors with different DPI resized the window.
+    let result = window
+        .set_position(position)
+        .and_then(|()| window.set_size(PhysicalSize::new(placement.width, placement.height)))
+        .and_then(|()| window.set_position(position))
+        .and_then(|()| {
+            if placement.maximized {
+                window.maximize()
+            } else {
+                Ok(())
+            }
+        });
+    if let Err(err) = result {
+        tracing::warn!(%err, "could not restore the window position");
+    }
+    let lifecycle = app.state::<Lifecycle>();
+    *lifecycle
+        .placement
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner) = Some(placement);
+}
+
+/// Records the window's current rectangle unless it is minimized (then the position is
+/// off-screen); while maximized only the flag changes, so un-maximizing later restores the size.
+fn track_placement(app: &AppHandle) {
+    let Some(window) = app.get_webview_window(MAIN_WINDOW) else {
+        return;
+    };
+    if window.is_minimized().unwrap_or(true) {
+        return;
+    }
+    let maximized = window.is_maximized().unwrap_or(false);
+    let lifecycle = app.state::<Lifecycle>();
+    let mut placement = lifecycle
+        .placement
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+    if maximized {
+        if let Some(placement) = placement.as_mut() {
+            placement.maximized = true;
+        }
+        return;
+    }
+    if let (Ok(position), Ok(size)) = (window.outer_position(), window.outer_size()) {
+        *placement = Some(WindowPlacement {
+            x: position.x,
+            y: position.y,
+            width: size.width,
+            height: size.height,
+            maximized: false,
+        });
+    }
+}
+
+/// Saves where the main window is, before it is destroyed or the app exits.
+pub fn save_placement(app: &AppHandle) {
+    if keep_hidden() {
+        return;
+    }
+    track_placement(app);
+    let placement = *app
+        .state::<Lifecycle>()
+        .placement
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+    let (Some(placement), Some(store)) = (placement, placement_store(app)) else {
+        return;
+    };
+    if let Err(err) = store.save(&placement) {
+        tracing::warn!(%err, "could not save the window position");
+    }
 }
 
 /// Brings the main window to the front, creating it when it was destroyed in the tray. Blocks
@@ -110,6 +219,7 @@ pub fn show_main_window_async(app: &AppHandle) {
 fn hide_to_tray(app: &AppHandle) {
     // Set first: destroying the last window triggers an exit request that must see the flag.
     app.state::<Lifecycle>().set_hidden_to_tray(true);
+    save_placement(app);
     if let Some(window) = app.get_webview_window(MAIN_WINDOW) {
         tracing::info!("hiding to the tray (destroying the main window)");
         if let Err(err) = window.destroy() {
@@ -133,8 +243,11 @@ pub fn on_main_window_event(app: &AppHandle, event: &WindowEvent) {
             {
                 api.prevent_close();
                 hide_to_tray(app);
+            } else {
+                save_placement(app);
             }
         }
+        WindowEvent::Moved(_) => track_placement(app),
         WindowEvent::Resized(_) => {
             // Resized fires continuously while dragging; the cheap check comes first.
             let minimized = app
@@ -144,6 +257,8 @@ pub fn on_main_window_event(app: &AppHandle, event: &WindowEvent) {
                 && tray::hide_on_minimize(&state.library.settings(), lifecycle.tray_available())
             {
                 hide_to_tray(app);
+            } else if !minimized {
+                track_placement(app);
             }
         }
         _ => {}

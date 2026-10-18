@@ -63,10 +63,24 @@ pub fn create(app: &AppHandle, state: &Arc<AppState>) -> tauri::Result<()> {
             }
         })
         .on_menu_event(|app, event| on_menu_event(app, event.id().as_ref()));
-    if let Some(icon) = app.default_window_icon() {
-        builder = builder.icon(icon.clone());
+    match crate::tray_theme::icon(crate::tray_theme::light_taskbar()) {
+        Ok(icon) => builder = builder.icon(icon),
+        Err(err) => {
+            tracing::warn!(%err, "could not load the tray glyph, using the app icon");
+            if let Some(icon) = app.default_window_icon() {
+                builder = builder.icon(icon.clone());
+            }
+        }
     }
-    builder.build(app)?;
+    let tray = builder.build(app)?;
+    crate::tray_theme::watch(move |light| match crate::tray_theme::icon(light) {
+        Ok(icon) => {
+            if let Err(err) = tray.set_icon(Some(icon)) {
+                tracing::warn!(%err, "could not update the tray icon");
+            }
+        }
+        Err(err) => tracing::warn!(%err, "could not load the tray glyph"),
+    });
 
     let (tx, rx) = mpsc::channel();
     state.library.events().subscribe(move |event| {
@@ -212,6 +226,8 @@ fn on_menu_event(app: &AppHandle, id: &str) {
             if let Some(lifecycle) = app.try_state::<Lifecycle>() {
                 lifecycle.request_quit();
             }
+            // Exiting skips CloseRequested, so the window position is saved here.
+            window::save_placement(app);
             // Runs the exit handler: fetchers close and running sessions are saved.
             app.exit(0);
         }

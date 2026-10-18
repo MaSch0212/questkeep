@@ -24,3 +24,23 @@ ${paths.map((d) => `    <path d="${d}"/>`).join("\n")}
 `;
 fs.writeFileSync(path.join(root, "assets/icon.svg"), svg);
 console.log("wrote assets/icon.svg");
+
+// Tray icons: the bare glyph filling the square (no tile, so it reads larger in the tray), white
+// for dark taskbars and black for light ones. Rasterize with:
+//   pnpm tauri icon assets/tray-dark.svg -o target/tray-dark  (then copy 32x32.png, see AGENTS.md)
+const trayScale = (size * 0.98) / Math.max(width, height);
+const trayTx = (size - width * trayScale) / 2 - minX * trayScale;
+const trayTy = (size - height * trayScale) / 2 - minY * trayScale;
+for (const [name, fill] of [
+  ["tray-dark", "#ffffff"],
+  ["tray-light", "#000000"],
+]) {
+  const traySvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}">
+  <g fill="${fill}" transform="translate(${trayTx.toFixed(2)} ${trayTy.toFixed(2)}) scale(${trayScale.toFixed(5)})">
+${paths.map((d) => `    <path d="${d}"/>`).join("\n")}
+  </g>
+</svg>
+`;
+  fs.writeFileSync(path.join(root, `assets/${name}.svg`), traySvg);
+  console.log(`wrote assets/${name}.svg`);
+}

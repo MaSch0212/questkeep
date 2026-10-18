@@ -75,6 +75,11 @@ impl DataPaths {
         self.root.join("settings.json")
     }
 
+    /// Where the main window was last placed.
+    pub fn window_file(&self) -> PathBuf {
+        self.root.join("window.json")
+    }
+
     /// Turns a path stored relative to the data root into an absolute path.
     pub fn absolute(&self, relative: &str) -> PathBuf {
         self.root.join(relative)

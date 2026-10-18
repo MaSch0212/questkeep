@@ -231,3 +231,13 @@ Short log of choices made while building. Newest at the bottom of each section.
 - **Tray menu without icons**: items are text only; per-game icons would need decoding cached
   images into menu icons for every rebuild.
 - **Events go to the `main` window only** (`emit_to`), so the login windows never receive them.
+- **Monochrome tray glyph following the taskbar theme** (`SystemUsesLightTheme`, not the app
+  theme): white on dark taskbars, black on light ones, no tile so it fills the tray slot. A thread
+  blocks in `RegNotifyChangeKeyValue` to swap it; this is the only `unsafe` code (scoped
+  `allow(unsafe_code)` in `tray_theme.rs`), because winreg cannot wait for changes and polling
+  would wake the idle tray process.
+- **Window placement in `window.json` in the data folder**, not via `tauri-plugin-window-state`,
+  which saves to the app config dir and so would break portable mode. The last normal rectangle is
+  tracked on move/resize (a minimized window reports an off-screen position) and saved before the
+  window is destroyed or the app exits; it is used only if enough of the title bar is still on a
+  connected monitor.

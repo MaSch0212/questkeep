@@ -4,6 +4,7 @@ mod autostart;
 mod commands;
 mod signin;
 mod tray;
+mod tray_theme;
 mod window;
 
 use std::sync::Arc;

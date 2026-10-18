@@ -16,6 +16,7 @@ pub mod providers;
 pub mod seed;
 pub mod settings;
 pub mod tray;
+pub mod window_placement;
 
 pub use error::{CoreError, Result};
 pub use library::{AppInfo, Library};
