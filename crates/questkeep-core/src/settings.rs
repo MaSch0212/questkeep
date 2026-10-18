@@ -23,6 +23,10 @@ pub struct Settings {
     /// Passed to the provider as-is; secrets are stored in plain text (see DECISIONS.md).
     #[ts(type = "Record<string, Record<string, unknown>>")]
     pub providers: BTreeMap<String, serde_json::Value>,
+    /// Optional SteamGridDB API key. When set, SteamGridDB supplies covers and backgrounds that
+    /// the stores don't have. Stored in plain text like the Steam key (see DECISIONS.md).
+    #[serde(rename = "steamGridDbApiKey")]
+    pub steamgriddb_api_key: Option<String>,
 }
 
 impl Settings {
@@ -39,6 +43,7 @@ impl Default for Settings {
             download_covers: true,
             fetch_metadata: true,
             providers: BTreeMap::new(),
+            steamgriddb_api_key: None,
         }
     }
 }
@@ -105,8 +110,11 @@ mod tests {
                 "steam".to_string(),
                 serde_json::json!({ "apiKey": "k", "steamId": "1" }),
             )]),
+            steamgriddb_api_key: Some("sgdb".into()),
         };
         store.save(&custom).unwrap();
+        let raw = std::fs::read_to_string(tmp.path().join("settings.json")).unwrap();
+        assert!(raw.contains("\"steamGridDbApiKey\": \"sgdb\""));
         assert_eq!(store.load(), custom);
         assert_eq!(custom.provider_config("steam")["steamId"], "1");
         assert!(custom.provider_config("gog").is_null());

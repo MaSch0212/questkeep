@@ -128,6 +128,19 @@ pub async fn refresh_metadata(state: State<'_, Arc<AppState>>, id: String) -> Cm
     .await
 }
 
+/// Fetches the game's cover and background from SteamGridDB again, replacing the current ones.
+/// Fails with a readable message when no API key is configured. Results arrive as
+/// `gamesChanged` events.
+#[tauri::command]
+pub async fn refetch_artwork(state: State<'_, Arc<AppState>>, id: String) -> CmdResult<()> {
+    blocking(state, move |s| {
+        let job = s.library.refetch_artwork(parse_id(&id)?)?;
+        s.covers.enqueue([job]);
+        Ok(())
+    })
+    .await
+}
+
 #[tauri::command]
 pub async fn running_games(state: State<'_, Arc<AppState>>) -> CmdResult<Vec<String>> {
     blocking(state, |s| {
@@ -152,7 +165,16 @@ pub async fn get_settings(state: State<'_, Arc<AppState>>) -> CmdResult<Settings
 
 #[tauri::command]
 pub async fn save_settings(state: State<'_, Arc<AppState>>, settings: Settings) -> CmdResult<()> {
-    blocking(state, move |s| s.library.save_settings(&settings)).await
+    blocking(state, move |s| {
+        let had_key = s.library.artwork().is_configured();
+        s.library.save_settings(&settings)?;
+        // A newly entered SteamGridDB key can fill in covers for games that had no source.
+        if !had_key && s.library.artwork().is_configured() {
+            s.queue_missing_covers();
+        }
+        Ok(())
+    })
+    .await
 }
 
 #[tauri::command]

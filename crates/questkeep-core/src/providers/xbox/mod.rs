@@ -78,6 +78,10 @@ impl LibraryProvider for XboxProvider {
         valid.then(|| PlayAction::uri(format!("ms-windows-store://pdp/?PFN={source_game_id}")))
     }
 
+    fn covers_are_low_quality(&self) -> bool {
+        true
+    }
+
     /// The package's logo tile. These are square (150x150 up to 480x480), not 2:3 covers, so
     /// they are only a stopgap: real portrait art needs the Xbox Store catalog API (future).
     fn cover_candidates(&self, source_game_id: &str) -> Vec<ImageCandidate> {

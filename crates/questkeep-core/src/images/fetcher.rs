@@ -16,9 +16,11 @@ use std::time::{Duration, Instant};
 use chrono::Utc;
 use uuid::Uuid;
 
+use super::steamgriddb::{Lookup, SteamGridDb, checked_key};
 use super::{ImageCache, ImageKind, MAX_IMAGE_BYTES};
 use crate::db::Database;
 use crate::events::{CoreEvent, EventBus};
+use crate::model::Game;
 use crate::providers::{ImageCandidate, LibraryProvider, ProviderRegistry};
 
 /// One game whose cover should be fetched.
@@ -26,7 +28,11 @@ use crate::providers::{ImageCandidate, LibraryProvider, ProviderRegistry};
 pub struct CoverJob {
     pub game_id: Uuid,
     pub source: String,
-    pub source_game_id: String,
+    /// `None` for manual games and other games without a store id; those only get SteamGridDB.
+    pub source_game_id: Option<String>,
+    /// Replace existing artwork with SteamGridDB's (cover and background), ignoring the
+    /// provider, the "checked" marker and the once-per-run limit. Used for manual re-fetching.
+    pub force: bool,
 }
 
 struct Shared {
@@ -34,6 +40,7 @@ struct Shared {
     images: ImageCache,
     providers: ProviderRegistry,
     events: EventBus,
+    artwork: SteamGridDb,
     http: ureq::Agent,
     /// Games already attempted in this run, so failures aren't retried in a loop.
     attempted: Mutex<HashSet<Uuid>>,
@@ -52,6 +59,7 @@ impl CoverFetcher {
         images: ImageCache,
         providers: ProviderRegistry,
         events: EventBus,
+        artwork: SteamGridDb,
         workers: usize,
     ) -> Self {
         let http = http_agent();
@@ -60,6 +68,7 @@ impl CoverFetcher {
             images,
             providers,
             events,
+            artwork,
             http,
             attempted: Mutex::new(HashSet::new()),
         });
@@ -94,7 +103,7 @@ impl CoverFetcher {
             .unwrap_or_else(PoisonError::into_inner);
         let mut queued = 0;
         for job in jobs {
-            if attempted.insert(job.game_id) && sender.send(job).is_ok() {
+            if (attempted.insert(job.game_id) || job.force) && sender.send(job).is_ok() {
                 queued += 1;
             }
         }
@@ -131,24 +140,123 @@ fn worker(shared: &Shared, receiver: &Mutex<Receiver<CoverJob>>) {
 }
 
 fn process(shared: &Shared, job: &CoverJob) {
-    let Some(provider) = shared.providers.get(&job.source) else {
+    let Ok(Some(game)) = shared.db.find_game(job.game_id) else {
         return;
     };
-    let candidates = provider.cover_candidates(&job.source_game_id);
-    let Some((ext, bytes)) = first_image(&shared.http, &candidates) else {
-        tracing::debug!(game = %job.game_id, "no cover found");
+    if game.cover_path.is_some() && !job.force {
         return;
+    }
+    let provider = job
+        .source_game_id
+        .as_deref()
+        .and_then(|_| shared.providers.get(&job.source));
+    let sgdb = |kind| steamgriddb_image(shared, &game, kind);
+    let sgdb_wanted =
+        shared.artwork.is_configured() && (job.force || !is_checked(&game, ImageKind::Cover));
+
+    let found = if job.force {
+        sgdb(ImageKind::Cover)
+    } else {
+        let from_provider = || {
+            let provider = provider.as_ref()?;
+            let id = job.source_game_id.as_deref()?;
+            first_image(&shared.http, &provider.cover_candidates(id))
+        };
+        let low_quality = provider
+            .as_ref()
+            .is_some_and(|p| p.covers_are_low_quality());
+        if low_quality && sgdb_wanted {
+            // Square logos and the like: real box art first, the logo only as a fallback.
+            sgdb(ImageKind::Cover).or_else(from_provider)
+        } else {
+            from_provider().or_else(|| sgdb_wanted.then(|| sgdb(ImageKind::Cover)).flatten())
+        }
     };
-    let stored = shared
-        .images
-        .store_image(ImageKind::Cover, job.game_id, ext, &bytes)
-        .and_then(|rel| shared.db.set_cover_path(job.game_id, Some(&rel)));
-    match stored {
-        Ok(()) => shared.events.publish(CoreEvent::GamesChanged {
+    let mut changed = match found {
+        Some((ext, bytes)) => store(shared, &game, ImageKind::Cover, ext, &bytes),
+        None => {
+            tracing::debug!(game = %job.game_id, "no cover found");
+            false
+        }
+    };
+
+    // Games with a store background get it from the metadata worker, which also falls back to
+    // SteamGridDB itself. Games without a provider never reach that worker and providers without
+    // any background source would only get it on first metadata fetch, so do it here.
+    let provider_has_background = || {
+        let (Some(provider), Some(id)) = (provider.as_ref(), job.source_game_id.as_deref()) else {
+            return false;
+        };
+        !provider.background_candidates(id).is_empty()
+    };
+    let wants_background = shared.artwork.is_configured()
+        && (job.force
+            || (game.background_path.is_none()
+                && !is_checked(&game, ImageKind::Background)
+                && !provider_has_background()));
+    if wants_background && let Some((ext, bytes)) = sgdb(ImageKind::Background) {
+        changed |= store(shared, &game, ImageKind::Background, ext, &bytes);
+    }
+    if changed {
+        shared.events.publish(CoreEvent::GamesChanged {
             ids: vec![job.game_id],
-        }),
-        // The game may have been removed meanwhile; nothing else to do.
-        Err(err) => tracing::warn!(game = %job.game_id, %err, "could not store cover"),
+        });
+    }
+}
+
+/// Stores a downloaded image and updates the game row. The game may have been removed
+/// meanwhile, which is only logged.
+fn store(shared: &Shared, game: &Game, kind: ImageKind, ext: &str, bytes: &[u8]) -> bool {
+    shared
+        .images
+        .store_image(kind, game.id, ext, bytes)
+        .and_then(|rel| match kind {
+            ImageKind::Cover => shared.db.set_cover_path(game.id, Some(&rel)),
+            ImageKind::Background => shared.db.set_background_path(game.id, Some(&rel)),
+        })
+        .inspect_err(|err| tracing::warn!(game = %game.id, %err, "could not store image"))
+        .is_ok()
+}
+
+fn is_checked(game: &Game, kind: ImageKind) -> bool {
+    game.extra.get(checked_key(kind)).is_some()
+}
+
+/// Asks SteamGridDB for the game's cover or background. "Nothing found" is remembered in
+/// `extra`; errors (offline, rate limit, bad key) are only logged so they are retried later.
+fn steamgriddb_image(
+    shared: &Shared,
+    game: &Game,
+    kind: ImageKind,
+) -> Option<(&'static str, Vec<u8>)> {
+    steamgriddb_lookup(&shared.db, &shared.artwork, &shared.http, game, kind)
+}
+
+fn steamgriddb_lookup(
+    db: &Database,
+    artwork: &SteamGridDb,
+    http: &ureq::Agent,
+    game: &Game,
+    kind: ImageKind,
+) -> Option<(&'static str, Vec<u8>)> {
+    let lookup = Lookup {
+        name: &game.name,
+        source: &game.source,
+        source_game_id: game.source_game_id.as_deref(),
+    };
+    match artwork.fetch_image(http, &lookup, kind) {
+        Ok(Some(image)) => Some(image),
+        Ok(None) => {
+            let marker = serde_json::Value::String(Utc::now().to_rfc3339());
+            if let Err(err) = db.set_extra_value(game.id, checked_key(kind), Some(marker)) {
+                tracing::warn!(game = %game.id, %err, "could not remember the SteamGridDB miss");
+            }
+            None
+        }
+        Err(err) => {
+            tracing::debug!(game = %game.id, %err, "SteamGridDB lookup failed");
+            None
+        }
     }
 }
 
@@ -184,6 +292,7 @@ struct MetadataShared {
     images: ImageCache,
     providers: ProviderRegistry,
     events: EventBus,
+    artwork: SteamGridDb,
     http: ureq::Agent,
     interval: Duration,
     /// Games waiting in the queue, so repeated enqueues don't pile up duplicates.
@@ -204,6 +313,7 @@ impl MetadataFetcher {
         images: ImageCache,
         providers: ProviderRegistry,
         events: EventBus,
+        artwork: SteamGridDb,
         interval: Duration,
     ) -> Self {
         let shared = Arc::new(MetadataShared {
@@ -211,6 +321,7 @@ impl MetadataFetcher {
             images,
             providers,
             events,
+            artwork,
             http: http_agent(),
             interval,
             queued: Mutex::new(HashSet::new()),
@@ -312,15 +423,27 @@ fn fetch_background(
     provider: &dyn LibraryProvider,
     job: &MetadataJob,
 ) -> bool {
-    let needs_background = matches!(
-        shared.db.find_game(job.game_id),
-        Ok(Some(game)) if game.background_path.is_none()
-    );
-    if !needs_background {
+    let Ok(Some(game)) = shared.db.find_game(job.game_id) else {
+        return false;
+    };
+    if game.background_path.is_some() {
         return false;
     }
     let candidates = provider.background_candidates(&job.source_game_id);
-    let Some((ext, bytes)) = first_image(&shared.http, &candidates) else {
+    let found = first_image(&shared.http, &candidates).or_else(|| {
+        (shared.artwork.is_configured() && !is_checked(&game, ImageKind::Background))
+            .then(|| {
+                steamgriddb_lookup(
+                    &shared.db,
+                    &shared.artwork,
+                    &shared.http,
+                    &game,
+                    ImageKind::Background,
+                )
+            })
+            .flatten()
+    });
+    let Some((ext, bytes)) = found else {
         return false;
     };
     shared
@@ -340,7 +463,7 @@ fn load_file(path: &std::path::Path) -> Option<(&'static str, Vec<u8>)> {
     image_extension(&bytes).map(|ext| (ext, bytes))
 }
 
-fn download(http: &ureq::Agent, url: &str) -> Option<(&'static str, Vec<u8>)> {
+pub(super) fn download(http: &ureq::Agent, url: &str) -> Option<(&'static str, Vec<u8>)> {
     let response = match http.get(url).call() {
         Ok(r) => r,
         Err(err) => {
@@ -454,12 +577,14 @@ mod tests {
             ImageCache::new(paths),
             providers,
             EventBus::new(),
+            SteamGridDb::new(None),
             2,
         );
         let job = |g: &crate::model::Game| CoverJob {
             game_id: g.id,
             source: "local".into(),
-            source_game_id: g.source_game_id.clone().unwrap(),
+            source_game_id: g.source_game_id.clone(),
+            force: false,
         };
         assert_eq!(fetcher.enqueue([job(&g1), job(&g2)]), 2);
         assert_eq!(
@@ -537,6 +662,7 @@ mod tests {
             ImageCache::new(paths),
             providers,
             EventBus::new(),
+            SteamGridDb::new(None),
             Duration::ZERO,
         );
         let jobs = games.iter().map(|g| MetadataJob {

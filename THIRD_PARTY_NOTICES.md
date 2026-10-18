@@ -42,3 +42,13 @@ Icons come from the Lucide icon set via the `lucide-solid` package.
 
 Other third-party dependencies (Rust crates, npm packages) are used under their own licenses as
 declared in `Cargo.lock` and `pnpm-lock.yaml`.
+
+## SteamGridDB
+
+Questkeep can fetch cover and background images from the SteamGridDB API
+(https://www.steamgriddb.com, API v2) when the user supplies their own free API key in the
+settings. Artwork is community-uploaded and belongs to its authors; Questkeep only caches it
+locally for personal use. SteamGridDB is not affiliated with Questkeep. The API terms were not
+reachable while this was written, so check https://www.steamgriddb.com/api/v2 and the site's
+terms before distributing builds, and add any attribution they require (none is shown in the UI
+today).
