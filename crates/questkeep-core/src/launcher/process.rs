@@ -6,7 +6,6 @@
 //! separator so `C:\Fallout` does not match `C:\Fallout 2`.
 
 use std::collections::HashSet;
-use std::path::Path;
 use std::sync::{Mutex, PoisonError};
 
 use sysinfo::{ProcessRefreshKind, ProcessStatus, ProcessesToUpdate, System, UpdateKind};
@@ -143,10 +142,11 @@ impl Matcher {
     }
 
     pub fn name(name: &str) -> Self {
-        let file = Path::new(name)
-            .file_name()
-            .map(|f| f.to_string_lossy().into_owned())
-            .unwrap_or_else(|| name.to_string());
+        // Split on both separators so Windows-style paths work on every OS.
+        let file = name
+            .rsplit(['/', '\\'])
+            .find(|s| !s.is_empty())
+            .unwrap_or(name);
         Self::Name {
             name: file.to_lowercase(),
         }
@@ -190,6 +190,8 @@ fn any_under_dir(snapshot: &[ProcInfo], dir: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use super::*;
 
     fn proc(pid: u32, parent: Option<u32>, exe: &str) -> ProcInfo {
