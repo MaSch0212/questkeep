@@ -202,6 +202,7 @@ pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let (state, guard) = build_state(app.handle())?;
             let state = Arc::new(state);
@@ -231,6 +232,8 @@ pub fn run() {
             commands::get_settings,
             commands::save_settings,
             commands::seed_fake_library,
+            commands::check_update,
+            commands::install_update,
         ])
         .build(tauri::generate_context!());
 

@@ -1,0 +1,256 @@
+name: Release
+
+# Manual "Release" button. Turns the pending changesets in `.changeset/` into a version, builds the
+# installers, commits the version bump to main, tags it and publishes a GitHub release. See
+# docs/RELEASING.md.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run: compute the version and build, but commit, tag and publish nothing"
+        type: boolean
+        default: false
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  NODE_VERSION: "24"
+
+jobs:
+  prepare:
+    name: Plan release
+    runs-on: ubuntu-latest
+    outputs:
+      has_release: ${{ steps.plan.outputs.has_release }}
+      version: ${{ steps.plan.outputs.version }}
+    steps:
+      - name: Require main for a real release
+        if: ${{ !inputs.dry_run && github.ref != 'refs/heads/main' }}
+        run: |
+          echo "::error::Real releases can only run from main (this run is on ${GITHUB_REF}). Use dry_run on other branches."
+          exit 1
+
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Compute version and notes
+        id: plan
+        run: node scripts/release/changeset.mjs plan --out-dir "$RUNNER_TEMP/release-meta" --github-output
+
+      - name: Nothing to release
+        if: steps.plan.outputs.has_release != 'true'
+        run: |
+          echo "::notice::No pending changesets in .changeset/, so there is nothing to release."
+          echo "No pending changesets, nothing to release." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Summary
+        if: steps.plan.outputs.has_release == 'true'
+        env:
+          CURRENT: ${{ steps.plan.outputs.current }}
+          VERSION: ${{ steps.plan.outputs.version }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          {
+            echo "## Release v${VERSION} (from ${CURRENT})"
+            [ "$DRY_RUN" = "true" ] && echo "**Dry run:** nothing will be committed, tagged or published."
+            echo
+            cat "$RUNNER_TEMP/release-meta/notes.md"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload release metadata
+        if: steps.plan.outputs.has_release == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-meta
+          path: ${{ runner.temp }}/release-meta/*
+          retention-days: 7
+          if-no-files-found: error
+
+  build:
+    name: Build (${{ matrix.name }})
+    needs: prepare
+    if: needs.prepare.outputs.has_release == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - name: windows
+            os: windows-latest
+            bundles: nsis,msi
+            artifact_paths: |
+              target/release/bundle/nsis/*.exe
+              target/release/bundle/nsis/*.exe.sig
+              target/release/bundle/msi/*.msi
+              target/release/bundle/msi/*.msi.sig
+          - name: linux
+            os: ubuntu-22.04
+            bundles: appimage,deb
+            artifact_paths: |
+              target/release/bundle/appimage/*.AppImage
+              target/release/bundle/appimage/*.AppImage.sig
+              target/release/bundle/deb/*.deb
+    defaults:
+      run:
+        # pwsh on both OSes: Git Bash's `link` would shadow MSVC's link.exe on Windows.
+        shell: pwsh
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      # Empty when the secrets are not configured; the build then skips updater artifacts.
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Tauri system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends `
+            libwebkit2gtk-4.1-dev libxdo-dev libssl-dev `
+            libayatana-appindicator3-dev librsvg2-dev build-essential file patchelf libfuse2
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Write version ${{ env.VERSION }} into the project files
+        run: node scripts/release/changeset.mjs version --write "$env:VERSION"
+
+      - name: Install JS dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Updater signing is not configured
+        if: env.TAURI_SIGNING_PRIVATE_KEY == ''
+        run: |
+          Write-Host "::warning::TAURI_SIGNING_PRIVATE_KEY is not set: building without updater artifacts. This release will not auto-update existing installs. See docs/RELEASING.md."
+
+      - name: Check the updater public key is configured
+        if: env.TAURI_SIGNING_PRIVATE_KEY != ''
+        run: |
+          if ((Get-Content src-tauri/tauri.conf.json -Raw) -match 'REPLACE_WITH_PUBLIC_KEY') {
+            Write-Host "::error::plugins.updater.pubkey in src-tauri/tauri.conf.json is still the placeholder. Paste the public key from 'pnpm tauri signer generate' (docs/RELEASING.md)."
+            exit 1
+          }
+
+      - name: Build (signed, with updater artifacts)
+        if: env.TAURI_SIGNING_PRIVATE_KEY != ''
+        run: pnpm tauri build --bundles "${{ matrix.bundles }}"
+
+      - name: Build (unsigned, no updater artifacts)
+        if: env.TAURI_SIGNING_PRIVATE_KEY == ''
+        run: pnpm tauri build --bundles "${{ matrix.bundles }}" --config src-tauri/tauri.no-updater.conf.json
+
+      - name: Upload bundles
+        uses: actions/upload-artifact@v7
+        with:
+          name: bundles-${{ matrix.name }}
+          path: ${{ matrix.artifact_paths }}
+          retention-days: 7
+          if-no-files-found: error
+
+  release:
+    name: Commit, tag and publish
+    needs: [prepare, build]
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download release metadata and bundles
+        uses: actions/download-artifact@v8
+        with:
+          path: ${{ runner.temp }}/artifacts
+
+      - name: Collect assets
+        run: |
+          mkdir -p "$RUNNER_TEMP/dist"
+          # release-meta/ holds notes.md + consumed.txt; bundles-*/ hold the installers.
+          find "$RUNNER_TEMP/artifacts" -path '*/bundles-*/*' -type f -exec cp {} "$RUNNER_TEMP/dist/" \;
+          ls -la "$RUNNER_TEMP/dist"
+
+      - name: Check whether v${{ env.VERSION }} was already pushed (re-run)
+        id: existing
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/v${VERSION}" > /dev/null; then
+            echo "pushed=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Tag v${VERSION} already exists; skipping the commit and tag and only publishing the release."
+          else
+            echo "pushed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Make sure main did not move during the build
+        if: steps.existing.outputs.pushed != 'true'
+        run: |
+          if [ "$(git rev-parse HEAD)" != "$GITHUB_SHA" ]; then
+            echo "::error::main moved from ${GITHUB_SHA} to $(git rev-parse HEAD) while the release was building. Run the release again so the build matches what is tagged."
+            exit 1
+          fi
+
+      - name: Commit version bump, delete changesets, tag
+        if: steps.existing.outputs.pushed != 'true'
+        run: |
+          node scripts/release/changeset.mjs version --write "$VERSION"
+          node scripts/release/changeset.mjs consume --list "$RUNNER_TEMP/artifacts/release-meta/consumed.txt"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .changeset Cargo.toml Cargo.lock src-tauri/Cargo.toml src-tauri/tauri.conf.json \
+            crates/questkeep-core/Cargo.toml ui/package.json
+          git commit -m "chore(release): v${VERSION}"
+          git tag -a "v${VERSION}" -m "Questkeep v${VERSION}"
+          git push origin HEAD:main
+          git push origin "v${VERSION}"
+
+      - name: Create updater manifest (latest.json)
+        run: |
+          if ls "$RUNNER_TEMP"/dist/*.sig > /dev/null 2>&1; then
+            node scripts/release/latest-json.mjs --dir "$RUNNER_TEMP/dist" --version "$VERSION" \
+              --notes "$RUNNER_TEMP/artifacts/release-meta/notes.md" \
+              --repo "$GITHUB_REPOSITORY" --out "$RUNNER_TEMP/dist/latest.json"
+          else
+            echo "::warning::No .sig files in the build output (signing key not configured): publishing without latest.json, so installed apps will not see this release as an update."
+          fi
+
+      - name: Create GitHub release
+        run: |
+          files=("$RUNNER_TEMP"/dist/*)
+          if gh release view "v${VERSION}" > /dev/null 2>&1; then
+            gh release upload "v${VERSION}" "${files[@]}" --clobber
+          else
+            gh release create "v${VERSION}" "${files[@]}" \
+              --verify-tag \
+              --title "Questkeep v${VERSION}" \
+              --notes-file "$RUNNER_TEMP/artifacts/release-meta/notes.md"
+          fi

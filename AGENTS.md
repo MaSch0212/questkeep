@@ -8,16 +8,19 @@ Guide for humans and coding agents working on Questkeep.
 |---|---|
 | Install JS deps | `pnpm install` |
 | Run the app (dev) | `pnpm dev` (= `tauri dev`) |
-| Build the app | `pnpm build` (= `tauri build`) |
+| Build the app | `pnpm build` (= `tauri build`; needs the updater signing key, see `docs/RELEASING.md`) |
 | **All quality gates** | `pnpm check` |
 | Auto-format, then check | `pnpm fix` |
 | Update the Rust lockfile (2-day min age) | `pnpm deps:rust` |
+| Add a changeset (every user-visible PR) | `pnpm changeset add <major\|minor\|patch> "summary"` |
+| Show version, pending changesets, next version | `pnpm changeset status` |
+| Build without the updater signing key | `pnpm build:unsigned` |
 | List installed Steam games (dev tool) | `cargo run -p questkeep-core --example scan_steam` |
 | Regenerate app icons from `assets/logo.svg` | `node scripts/make-icon.mjs && pnpm tauri icon assets/icon.svg -o src-tauri/icons` |
 
 `pnpm check` runs, in order: rustfmt check, clippy (`-D warnings`), `cargo test --workspace`,
 oxfmt check, oxlint (`--deny-warnings`), `tsc --noEmit`, vitest. In CI (`CI` env set) it also
-fails if `ui/src/bindings` differs from what `cargo test` generated. Run it before every commit.
+fails if `ui/src/bindings` differs from what `cargo test` generated. Run it before every commit. It also runs the release-script tests (`node --test scripts/release/*.test.mjs`).
 CI (`.github/workflows/ci.yml`) runs the same steps on Windows and Ubuntu, then builds the app.
 
 UI-only commands run from `ui/`: `pnpm lint`, `pnpm format`, `pnpm format:check`, `pnpm test`,
@@ -92,6 +95,8 @@ ui/src/
   action. Pure logic goes into `lib/` with vitest tests.
 - **Dependencies:** pnpm installs only versions at least 2 days old (`minimumReleaseAge`); Cargo
   has `min-publish-age = "2 days"`. Prefer major-only ranges in `package.json`.
+- **Releases:** changesets in `.changeset/` + the manual Release workflow; see `docs/RELEASING.md`.
+  Docs/CI-only changes need no changeset.
 - Record non-obvious choices in `docs/DECISIONS.md` (one or two lines of rationale) and ideas in
   `docs/ROADMAP.md`.
 

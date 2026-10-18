@@ -8,7 +8,9 @@
     "build": "tauri build",
     "check": "node scripts/check.mjs",
     "fix": "node scripts/check.mjs --fix",
-    "deps:rust": "cargo +nightly update"
+    "deps:rust": "cargo +nightly update",
+    "changeset": "node scripts/release/changeset.mjs",
+    "build:unsigned": "tauri build --config src-tauri/tauri.no-updater.conf.json"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0"
