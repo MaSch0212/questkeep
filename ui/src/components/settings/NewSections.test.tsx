@@ -87,7 +87,7 @@ describe("AccountsSection", () => {
 
   it("submits a trimmed code from the fallback", async () => {
     vi.mocked(api.accountStatus).mockResolvedValue([gog()]);
-    vi.mocked(api.signInWithCode).mockResolvedValue(undefined);
+    vi.mocked(api.signInWithCode).mockResolvedValue(gog({ signedIn: true }));
     render(() => <AccountsSection />);
     await fireEvent.click(
       await screen.findByRole("button", { name: /Sign in with a code instead/ }),
@@ -112,7 +112,7 @@ describe("AccountsSection", () => {
 
   it("signs out after an inline confirmation", async () => {
     vi.mocked(api.accountStatus).mockResolvedValueOnce([epic()]);
-    vi.mocked(api.signOut).mockResolvedValue(undefined);
+    vi.mocked(api.signOut).mockResolvedValue(epic({ signedIn: false }));
     render(() => <AccountsSection />);
     await fireEvent.click(await screen.findByRole("button", { name: "Sign out of Epic Games" }));
     expect(api.signOut).not.toHaveBeenCalled();

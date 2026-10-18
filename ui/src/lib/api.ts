@@ -36,8 +36,8 @@ export const accountStatus = () => invoke<AccountStatus[]>("account_status");
 /** Resolves `true` once signed in, `false` if the user closed the login window. Can take minutes. */
 export const signIn = (provider: string) => invoke<boolean>("sign_in", { provider });
 export const signInWithCode = (provider: string, code: string) =>
-  invoke<void>("sign_in_with_code", { provider, code });
-export const signOut = (provider: string) => invoke<void>("sign_out", { provider });
+  invoke<AccountStatus>("sign_in_with_code", { provider, code });
+export const signOut = (provider: string) => invoke<AccountStatus>("sign_out", { provider });
 
 export interface UpdateInfo {
   version: string;
