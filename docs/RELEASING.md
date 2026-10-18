@@ -73,17 +73,16 @@ installer signature against the public key in `src-tauri/tauri.conf.json`. You g
    `src-tauri/tauri.conf.json` (it currently holds a `REPLACE_WITH_PUBLIC_KEY...` placeholder) and
    commit it.
 
-Without the secrets the workflow still works: it warns, builds with
-`src-tauri/tauri.no-updater.conf.json` (`createUpdaterArtifacts: false`) and publishes without
-`latest.json`, so that release does not auto-update installed apps. With the secrets set but the
-placeholder public key still in place, the build fails on purpose.
+Without the secrets the workflow still works: it warns, builds without updater artifacts and
+publishes without `latest.json`, so that release does not auto-update installed apps. With the
+secrets set but the placeholder public key still in place, the build fails on purpose.
 
 ## Builds without the key
 
-`bundle.createUpdaterArtifacts` is `true`, which makes `tauri build` demand the private key. CI and
-local builds therefore pass the override config: `pnpm build:unsigned` (or
-`pnpm tauri build --config src-tauri/tauri.no-updater.conf.json`). Dev builds (`pnpm dev`) are not
-affected. The update commands return "no update" in debug builds.
+`bundle.createUpdaterArtifacts` is `false` in `tauri.conf.json`, so `pnpm build` and CI work
+without the private key. Only the signed release build adds `--config
+src-tauri/tauri.updater.conf.json`, which turns updater artifacts on. Dev builds (`pnpm dev`) are
+not affected. The update commands return "no update" in debug builds.
 
 ## Update commands (for the UI)
 

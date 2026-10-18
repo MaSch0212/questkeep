@@ -14,7 +14,6 @@ Guide for humans and coding agents working on Questkeep.
 | Update the Rust lockfile (2-day min age) | `pnpm deps:rust` |
 | Add a changeset (every user-visible PR) | `pnpm changeset add <major\|minor\|patch> "summary"` |
 | Show version, pending changesets, next version | `pnpm changeset status` |
-| Build without the updater signing key | `pnpm build:unsigned` |
 | List installed Steam games (dev tool) | `cargo run -p questkeep-core --example scan_steam` |
 | Regenerate app icons from `assets/logo.svg` | `node scripts/make-icon.mjs && pnpm tauri icon assets/icon.svg -o src-tauri/icons` |
 

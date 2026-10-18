@@ -67,7 +67,7 @@ jobs:
         run: pnpm --dir ui test
 
       - name: Build app
-        run: pnpm tauri build --config src-tauri/tauri.no-updater.conf.json
+        run: pnpm tauri build
 
       - name: Upload build output
         uses: actions/upload-artifact@v7
@@ -126,7 +126,7 @@ jobs:
           pnpm --dir ui test
 
       - name: Build app (no bundle)
-        run: pnpm tauri build --no-bundle --config src-tauri/tauri.no-updater.conf.json
+        run: pnpm tauri build --no-bundle
 
   changeset:
     name: Changeset reminder
