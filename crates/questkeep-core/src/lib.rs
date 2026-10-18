@@ -2,7 +2,10 @@
 //!
 //! This crate has no dependency on Tauri or any UI so it can be unit-tested headless.
 
+pub mod db;
 pub mod error;
+pub mod events;
+pub mod model;
 pub mod paths;
 
 pub use error::{CoreError, Result};

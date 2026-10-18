@@ -1,0 +1,169 @@
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use ts_rs::TS;
+use uuid::Uuid;
+
+/// Provider id used for games added by hand.
+pub const MANUAL_SOURCE: &str = "manual";
+
+/// A game in the library.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct Game {
+    /// Stable id (UUID v4), never reused.
+    pub id: Uuid,
+    pub name: String,
+    /// Derived key used for ordering (leading article stripped, numbers padded).
+    pub sorting_name: String,
+    /// Provider id that owns this game (`manual`, `steam`, ...).
+    pub source: String,
+    /// The store's own id (Steam app id, ...). `None` for manual games.
+    pub source_game_id: Option<String>,
+    /// `false` when the provider no longer reports the game as installed.
+    pub installed: bool,
+    pub install_dir: Option<String>,
+    pub play_action: Option<PlayAction>,
+    #[ts(type = "number")]
+    pub playtime_seconds: u64,
+    #[ts(type = "number")]
+    pub play_count: u64,
+    pub last_played: Option<DateTime<Utc>>,
+    pub date_added: DateTime<Utc>,
+    pub favorite: bool,
+    pub hidden: bool,
+    /// Absolute path of the cached cover image when returned by the library API.
+    pub cover_path: Option<String>,
+    /// Absolute path of the cached icon when returned by the library API.
+    pub icon_path: Option<String>,
+    /// Free-form data for future fields and plugins.
+    #[ts(type = "Record<string, unknown>")]
+    pub extra: serde_json::Value,
+}
+
+/// How a game is started.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "lowercase")]
+#[ts(export)]
+pub enum ActionKind {
+    /// Start an executable.
+    File,
+    /// Open a URI with the system handler (e.g. `steam://rungameid/440`).
+    Uri,
+}
+
+/// How the launcher decides that a game is still running.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum TrackingMode {
+    /// Process tree for `file` actions, install directory for `uri` actions.
+    #[default]
+    Default,
+    /// The started process and all of its descendants.
+    Process,
+    /// Only the started process.
+    OriginalProcess,
+    /// Any process whose executable lives under `tracking_path` (or the install dir).
+    Directory,
+    /// Any process whose executable file name equals `tracking_path`.
+    Name,
+}
+
+/// The single play action of a game. Stored as JSON so it can grow into a list later.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct PlayAction {
+    pub kind: ActionKind,
+    /// Executable path for `file`, URI for `uri`.
+    pub target: String,
+    /// Command-line arguments as typed by the user.
+    #[serde(default)]
+    pub args: Option<String>,
+    #[serde(default)]
+    pub working_dir: Option<String>,
+    #[serde(default)]
+    pub tracking: TrackingMode,
+    #[serde(default)]
+    pub tracking_path: Option<String>,
+}
+
+impl PlayAction {
+    pub fn file(target: impl Into<String>) -> Self {
+        Self {
+            kind: ActionKind::File,
+            target: target.into(),
+            args: None,
+            working_dir: None,
+            tracking: TrackingMode::Default,
+            tracking_path: None,
+        }
+    }
+
+    pub fn uri(target: impl Into<String>) -> Self {
+        Self {
+            kind: ActionKind::Uri,
+            ..Self::file(target)
+        }
+    }
+}
+
+/// A game as reported by a library provider scan. Plain data so providers can later run as
+/// sandboxed plugins.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct ImportedGame {
+    pub source_game_id: String,
+    pub name: String,
+    pub install_dir: Option<String>,
+    pub play_action: Option<PlayAction>,
+}
+
+/// Input for adding a game by hand.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct NewManualGame {
+    /// Display name. When empty, it is derived from the executable path.
+    #[serde(default)]
+    pub name: Option<String>,
+    pub executable: String,
+    #[serde(default)]
+    pub args: Option<String>,
+    #[serde(default)]
+    pub working_dir: Option<String>,
+    /// Image file to copy into the cover cache.
+    #[serde(default)]
+    pub cover_image: Option<String>,
+}
+
+/// Partial update of user-editable fields. `None` leaves a field unchanged.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct GameUpdate {
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub favorite: Option<bool>,
+    #[serde(default)]
+    pub hidden: Option<bool>,
+    #[serde(default)]
+    pub play_action: Option<PlayAction>,
+}
+
+/// Result of applying a provider scan to the library.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct ScanSummary {
+    pub added: u32,
+    pub updated: u32,
+    /// Games of this source that were not found anymore and are now marked as not installed.
+    pub uninstalled: u32,
+    #[serde(skip)]
+    #[ts(skip)]
+    pub changed_ids: Vec<Uuid>,
+}
