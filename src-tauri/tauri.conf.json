@@ -12,12 +12,15 @@
   "app": {
     "windows": [
       {
+        "label": "main",
+        "create": false,
         "title": "Questkeep",
         "width": 1280,
         "height": 800,
         "minWidth": 800,
         "minHeight": 500,
-        "backgroundColor": "#121417"
+        "backgroundColor": "#121417",
+        "visible": false
       }
     ],
     "security": {

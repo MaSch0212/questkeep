@@ -128,6 +128,30 @@ fn build_state(app: &tauri::AppHandle) -> Result<(AppState, Option<WorkerGuard>)
     ))
 }
 
+/// Creates the main window from its config (`"create": false` in `tauri.conf.json`) and shows it
+/// once setup succeeded, which also avoids a white flash.
+///
+/// Debug builds with `QUESTKEEP_HIDDEN=1` build it invisible, unfocused and off the taskbar, so the
+/// app can be driven through the WebView2 DevTools port while someone else uses the machine (e.g. a
+/// fullscreen game) without a window ever appearing or taking focus.
+fn create_main_window(app: &tauri::App) -> tauri::Result<()> {
+    let Some(config) = app.config().app.windows.iter().find(|w| w.label == "main") else {
+        return Ok(());
+    };
+    let keep_hidden =
+        cfg!(debug_assertions) && std::env::var("QUESTKEEP_HIDDEN").is_ok_and(|v| v == "1");
+    let mut builder = tauri::WebviewWindowBuilder::from_config(app.handle(), config)?;
+    if keep_hidden {
+        tracing::info!("QUESTKEEP_HIDDEN=1: creating the window hidden");
+        builder = builder.visible(false).focused(false).skip_taskbar(true);
+    }
+    let window = builder.build()?;
+    if !keep_hidden {
+        window.show()?;
+    }
+    Ok(())
+}
+
 /// Startup work that must not delay the window: provider scans and cover downloads.
 fn spawn_startup_tasks(state: Arc<AppState>) {
     tauri::async_runtime::spawn_blocking(move || {
@@ -151,6 +175,7 @@ pub fn run() {
                 // Keep the log writer alive for the whole process.
                 app.manage(guard);
             }
+            create_main_window(app)?;
             spawn_startup_tasks(state);
             Ok(())
         })

@@ -29,12 +29,27 @@ UI-only commands run from `ui/`: `pnpm lint`, `pnpm format`, `pnpm format:check`
 - Requires Visual Studio Build Tools with the C++ workload.
 - Never invoke `python` in scripts: on stock Windows it's a Microsoft Store stub that hangs.
 
-### Debugging the running app
+### Debugging and testing the running app
 
 Set `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222` before `pnpm dev`; the
 page is then reachable through the Chrome DevTools protocol at `http://127.0.0.1:9222/json`
 (screenshots, console, `window.__TAURI_INTERNALS__.invoke(...)`). Put an empty `portable.txt` next
 to `target/debug/questkeep.exe` to use a throwaway data dir under `target/debug/data`.
+
+**Agents testing on someone's workstation must not show windows or take focus** (the user may be
+playing a fullscreen game). Use:
+
+```powershell
+scripts/dev-hidden.ps1 -Portable   # hidden window, DevTools on :9222, low priority, throwaway data
+```
+
+It sets `QUESTKEEP_HIDDEN=1` (debug builds only: the window is created invisible, unfocused and
+off the taskbar), disables WebView2 background throttling so the page keeps rendering, and runs
+cargo/node/the app at below-normal priority with a third of the cores as build jobs. Screenshots
+via `Page.captureScreenshot` still work. Also run other heavy commands (clippy, tests, release
+builds) with `(Get-Process -Id $PID).PriorityClass = "BelowNormal"; $env:CARGO_BUILD_JOBS = "6"`
+first; child processes inherit the priority. Never call `SetForegroundWindow` or screen-capture
+APIs (`CopyFromScreen`): they steal focus or capture the user's screen.
 
 ## Module map
 

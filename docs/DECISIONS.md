@@ -87,3 +87,8 @@ Short log of choices made while building. Newest at the bottom of each section.
   keeps IPC calls down while typing.
 - **Covers are cache-busted** with a per-game version query parameter bumped on `gamesChanged`
   events, because a cover's path stays the same when its content changes.
+- **The main window is created in code** (`"create": false` in `tauri.conf.json`). Setting
+  `"visible": false` in the config and hiding later was not enough: the window still showed up on
+  Windows. Building it ourselves allows a dev-only hidden mode (`QUESTKEEP_HIDDEN=1`, see
+  `scripts/dev-hidden.ps1`) for testing through the DevTools port without a window or focus change,
+  and showing the normal window only after setup avoids a white flash.
