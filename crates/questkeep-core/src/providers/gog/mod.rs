@@ -17,12 +17,16 @@ mod registry;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 pub use account::{GogAccount, LOGIN_SUCCESS_PREFIX};
 pub use install::InstallRecord;
 
 use super::heroic::{self, HeroicPaths};
+
+/// Setting key (under `providers.gog`) for launching through GOG Galaxy.
+pub const LAUNCH_THROUGH_GALAXY: &str = "launchThroughGalaxy";
 use super::{ImageCandidate, LibraryProvider, ProviderError};
 use crate::auth::AccountAuth;
 use crate::model::{GameMetadata, ImportedGame, PlayAction};
@@ -50,7 +54,8 @@ pub struct GogProvider {
     installs: Installs,
     /// Launch through GOG Galaxy when it is installed (cloud saves, overlay, playtime). When
     /// `false`, or when Galaxy is missing, the manifest's primary executable is started directly.
-    use_galaxy: bool,
+    /// Set from the `launchThroughGalaxy` setting before each scan ([`LibraryProvider::configure`]).
+    use_galaxy: AtomicBool,
     /// Signed-in account, when the app supplies token storage.
     account: Option<Arc<GogAccount>>,
     http: ureq::Agent,
@@ -83,7 +88,7 @@ impl GogProvider {
     fn new(installs: Installs) -> Self {
         Self {
             installs,
-            use_galaxy: false,
+            use_galaxy: AtomicBool::new(false),
             account: None,
             http: api::http_agent(),
             store_cache: Mutex::new(HashMap::new()),
@@ -98,8 +103,8 @@ impl GogProvider {
 
     /// Chooses between starting the executable directly (default; works for offline-installer
     /// games Galaxy doesn't know) and launching through Galaxy.
-    pub fn with_galaxy_launch(mut self, use_galaxy: bool) -> Self {
-        self.use_galaxy = use_galaxy;
+    pub fn with_galaxy_launch(self, use_galaxy: bool) -> Self {
+        self.use_galaxy.store(use_galaxy, Ordering::Relaxed);
         self
     }
 
@@ -154,9 +159,22 @@ impl LibraryProvider for GogProvider {
             return heroic::gog_games(paths);
         }
         let (records, galaxy) = self.load_installs()?;
-        let mut games = install::games_from_records(&records, galaxy.as_deref(), self.use_galaxy);
+        let mut games = install::games_from_records(
+            &records,
+            galaxy.as_deref(),
+            self.use_galaxy.load(Ordering::Relaxed),
+        );
         games.sort_by_cached_key(|g| (g.name.to_lowercase(), g.source_game_id.clone()));
         Ok(games)
+    }
+
+    /// `{ "launchThroughGalaxy": true }` starts installed games through GOG Galaxy.
+    fn configure(&self, config: &serde_json::Value) {
+        let use_galaxy = config
+            .get(LAUNCH_THROUGH_GALAXY)
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false);
+        self.use_galaxy.store(use_galaxy, Ordering::Relaxed);
     }
 
     /// The owned library needs a signed-in account; without one only installed games are imported.
@@ -263,6 +281,35 @@ mod tests {
         assert_eq!(action.kind, ActionKind::Uri);
         assert_eq!(action.target, "goggalaxy://installationScreen/1207658924");
         assert!(p.install_action("1/../x").is_none());
+    }
+
+    #[test]
+    fn launch_through_galaxy_follows_the_setting() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("1");
+        fs::create_dir_all(&dir).unwrap();
+        let galaxy = tmp.path().join("GalaxyClient.exe");
+        let record = InstallRecord {
+            id: "1".into(),
+            game_name: Some("Game".into()),
+            path: Some(dir.to_string_lossy().into_owned()),
+            exe: Some(dir.join("g.exe").to_string_lossy().into_owned()),
+            ..Default::default()
+        };
+        let p = GogProvider::with_records(vec![record], Some(galaxy.clone()));
+        let target = |p: &GogProvider| {
+            p.scan_installed().unwrap()[0]
+                .play_action
+                .as_ref()
+                .unwrap()
+                .target
+                .clone()
+        };
+        assert!(target(&p).ends_with("g.exe"), "direct launch by default");
+        p.configure(&serde_json::json!({ "launchThroughGalaxy": true }));
+        assert_eq!(target(&p), galaxy.to_string_lossy());
+        p.configure(&serde_json::Value::Null);
+        assert!(target(&p).ends_with("g.exe"), "unset means direct again");
     }
 
     #[test]

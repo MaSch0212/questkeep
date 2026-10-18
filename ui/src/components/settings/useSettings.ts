@@ -3,6 +3,7 @@ import type { Settings } from "../../bindings/Settings";
 import * as api from "../../lib/api";
 import { errorMessage } from "../../lib/errors";
 import { scanSummaryText } from "../../lib/query";
+import { withProviderOption } from "../../lib/providerSettings";
 import { textOf, withSteamSettings } from "../../lib/steamSettings";
 import { store } from "../../lib/store";
 
@@ -72,6 +73,30 @@ export function createSettingsModel() {
     }
   }
 
+  /**
+   * Saves one provider option, then rescans that provider so play actions and the like follow
+   * the new value.
+   */
+  async function setProviderOption(providerId: string, key: string, value: unknown) {
+    const previous = settings();
+    if (!previous) return;
+    const next = withProviderOption(previous, providerId, key, value);
+    setSettings(next);
+    try {
+      await api.saveSettings(next);
+    } catch (error) {
+      setSettings(previous);
+      store.pushToast("error", errorMessage(error));
+      return;
+    }
+    try {
+      await api.scanLibrary(providerId);
+      store.scheduleRefresh();
+    } catch (error) {
+      store.pushToast("error", errorMessage(error));
+    }
+  }
+
   async function saveGridDb() {
     const previous = settings();
     if (!previous || savingGridDb()) return;
@@ -101,6 +126,7 @@ export function createSettingsModel() {
     setGridDbKey,
     savingGridDb,
     toggle,
+    setProviderOption,
     saveSteam,
     saveGridDb,
   };

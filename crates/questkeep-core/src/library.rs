@@ -338,8 +338,11 @@ impl Library {
             .providers
             .get(provider_id)
             .ok_or_else(|| CoreError::UnknownProvider(provider_id.to_string()))?;
+        let settings = self.settings();
+        let config = settings.provider_config(provider_id);
+        provider.configure(config);
         let owned = if provider.can_scan_owned() {
-            match provider.scan_owned(self.settings().provider_config(provider_id)) {
+            match provider.scan_owned(config) {
                 Ok(games) => Some(games),
                 Err(ProviderError::NotConfigured(reason)) => {
                     tracing::debug!(provider = provider_id, %reason, "owned scan skipped");

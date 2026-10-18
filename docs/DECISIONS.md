@@ -271,3 +271,7 @@ Short log of choices made while building. Newest at the bottom of each section.
   AppIndicator backend reports no clicks (tray-icon's KSNI backend would) and Wayland apps cannot
   place a window next to the tray.
 
+- **Provider settings reach providers through `LibraryProvider::configure`**, called with
+  `providers.<id>` before every scan (scans already store play actions). First user: GOG's
+  `launchThroughGalaxy` (default off: direct launch also works for offline-installer games); the
+  UI rescans GOG after the toggle changes so existing games switch immediately.

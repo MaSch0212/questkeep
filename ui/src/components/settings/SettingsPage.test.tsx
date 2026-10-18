@@ -226,3 +226,35 @@ describe("SettingsPage", () => {
     expect(api.scanLibrary).not.toHaveBeenCalled();
   });
 });
+
+describe("GOG Galaxy launch option", () => {
+  it("saves the option and rescans GOG", async () => {
+    await loadAppInfo("C:/data", "C:/data/logs");
+    vi.mocked(api.listProviders).mockResolvedValue([
+      { id: "gog", name: "GOG", canScan: true, canScanOwned: false },
+    ]);
+    await store.init();
+    vi.mocked(api.scanLibrary).mockResolvedValue({
+      added: 0,
+      updated: 1,
+      uninstalled: 0,
+    });
+    render(() => <SettingsPage />);
+    const toggle = await screen.findByRole("checkbox", {
+      name: "Launch GOG games through GOG Galaxy",
+    });
+    expect((toggle as HTMLInputElement).checked).toBe(false);
+    fireEvent.change(toggle, { target: { checked: true } });
+    await waitFor(() => expect(api.scanLibrary).toHaveBeenCalledWith("gog"));
+    const saved = vi.mocked(api.saveSettings).mock.calls.at(-1)?.[0];
+    expect(saved?.providers.gog).toEqual({ launchThroughGalaxy: true });
+    expect(saved?.providers.steam).toEqual({ apiKey: "OLDKEY", extraFlag: 7 });
+  });
+
+  it("is hidden without the GOG provider", async () => {
+    await loadAppInfo("C:/data", "C:/data/logs");
+    render(() => <SettingsPage />);
+    await screen.findByText("Close to the tray instead of quitting");
+    expect(screen.queryByText("Launch GOG games through GOG Galaxy")).toBeNull();
+  });
+});

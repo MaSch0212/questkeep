@@ -75,6 +75,9 @@ pub trait LibraryProvider: Send + Sync {
     fn metadata(&self, _source_game_id: &str) -> Result<Option<GameMetadata>, ProviderError> {
         Ok(None)
     }
+    /// Applies the provider's settings (`providers.<id>` in settings.json, `Null` when unset).
+    /// Called before every scan, so a changed setting takes effect with the next scan.
+    fn configure(&self, _config: &serde_json::Value) {}
     /// Account sign-in for this store, when the provider supports it (see [`crate::auth`]).
     fn account(&self) -> Option<&dyn AccountAuth> {
         None
