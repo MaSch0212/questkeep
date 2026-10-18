@@ -29,7 +29,7 @@ const TOKEN_URL: &str =
 const LIBRARY_URL: &str = "https://library-service.live.use1a.on.epicgames.com/library/api/public/items?includeMetadata=true&platform=Windows";
 const PLAYTIME_URL: &str =
     "https://library-service.live.use1a.on.epicgames.com/library/api/public/playtime/account";
-const CATALOG_URL: &str =
+pub(super) const CATALOG_URL: &str =
     "https://catalog-public-service-prod06.ol.epicgames.com/catalog/api/shared/namespace";
 /// Where a logged-in browser gets the one-time code (JSON with `authorizationCode`).
 pub const REDIRECT_URL: &str = "https://www.epicgames.com/id/api/redirect?clientId=34a02cf8f4414e29b15921876da36f9a&responseType=code";
@@ -56,7 +56,7 @@ pub fn extract_code(input: &str) -> Option<String> {
     plausible_code(input)
 }
 
-fn token_request(grant: &[(&str, &str)]) -> HttpRequest {
+pub(super) fn token_request(grant: &[(&str, &str)]) -> HttpRequest {
     let mut form: Vec<(String, String)> = grant
         .iter()
         .map(|(k, v)| ((*k).to_string(), (*v).to_string()))

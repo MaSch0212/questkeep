@@ -1,0 +1,13 @@
+{
+  "wide-item": {
+    "id": "wide-item",
+    "title": "Wide Only Game",
+    "namespace": "ns-wide",
+    "keyImages": [
+      { "type": "OfferImageWide", "url": "https://cdn.example/wide-offer.jpg" },
+      { "type": "DieselGameBox", "url": "https://cdn.example/wide-box.jpg" },
+      { "type": "Thumbnail", "url": "https://cdn.example/wide-thumb.jpg" }
+    ],
+    "categories": [{ "path": "games" }, { "path": "applications" }]
+  }
+}

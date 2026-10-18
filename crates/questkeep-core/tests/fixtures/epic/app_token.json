@@ -1,0 +1,9 @@
+{
+  "access_token": "eg1~epic-app-token-value",
+  "expires_in": 3600,
+  "expires_at": "2026-10-18T14:00:00.000Z",
+  "token_type": "bearer",
+  "client_id": "34a02cf8f4414e29b15921876da36f9a",
+  "internal_client": true,
+  "client_service": "launcher"
+}
