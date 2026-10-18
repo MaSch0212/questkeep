@@ -111,6 +111,7 @@ describe("App", () => {
       scanOnStartup: true,
       downloadCovers: true,
       fetchMetadata: true,
+      steamGridDbApiKey: null,
       providers: {},
     });
     render(() => <App />);

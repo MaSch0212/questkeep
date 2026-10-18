@@ -12,9 +12,9 @@ use crate::error::{CoreError, Result};
 use crate::paths::DataPaths;
 
 pub(crate) use fetcher::http_agent;
+pub use fetcher::{CoverFetcher, CoverJob, MetadataFetcher, MetadataJob, image_extension};
 pub(crate) use steamgriddb::checked_key;
 pub use steamgriddb::{Lookup, SteamGridDb};
-pub use fetcher::{CoverFetcher, CoverJob, MetadataFetcher, MetadataJob, image_extension};
 
 const ALLOWED_EXTENSIONS: [&str; 5] = ["jpg", "jpeg", "png", "webp", "gif"];
 /// Upper bound for user-picked and downloaded images.
