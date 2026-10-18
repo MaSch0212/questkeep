@@ -1,0 +1,41 @@
+"libraryfolders"
+{
+	"0"
+	{
+		"path"		"{{ROOT}}"
+		"label"		""
+		"contentid"		"3347178461079329142"
+		"totalsize"		"0"
+		"update_clean_bytes_tally"		"15329418512"
+		"time_last_update_corruption"		"0"
+		"apps"
+		{
+			"228980"		"315349678"
+			"620"		"12009619386"
+		}
+	}
+	"1"
+	{
+		"PATH"		"{{LIB2}}"
+		"label"		"Games"
+		"contentid"		"5678349054902314571"
+		"totalsize"		"1000203091968"
+		"update_clean_bytes_tally"		"0"
+		"time_last_update_corruption"		"0"
+		"apps"
+		{
+			"620"		"12009619386"
+			"1245620"		"58442101234"
+		}
+	}
+	"2"
+	{
+		"path"		"{{MISSING}}"
+		"label"		""
+		"contentid"		"1"
+		"totalsize"		"0"
+		"apps"
+		{
+		}
+	}
+}

@@ -383,6 +383,30 @@ impl Database {
         Ok(summary)
     }
 
+    /// Store games that have no cover yet: `(id, source, source_game_id)`.
+    pub fn games_without_cover(&self) -> Result<Vec<(Uuid, String, String)>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT id, source, source_game_id FROM games \
+             WHERE cover_path IS NULL AND source_game_id IS NOT NULL ORDER BY sorting_name",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, String>(2)?,
+            ))
+        })?;
+        let mut out = Vec::new();
+        for row in rows {
+            let (id, source, source_game_id) = row?;
+            if let Ok(id) = Uuid::parse_str(&id) {
+                out.push((id, source, source_game_id));
+            }
+        }
+        Ok(out)
+    }
+
     /// Bulk insert for the dev seed; one transaction for speed.
     pub fn insert_many(&self, records: &[NewGameRecord], now: DateTime<Utc>) -> Result<usize> {
         let mut conn = self.conn();

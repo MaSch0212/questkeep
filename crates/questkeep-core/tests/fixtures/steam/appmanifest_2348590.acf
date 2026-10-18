@@ -1,0 +1,17 @@
+"AppState"
+{
+	"appid"		"2348590"
+	"Universe"		"1"
+	"name"		"Proton 8.0"
+	"StateFlags"		"4"
+	"installdir"		"Proton 8.0"
+	"LastUpdated"		"1700000000"
+	"SizeOnDisk"		"1500000000"
+	"buildid"		"12222222"
+	"UserConfig"
+	{
+	}
+	"MountedConfig"
+	{
+	}
+}

@@ -1,0 +1,22 @@
+"AppState"
+{
+	"appid"		"1245620"
+	"Universe"		"1"
+	"name"		"ELDEN RING"
+	"StateFlags"		"6"
+	"installdir"		"ELDEN RING"
+	"LastUpdated"		"1700000000"
+	"SizeOnDisk"		"58442101234"
+	"buildid"		"13000000"
+	"BytesToDownload"		"1048576"
+	"BytesDownloaded"		"0"
+	"AutoUpdateBehavior"		"0"
+	"UserConfig"
+	{
+		"language"		"english"
+	}
+	"MountedConfig"
+	{
+		"language"		"english"
+	}
+}

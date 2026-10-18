@@ -1,0 +1,19 @@
+"AppState"
+{
+	"appid"		"413150"
+	"Universe"		"1"
+	"StateFlags"		"4"
+	"installdir"		"Stardew Valley"
+	"LastUpdated"		"1700000000"
+	"SizeOnDisk"		"700000000"
+	"buildid"		"9999999"
+	"UserConfig"
+	{
+		"name"		"Stardew Valley"
+		"language"		"english"
+	}
+	"MountedConfig"
+	{
+		"language"		"english"
+	}
+}
