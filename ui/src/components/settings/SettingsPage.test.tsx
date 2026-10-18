@@ -71,14 +71,14 @@ describe("SettingsPage", () => {
     );
   });
 
-  it("hides the API key until asked and warns about plain-text storage", async () => {
+  it("hides the API key until asked and explains where it is stored", async () => {
     render(() => <SettingsPage />);
     const input = await screen.findByLabelText("Steam Web API key");
     await waitFor(() => expect(input).toHaveValue("OLDKEY"));
     expect(input).toHaveAttribute("type", "password");
     await fireEvent.click(screen.getByRole("button", { name: "Show API key" }));
     expect(input).toHaveAttribute("type", "text");
-    expect(screen.getAllByText(/stored unencrypted/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/credential store/).length).toBeGreaterThan(0);
     expect(screen.getByText(/last signed in to Steam/)).toBeInTheDocument();
   });
 

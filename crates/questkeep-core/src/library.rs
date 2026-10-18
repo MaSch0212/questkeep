@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use uuid::Uuid;
 
-use crate::auth::AccountStatus;
+use crate::auth::{AccountStatus, TokenStore};
 use crate::db::{Database, NewGameRecord};
 use crate::error::{CoreError, Result};
 use crate::events::{CoreEvent, EventBus};
@@ -47,10 +47,16 @@ pub struct Library {
 
 impl Library {
     /// Opens the library in `paths` (creating directories and the database as needed).
-    pub fn open(paths: DataPaths, providers: ProviderRegistry, events: EventBus) -> Result<Self> {
+    /// `secrets` holds API keys from the settings (the system keyring in the app).
+    pub fn open(
+        paths: DataPaths,
+        providers: ProviderRegistry,
+        events: EventBus,
+        secrets: Arc<dyn TokenStore>,
+    ) -> Result<Self> {
         paths.ensure_dirs()?;
         let db = Arc::new(Database::open(&paths.database_file())?);
-        Ok(Self::with_database(paths, db, providers, events))
+        Ok(Self::with_database(paths, db, providers, events, secrets))
     }
 
     /// Builds a library around an existing database (tests use an in-memory one).
@@ -59,8 +65,9 @@ impl Library {
         db: Arc<Database>,
         providers: ProviderRegistry,
         events: EventBus,
+        secrets: Arc<dyn TokenStore>,
     ) -> Self {
-        let settings = SettingsStore::new(paths.settings_file());
+        let settings = SettingsStore::new(paths.settings_file(), secrets);
         Self {
             images: ImageCache::new(paths.clone()),
             artwork: SteamGridDb::new(settings.load().steamgriddb_api_key),
@@ -551,7 +558,11 @@ mod tests {
         let s = seen.clone();
         events.subscribe(move |e| s.lock().unwrap().push(e.clone()));
         let db = Arc::new(Database::open_in_memory().unwrap());
-        (Library::with_database(paths, db, providers, events), seen)
+        let secrets = Arc::new(crate::auth::MemoryTokenStore::default());
+        (
+            Library::with_database(paths, db, providers, events, secrets),
+            seen,
+        )
     }
 
     #[test]

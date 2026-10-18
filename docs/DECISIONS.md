@@ -80,10 +80,13 @@ Short log of choices made while building. Newest at the bottom of each section.
 - **Owned games come from the provider's own API, configured per provider** in
   `settings.providers.<id>` and passed to `scan_owned()` as plain JSON, so providers (and later
   plugins) define their own settings without schema changes in the core.
-- **The Steam Web API key is stored in plain text** in `settings.json` inside the data folder. It
-  only grants read access to public profile data, the OS keyring would complicate portable mode
-  and Linux setups, and the settings UI says so. Revisit if a provider needs real credentials
-  (OAuth tokens), which should go to the OS keyring.
+- **API keys (Steam Web API, SteamGridDB) live in the system keyring**, like sign-in tokens
+  (entries `setting:steam.apiKey` / `setting:steamGridDbApiKey`). `SettingsStore` strips them from
+  `settings.json` on save and fills them in on load, so the UI still sees one settings object.
+  Earlier versions wrote them in plain text; the first load moves them into the keyring and
+  rewrites the file. Without a keyring, saving a key fails (never plain text), while existing
+  plain values keep working until a keyring is available. Portable mode therefore does not carry
+  keys to another machine; that is intended.
 - **Store playtime is merged as the maximum**, never added: Questkeep's own tracking and the store
   usually count the same sessions, so summing would double them.
 - **Metadata is fetched by one worker with at least 1.5 s between requests**: Steam's appdetails
@@ -144,9 +147,8 @@ Short log of choices made while building. Newest at the bottom of each section.
 
 ## Artwork (SteamGridDB)
 
-- **SteamGridDB is a fallback artwork source, keyed by a user-provided API key** stored in plain
-  text as `steamGridDbApiKey` in `settings.json`, for the same reason as the Steam key (free,
-  low-risk key; keyring complicates portable mode). `Library` owns the shared `SteamGridDb`
+- **SteamGridDB is a fallback artwork source, keyed by a user-provided API key** kept in the
+  system keyring like the Steam key (see "Store accounts and metadata"). `Library` owns the shared `SteamGridDb`
   client and `save_settings` updates its key in place, so the running fetchers pick up a new key
   without restarting and without reading settings per job. A 401/403 marks the key rejected until
   it changes, so a bad key costs one request, not one per game.
@@ -168,9 +170,9 @@ Short log of choices made while building. Newest at the bottom of each section.
 - **Tokens only in the system keyring** (`keyring` 3.x: Windows Credential Manager, Linux Secret
   Service, macOS Keychain), service `dev.masch0212.questkeep`, user = provider id. **No plain-file
   fallback**: without a keyring (Linux without Secret Service) sign-in fails with a readable
-  message instead of writing secrets next to the library. This differs from the Steam and
-  SteamGridDB keys (plain text) on purpose: those are free read-only keys, these are account
-  sessions. Linux uses the `sync-secret-service` backend with `crypto-rust` (no OpenSSL), which
+  message instead of writing secrets next to the library. The Steam and SteamGridDB API keys
+  use the same store (see "Store accounts and metadata").
+  Linux uses the `sync-secret-service` backend with `crypto-rust` (no OpenSSL), which
   needs `libdbus-1-dev` + `pkg-config` to build.
 - **The access token is not persisted**, only refresh token, account id and display name: the
   Windows credential blob is limited to 2560 bytes (UTF-16) and Epic's eg1 access tokens exceed it.

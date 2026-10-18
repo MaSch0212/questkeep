@@ -55,8 +55,8 @@ export function ArtworkSection(props: { model: SettingsModel }) {
           </div>
         </div>
         <p class="field__hint">
-          The key is stored unencrypted in the Questkeep data folder. Only use a key you are
-          comfortable keeping there. Leave it empty to turn SteamGridDB off.
+          The key is stored in your system's credential store, not in the Questkeep data folder.
+          Leave it empty to turn SteamGridDB off.
         </p>
         <div class="form__actions">
           <button type="submit" class="btn btn--primary" disabled={props.model.savingGridDb()}>

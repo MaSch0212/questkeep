@@ -150,7 +150,7 @@ describe("ArtworkSection", () => {
     render(() => <ArtworkHarness />);
     const input = await screen.findByLabelText("SteamGridDB API key");
     expect(input).toHaveAttribute("type", "password");
-    expect(screen.getByText(/stored unencrypted/)).toBeInTheDocument();
+    expect(screen.getByText(/credential store/)).toBeInTheDocument();
     await fireEvent.input(input, { target: { value: "  sgdb  " } });
     await fireEvent.click(screen.getByRole("button", { name: "Save artwork settings" }));
     await waitFor(() =>

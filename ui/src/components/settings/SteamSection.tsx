@@ -83,8 +83,7 @@ export function SteamSection(props: { model: SettingsModel }) {
           </span>
         </div>
         <p class="field__hint">
-          The key is stored unencrypted in the Questkeep data folder. Only use a key you are
-          comfortable keeping there.
+          The key is stored in your system's credential store, not in the Questkeep data folder.
         </p>
         <div class="form__actions">
           <button type="submit" class="btn btn--primary" disabled={props.model.savingSteam()}>

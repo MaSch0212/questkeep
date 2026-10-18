@@ -129,9 +129,10 @@ fn build_state(app: &tauri::AppHandle) -> Result<(AppState, Option<WorkerGuard>)
         }
     });
 
-    let providers = ProviderRegistry::with_builtin(Arc::new(KeyringTokenStore::new()));
-    let library =
-        Library::open(paths, providers.clone(), events.clone()).map_err(|e| e.to_string())?;
+    let keyring: Arc<KeyringTokenStore> = Arc::new(KeyringTokenStore::new());
+    let providers = ProviderRegistry::with_builtin(keyring.clone());
+    let library = Library::open(paths, providers.clone(), events.clone(), keyring)
+        .map_err(|e| e.to_string())?;
     match library.database().recover_open_sessions() {
         Ok(ids) if !ids.is_empty() => {
             tracing::info!(count = ids.len(), "recovered unfinished play sessions");

@@ -15,11 +15,11 @@ downloadCovers: boolean,
 fetchMetadata: boolean, 
 /**
  * Per-provider configuration keyed by provider id, e.g. `steam: { apiKey, steamId }`.
- * Passed to the provider as-is; secrets are stored in plain text (see DECISIONS.md).
+ * Passed to the provider as-is. `steam.apiKey` lives in the keyring, not in the file.
  */
 providers: Record<string, Record<string, unknown>>, 
 /**
  * Optional SteamGridDB API key. When set, SteamGridDB supplies covers and backgrounds that
- * the stores don't have. Stored in plain text like the Steam key (see DECISIONS.md).
+ * the stores don't have. Lives in the keyring, not in the file.
  */
 steamGridDbApiKey: string | null, };

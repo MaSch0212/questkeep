@@ -1,13 +1,19 @@
 //! User settings stored in `settings.json`. A missing or unreadable file yields defaults so a
 //! broken settings file never prevents the app from starting.
+//!
+//! API keys are not part of the file: [`SettingsStore`] keeps them in the system keyring (the
+//! same store as sign-in tokens) and fills them into [`Settings`] on load, so the rest of the app
+//! and the UI see one settings object.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::error::Result;
+use crate::auth::TokenStore;
+use crate::error::{CoreError, Result};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", default)]
@@ -20,11 +26,11 @@ pub struct Settings {
     /// Download descriptions, genres, release dates and backgrounds from stores.
     pub fetch_metadata: bool,
     /// Per-provider configuration keyed by provider id, e.g. `steam: { apiKey, steamId }`.
-    /// Passed to the provider as-is; secrets are stored in plain text (see DECISIONS.md).
+    /// Passed to the provider as-is. `steam.apiKey` lives in the keyring, not in the file.
     #[ts(type = "Record<string, Record<string, unknown>>")]
     pub providers: BTreeMap<String, serde_json::Value>,
     /// Optional SteamGridDB API key. When set, SteamGridDB supplies covers and backgrounds that
-    /// the stores don't have. Stored in plain text like the Steam key (see DECISIONS.md).
+    /// the stores don't have. Lives in the keyring, not in the file.
     #[serde(rename = "steamGridDbApiKey")]
     pub steamgriddb_api_key: Option<String>,
 }
@@ -48,18 +54,138 @@ impl Default for Settings {
     }
 }
 
-/// Loads and saves [`Settings`].
-#[derive(Debug, Clone)]
+/// A secret field of [`Settings`] and its keyring entry name.
+struct SecretField {
+    keyring_user: &'static str,
+    get: fn(&Settings) -> Option<String>,
+    set: fn(&mut Settings, Option<String>),
+}
+
+const SECRETS: [SecretField; 2] = [
+    SecretField {
+        keyring_user: "setting:steam.apiKey",
+        get: steam_key,
+        set: set_steam_key,
+    },
+    SecretField {
+        keyring_user: "setting:steamGridDbApiKey",
+        get: |s| s.steamgriddb_api_key.clone(),
+        set: |s, value| s.steamgriddb_api_key = value,
+    },
+];
+
+fn steam_key(s: &Settings) -> Option<String> {
+    s.providers
+        .get("steam")
+        .and_then(|c| c.get("apiKey"))
+        .and_then(|v| v.as_str())
+        .map(str::to_string)
+}
+
+fn set_steam_key(s: &mut Settings, value: Option<String>) {
+    match value {
+        Some(v) => {
+            let section = s
+                .providers
+                .entry("steam".to_string())
+                .or_insert_with(|| serde_json::json!({}));
+            if let Some(map) = section.as_object_mut() {
+                map.insert("apiKey".into(), serde_json::Value::String(v));
+            }
+        }
+        None => {
+            if let Some(map) = s.providers.get_mut("steam").and_then(|c| c.as_object_mut()) {
+                map.remove("apiKey");
+            }
+        }
+    }
+}
+
+fn non_empty(value: Option<String>) -> Option<String> {
+    value
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+}
+
+/// A copy without any secret values (what goes into the file).
+fn strip_secrets(settings: &Settings) -> Settings {
+    let mut copy = settings.clone();
+    for field in &SECRETS {
+        (field.set)(&mut copy, None);
+    }
+    copy
+}
+
+/// Loads and saves [`Settings`]; secrets go to the keyring.
+#[derive(Clone)]
 pub struct SettingsStore {
     path: PathBuf,
+    secrets: Arc<dyn TokenStore>,
+    /// Secret values as last loaded or saved, so frequent loads don't hit the keyring.
+    cache: Arc<Mutex<Option<Vec<Option<String>>>>>,
+}
+
+impl std::fmt::Debug for SettingsStore {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SettingsStore")
+            .field("path", &self.path)
+            .finish_non_exhaustive()
+    }
 }
 
 impl SettingsStore {
-    pub fn new(path: impl Into<PathBuf>) -> Self {
-        Self { path: path.into() }
+    pub fn new(path: impl Into<PathBuf>, secrets: Arc<dyn TokenStore>) -> Self {
+        Self {
+            path: path.into(),
+            secrets,
+            cache: Arc::new(Mutex::new(None)),
+        }
     }
 
+    /// Reads the file, moves any plain-text secrets left by older versions into the keyring, and
+    /// fills the secrets in from the keyring.
     pub fn load(&self) -> Settings {
+        let mut settings = self.read_file();
+        let plain: Vec<Option<String>> = SECRETS
+            .iter()
+            .map(|f| non_empty((f.get)(&settings)))
+            .collect();
+        if plain.iter().any(Option::is_some) && !self.migrate_plain_secrets(&settings, &plain) {
+            // No keyring: keep using the values from the file.
+            return settings;
+        }
+        settings = strip_secrets(&settings);
+        for (field, value) in SECRETS.iter().zip(self.secret_values()) {
+            if value.is_some() {
+                (field.set)(&mut settings, value);
+            }
+        }
+        settings
+    }
+
+    /// Writes the secrets to the keyring and the rest to the file (atomically: temp file +
+    /// rename). Fails instead of writing a secret to the file when the keyring is unavailable.
+    pub fn save(&self, settings: &Settings) -> Result<()> {
+        let values: Vec<Option<String>> = SECRETS
+            .iter()
+            .map(|f| non_empty((f.get)(settings)))
+            .collect();
+        for (field, value) in SECRETS.iter().zip(&values) {
+            let result = match value {
+                Some(v) => self.secrets.save(field.keyring_user, v),
+                None => self.secrets.delete(field.keyring_user),
+            };
+            result.map_err(|err| {
+                CoreError::Invalid(format!(
+                    "Could not store the API key in the system keyring: {err}"
+                ))
+            })?;
+        }
+        *self.cache.lock().unwrap_or_else(PoisonError::into_inner) = Some(values);
+        self.write_file(&strip_secrets(settings))
+    }
+
+    fn read_file(&self) -> Settings {
         match std::fs::read_to_string(&self.path) {
             Ok(text) => serde_json::from_str(&text).unwrap_or_else(|err| {
                 tracing::warn!(%err, path = %self.path.display(), "invalid settings file, using defaults");
@@ -73,13 +199,56 @@ impl SettingsStore {
         }
     }
 
-    /// Writes atomically (temp file + rename) so a crash never leaves a truncated file.
-    pub fn save(&self, settings: &Settings) -> Result<()> {
+    fn write_file(&self, settings: &Settings) -> Result<()> {
         let json = serde_json::to_string_pretty(settings)?;
         let tmp = tmp_path(&self.path);
         std::fs::write(&tmp, json)?;
         std::fs::rename(&tmp, &self.path)?;
         Ok(())
+    }
+
+    /// Secret values from the cache, or the keyring on first use. Keyring errors count as "no
+    /// value" (logged), so a missing keyring never breaks loading settings.
+    fn secret_values(&self) -> Vec<Option<String>> {
+        let mut cache = self.cache.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(values) = cache.as_ref() {
+            return values.clone();
+        }
+        let values: Vec<Option<String>> = SECRETS
+            .iter()
+            .map(|field| match self.secrets.load(field.keyring_user) {
+                Ok(value) => non_empty(value),
+                Err(err) => {
+                    tracing::warn!(%err, "could not read an API key from the keyring");
+                    None
+                }
+            })
+            .collect();
+        *cache = Some(values.clone());
+        values
+    }
+
+    /// Moves plain-text secrets from the file (written by older versions) into the keyring and
+    /// rewrites the file without them. Returns `false` if the keyring is unavailable; the file is
+    /// then left as it is, so nothing is lost.
+    fn migrate_plain_secrets(&self, settings: &Settings, plain: &[Option<String>]) -> bool {
+        for (field, value) in SECRETS.iter().zip(plain) {
+            if let Some(v) = value
+                && let Err(err) = self.secrets.save(field.keyring_user, v)
+            {
+                tracing::warn!(%err, "could not move an API key into the keyring; keeping it in settings.json");
+                return false;
+            }
+        }
+        self.cache
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take();
+        match self.write_file(&strip_secrets(settings)) {
+            Ok(()) => tracing::info!("moved API keys from settings.json into the system keyring"),
+            Err(err) => tracing::warn!(%err, "could not rewrite settings.json without API keys"),
+        }
+        true
     }
 }
 
@@ -92,14 +261,21 @@ fn tmp_path(path: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::auth::{AuthError, MemoryTokenStore};
+
+    fn store_at(path: PathBuf) -> (SettingsStore, Arc<MemoryTokenStore>) {
+        let secrets = Arc::new(MemoryTokenStore::default());
+        (SettingsStore::new(path, secrets.clone()), secrets)
+    }
 
     #[test]
     fn missing_or_corrupt_file_gives_defaults_and_save_roundtrips() {
         let tmp = tempfile::tempdir().unwrap();
-        let store = SettingsStore::new(tmp.path().join("settings.json"));
+        let path = tmp.path().join("settings.json");
+        let (store, secrets) = store_at(path.clone());
         assert_eq!(store.load(), Settings::default());
 
-        std::fs::write(tmp.path().join("settings.json"), "{not json").unwrap();
+        std::fs::write(&path, "{not json").unwrap();
         assert_eq!(store.load(), Settings::default());
 
         let custom = Settings {
@@ -113,9 +289,23 @@ mod tests {
             steamgriddb_api_key: Some("sgdb".into()),
         };
         store.save(&custom).unwrap();
-        let raw = std::fs::read_to_string(tmp.path().join("settings.json")).unwrap();
-        assert!(raw.contains("\"steamGridDbApiKey\": \"sgdb\""));
+        let raw = std::fs::read_to_string(&path).unwrap();
+        assert!(
+            !raw.contains("sgdb") && !raw.contains("apiKey"),
+            "no secrets in the file: {raw}"
+        );
+        assert!(raw.contains("steamId"));
+        assert_eq!(
+            secrets
+                .load("setting:steamGridDbApiKey")
+                .unwrap()
+                .as_deref(),
+            Some("sgdb")
+        );
         assert_eq!(store.load(), custom);
+        // A fresh store (a new process) reads the secrets back from the keyring.
+        let reopened = SettingsStore::new(path, secrets.clone());
+        assert_eq!(reopened.load(), custom);
         assert_eq!(custom.provider_config("steam")["steamId"], "1");
         assert!(custom.provider_config("gog").is_null());
     }
@@ -125,8 +315,76 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let path = tmp.path().join("settings.json");
         std::fs::write(&path, r#"{"scanOnStartup": false, "future": 1}"#).unwrap();
-        let s = SettingsStore::new(path).load();
+        let s = store_at(path).0.load();
         assert!(!s.scan_on_startup);
         assert!(s.download_covers);
+    }
+
+    #[test]
+    fn plain_text_keys_from_older_versions_move_into_the_keyring() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("settings.json");
+        std::fs::write(
+            &path,
+            r#"{"providers":{"steam":{"apiKey":"OLD","steamId":"7"}},"steamGridDbApiKey":"GRID"}"#,
+        )
+        .unwrap();
+        let (store, secrets) = store_at(path.clone());
+        let s = store.load();
+        assert_eq!(s.provider_config("steam")["apiKey"], "OLD");
+        assert_eq!(s.provider_config("steam")["steamId"], "7");
+        assert_eq!(s.steamgriddb_api_key.as_deref(), Some("GRID"));
+        let raw = std::fs::read_to_string(&path).unwrap();
+        assert!(!raw.contains("OLD") && !raw.contains("GRID"), "{raw}");
+        assert!(raw.contains("steamId"));
+        assert_eq!(
+            secrets.load("setting:steam.apiKey").unwrap().as_deref(),
+            Some("OLD")
+        );
+    }
+
+    struct NoKeyring;
+    impl TokenStore for NoKeyring {
+        fn load(&self, _: &str) -> std::result::Result<Option<String>, AuthError> {
+            Err(AuthError::NoKeyring("test".into()))
+        }
+        fn save(&self, _: &str, _: &str) -> std::result::Result<(), AuthError> {
+            Err(AuthError::NoKeyring("test".into()))
+        }
+        fn delete(&self, _: &str) -> std::result::Result<(), AuthError> {
+            Err(AuthError::NoKeyring("test".into()))
+        }
+    }
+
+    #[test]
+    fn clearing_a_key_deletes_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (store, secrets) = store_at(tmp.path().join("settings.json"));
+        let mut s = Settings {
+            steamgriddb_api_key: Some("GRID".into()),
+            ..Settings::default()
+        };
+        store.save(&s).unwrap();
+        s.steamgriddb_api_key = Some("  ".into());
+        store.save(&s).unwrap();
+        assert!(secrets.load("setting:steamGridDbApiKey").unwrap().is_none());
+        assert!(store.load().steamgriddb_api_key.is_none());
+    }
+
+    #[test]
+    fn without_a_keyring_secrets_are_never_written_to_the_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("settings.json");
+        let store = SettingsStore::new(path.clone(), Arc::new(NoKeyring));
+        let with_key = Settings {
+            steamgriddb_api_key: Some("SECRET".into()),
+            ..Settings::default()
+        };
+        assert!(store.save(&with_key).is_err());
+        assert!(!path.exists() || !std::fs::read_to_string(&path).unwrap().contains("SECRET"));
+        // Loading still works, and an old plain-text file is left untouched.
+        std::fs::write(&path, r#"{"steamGridDbApiKey":"LEGACY"}"#).unwrap();
+        assert_eq!(store.load().steamgriddb_api_key.as_deref(), Some("LEGACY"));
+        assert!(std::fs::read_to_string(&path).unwrap().contains("LEGACY"));
     }
 }
