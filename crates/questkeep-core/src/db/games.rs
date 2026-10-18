@@ -464,9 +464,65 @@ impl Database {
         self.store_game_keys("metadata_updated_at IS NULL")
     }
 
-    /// Store games that have no cover yet: `(id, source, source_game_id)`.
-    pub fn games_without_cover(&self) -> Result<Vec<(Uuid, String, String)>> {
-        self.store_game_keys("cover_path IS NULL")
+    /// Games that have no cover yet, including manual ones: `(id, source, source_game_id)`.
+    pub fn games_without_cover(&self) -> Result<Vec<(Uuid, String, Option<String>)>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT id, source, source_game_id FROM games WHERE cover_path IS NULL \
+             ORDER BY installed DESC, sorting_name",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, Option<String>>(2)?,
+            ))
+        })?;
+        let mut out = Vec::new();
+        for row in rows {
+            let (id, source, source_game_id) = row?;
+            if let Ok(id) = Uuid::parse_str(&id) {
+                out.push((id, source, source_game_id));
+            }
+        }
+        Ok(out)
+    }
+
+    /// Sets (or with `None` removes) one top-level key of the game's `extra` JSON object.
+    pub fn set_extra_value(
+        &self,
+        id: Uuid,
+        key: &str,
+        value: Option<serde_json::Value>,
+    ) -> Result<()> {
+        let conn = self.conn();
+        let text: String = conn
+            .query_row(
+                "SELECT extra FROM games WHERE id = ?1",
+                params![id.to_string()],
+                |r| r.get(0),
+            )
+            .optional()?
+            .ok_or(CoreError::GameNotFound(id))?;
+        let mut extra = serde_json::from_str::<serde_json::Value>(&text)
+            .ok()
+            .filter(serde_json::Value::is_object)
+            .unwrap_or_else(|| serde_json::json!({}));
+        if let Some(obj) = extra.as_object_mut() {
+            match value {
+                Some(v) => {
+                    obj.insert(key.to_string(), v);
+                }
+                None => {
+                    obj.remove(key);
+                }
+            }
+        }
+        conn.execute(
+            "UPDATE games SET extra = ?2 WHERE id = ?1",
+            params![id.to_string(), extra.to_string()],
+        )?;
+        Ok(())
     }
 
     /// `(id, source, source_game_id)` of store games matching a fixed SQL condition.
@@ -1016,5 +1072,35 @@ mod tests {
         let other = db.insert_game(&manual("Manual"), now).unwrap();
         db.mark_metadata_checked(other.id, now).unwrap();
         assert!(db.get_game(other.id).unwrap().genres.is_empty());
+    }
+
+    #[test]
+    fn extra_values_and_covers_for_all_games() {
+        let db = db();
+        let now = Utc::now();
+        let manual = db.insert_game(&manual("Manual"), now).unwrap();
+        db.upsert_imported("steam", &[imported("1", "G")], now)
+            .unwrap();
+        let missing = db.games_without_cover().unwrap();
+        assert_eq!(missing.len(), 2, "manual games are included");
+        assert!(
+            missing
+                .iter()
+                .any(|(id, _, sgid)| *id == manual.id && sgid.is_none())
+        );
+
+        db.set_extra_value(manual.id, "k", Some(serde_json::json!("v")))
+            .unwrap();
+        db.set_extra_value(manual.id, "other", Some(serde_json::json!(1)))
+            .unwrap();
+        db.set_extra_value(manual.id, "k", None).unwrap();
+        assert_eq!(
+            db.get_game(manual.id).unwrap().extra,
+            serde_json::json!({ "other": 1 })
+        );
+        assert!(
+            db.set_extra_value(Uuid::new_v4(), "k", None).is_err(),
+            "unknown game"
+        );
     }
 }

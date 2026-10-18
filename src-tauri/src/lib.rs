@@ -143,6 +143,7 @@ fn build_state(app: &tauri::AppHandle) -> Result<(AppState, Option<WorkerGuard>)
         library.images().clone(),
         providers.clone(),
         events.clone(),
+        library.artwork().clone(),
         COVER_WORKERS,
     );
     let metadata = MetadataFetcher::new(
@@ -150,6 +151,7 @@ fn build_state(app: &tauri::AppHandle) -> Result<(AppState, Option<WorkerGuard>)
         library.images().clone(),
         providers,
         events,
+        library.artwork().clone(),
         METADATA_INTERVAL,
     );
     Ok((
@@ -226,6 +228,7 @@ pub fn run() {
             commands::launch_game,
             commands::install_game,
             commands::refresh_metadata,
+            commands::refetch_artwork,
             commands::running_games,
             commands::app_info,
             commands::get_settings,

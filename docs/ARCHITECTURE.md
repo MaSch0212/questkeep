@@ -30,7 +30,7 @@ those commands and events.
 | `db/` | `Database` (rusqlite connection behind a mutex), ordered migrations with `schema_version`, `games` repository (CRUD, query, upsert of imported games), `sessions` repository. |
 | `providers/` | `LibraryProvider` trait, `ProviderRegistry`, `steam` (VDF/ACF parser, library discovery, tool filter), `manual` helpers. |
 | `launcher/` | Starts games (`file` spawn or `uri` open), tracks sessions on a background thread per game, writes playtime. `ProcessProbe` trait keeps tracking testable. |
-| `images/` | Image cache under `images/covers` and `images/backgrounds`. `CoverFetcher` (4 workers) tries each provider's cover candidates, local files before CDN URLs. `MetadataFetcher` (1 worker, at least 1.5 s between store requests) stores store metadata and a background per game. |
+| `images/` | Image cache under `images/covers` and `images/backgrounds`. `CoverFetcher` (4 workers) tries each provider's cover candidates, local files before CDN URLs. `MetadataFetcher` (1 worker, at least 1.5 s between store requests) stores store metadata and a background per game. `SteamGridDb` (`images/steamgriddb.rs`) is a fallback source for covers and backgrounds when a user API key is set: used when the provider has no image (or only low-quality ones, see `covers_are_low_quality`), and for manual games. Global limiter of 2 requests/s, "nothing found" remembered in `games.extra`, key shared via `Library::artwork()` and updated by `save_settings`. |
 | `settings` | Small `settings.json` (serde, defaults on missing/corrupt file), including a per-provider config map (`providers.steam = { apiKey, steamId }`). |
 | `events` | `EventBus` with serializable `CoreEvent` enum; subscribers are callbacks. Plugin hooks attach here later. |
 | `platform/` | OS-specific bits: Steam install dirs (registry on Windows, XDG paths on Linux), opening URIs, process snapshots. Stubs on other targets. |
@@ -118,6 +118,7 @@ silently falls back to installed games only.
 | `launch_game(id)` / `running_games()` | Launch and active sessions. |
 | `install_game(id)` | Opens the provider's install action (e.g. `steam://install/440`). |
 | `refresh_metadata(id)` | Queues a metadata (and missing background) download for one game. |
+| `refetch_artwork(id)` | Clears the SteamGridDB "checked" markers and re-fetches cover and background from SteamGridDB, replacing the current ones. Errors without an API key. |
 | `app_info()` | Version, data dir, log path. |
 | `seed_fake_library(count)` | Debug builds only. |
 

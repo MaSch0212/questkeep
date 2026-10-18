@@ -11,7 +11,7 @@ use uuid::Uuid;
 use crate::db::{Database, NewGameRecord};
 use crate::error::{CoreError, Result};
 use crate::events::{CoreEvent, EventBus};
-use crate::images::{CoverJob, ImageCache, ImageKind, MetadataJob};
+use crate::images::{CoverJob, ImageCache, ImageKind, MetadataJob, SteamGridDb};
 use crate::model::{
     ActionKind, Game, GameQuery, GameUpdate, ImportedGame, MANUAL_SOURCE, NewManualGame,
     PlayAction, ScanSummary, display_name_from_path,
@@ -40,6 +40,8 @@ pub struct Library {
     events: EventBus,
     images: ImageCache,
     settings: SettingsStore,
+    /// Shared with the fetchers; `save_settings` keeps its API key current.
+    artwork: SteamGridDb,
 }
 
 impl Library {
@@ -57,9 +59,11 @@ impl Library {
         providers: ProviderRegistry,
         events: EventBus,
     ) -> Self {
+        let settings = SettingsStore::new(paths.settings_file());
         Self {
             images: ImageCache::new(paths.clone()),
-            settings: SettingsStore::new(paths.settings_file()),
+            artwork: SteamGridDb::new(settings.load().steamgriddb_api_key),
+            settings,
             paths,
             db,
             providers,
@@ -102,7 +106,15 @@ impl Library {
     }
 
     pub fn save_settings(&self, settings: &Settings) -> Result<()> {
-        self.settings.save(settings)
+        self.settings.save(settings)?;
+        self.artwork
+            .set_api_key(settings.steamgriddb_api_key.clone());
+        Ok(())
+    }
+
+    /// The SteamGridDB client, to hand to the image fetchers.
+    pub fn artwork(&self) -> &SteamGridDb {
+        &self.artwork
     }
 
     /// Converts stored relative image paths into absolute ones for the UI; drops missing files.
@@ -295,19 +307,54 @@ impl Library {
             .collect()
     }
 
-    /// Cover-fetch jobs for store games that don't have a cover yet.
+    /// Cover-fetch jobs for games that don't have a cover yet. Store games always get a job (their
+    /// provider is asked first). Manual games and games of unregistered providers can only be
+    /// served by SteamGridDB, so they get a job only when an API key is configured.
     pub fn missing_cover_jobs(&self) -> Result<Vec<CoverJob>> {
+        let has_key = self
+            .settings()
+            .steamgriddb_api_key
+            .is_some_and(|k| !k.trim().is_empty());
         Ok(self
             .db
             .games_without_cover()?
             .into_iter()
-            .filter(|(_, source, _)| self.providers.get(source).is_some())
+            .filter(|(_, source, source_game_id)| {
+                has_key || (source_game_id.is_some() && self.providers.get(source).is_some())
+            })
             .map(|(game_id, source, source_game_id)| CoverJob {
                 game_id,
                 source,
                 source_game_id,
+                force: false,
             })
             .collect())
+    }
+
+    /// Prepares fetching a game's cover and background from SteamGridDB again, replacing the
+    /// current ones: clears the "nothing found" markers and returns the job for the cover
+    /// fetcher (which also handles the background). Fails when no API key is configured.
+    pub fn refetch_artwork(&self, id: Uuid) -> Result<CoverJob> {
+        let game = self.db.get_game(id)?;
+        if !self
+            .settings()
+            .steamgriddb_api_key
+            .is_some_and(|k| !k.trim().is_empty())
+        {
+            return Err(CoreError::Invalid(
+                "Add a SteamGridDB API key in the settings first.".into(),
+            ));
+        }
+        for kind in [ImageKind::Cover, ImageKind::Background] {
+            self.db
+                .set_extra_value(id, crate::images::checked_key(kind), None)?;
+        }
+        Ok(CoverJob {
+            game_id: id,
+            source: game.source,
+            source_game_id: game.source_game_id,
+            force: true,
+        })
     }
 
     /// Metadata jobs for store games whose metadata was never fetched.
@@ -583,6 +630,51 @@ mod tests {
         assert_eq!(jobs.len(), 2);
         assert_eq!(jobs[0].game_id, installed.id, "installed games first");
         assert!(lib.metadata_job(owned.id).unwrap().is_some());
+    }
+
+    #[test]
+    fn manual_games_get_cover_jobs_only_with_a_steamgriddb_key() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (lib, _) = library(tmp.path(), ProviderRegistry::new());
+        std::fs::write(tmp.path().join("hades.exe"), b"x").unwrap();
+        let game = lib
+            .add_manual_game(&NewManualGame {
+                name: Some("Hades".into()),
+                executable: tmp.path().join("hades.exe").display().to_string(),
+                args: None,
+                working_dir: None,
+                cover_image: None,
+            })
+            .unwrap();
+        assert!(lib.missing_cover_jobs().unwrap().is_empty());
+        assert!(
+            lib.refetch_artwork(game.id).is_err(),
+            "no key: readable error"
+        );
+
+        let mut settings = lib.settings();
+        settings.steamgriddb_api_key = Some("test-key".into());
+        lib.save_settings(&settings).unwrap();
+        assert!(lib.artwork().is_configured());
+        let jobs = lib.missing_cover_jobs().unwrap();
+        assert_eq!(jobs.len(), 1);
+        assert_eq!(jobs[0].source_game_id, None);
+        assert!(!jobs[0].force);
+
+        lib.database()
+            .set_extra_value(game.id, "steamGridDbCoverCheckedAt", Some("x".into()))
+            .unwrap();
+        let job = lib.refetch_artwork(game.id).unwrap();
+        assert!(job.force);
+        assert!(
+            lib.database()
+                .get_game(game.id)
+                .unwrap()
+                .extra
+                .get("steamGridDbCoverCheckedAt")
+                .is_none(),
+            "marker cleared"
+        );
     }
 
     #[test]

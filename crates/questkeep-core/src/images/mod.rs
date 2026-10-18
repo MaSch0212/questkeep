@@ -2,6 +2,7 @@
 //! directory, e.g. `images/covers/<game id>.jpg` or `images/backgrounds/<game id>.jpg`.
 
 mod fetcher;
+mod steamgriddb;
 
 use std::path::{Path, PathBuf};
 
@@ -11,6 +12,8 @@ use crate::error::{CoreError, Result};
 use crate::paths::DataPaths;
 
 pub(crate) use fetcher::http_agent;
+pub(crate) use steamgriddb::checked_key;
+pub use steamgriddb::{Lookup, SteamGridDb};
 pub use fetcher::{CoverFetcher, CoverJob, MetadataFetcher, MetadataJob, image_extension};
 
 const ALLOWED_EXTENSIONS: [&str; 5] = ["jpg", "jpeg", "png", "webp", "gif"];

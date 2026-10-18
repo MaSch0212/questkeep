@@ -77,6 +77,12 @@ pub trait LibraryProvider: Send + Sync {
     fn cover_candidates(&self, _source_game_id: &str) -> Vec<ImageCandidate> {
         Vec::new()
     }
+    /// Whether this provider's cover candidates are poor stand-ins for real 2:3 box art (e.g.
+    /// square app logos). When true and a SteamGridDB key is configured, SteamGridDB is tried
+    /// first and the provider's candidates only serve as fallback.
+    fn covers_are_low_quality(&self) -> bool {
+        false
+    }
     /// Where a wide background / hero image for the game may be found, best first.
     fn background_candidates(&self, _source_game_id: &str) -> Vec<ImageCandidate> {
         Vec::new()

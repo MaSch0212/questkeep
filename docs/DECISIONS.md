@@ -107,3 +107,21 @@ Short log of choices made while building. Newest at the bottom of each section.
   Windows. Building it ourselves allows a dev-only hidden mode (`QUESTKEEP_HIDDEN=1`, see
   `scripts/dev-hidden.ps1`) for testing through the DevTools port without a window or focus change,
   and showing the normal window only after setup avoids a white flash.
+- **SteamGridDB is a fallback artwork source, keyed by a user-provided API key** stored in plain
+  text as `steamGridDbApiKey` in `settings.json`, for the same reason as the Steam key (free,
+  low-risk key; keyring complicates portable mode). `Library` owns the shared `SteamGridDb`
+  client and `save_settings` updates its key in place, so the running fetchers pick up a new key
+  without restarting and without reading settings per job. A 401/403 marks the key rejected until
+  it changes, so a bad key costs one request, not one per game.
+- **SteamGridDB calls share one global limiter** (at least 500 ms between requests, a
+  `Mutex<Instant>` slot reservation) instead of a dedicated worker, so cover workers and the
+  metadata worker can both use it while the API sees at most ~2 requests per second. Image
+  downloads go to the CDN and skip the limiter.
+- **"SteamGridDB had nothing" is remembered in `games.extra`** (`steamGridDbCoverCheckedAt`,
+  `steamGridDbBackgroundCheckedAt`, RFC 3339) rather than a new column or migration: it is cheap,
+  per image kind, and cleared by `refetch_artwork`. Network and key errors are not remembered.
+- **Providers flag poor covers with `LibraryProvider::covers_are_low_quality`** (Xbox: square
+  logos) rather than a per-candidate field: the quality is a property of the whole source, and a
+  default method keeps other providers untouched. With a key, SteamGridDB is tried first and the
+  logo is the fallback. Covers already stored are never replaced automatically (a user-picked
+  cover is indistinguishable from a fetched one); `refetch_artwork` replaces on request.
