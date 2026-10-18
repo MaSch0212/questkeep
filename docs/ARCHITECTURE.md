@@ -120,7 +120,12 @@ silently falls back to installed games only.
   pills and Open/Exit. `layout.rs` is pure and tested (layout, hit testing, keyboard navigation,
   placement next to the taskbar); `render.rs` draws onto any Direct2D target, which the
   `renders_offscreen` test uses to render into a WIC bitmap (set `QUESTKEEP_POPUP_PREVIEW=<png>`
-  to save it, `QUESTKEEP_POPUP_SCALE` for the DPI scale); `window.rs` owns the window and input.
+  to save it, `QUESTKEEP_POPUP_SCALE` for the DPI scale, `QUESTKEEP_POPUP_IMAGES=<data dir>/images`
+  for real covers); `window.rs` owns the window and input. `a11y.rs` builds an AccessKit tree from
+  the layout (groups per section, a named button per item, keyboard focus); `window.rs` serves it
+  on `WM_GETOBJECT` through `accesskit_windows` and forwards screen-reader actions (invoke,
+  focus, scroll into view) to the window thread. A test reads it back through the UI Automation
+  client API on a window that is never shown.
   Images are scaled once to their exact pixel size (`images::load_image_filled`, `scale_icon`) and
   drawn 1:1 at pixel-snapped positions, so nothing is resampled while drawing.
 - **Game icons.** Linux menu entries are `IconMenuItem`s with a 32x32 RGBA icon when the game has a cached

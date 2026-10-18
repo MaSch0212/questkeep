@@ -7,6 +7,7 @@
 //! `layout` is pure and tested; `render` draws a layout onto any Direct2D target (the window, or a
 //! bitmap for the preview test); `window` owns the Win32 window and input.
 
+mod a11y;
 pub mod layout;
 #[cfg(windows)]
 mod render;

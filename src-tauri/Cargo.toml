@@ -43,11 +43,15 @@ windows = { version = "0.62.2", features = [
   "Win32_Graphics_Imaging",
   "Win32_System_Com",
   "Win32_System_LibraryLoader",
+  "Win32_UI_Accessibility",
   "Win32_UI_HiDpi",
   "Win32_UI_Input_KeyboardAndMouse",
   "Win32_UI_WindowsAndMessaging",
 ] }
 windows-numerics = "0.3.1"
+# Screen-reader support for the tray popup (UI Automation).
+accesskit = "0.25.1"
+accesskit_windows = "0.35.1"
 
 [dev-dependencies]
 image = { version = "0.25.10", default-features = false, features = ["png"] }

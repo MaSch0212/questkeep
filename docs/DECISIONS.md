@@ -261,6 +261,13 @@ Short log of choices made while building. Newest at the bottom of each section.
   + Direct2D (`windows` crate, already in the lockfile through Tauri): instant, and nothing exists
   while it is closed. It is the third place with `unsafe` code (`tray_popup/{render,window}.rs`, scoped
   `allow`); layout and navigation are pure Rust with tests. Its colors mirror `theme.css` (dark
-  only, like the app). Limits: no screen reader support yet (the native menu had it) and no
-  acrylic backdrop. Linux keeps the native menu (AppIndicator menus cannot be replaced there).
+  only, like the app). No acrylic backdrop. Linux keeps the native menu (AppIndicator menus cannot be replaced there).
+- **Tray popup accessibility through AccessKit** (MIT/Apache, `accesskit_windows` -> UI
+  Automation), not a hand-written UIA provider: the tree is built from the same `Layout` the
+  renderer draws (`tray_popup/a11y.rs`, platform independent), so a later Linux popup could expose
+  it through `accesskit_unix` (AT-SPI) unchanged. Considered and rejected: a webview popup (best
+  accessibility, but 100+ MB and a cold start per opening), egui (GPU context, restyling) and Slint
+  (licence needs attribution). A Linux popup is blocked less by drawing than by the tray: the
+  AppIndicator backend reports no clicks (tray-icon's KSNI backend would) and Wayland apps cannot
+  place a window next to the tray.
 

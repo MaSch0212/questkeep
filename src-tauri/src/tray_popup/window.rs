@@ -39,13 +39,19 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetCursorPos, GetMessageW,
     IDC_ARROW, LoadCursorW, MSG, PostMessageW, PostQuitMessage, RegisterClassExW, SW_SHOW,
-    SetForegroundWindow, ShowWindow, TranslateMessage, WA_INACTIVE, WM_ACTIVATE, WM_CLOSE,
-    WM_DESTROY, WM_DISPLAYCHANGE, WM_DPICHANGED, WM_ERASEBKGND, WM_KEYDOWN, WM_LBUTTONDOWN,
-    WM_LBUTTONUP, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_PAINT, WNDCLASSEXW, WS_EX_TOOLWINDOW,
-    WS_EX_TOPMOST, WS_POPUP,
+    SetForegroundWindow, ShowWindow, TranslateMessage, WA_INACTIVE, WM_ACTIVATE, WM_APP, WM_CLOSE,
+    WM_DESTROY, WM_DISPLAYCHANGE, WM_DPICHANGED, WM_ERASEBKGND, WM_GETOBJECT, WM_KEYDOWN,
+    WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_PAINT, WNDCLASSEXW,
+    WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
 };
 use windows::core::{Result, w};
 
+use accesskit::{
+    Action as A11yAction, ActionHandler, ActionRequest, ActivationHandler, TreeUpdate,
+};
+use accesskit_windows::Adapter;
+
+use super::a11y;
 use super::layout::{self, Action, Layout, Nav, ScreenRect, navigate};
 use super::render::{Bitmaps, Frame, Renderer, ViewState};
 use super::{PopupData, Prepared, prepare};
@@ -80,6 +86,8 @@ struct State {
     view: ViewState,
     tracking_leave: bool,
     action: Option<Action>,
+    /// Screen-reader support (UI Automation), created right after the window.
+    adapter: Option<Adapter>,
 }
 
 impl State {
@@ -195,11 +203,23 @@ fn monitor_for(anchor: ScreenRect) -> (ScreenRect, f32) {
 }
 
 fn run(anchor: ScreenRect, data: PopupData) -> Result<Option<Action>> {
+    run_with(anchor, data, true, |_| {})
+}
+
+/// Creates the popup and runs its message loop until it closes. `visible: false` never shows
+/// or activates it (tests); `on_created` gets the window before the loop starts.
+fn run_with(
+    anchor: ScreenRect,
+    data: PopupData,
+    visible: bool,
+    on_created: impl FnOnce(HWND),
+) -> Result<Option<Action>> {
     register_class()?;
     let (work, scale) = monitor_for(anchor);
     let renderer = Renderer::new()?;
     let layout = layout::layout(&data.content(), 0.0, |t| renderer.measure(t));
     let images = prepare(&data, &layout, scale);
+    let layout_empty = layout.items.is_empty();
     let (w, h) = (
         (layout.width * scale).round() as i32,
         (layout.height * scale).round() as i32,
@@ -216,9 +236,14 @@ fn run(anchor: ScreenRect, data: PopupData) -> Result<Option<Action>> {
             images,
             scale,
             scroll: 0.0,
-            view: ViewState::default(),
+            // Screen readers start on the first item; the ring only shows after keyboard use.
+            view: ViewState {
+                focus: (!layout_empty).then_some(0),
+                ..ViewState::default()
+            },
             tracking_leave: false,
             action: None,
+            adapter: None,
         });
     });
 
@@ -241,13 +266,26 @@ fn run(anchor: ScreenRect, data: PopupData) -> Result<Option<Action>> {
             None,
         )?;
         style_window(hwnd);
+        // Must exist before the first WM_GETOBJECT (screen readers ask as soon as it shows).
+        STATE.with(|s| {
+            if let Some(state) = s.borrow_mut().as_mut() {
+                state.adapter = Some(Adapter::new(
+                    hwnd,
+                    visible,
+                    ActionForwarder(hwnd.0 as isize),
+                ));
+            }
+        });
         *OPEN
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(hwnd.0 as isize);
-        let _ = ShowWindow(hwnd, SW_SHOW);
-        // The shell lets the tray icon's process take the foreground after a click on its icon;
-        // without activation the popup could not notice clicks elsewhere.
-        let _ = SetForegroundWindow(hwnd);
+        if visible {
+            let _ = ShowWindow(hwnd, SW_SHOW);
+            // The shell lets the tray icon's process take the foreground after a click on its
+            // icon; without activation the popup could not notice clicks elsewhere.
+            let _ = SetForegroundWindow(hwnd);
+        }
+        on_created(hwnd);
 
         let mut msg = MSG::default();
         while GetMessageW(&mut msg, None, 0, 0).as_bool() {
@@ -397,6 +435,81 @@ fn paint(hwnd: HWND, state: &mut State) -> Result<()> {
     Ok(())
 }
 
+/// Posted by [`ActionForwarder`]: `wparam` is the action (`A11Y_*`), `lparam` the item index.
+const WM_A11Y_ACTION: u32 = WM_APP + 1;
+const A11Y_CLICK: usize = 0;
+const A11Y_FOCUS: usize = 1;
+const A11Y_SCROLL: usize = 2;
+
+/// Receives screen-reader actions (possibly on another thread) and forwards them to the window
+/// thread, which owns the state.
+struct ActionForwarder(isize);
+
+impl ActionHandler for ActionForwarder {
+    fn do_action(&mut self, request: ActionRequest) {
+        let Some(index) = a11y::item_index(request.target_node) else {
+            return;
+        };
+        let action = match request.action {
+            A11yAction::Click => A11Y_CLICK,
+            A11yAction::Focus => A11Y_FOCUS,
+            A11yAction::ScrollIntoView => A11Y_SCROLL,
+            _ => return,
+        };
+        // SAFETY: posting to our window; a stale handle just fails.
+        let _ = unsafe {
+            PostMessageW(
+                Some(HWND(self.0 as *mut _)),
+                WM_A11Y_ACTION,
+                WPARAM(action),
+                LPARAM(index as isize),
+            )
+        };
+    }
+}
+
+/// Serves the initial tree on the first `WM_GETOBJECT`.
+struct InitialTree(Option<TreeUpdate>);
+
+impl ActivationHandler for InitialTree {
+    fn request_initial_tree(&mut self) -> Option<TreeUpdate> {
+        self.0.take()
+    }
+}
+
+fn on_a11y_action(state: &mut State, action: usize, index: usize) -> Effect {
+    if index >= state.layout.items.len() {
+        return Effect::None;
+    }
+    match action {
+        A11Y_CLICK => activate(state, index),
+        A11Y_FOCUS | A11Y_SCROLL => {
+            if action == A11Y_FOCUS {
+                state.view.focus = Some(index);
+                state.view.show_focus = true;
+            }
+            state.scroll = state.layout.reveal(index, state.scroll);
+            state.relayout();
+            Effect::Redraw
+        }
+        _ => Effect::None,
+    }
+}
+
+/// Sends the current tree to the screen reader (if one is listening) and raises the resulting
+/// events, outside the state borrow because raising may re-enter the window procedure.
+fn sync_a11y() {
+    let events = STATE.with(|s| {
+        let mut guard = s.try_borrow_mut().ok()?;
+        let state = guard.as_mut()?;
+        let tree = a11y::tree(&state.layout, &state.data, state.view.focus, state.scale);
+        state.adapter.as_mut()?.update_if_active(|| tree)
+    });
+    if let Some(events) = events {
+        events.raise();
+    }
+}
+
 fn activate(state: &mut State, index: usize) -> Effect {
     match state.layout.items.get(index) {
         Some(item) => {
@@ -451,6 +564,29 @@ fn on_key(state: &mut State, key: u16) -> Effect {
 
 unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     let effect = match msg {
+        WM_GETOBJECT => {
+            let result = STATE.with(|s| {
+                let mut guard = s.try_borrow_mut().ok()?;
+                let state = guard.as_mut()?;
+                let mut initial = InitialTree(Some(a11y::tree(
+                    &state.layout,
+                    &state.data,
+                    state.view.focus,
+                    state.scale,
+                )));
+                state
+                    .adapter
+                    .as_mut()?
+                    .handle_wm_getobject(wparam, lparam, &mut initial)
+            });
+            // Converting calls into UIA, which may send a nested WM_GETOBJECT: no borrow held.
+            return match result {
+                Some(result) => result.into(),
+                // SAFETY: default handling for object ids AccessKit does not serve.
+                None => unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) },
+            };
+        }
+        WM_A11Y_ACTION => with_state(|state| on_a11y_action(state, wparam.0, lparam.0 as usize)),
         WM_PAINT => {
             let _ = with_state(|state| {
                 if let Err(err) = paint(hwnd, state) {
@@ -513,6 +649,21 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
         }),
         WM_KEYDOWN => with_state(|state| on_key(state, wparam.0 as u16)),
         WM_ACTIVATE if (wparam.0 & 0xffff) as u32 == WA_INACTIVE => Effect::Close,
+        WM_ACTIVATE => {
+            let events = STATE.with(|s| {
+                let mut guard = s.try_borrow_mut().ok()?;
+                guard
+                    .as_mut()?
+                    .adapter
+                    .as_mut()?
+                    .update_window_focus_state(true)
+            });
+            if let Some(events) = events {
+                events.raise();
+            }
+            // SAFETY: default activation handling.
+            return unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) };
+        }
         WM_CLOSE | WM_DISPLAYCHANGE | WM_DPICHANGED => Effect::Close,
         WM_DESTROY => {
             // SAFETY: ends this thread's message loop.
@@ -524,14 +675,102 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
     };
     match effect {
         Effect::None => {}
-        // SAFETY: requesting a repaint of our own window.
-        Effect::Redraw => unsafe {
-            let _ = InvalidateRect(Some(hwnd), None, false);
-        },
+        Effect::Redraw => {
+            // SAFETY: requesting a repaint of our own window.
+            unsafe {
+                let _ = InvalidateRect(Some(hwnd), None, false);
+            }
+            sync_a11y();
+        }
         // SAFETY: destroying our own window on its thread (no state borrow is held here).
         Effect::Close => unsafe {
             let _ = DestroyWindow(hwnd);
         },
     }
     LRESULT(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use questkeep_core::platform::StoreClient;
+    use questkeep_core::tray::{TrayGame, TrayGames};
+    use uuid::Uuid;
+    use windows::Win32::System::Com::{
+        CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx,
+    };
+    use windows::Win32::UI::Accessibility::{
+        CUIAutomation, IUIAutomation, IUIAutomationInvokePattern, TreeScope_Descendants,
+        UIA_ButtonControlTypeId, UIA_InvokePatternId,
+    };
+
+    /// The popup as a screen reader sees it, through the real UI Automation client API, on a
+    /// window that is never shown: every item is a named button, and invoking one runs it.
+    #[test]
+    fn screen_readers_see_and_invoke_the_items() {
+        let data = PopupData {
+            games: TrayGames {
+                recent: vec![TrayGame {
+                    id: Uuid::from_u128(1),
+                    name: "Hades".into(),
+                    icon: None,
+                    cover: None,
+                }],
+                favorites: vec![],
+            },
+            clients: vec![StoreClient {
+                id: "steam",
+                name: "Steam",
+                uri: "steam://open/main",
+            }],
+        };
+        let anchor = ScreenRect {
+            x: 100,
+            y: 100,
+            w: 24,
+            h: 24,
+        };
+        let (tx, rx) = std::sync::mpsc::channel();
+        let window = std::thread::spawn(move || {
+            run_with(anchor, data, false, |hwnd| {
+                tx.send(hwnd.0 as isize).unwrap();
+            })
+            .unwrap()
+        });
+        let hwnd = HWND(rx.recv().unwrap() as *mut _);
+
+        // SAFETY: COM client calls on owned interfaces; the window lives on its own thread.
+        let buttons = unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+            let uia: IUIAutomation =
+                CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER).unwrap();
+            let root = uia.ElementFromHandle(hwnd).unwrap();
+            let all = root
+                .FindAll(TreeScope_Descendants, &uia.CreateTrueCondition().unwrap())
+                .unwrap();
+            let mut buttons = Vec::new();
+            for i in 0..all.Length().unwrap() {
+                let element = all.GetElement(i).unwrap();
+                if element.CurrentControlType().unwrap() == UIA_ButtonControlTypeId {
+                    let name = element.CurrentName().unwrap().to_string();
+                    buttons.push((name, element));
+                }
+            }
+            let names: Vec<&str> = buttons.iter().map(|(n, _)| n.as_str()).collect();
+            assert_eq!(
+                names,
+                ["Hades", "Open Steam", "Open Questkeep", "Exit Questkeep"]
+            );
+            buttons
+        };
+        // SAFETY: as above.
+        unsafe {
+            let invoke: IUIAutomationInvokePattern = buttons[2]
+                .1
+                .GetCurrentPatternAs(UIA_InvokePatternId)
+                .unwrap();
+            invoke.Invoke().unwrap();
+        }
+        assert_eq!(window.join().unwrap(), Some(Action::OpenWindow));
+    }
 }
