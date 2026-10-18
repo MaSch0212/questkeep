@@ -1,0 +1,27 @@
+{
+  "buildId": "56273514379284738",
+  "clientId": "49843738347938",
+  "gameId": "1207658924",
+  "language": "English",
+  "name": "The Witcher: Enhanced Edition",
+  "playTasks": [
+    {
+      "category": "tool",
+      "name": "Configuration",
+      "path": "System\\config.exe",
+      "type": "FileTask"
+    },
+    {
+      "category": "game",
+      "isPrimary": true,
+      "languages": ["en-US"],
+      "name": "The Witcher: Enhanced Edition",
+      "path": "System\\witcher.exe",
+      "type": "FileTask",
+      "workingDir": "System",
+      "arguments": "-fullscreen"
+    }
+  ],
+  "rootGameId": "1207658924",
+  "version": 1
+}

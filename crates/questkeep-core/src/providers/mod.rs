@@ -2,6 +2,7 @@
 //! registering it; UI and database code stay untouched.
 
 pub mod epic;
+pub mod gog;
 pub mod manual;
 pub mod steam;
 pub mod xbox;
@@ -118,6 +119,7 @@ impl ProviderRegistry {
         registry.register(Arc::new(steam::SteamProvider::detect()));
         registry.register(Arc::new(epic::EpicProvider::detect()));
         registry.register(Arc::new(xbox::XboxProvider::detect()));
+        registry.register(Arc::new(gog::GogProvider::detect()));
         registry
     }
 

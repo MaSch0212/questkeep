@@ -1,0 +1,25 @@
+{
+  "overview": "\n\n<p>\nThe Witcher is a role-playing game&nbsp;set in a dark fantasy world.<br>\n<br>\nBecome <strong>Geralt</strong> &amp; make choices.\n<video muted loop><source src=\"https://items.gog.com/x.mp4\" type=\"video/mp4\"></video>\n</p>\n<h4>KEY FEATURES</h4>\n<ul>\n\t<li>Choose from over 250 abilities.</li>\n\t<li>Three endings &mdash; each different.</li>\n</ul>\n",
+  "_links": {
+    "self": { "href": "https://api.gog.com/v2/games/1207658924?locale=en-US" },
+    "store": { "href": "https://www.gog.com/en/game/the_witcher" },
+    "boxArtImage": { "href": "https://images.gog-statics.com/32385c2c39b8715a9ccfb159ed481b55503b96526b00866f75a4af48461615a5.jpg" },
+    "backgroundImage": { "href": "https://images.gog-statics.com/c73009d18e964448b9704ad9d69a7c68bab5f8a10df410254bb511f2f9198a3a.jpg" },
+    "galaxyBackgroundImage": { "href": "https://images.gog-statics.com/46d5f76e789d0f335558b4ea79487ef7f1b2864ca67e77e127494882a3571751.jpg" }
+  },
+  "_embedded": {
+    "product": {
+      "id": 1207658924,
+      "title": "The Witcher: Enhanced Edition",
+      "globalReleaseDate": "2007-10-26T00:00:00+02:00",
+      "gogReleaseDate": "2011-05-09T23:00:00+02:00"
+    },
+    "publishers": [{ "name": "CD PROJEKT RED", "searchIndex": "cd-projekt-red" }],
+    "developers": [{ "name": "CD PROJEKT RED", "searchIndex": "cd-projekt-red" }],
+    "tags": [
+      { "id": 57, "name": "Role-playing", "level": 1, "slug": "rpg" },
+      { "id": 64, "name": "Action", "level": 2, "slug": "action" },
+      { "id": 71, "name": "Fantasy", "level": 3, "slug": "fantasy" }
+    ]
+  }
+}
