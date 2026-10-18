@@ -20,6 +20,10 @@ pub struct ProcInfo {
     pub exe: Option<String>,
     /// Executable file name.
     pub name: String,
+    /// Other paths that identify the process (working directory, path-like command-line
+    /// arguments). Filled on Linux only, where Proton games run as `wine64-preloader` from the
+    /// Proton folder and only their working directory/arguments point into the game folder.
+    pub hint_paths: Vec<String>,
 }
 
 /// Source of process snapshots. Abstracted so tracking logic is testable without real processes.
@@ -49,11 +53,12 @@ impl Default for SystemProbe {
 impl ProcessProbe for SystemProbe {
     fn snapshot(&self) -> Vec<ProcInfo> {
         let mut system = self.system.lock().unwrap_or_else(PoisonError::into_inner);
-        system.refresh_processes_specifics(
-            ProcessesToUpdate::All,
-            true,
-            ProcessRefreshKind::nothing().with_exe(UpdateKind::OnlyIfNotSet),
-        );
+        let kind = ProcessRefreshKind::nothing().with_exe(UpdateKind::OnlyIfNotSet);
+        #[cfg(target_os = "linux")]
+        let kind = kind
+            .with_cwd(UpdateKind::OnlyIfNotSet)
+            .with_cmd(UpdateKind::OnlyIfNotSet);
+        system.refresh_processes_specifics(ProcessesToUpdate::All, true, kind);
         system
             .processes()
             .values()
@@ -63,9 +68,37 @@ impl ProcessProbe for SystemProbe {
                 parent: p.parent().map(|pp| pp.as_u32()),
                 exe: p.exe().map(|e| e.display().to_string()),
                 name: p.name().to_string_lossy().into_owned(),
+                hint_paths: hint_paths(p),
             })
             .collect()
     }
+}
+
+#[cfg(target_os = "linux")]
+fn hint_paths(p: &sysinfo::Process) -> Vec<String> {
+    let mut paths: Vec<String> = p
+        .cwd()
+        .map(|c| c.display().to_string())
+        .into_iter()
+        .collect();
+    for arg in p.cmd() {
+        let arg = arg.to_string_lossy();
+        // Wine maps the Unix root to drive Z:.
+        if let Some(rest) = arg
+            .strip_prefix("Z:\\")
+            .or_else(|| arg.strip_prefix("z:\\"))
+        {
+            paths.push(format!("/{}", rest.replace('\\', "/")));
+        } else if arg.starts_with('/') {
+            paths.push(arg.into_owned());
+        }
+    }
+    paths
+}
+
+#[cfg(not(target_os = "linux"))]
+fn hint_paths(_: &sysinfo::Process) -> Vec<String> {
+    Vec::new()
 }
 
 /// Normalizes a path for prefix comparison: unified separators, trailing separator, and
@@ -86,12 +119,8 @@ fn normalize_path(path: &str) -> String {
 /// Decides whether a game is running based on process snapshots.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Matcher {
-    /// The root process and every descendant seen so far; optionally also any process from a
-    /// directory (covers launchers that start the game and exit before we see the child).
-    Tree {
-        tracked: HashSet<u32>,
-        dir: Option<String>,
-    },
+    /// The root process and every descendant seen so far.
+    Tree { tracked: HashSet<u32> },
     /// Only the original process.
     Original { pid: u32 },
     /// Any process whose executable lives under the directory (normalized).
@@ -101,10 +130,9 @@ pub enum Matcher {
 }
 
 impl Matcher {
-    pub fn tree(pid: u32, dir: Option<&str>) -> Self {
+    pub fn tree(pid: u32) -> Self {
         Self::Tree {
             tracked: HashSet::from([pid]),
-            dir: dir.map(normalize_dir),
         }
     }
 
@@ -127,7 +155,7 @@ impl Matcher {
     /// Updates internal state from a snapshot and reports whether the game is running.
     pub fn is_running(&mut self, snapshot: &[ProcInfo]) -> bool {
         match self {
-            Self::Tree { tracked, dir } => {
+            Self::Tree { tracked } => {
                 // Adopt children until no new descendant appears (handles multi-level spawns
                 // within one polling interval).
                 loop {
@@ -142,7 +170,7 @@ impl Matcher {
                     }
                 }
                 tracked.retain(|pid| snapshot.iter().any(|p| p.pid == *pid));
-                !tracked.is_empty() || dir.as_deref().is_some_and(|d| any_under_dir(snapshot, d))
+                !tracked.is_empty()
             }
             Self::Original { pid } => snapshot.iter().any(|p| p.pid == *pid),
             Self::Directory { dir } => any_under_dir(snapshot, dir),
@@ -154,8 +182,9 @@ impl Matcher {
 fn any_under_dir(snapshot: &[ProcInfo], dir: &str) -> bool {
     snapshot.iter().any(|p| {
         p.exe
-            .as_deref()
-            .is_some_and(|exe| normalize_path(exe).starts_with(dir))
+            .iter()
+            .chain(p.hint_paths.iter())
+            .any(|path| normalize_dir(path).starts_with(dir))
     })
 }
 
@@ -173,12 +202,26 @@ mod tests {
                 .unwrap()
                 .to_string_lossy()
                 .into_owned(),
+            hint_paths: Vec::new(),
         }
     }
 
     #[test]
+    fn directory_matches_hint_paths() {
+        let mut m = Matcher::directory("/home/u/.steam/steamapps/common/Game");
+        let mut wine = proc(
+            7,
+            None,
+            "/home/u/.steam/steamapps/common/Proton 9.0/files/bin/wine64-preloader",
+        );
+        assert!(!m.is_running(std::slice::from_ref(&wine)));
+        wine.hint_paths = vec!["/home/u/.steam/steamapps/common/Game".into()];
+        assert!(m.is_running(&[wine]));
+    }
+
+    #[test]
     fn tree_follows_children_after_root_exits() {
-        let mut m = Matcher::tree(10, None);
+        let mut m = Matcher::tree(10);
         // Launcher 10 spawns 11, which spawns 12 within one interval.
         let snap = [
             proc(10, Some(1), "/g/launcher"),
@@ -191,15 +234,6 @@ mod tests {
         assert!(m.is_running(&[proc(11, Some(10), "/g/game"), proc(99, Some(1), "/other")]));
         // Game exits.
         assert!(!m.is_running(&[proc(99, Some(1), "/other")]));
-    }
-
-    #[test]
-    fn tree_with_dir_catches_detached_children() {
-        let mut m = Matcher::tree(10, Some("/games/Foo"));
-        assert!(m.is_running(&[proc(10, Some(1), "/games/Foo/launcher")]));
-        // Launcher exited before we saw the game; the game was reparented.
-        assert!(m.is_running(&[proc(20, Some(1), "/games/Foo/bin/foo")]));
-        assert!(!m.is_running(&[proc(21, Some(1), "/games/Foo2/x")]));
     }
 
     #[test]

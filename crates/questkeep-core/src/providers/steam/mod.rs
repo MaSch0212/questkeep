@@ -59,8 +59,8 @@ impl LibraryProvider for SteamProvider {
 
     /// Steam's own library cache first (no network), then the store CDN. Cached file layouts:
     /// `librarycache/<id>_library_600x900.jpg` (older clients) and
-    /// `librarycache/<id>/library_600x900.jpg` or `librarycache/<id>/<hash>/library_600x900.jpg`
-    /// (newer clients).
+    /// `librarycache/<id>/library_600x900.jpg`, and `librarycache/<id>/<hash>/library_600x900.jpg`
+    /// or `.../<hash>/library_capsule.jpg` (newer clients).
     fn cover_candidates(&self, app_id: &str) -> Vec<CoverCandidate> {
         if app_id.is_empty() || !app_id.chars().all(|c| c.is_ascii_digit()) {
             return Vec::new();
@@ -72,11 +72,14 @@ impl LibraryProvider for SteamProvider {
                 cache.join(format!("{app_id}_library_600x900.jpg")),
             ));
             let app_dir = cache.join(app_id);
-            candidates.push(CoverCandidate::File(app_dir.join("library_600x900.jpg")));
+            let mut dirs = vec![app_dir.clone()];
             if let Ok(entries) = std::fs::read_dir(&app_dir) {
-                for entry in entries.flatten() {
-                    let path = entry.path().join("library_600x900.jpg");
-                    candidates.push(CoverCandidate::File(path));
+                dirs.extend(entries.flatten().map(|e| e.path()).filter(|p| p.is_dir()));
+            }
+            // Newest clients store the portrait capsule as `library_capsule.jpg`.
+            for name in ["library_600x900.jpg", "library_capsule.jpg"] {
+                for dir in &dirs {
+                    candidates.push(CoverCandidate::File(dir.join(name)));
                 }
             }
         }
@@ -339,5 +342,26 @@ mod tests {
         assert_eq!(p.roots(), [PathBuf::from("x")]);
         let game = &expected_games(&layout(LIBRARYFOLDERS))[0];
         assert_eq!(game.play_action.as_ref().unwrap().kind, ActionKind::Uri);
+    }
+
+    #[test]
+    fn cover_candidates_prefer_local_cache_then_cdn() {
+        let tmp = tempfile::tempdir().unwrap();
+        let hashed = tmp.path().join("appcache/librarycache/123/abc");
+        fs::create_dir_all(&hashed).unwrap();
+        let provider = SteamProvider::with_roots(vec![tmp.path().to_path_buf()]);
+        let candidates = provider.cover_candidates("123");
+        let capsule = CoverCandidate::File(hashed.join("library_capsule.jpg"));
+        let capsule_pos = candidates.iter().position(|c| *c == capsule).unwrap();
+        let first_url = candidates
+            .iter()
+            .position(|c| matches!(c, CoverCandidate::Url(_)))
+            .unwrap();
+        assert!(capsule_pos < first_url);
+        assert!(matches!(
+            &candidates[0],
+            CoverCandidate::File(p) if p.ends_with("123_library_600x900.jpg")
+        ));
+        assert!(provider.cover_candidates("../etc").is_empty());
     }
 }

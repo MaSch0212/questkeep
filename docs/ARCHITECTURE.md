@@ -88,7 +88,7 @@ that were not found as `installed = 0` (playtime and favorites are kept).
 - `Launcher::launch(game)` resolves the action, starts it, inserts a `play_sessions` row and
   spawns one tracker thread. A game can have at most one active session.
 - The tracker polls every 2 s via `ProcessProbe` (process tree of the spawned PID, or any process
-  whose executable is under the tracking directory). URI launches wait up to 60 s for a matching
+  whose executable is under the tracking directory). URI launches wait up to 90 s for a matching
   process to appear before giving up.
 - Every poll updates `last_seen_at`. On stop: `ended_at` is set, duration is added to
   `playtime_seconds`, `last_played` and `play_count` update, `GameStopped` fires.
@@ -115,4 +115,31 @@ script fails if the generated files differ from what's committed.
 
 ## Performance
 
-_Measured in slice 6; see the "Measurements" section below._
+The grid renders only the rows in view (plus 3 rows of overscan), so about 30 to 45 tiles exist in
+the DOM regardless of library size. Rows have a fixed height derived from the container width,
+which makes the visible window plain arithmetic (`ui/src/lib/virtualRows.ts`).
+
+### Measurements (2026-10-18)
+
+Machine: Windows 11 desktop, 240 Hz display, release build (`tauri build --no-bundle`), portable
+data dir with **5,000 games** (4,948 seeded fake games + 52 real Steam games), measured via the
+WebView2 DevTools protocol (scripted scrolling and typing in the real UI).
+
+| Metric | Result |
+|---|---|
+| Cold start: process start until the first cover tiles are in the DOM | **480 to 600 ms** (3 runs) |
+| Idle memory, app process (Rust) | **36 MB** working set |
+| Idle memory, app + 6 WebView2 processes | **200 MB** private, 374 MB working set (shared pages counted per process) |
+| JS heap | 11 to 32 MB |
+| Scrolling 3 s at ~3,600 px/s | 721 frames, avg **4.2 ms**, p95 4.3 ms, max 4.4 ms, 0 frames over 33 ms |
+| `list_games` for all 5,000 games (query + IPC + JSON) | 66 ms (160 ms in a debug build) |
+| Search as you type, end to end (includes the 80 ms debounce) | 87 to 91 ms for selective terms, 145 to 150 ms for terms matching ~4,000+ games |
+
+Honest notes:
+
+- Broad queries are dominated by serializing every matching game over IPC. If that ever matters,
+  return a slim list payload (id, name, cover, flags) and fetch full games on demand, or filter
+  client-side.
+- WebView2 dominates memory, as with any Tauri app on Windows; the Rust side stays small.
+- Steam scan of 52 installed games plus cover lookup runs on a background thread at startup and
+  does not delay the first paint.

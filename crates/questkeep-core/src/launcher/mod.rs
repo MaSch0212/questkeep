@@ -151,8 +151,9 @@ impl Launcher {
                 let pid = child.id();
                 let dir = tracking_dir.clone().or(exe_dir);
                 let matcher = match action.tracking {
-                    TrackingMode::Default => Some(Matcher::tree(pid, dir.as_deref())),
-                    TrackingMode::Process => Some(Matcher::tree(pid, None)),
+                    // Playnite's default too. Directory matching is opt-in: executables in shared
+                    // folders would otherwise match unrelated processes.
+                    TrackingMode::Default | TrackingMode::Process => Some(Matcher::tree(pid)),
                     TrackingMode::OriginalProcess => Some(Matcher::Original { pid }),
                     TrackingMode::Directory => dir.as_deref().map(Matcher::directory),
                     TrackingMode::Name => Some(Matcher::name(
@@ -391,6 +392,7 @@ mod tests {
                     parent: None,
                     exe: Some("/games/fake/fake.exe".into()),
                     name: "fake.exe".into(),
+                    hint_paths: Vec::new(),
                 }]
             } else {
                 Vec::new()
@@ -569,7 +571,9 @@ mod tests {
                     source: "test".into(),
                     play_action: Some(PlayAction {
                         args: Some(args.into()),
-                        tracking: TrackingMode::Process,
+                        // The exe lives in a shared system folder: unrelated processes there
+                        // must not keep the session alive.
+                        tracking: TrackingMode::Default,
                         ..PlayAction::file(exe)
                     }),
                     ..Default::default()

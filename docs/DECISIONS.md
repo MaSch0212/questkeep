@@ -38,3 +38,52 @@ Short log of choices made while building. Newest at the bottom of each section.
   `portable.txt` next to the executable.
 - **Asset protocol scope is granted at runtime** to the resolved images dir only, instead of a
   broad static scope in `tauri.conf.json`.
+
+## Launching and playtime
+
+- **Default tracking for `file` actions = process tree** (the started process and every
+  descendant seen, kept after the root exits), like Playnite. I briefly also adopted processes
+  from the executable's folder that started after the launch, to catch launchers that spawn the game
+  detached; a live test with an exe in `System32` recorded 22 s for a 7 s run because unrelated
+  system processes kept matching, so that was dropped. Launcher-style games can switch to
+  `directory` tracking in their launch options.
+- **URI launches (Steam) are tracked by install directory**, as in Playnite, but with a 90 s
+  startup timeout (Playnite waits forever). Limits: games whose executable lives outside the
+  install dir (some anti-cheat bootstrappers) may not be detected. On Linux, Proton games run as
+  `wine64-preloader` from the Proton folder, so directory matching also checks each process's
+  working directory and path-like command-line arguments (Wine `Z:\` paths are mapped back to
+  Unix paths). Undetected games produce a "couldn't find the process" notice and no playtime.
+  Steam's own playtime is not imported in v0.1.
+- **Sessions are persisted** with a heartbeat every poll (2 s). App exit saves elapsed time; a
+  crash is recovered on next start up to the last heartbeat (sleep gaps inside a crashed session
+  are not subtracted, a deliberate simplification).
+- **Launched games get null stdio** and Windows arguments are passed verbatim (`raw_arg`), so the
+  user's quoting works exactly as typed in a shortcut. On Linux arguments are split shell-style.
+- **`play_count` and `last_played` update when a session ends** (Playnite updates them at start),
+  so a game that fails to start doesn't count as played.
+
+## Steam and covers
+
+- **Steam tool filtering** extends Playnite's (redist 228980, soundtracks) with Steam Linux
+  Runtime / Proton / SteamVR ids and name prefixes, because those have local manifests and would
+  show up as games, especially on Linux.
+- **Covers come from Steam's local `appcache/librarycache` first**, then the store CDN
+  (`shared.cloudflare.steamstatic.com` 600x900 assets, then the legacy akamai URL). Downloads are
+  validated by magic bytes (CDNs sometimes answer 200 with HTML) and capped at 20 MB. Failed games
+  are not retried within the same run. Providers expose `cover_candidates()`, so future providers
+  plug into the same fetcher.
+- **No landscape `header.jpg` fallback**: a 2:3 grid looks worse with letterboxed banners than with
+  the placeholder tile.
+
+## Frontend
+
+- **Own row virtualization instead of `@tanstack/solid-virtual`.** With `@tanstack/virtual-core`
+  3.19.5 the Solid adapter (3.13.47) ended up with its scroll/resize observers detached right after
+  mounting, so the grid never re-rendered on scroll (found during the 5,000-game check). Grid rows
+  have a fixed height, so the visible window is simple arithmetic; `ui/src/lib/virtualRows.ts`
+  (unit-tested) plus a passive, rAF-throttled scroll listener replaced the dependency.
+- **Search runs in SQLite**, not in the webview, so it's unit-tested with the rest of the queries
+  and stays correct for Unicode case folding (`search_key` is Rust-lowercased). An 80 ms debounce
+  keeps IPC calls down while typing.
+- **Covers are cache-busted** with a per-game version query parameter bumped on `gamesChanged`
+  events, because a cover's path stays the same when its content changes.

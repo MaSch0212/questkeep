@@ -1,6 +1,104 @@
-/* Default dark theme. Every visual value used by the app is defined here. */
+/*
+ * Questkeep theme. Every color, size, spacing, radius, shadow and duration used by the UI is
+ * defined here; app.css only references these variables.
+ */
 :root {
   color-scheme: dark;
-  --qk-color-bg: #121417;
-  --qk-color-text: #e6e8eb;
+
+  /* Colors */
+  --qk-color-bg: #111317;
+  --qk-color-surface: #171a20;
+  --qk-color-surface-raised: #1e222a;
+  --qk-color-surface-hover: #262b35;
+  --qk-color-border: #2a2f3a;
+  --qk-color-text: #e6e8ec;
+  --qk-color-text-muted: #9aa1ae;
+  --qk-color-text-faint: #6c7381;
+  --qk-color-accent: #7c9cff;
+  --qk-color-accent-hover: #96b0ff;
+  --qk-color-accent-contrast: #0e1220;
+  --qk-color-accent-soft: #232c4a;
+  --qk-color-danger: #ff7a85;
+  --qk-color-danger-soft: #3a1f26;
+  --qk-color-success: #6fd6a0;
+  --qk-color-star: #ffd166;
+  --qk-color-running: #6fd6a0;
+  --qk-color-backdrop: #05060acc;
+  --qk-color-badge-bg: #0b0d12cc;
+  --qk-color-cover-bg: #0d0f13;
+  --qk-color-title-on-cover: #ffffff;
+
+  /* Placeholder cover gradients: hue is set per tile, the rest comes from here */
+  --qk-placeholder-saturation: 38%;
+  --qk-placeholder-light-from: 34%;
+  --qk-placeholder-light-to: 18%;
+  --qk-placeholder-hue-shift: 40;
+
+  /* Spacing */
+  --qk-space-1: 4px;
+  --qk-space-2: 8px;
+  --qk-space-3: 12px;
+  --qk-space-4: 16px;
+  --qk-space-5: 24px;
+  --qk-space-6: 32px;
+
+  /* Radii */
+  --qk-radius-sm: 4px;
+  --qk-radius-md: 8px;
+  --qk-radius-lg: 12px;
+  --qk-radius-pill: 999px;
+
+  /* Typography */
+  --qk-font-family: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --qk-font-mono: "Cascadia Mono", "Consolas", ui-monospace, monospace;
+  --qk-font-size-xs: 11px;
+  --qk-font-size-sm: 12px;
+  --qk-font-size-md: 14px;
+  --qk-font-size-lg: 16px;
+  --qk-font-size-xl: 20px;
+  --qk-font-size-initials: 40px;
+  --qk-font-weight-normal: 400;
+  --qk-font-weight-medium: 500;
+  --qk-font-weight-bold: 600;
+  --qk-line-height: 1.4;
+
+  /* Shadows */
+  --qk-shadow-tile: 0 2px 8px #00000066;
+  --qk-shadow-panel: -12px 0 32px #00000066;
+  --qk-shadow-dialog: 0 24px 64px #000000aa;
+  --qk-shadow-toast: 0 8px 24px #00000088;
+
+  /* Motion */
+  --qk-duration-fast: 120ms;
+  --qk-duration-normal: 200ms;
+  --qk-easing: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* Component sizes */
+  --qk-sidebar-width: 220px;
+  --qk-topbar-height: 56px;
+  --qk-details-width: 380px;
+  --qk-tile-min-width: 170px;
+  --qk-tile-aspect-ratio: 2 / 3;
+  --qk-tile-ratio-height: 1.5; /* height / width of the tile above, used by the grid maths */
+  --qk-tile-title-height: 36px;
+  --qk-grid-gap: 16px;
+  --qk-grid-padding: 20px;
+  --qk-control-height: 34px;
+  --qk-search-width: 340px;
+  --qk-sort-width: 150px;
+  --qk-dialog-width: 520px;
+  --qk-toast-width: 340px;
+  --qk-focus-ring-width: 2px;
+  --qk-focus-ring-offset: 2px;
+  --qk-details-cover-width: 180px;
+  --qk-badge-size: 24px;
+  --qk-scrollbar-size: 10px;
+  --qk-dimmed-opacity: 0.45;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --qk-duration-fast: 0ms;
+    --qk-duration-normal: 0ms;
+  }
 }
