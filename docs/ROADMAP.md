@@ -5,13 +5,15 @@ Ideas not built yet, roughly in priority order. Not a commitment.
 ## Done in v0.2
 
 Epic, GOG and Xbox installed games; Steam owned games, Install action, imported Steam playtime;
-store metadata and backgrounds (Steam, GOG); list view.
+store metadata and backgrounds (Steam, GOG); list view. Linux store support: Heroic/Legendary
+(Epic, GOG) and Lutris installed games.
 
 ## Next
 
 - **Account sign-in for Epic, GOG and Xbox** (OAuth, tokens in the OS keyring) to import owned
   games, covers and metadata for those stores.
-- **Linux store support**: Heroic / Legendary (Epic, GOG) and Lutris libraries.
+- **Linux stores, follow-ups**: Heroic Amazon (Nile) and sideloaded games, owned-but-not-installed
+  games from Heroic/Lutris service libraries.
 - **Real covers for Epic and Xbox** (store catalog APIs or SteamGridDB); Xbox currently falls back
   to square package logos.
 - **GOG: optional launch through Galaxy** (setting; the provider supports it) and the

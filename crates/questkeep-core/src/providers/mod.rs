@@ -3,6 +3,8 @@
 
 pub mod epic;
 pub mod gog;
+pub mod heroic;
+pub mod lutris;
 pub mod manual;
 pub mod steam;
 pub mod xbox;
@@ -120,6 +122,9 @@ impl ProviderRegistry {
         registry.register(Arc::new(epic::EpicProvider::detect()));
         registry.register(Arc::new(xbox::XboxProvider::detect()));
         registry.register(Arc::new(gog::GogProvider::detect()));
+        // Lutris only exists on Linux; leaving it out elsewhere keeps the provider list honest.
+        #[cfg(not(windows))]
+        registry.register(Arc::new(lutris::LutrisProvider::detect()));
         registry
     }
 

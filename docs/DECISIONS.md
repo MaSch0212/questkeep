@@ -107,3 +107,15 @@ Short log of choices made while building. Newest at the bottom of each section.
   Windows. Building it ourselves allows a dev-only hidden mode (`QUESTKEEP_HIDDEN=1`, see
   `scripts/dev-hidden.ps1`) for testing through the DevTools port without a window or focus change,
   and showing the normal window only after setup avoids a white flash.
+- **Same `source` + `source_game_id` on every OS for Epic and GOG.** On Linux the `epic` provider
+  reads Legendary/Heroic (`installed.json`, id = AppName) and `gog` reads Heroic's
+  `gog_store/installed.json` (id = GOG product id), so a library database moved between systems
+  keeps its games, playtime and favourites.
+- **Heroic games launch through `heroic://launch/<runner>/<appName>`** (a `uri` action with
+  `Directory` tracking on the install folder). Heroic's protocol handler accepts this path form and
+  `heroic://launch?appName=..&runner=..`; the path form also works in older releases. Heroic has no
+  install URI, so there is no install action. Standalone Legendary installs use
+  `legendary launch <app>` (a `file` action) when the binary is on `PATH`, otherwise no action.
+- **Lutris is read straight from `pga.db`** (read-only, temporary-copy fallback if locked) and
+  registered on non-Windows builds only. Steam-runner games are skipped; the game `directory` is
+  ignored for tracking when it is `/` or the home folder, since it would match every process.

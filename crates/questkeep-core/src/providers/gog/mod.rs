@@ -2,8 +2,8 @@
 //! description and artwork from GOG's public catalogue API. No login is involved.
 //!
 //! Installed games come from the Windows registry (`HKLM\SOFTWARE\WOW6432Node\GOG.com\Games`)
-//! plus the `goggame-<id>.info` manifest in each install folder. Heroic/Lutris on Linux are not
-//! supported yet.
+//! plus the `goggame-<id>.info` manifest in each install folder. On Linux they come from Heroic
+//! Games Launcher (`super::heroic`) with the same product ids; Lutris is not read for GOG.
 
 // Logic derived from Playnite (MIT), see THIRD_PARTY_NOTICES.md
 
@@ -18,6 +18,7 @@ use std::sync::Mutex;
 
 pub use install::InstallRecord;
 
+use super::heroic::{self, HeroicPaths};
 use super::{ImageCandidate, LibraryProvider, ProviderError};
 use crate::model::{GameMetadata, ImportedGame, PlayAction};
 
@@ -29,7 +30,10 @@ const CACHE_LIMIT: usize = 64;
 /// Where install records come from.
 enum Installs {
     /// The registry of this machine (Windows only).
+    #[cfg(windows)]
     System,
+    /// Heroic Games Launcher data (Linux).
+    Heroic(HeroicPaths),
     /// Fixed data, for tests.
     Fixed {
         records: Vec<InstallRecord>,
@@ -49,7 +53,16 @@ pub struct GogProvider {
 impl GogProvider {
     /// Reads the installs of this machine.
     pub fn detect() -> Self {
-        Self::new(Installs::System)
+        #[cfg(windows)]
+        let installs = Installs::System;
+        #[cfg(not(windows))]
+        let installs = Installs::Heroic(HeroicPaths::detect());
+        Self::new(installs)
+    }
+
+    /// Reads Heroic data from the given directories (any platform; tests and tools).
+    pub fn with_heroic(paths: HeroicPaths) -> Self {
+        Self::new(Installs::Heroic(paths))
     }
 
     /// Uses fixed install records (tests and tools).
@@ -82,7 +95,9 @@ impl GogProvider {
                 records,
                 galaxy_client,
             } => Ok((records.clone(), galaxy_client.clone())),
+            #[cfg(windows)]
             Installs::System => system_installs(),
+            Installs::Heroic(_) => Ok((Vec::new(), None)),
         }
     }
 
@@ -111,15 +126,6 @@ fn system_installs() -> Result<(Vec<InstallRecord>, Option<PathBuf>), ProviderEr
     Ok((records, registry::galaxy_client()))
 }
 
-#[cfg(not(windows))]
-fn system_installs() -> Result<(Vec<InstallRecord>, Option<PathBuf>), ProviderError> {
-    Err(ProviderError::NotFound(
-        "Detecting installed GOG games is only supported on Windows for now (Heroic and Lutris \
-         support is planned)"
-            .into(),
-    ))
-}
-
 impl LibraryProvider for GogProvider {
     fn id(&self) -> &str {
         GOG_SOURCE
@@ -130,6 +136,9 @@ impl LibraryProvider for GogProvider {
     }
 
     fn scan_installed(&self) -> Result<Vec<ImportedGame>, ProviderError> {
+        if let Installs::Heroic(paths) = &self.installs {
+            return heroic::gog_games(paths);
+        }
         let (records, galaxy) = self.load_installs()?;
         let mut games = install::games_from_records(&records, galaxy.as_deref(), self.use_galaxy);
         games.sort_by_cached_key(|g| (g.name.to_lowercase(), g.source_game_id.clone()));
@@ -144,6 +153,10 @@ impl LibraryProvider for GogProvider {
 
     /// Opens the game's page in GOG Galaxy, where it can be installed.
     fn install_action(&self, source_game_id: &str) -> Option<PlayAction> {
+        // Heroic has no install URI; Galaxy only exists on Windows.
+        if matches!(self.installs, Installs::Heroic(_)) {
+            return None;
+        }
         api::is_product_id(source_game_id)
             .then(|| PlayAction::uri(format!("goggalaxy://openGameView/{source_game_id}")))
     }
@@ -233,12 +246,35 @@ mod tests {
         assert_eq!(names, ["Alpha", "zebra"]);
     }
 
-    #[cfg(not(windows))]
     #[test]
-    fn non_windows_reports_not_found() {
+    fn heroic_mode_reports_not_found_without_heroic() {
+        let tmp = tempfile::tempdir().unwrap();
+        let p = GogProvider::with_heroic(HeroicPaths::discover(tmp.path(), None, None));
         assert!(matches!(
-            GogProvider::detect().scan_installed(),
+            p.scan_installed(),
             Err(ProviderError::NotFound(_))
         ));
+        assert!(p.install_action("1207658924").is_none());
+    }
+
+    #[test]
+    fn heroic_mode_scans_gog_installs() {
+        let tmp = tempfile::tempdir().unwrap();
+        let game = tmp.path().join("Games/Cyber");
+        fs::create_dir_all(&game).unwrap();
+        let hero = tmp.path().join(".config/heroic/gog_store");
+        fs::create_dir_all(&hero).unwrap();
+        fs::write(
+            hero.join("installed.json"),
+            serde_json::json!({"installed": [
+                {"appName": "123", "install_path": game, "platform": "windows"}
+            ]})
+            .to_string(),
+        )
+        .unwrap();
+        let p = GogProvider::with_heroic(HeroicPaths::discover(tmp.path(), None, None));
+        let games = p.scan_installed().unwrap();
+        assert_eq!(games[0].source_game_id, "123");
+        assert_eq!(games[0].name, "Cyber");
     }
 }

@@ -18,6 +18,9 @@ Tauri 2, Rust and SolidJS. Inspired by [Playnite](https://github.com/JosefNemec/
   Install button.
 - **Epic Games, GOG, Xbox / Microsoft Store** (Windows): detects installed games, DLC filtered
   out. Owned-but-not-installed games for these stores need account sign-in and come later.
+- **Linux stores**: Epic (via Heroic or Legendary) and GOG (via Heroic) installed games, plus
+  **Lutris** games (Steam-runner games are left to the Steam provider). Epic and GOG keep the same
+  ids as on Windows. Heroic games start through Heroic; Lutris games through `lutris:rungame/`.
 - **Store metadata**: description, release date, developers, publishers, genres and a background
   image from the Steam and GOG stores, fetched slowly in the background.
 - **Manual games**: add any executable with arguments, working directory and a cover image.
