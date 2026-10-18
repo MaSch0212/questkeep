@@ -1,3 +1,8 @@
+import EyeOff from "lucide-solid/icons/eye-off";
+import Eye from "lucide-solid/icons/eye";
+import Pencil from "lucide-solid/icons/pencil";
+import Star from "lucide-solid/icons/star";
+import X from "lucide-solid/icons/x";
 import { createEffect, createSignal, For, on, onCleanup, onMount, Show } from "solid-js";
 import type { Game } from "../bindings/Game";
 import {
@@ -23,6 +28,8 @@ function isLongText(text: string): boolean {
 
 interface DetailsPanelProps {
   game: Game;
+  /** Shown beside the library instead of overlaying it. */
+  split?: boolean;
   onClose: () => void;
 }
 
@@ -111,7 +118,11 @@ export function DetailsPanel(props: DetailsPanelProps) {
   }
 
   return (
-    <aside class="details" aria-label="Game details">
+    <aside
+      class="details"
+      classList={{ "details--split": props.split === true }}
+      aria-label="Game details"
+    >
       <div class="details__header">
         <button
           type="button"
@@ -120,7 +131,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
           title="Close (Esc)"
           onClick={props.onClose}
         >
-          ×
+          <X class="icon" aria-hidden="true" />
         </button>
       </div>
 
@@ -149,7 +160,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
                   title="Rename (F2)"
                   onClick={startRename}
                 >
-                  ✎
+                  <Pencil class="icon" aria-hidden="true" />
                 </button>
               </>
             }
@@ -260,26 +271,34 @@ export function DetailsPanel(props: DetailsPanelProps) {
         </dl>
 
         <div class="details__toggles">
-          <label class="check">
-            <input
-              type="checkbox"
-              checked={props.game.favorite}
-              onChange={(event) =>
-                void run(() => updateGame(props.game.id, { favorite: event.currentTarget.checked }))
-              }
-            />
-            <span>Favorite</span>
-          </label>
-          <label class="check">
-            <input
-              type="checkbox"
-              checked={props.game.hidden}
-              onChange={(event) =>
-                void run(() => updateGame(props.game.id, { hidden: event.currentTarget.checked }))
-              }
-            />
-            <span>Hidden</span>
-          </label>
+          <button
+            type="button"
+            class="toggle-btn"
+            classList={{ "toggle-btn--on": props.game.favorite }}
+            aria-pressed={props.game.favorite}
+            aria-label="Favorite"
+            title={props.game.favorite ? "Remove from favorites" : "Add to favorites"}
+            onClick={() =>
+              void run(() => updateGame(props.game.id, { favorite: !props.game.favorite }))
+            }
+          >
+            <Star class="icon icon--filled-when-on" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            class="toggle-btn"
+            classList={{ "toggle-btn--on": props.game.hidden }}
+            aria-pressed={props.game.hidden}
+            aria-label="Hidden"
+            title={props.game.hidden ? "Show in library" : "Hide from library"}
+            onClick={() =>
+              void run(() => updateGame(props.game.id, { hidden: !props.game.hidden }))
+            }
+          >
+            <Show when={props.game.hidden} fallback={<Eye class="icon" aria-hidden="true" />}>
+              <EyeOff class="icon" aria-hidden="true" />
+            </Show>
+          </button>
         </div>
 
         <div class="details__row">

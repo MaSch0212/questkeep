@@ -64,14 +64,30 @@ describe("DetailsPanel", () => {
     expect(screen.getByRole("heading", { name: "Hades" })).toBeInTheDocument();
   });
 
-  it("toggles favorite", async () => {
+  it("toggles favorite with an icon button", async () => {
     vi.mocked(api.updateGame).mockResolvedValue(makeGame({ favorite: true }));
     render(() => <DetailsPanel game={makeGame()} onClose={vi.fn<() => void>()} />);
-    await fireEvent.click(screen.getByRole("checkbox", { name: "Favorite" }));
+    const button = screen.getByRole("button", { name: "Favorite" });
+    expect(button).toHaveAttribute("aria-pressed", "false");
+    await fireEvent.click(button);
     await waitFor(() =>
       expect(api.updateGame).toHaveBeenCalledWith(
         "g1",
         expect.objectContaining({ favorite: true, name: null }),
+      ),
+    );
+  });
+
+  it("toggles hidden and reflects the current state", async () => {
+    vi.mocked(api.updateGame).mockResolvedValue(makeGame({ hidden: false }));
+    render(() => <DetailsPanel game={makeGame({ hidden: true })} onClose={vi.fn<() => void>()} />);
+    const button = screen.getByRole("button", { name: "Hidden" });
+    expect(button).toHaveAttribute("aria-pressed", "true");
+    await fireEvent.click(button);
+    await waitFor(() =>
+      expect(api.updateGame).toHaveBeenCalledWith(
+        "g1",
+        expect.objectContaining({ hidden: false, name: null }),
       ),
     );
   });

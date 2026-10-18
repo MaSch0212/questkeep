@@ -1,3 +1,4 @@
+import Settings from "lucide-solid/icons/settings";
 import { For } from "solid-js";
 import { libraryView, type LibraryView } from "../lib/query";
 import { store } from "../lib/store";
@@ -11,8 +12,9 @@ const VIEWS: { id: LibraryView; label: string }[] = [
 
 interface SidebarProps {
   onAdd: () => void;
-  onSettings: () => void;
 }
+
+const inLibrary = () => store.page() === "library";
 
 const view = () => libraryView(store.query());
 
@@ -32,8 +34,8 @@ export function Sidebar(props: SidebarProps) {
               <button
                 type="button"
                 class="nav-item"
-                classList={{ "nav-item--active": view() === item.id }}
-                aria-pressed={view() === item.id}
+                classList={{ "nav-item--active": inLibrary() && view() === item.id }}
+                aria-pressed={inLibrary() && view() === item.id}
                 onClick={() => store.setView(item.id)}
               >
                 {item.label}
@@ -75,8 +77,15 @@ export function Sidebar(props: SidebarProps) {
         <button type="button" class="btn btn--primary" onClick={props.onAdd}>
           Add game
         </button>
-        <button type="button" class="btn" onClick={props.onSettings}>
-          Settings
+        <button
+          type="button"
+          class="nav-item nav-item--icon"
+          classList={{ "nav-item--active": store.page() === "settings" }}
+          aria-current={store.page() === "settings" ? "page" : undefined}
+          onClick={() => store.showSettings()}
+        >
+          <Settings class="icon" aria-hidden="true" />
+          <span>Settings</span>
         </button>
       </div>
     </nav>

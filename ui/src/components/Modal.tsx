@@ -1,3 +1,4 @@
+import X from "lucide-solid/icons/x";
 import { createSignal, createUniqueId, onCleanup, onMount, type ParentProps } from "solid-js";
 
 const FOCUSABLE =
@@ -69,7 +70,7 @@ export function Modal(props: ParentProps<ModalProps>) {
             {props.title}
           </h2>
           <button class="icon-btn" type="button" aria-label="Close dialog" onClick={props.onClose}>
-            ×
+            <X class="icon" aria-hidden="true" />
           </button>
         </header>
         <div class="modal__body">{props.children}</div>

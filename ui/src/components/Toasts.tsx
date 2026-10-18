@@ -1,3 +1,4 @@
+import X from "lucide-solid/icons/x";
 import { For } from "solid-js";
 import { store } from "../lib/store";
 
@@ -14,7 +15,7 @@ export function Toasts() {
               aria-label="Dismiss notification"
               onClick={() => store.dismissToast(toast.id)}
             >
-              ×
+              <X class="icon" aria-hidden="true" />
             </button>
           </div>
         )}

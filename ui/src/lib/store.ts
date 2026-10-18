@@ -21,6 +21,8 @@ import {
 } from "./query";
 import { loadViewMode, saveViewMode, type ViewMode } from "./viewMode";
 
+export type Page = "library" | "settings";
+
 export interface Toast {
   id: number;
   kind: "info" | "error";
@@ -41,6 +43,7 @@ function createAppStore() {
   const [seenSources, setSeenSources] = createSignal<ReadonlySet<string>>(new Set());
   const [toasts, setToasts] = createSignal<Toast[]>([]);
   const [coverVersions, setCoverVersions] = createStore<Record<string, number>>({});
+  const [page, setPage] = createSignal<Page>("library");
   const [viewMode, setViewModeSignal] = createSignal<ViewMode>(loadViewMode());
 
   const indexById = createMemo(() => {
@@ -62,6 +65,8 @@ function createAppStore() {
   });
   const sources = createMemo(() => mergeSources(providers(), seenSources()));
 
+  // Scroll offset of the library, kept while another page (settings) replaces it.
+  const libraryScroll: Record<ViewMode, number> = { grid: 0, list: 0 };
   let requestSeq = 0;
   let refreshTimer: ReturnType<typeof setTimeout> | undefined;
   let toastSeq = 0;
@@ -144,6 +149,7 @@ function createAppStore() {
 
   function selectAndOpen(id: string) {
     batch(() => {
+      setPage("library");
       setSelectedId(id);
       setDetailsOpen(true);
     });
@@ -233,6 +239,9 @@ function createAppStore() {
       setLoading(false);
       setSelectedId(null);
       setDetailsOpen(false);
+      setPage("library");
+      libraryScroll.grid = 0;
+      libraryScroll.list = 0;
       setRunning(new Set<string>());
       setProviders([]);
       setAppInfo(null);
@@ -258,14 +267,29 @@ function createAppStore() {
     toasts,
     viewMode,
     setViewMode,
+    page,
+    showSettings: () => setPage("settings"),
+    showLibrary: () => setPage("library"),
+    rememberLibraryScroll: (mode: ViewMode, top: number) => {
+      libraryScroll[mode] = top;
+    },
+    libraryScroll: (mode: ViewMode) => libraryScroll[mode],
     // queries
     setSearch: (search: string | null) => updateQuery({ search }),
     setSort: (sort: SortField) => updateQuery({ sort, descending: defaultDescending(sort) }),
     toggleDirection: () => updateQuery((q) => ({ ...q, descending: !q.descending })),
-    setView: (view: LibraryView) => updateQuery((q) => withLibraryView(q, view)),
-    toggleSourceFilter: (id: string) =>
-      updateQuery((q) => ({ ...q, sources: toggleSource(q.sources, id) })),
-    setInstalledOnly: (installedOnly: boolean) => updateQuery({ installedOnly }),
+    setView: (view: LibraryView) => {
+      setPage("library");
+      updateQuery((q) => withLibraryView(q, view));
+    },
+    toggleSourceFilter: (id: string) => {
+      setPage("library");
+      updateQuery((q) => ({ ...q, sources: toggleSource(q.sources, id) }));
+    },
+    setInstalledOnly: (installedOnly: boolean) => {
+      setPage("library");
+      updateQuery({ installedOnly });
+    },
     refresh,
     scheduleRefresh,
     upsertGame,
