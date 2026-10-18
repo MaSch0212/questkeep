@@ -68,6 +68,7 @@ crates/questkeep-core/src/     all logic; no Tauri/UI dependency
   platform/                    registry, Steam paths, URI opening, argument handling (cfg-gated)
   settings.rs, paths.rs, seed.rs, error.rs
 src-tauri/src/                 thin shell: commands.rs (one wrapper per command), lib.rs (setup)
+  tray.rs, tray_popup/          tray icon; Windows tray popup (Win32 + Direct2D: layout, render, window)
 ui/src/
   lib/api.ts                   the only module that calls invoke()
   lib/store.ts                 app state + core-event handling

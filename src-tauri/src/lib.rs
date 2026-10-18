@@ -4,6 +4,8 @@ mod autostart;
 mod commands;
 mod signin;
 mod tray;
+#[cfg(windows)]
+mod tray_popup;
 mod tray_theme;
 mod window;
 

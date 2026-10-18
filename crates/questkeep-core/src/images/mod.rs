@@ -16,6 +16,7 @@ pub(crate) use fetcher::http_agent;
 pub use fetcher::{CoverFetcher, CoverJob, MetadataFetcher, MetadataJob, image_extension};
 pub use icons::{
     ICON_SIZE, IconRgba, SquareFrom, icon_png_from_bytes, icon_png_from_rgba, load_icon_rgba,
+    load_image_filled, scale_icon,
 };
 pub(crate) use steamgriddb::checked_key;
 pub use steamgriddb::{Lookup, SteamGridDb};

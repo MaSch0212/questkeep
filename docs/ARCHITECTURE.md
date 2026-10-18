@@ -104,13 +104,26 @@ silently falls back to installed games only.
  tray "Exit" ─▶ quit flag + app.exit(0) ─▶ RunEvent::Exit ─▶ close fetchers, save sessions
 ```
 
-- The tray icon is created in `setup`. Its menu (recent games, Favorites submenu, Open Questkeep,
-  Store clients submenu, Exit) is rebuilt by one background thread that blocks on a channel fed by
+- The tray icon is created in `setup`. Left click opens the window. Right click opens, on
+  Windows, the **tray popup** (below); on Linux the native menu (recent games, Favorites submenu,
+  Open Questkeep, Store clients submenu, Exit). The model behind both is kept by one background
+  thread that blocks on a channel fed by
   an `EventBus` subscriber (`GamesChanged`, `GameRemoved`, `GameStarted`, `GameStopped`,
   `LibraryScanned`). After a trigger it waits 2 s, coalesces further triggers, recomputes the menu
-  model and skips the rebuild when it is unchanged; menus are applied on the main thread. Idle cost
-  is zero: no timers, no polling (the launcher only polls while a game runs).
-- **Game icons.** Entries are `IconMenuItem`s with a 32x32 RGBA icon when the game has a cached
+  model and skips the rebuild when it is unchanged; menus are applied on the main thread (Linux) or
+  the model is stored for the next popup (Windows). Idle cost is zero: no timers, no polling (the
+  launcher only polls while a game runs).
+- **Tray popup** (`src-tauri/src/tray_popup/`, Windows only). A borderless Win32 window drawn with
+  Direct2D/DirectWrite, created on its own thread (own message loop) when opened and destroyed when
+  it closes (Escape, losing activation, or after a choice; the action runs afterwards). Recent
+  games are cover tiles (up to 8), favorites are rows with icons (scrolling past 6), then store
+  pills and Open/Exit. `layout.rs` is pure and tested (layout, hit testing, keyboard navigation,
+  placement next to the taskbar); `render.rs` draws onto any Direct2D target, which the
+  `renders_offscreen` test uses to render into a WIC bitmap (set `QUESTKEEP_POPUP_PREVIEW=<png>`
+  to save it, `QUESTKEEP_POPUP_SCALE` for the DPI scale); `window.rs` owns the window and input.
+  Images are scaled once to their exact pixel size (`images::load_image_filled`, `scale_icon`) and
+  drawn 1:1 at pixel-snapped positions, so nothing is resampled while drawing.
+- **Game icons.** Linux menu entries are `IconMenuItem`s with a 32x32 RGBA icon when the game has a cached
   one, plain text items otherwise. The menu build only decodes those small PNGs
   (`images::load_icon_rgba`, at most 10 recent + 30 favorites per rebuild); it never produces an
   icon. When the model lists a game with no icon, the tray thread queues an icon job
@@ -142,7 +155,7 @@ premultiplied alpha and re-encoded. Sources, best first (the first valid one win
    images must be nearly square (ratio <= 1.15), otherwise they are skipped.
 2. The executable's icon for games with a `file` action (Windows: `platform::executable_icon`,
    `PrivateExtractIconsW` at 48 px, then `GetIconInfo` + `GetDIBits`; the AND mask supplies alpha for
-   icons without an alpha channel). It lives in `platform/exe_icon.rs`, one of the two `unsafe` modules.
+   icons without an alpha channel). It lives in `platform/exe_icon.rs`, one of the few `unsafe` modules (see DECISIONS.md).
 3. A top-aligned square crop of the cached cover.
 
 Jobs run on the metadata worker, as the last step of a metadata job, and on demand for games the

@@ -3204,6 +3204,7 @@ name = "questkeep"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "image",
  "questkeep-core",
  "serde",
  "serde_json",
@@ -3214,10 +3215,13 @@ dependencies = [
  "tauri-plugin-opener",
  "tauri-plugin-single-instance",
  "tauri-plugin-updater",
+ "tempfile",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
  "uuid",
+ "windows",
+ "windows-numerics",
  "windows-sys 0.61.2",
 ]
 

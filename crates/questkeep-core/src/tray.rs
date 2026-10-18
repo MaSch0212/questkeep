@@ -28,6 +28,9 @@ pub struct TrayGame {
     /// [`crate::library::Library::tray_games`] makes it absolute and drops icons whose file is
     /// gone. Part of the comparison, so a newly made icon rebuilds the menu.
     pub icon: Option<PathBuf>,
+    /// The game's cached cover, resolved like [`TrayGame::icon`]; the tray popup shows recent
+    /// games as cover tiles.
+    pub cover: Option<PathBuf>,
 }
 
 /// The game lists of the tray menu. Compared to skip menu rebuilds when nothing changed.
@@ -48,6 +51,7 @@ fn entry(game: &Game) -> TrayGame {
         id: game.id,
         name: game.name.clone(),
         icon: game.icon_path.as_ref().map(PathBuf::from),
+        cover: game.cover_path.as_ref().map(PathBuf::from),
     }
 }
 
@@ -98,10 +102,11 @@ impl TrayGames {
         ids
     }
 
-    /// Replaces every icon path with `resolve(path)` (`None` drops it).
-    pub fn map_icons(mut self, resolve: impl Fn(&std::path::Path) -> Option<PathBuf>) -> Self {
+    /// Replaces every icon and cover path with `resolve(path)` (`None` drops it).
+    pub fn map_images(mut self, resolve: impl Fn(&std::path::Path) -> Option<PathBuf>) -> Self {
         for game in self.recent.iter_mut().chain(&mut self.favorites) {
             game.icon = game.icon.take().and_then(|p| resolve(&p));
+            game.cover = game.cover.take().and_then(|p| resolve(&p));
         }
         self
     }
@@ -314,7 +319,7 @@ mod tests {
         assert_eq!(tray_games(&games2).missing_icons(), vec![fav.id]);
 
         let resolved = picked
-            .map_icons(|p| (p.file_name()? == "a.png").then(|| PathBuf::from("C:/data").join(p)));
+            .map_images(|p| (p.file_name()? == "a.png").then(|| PathBuf::from("C:/data").join(p)));
         assert_eq!(
             resolved.recent[0].icon,
             Some(PathBuf::from("C:/data").join("images/icons/a.png"))

@@ -247,7 +247,7 @@ Short log of choices made while building. Newest at the bottom of each section.
 - **Events go to the `main` window only** (`emit_to`), so the login windows never receive them.
 - **Monochrome tray glyph following the taskbar theme** (`SystemUsesLightTheme`, not the app
   theme): white on dark taskbars, black on light ones, no tile so it fills the tray slot. A thread
-  blocks in `RegNotifyChangeKeyValue` to swap it; one of the two `unsafe` modules (scoped
+  blocks in `RegNotifyChangeKeyValue` to swap it; one of the few `unsafe` modules (scoped
   `allow(unsafe_code)` in `tray_theme.rs`), because winreg cannot wait for changes and polling
   would wake the idle tray process.
 - **Window placement in `window.json` in the data folder**, not via `tauri-plugin-window-state`,
@@ -255,3 +255,12 @@ Short log of choices made while building. Newest at the bottom of each section.
   tracked on move/resize (a minimized window reports an off-screen position) and saved before the
   window is destroyed or the app exits; it is used only if enough of the title bar is still on a
   connected monitor.
+- **Custom tray popup instead of the context menu on Windows.** Native menus cannot be padded,
+  show icons only at 16-20 px (scaled with nearest neighbor, so they alias) and cannot show cover
+  art. A webview popup would cost 100+ MB and a cold start per opening, so the popup is plain Win32
+  + Direct2D (`windows` crate, already in the lockfile through Tauri): instant, and nothing exists
+  while it is closed. It is the third place with `unsafe` code (`tray_popup/{render,window}.rs`, scoped
+  `allow`); layout and navigation are pure Rust with tests. Its colors mirror `theme.css` (dark
+  only, like the app). Limits: no screen reader support yet (the native menu had it) and no
+  acrylic backdrop. Linux keeps the native menu (AppIndicator menus cannot be replaced there).
+

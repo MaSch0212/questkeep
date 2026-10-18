@@ -129,7 +129,7 @@ impl Library {
         })?;
         // Icons are shown from their absolute path; files that are gone count as missing, which
         // makes the shell queue a new icon job.
-        Ok(tray::tray_games(&games).map_icons(|relative| {
+        Ok(tray::tray_games(&games).map_images(|relative| {
             self.images
                 .resolve(&relative.to_string_lossy().replace('\\', "/"))
         }))

@@ -1,8 +1,7 @@
 //! Extracts the icon of a Windows executable as RGBA pixels (Win32: `PrivateExtractIconsW`, then
 //! `GetIconInfo` + `GetDIBits`). No window, no shell UI and no clipboard is involved.
 //!
-//! One of two modules with `unsafe` code (the other watches the taskbar theme in
-//! `src-tauri/src/tray_theme.rs`). Every GDI/USER handle it creates is released by a
+//! One of the few modules with `unsafe` code (see docs/DECISIONS.md). Every GDI/USER handle it creates is released by a
 //! guard, also on early returns.
 
 #![allow(unsafe_code)]

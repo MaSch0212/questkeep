@@ -1,12 +1,13 @@
-//! System tray icon and its menu. The menu lists recently played and favorite games and opens
-//! store clients; it is rebuilt (debounced, off the UI thread) when the library changes.
+//! System tray icon and what it opens: on Windows a custom popup (`tray_popup`) with cover tiles,
+//! elsewhere a native menu. Both list recently played and favorite games and open store clients;
+//! their content is refreshed (debounced, off the UI thread) when the library changes.
 //!
 //! The selection logic is in `questkeep_core::tray` and `questkeep_core::platform`; this module
 //! only turns it into Tauri menu items, so it has no unit tests of its own (creating a tray icon
 //! needs a real desktop session).
 
-use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use questkeep_core::events::CoreEvent;
@@ -31,6 +32,12 @@ const ID_EXIT: &str = "exit";
 const GAME_PREFIX: &str = "game:";
 const URI_PREFIX: &str = "uri:";
 
+/// Windows shows the custom popup; other platforms the native menu.
+const USE_POPUP: bool = cfg!(windows);
+
+/// The latest model, for the popup (which is built when opened).
+static CURRENT: Mutex<Option<MenuModel>> = Mutex::new(None);
+
 /// Everything the menu shows; two equal models need no rebuild.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 struct MenuModel {
@@ -49,22 +56,14 @@ enum Trigger {
 
 /// Creates the tray icon and starts the background thread that keeps its menu current.
 pub fn create(app: &AppHandle, state: &Arc<AppState>) -> tauri::Result<()> {
-    let menu = build_menu(app, &MenuModel::default())?;
     let mut builder = TrayIconBuilder::with_id(TRAY_ID)
         .tooltip("Questkeep")
-        .menu(&menu)
         .show_menu_on_left_click(false)
-        .on_tray_icon_event(|tray, event| {
-            if let TrayIconEvent::Click {
-                button: MouseButton::Left,
-                button_state: MouseButtonState::Up,
-                ..
-            } = event
-            {
-                window::show_main_window_async(tray.app_handle());
-            }
-        })
+        .on_tray_icon_event(|tray, event| on_tray_event(tray.app_handle(), &event))
         .on_menu_event(|app, event| on_menu_event(app, event.id().as_ref()));
+    if !USE_POPUP {
+        builder = builder.menu(&build_menu(app, &MenuModel::default())?);
+    }
     match crate::tray_theme::icon(crate::tray_theme::light_taskbar()) {
         Ok(icon) => builder = builder.icon(icon),
         Err(err) => {
@@ -147,6 +146,11 @@ fn refresh_loop(app: &AppHandle, state: &AppState, rx: &Receiver<Trigger>) {
             clients: clients.clone().unwrap_or_default(),
         };
         if shown.as_ref() == Some(&model) {
+            continue;
+        }
+        *CURRENT.lock().unwrap_or_else(PoisonError::into_inner) = Some(model.clone());
+        if USE_POPUP {
+            shown = Some(model);
             continue;
         }
         let for_menu = model.clone();
@@ -241,18 +245,73 @@ fn build_menu(app: &AppHandle, model: &MenuModel) -> tauri::Result<Menu<Wry>> {
     builder.separator().text(ID_EXIT, "Exit").build()
 }
 
+/// Left click opens the window; right click opens the popup (Windows; elsewhere the native menu
+/// opens by itself).
+fn on_tray_event(app: &AppHandle, event: &TrayIconEvent) {
+    let TrayIconEvent::Click {
+        button,
+        button_state: MouseButtonState::Up,
+        rect,
+        ..
+    } = event
+    else {
+        return;
+    };
+    match button {
+        MouseButton::Left => window::show_main_window_async(app),
+        MouseButton::Right if USE_POPUP => show_popup(app, rect),
+        _ => {}
+    }
+}
+
+#[cfg(windows)]
+fn show_popup(app: &AppHandle, rect: &tauri::Rect) {
+    use crate::tray_popup::{self, Action, PopupData, ScreenRect};
+
+    let position = rect.position.to_physical::<i32>(1.0);
+    let size = rect.size.to_physical::<i32>(1.0);
+    let anchor = ScreenRect {
+        x: position.x,
+        y: position.y,
+        w: size.width,
+        h: size.height,
+    };
+    let model = CURRENT
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone()
+        .unwrap_or_default();
+    let data = PopupData {
+        games: model.games,
+        clients: model.clients,
+    };
+    let app = app.clone();
+    tray_popup::show(anchor, data, move |action| match action {
+        Action::Launch(id) => launch(&app, id),
+        Action::OpenUri(uri) => open_client(uri),
+        Action::OpenWindow => window::show_main_window(&app),
+        Action::Exit => exit(&app),
+    });
+}
+
+#[cfg(not(windows))]
+fn show_popup(_app: &AppHandle, _rect: &tauri::Rect) {}
+
+/// Tray "Exit": quits even though the app waits in the tray.
+fn exit(app: &AppHandle) {
+    if let Some(lifecycle) = app.try_state::<Lifecycle>() {
+        lifecycle.request_quit();
+    }
+    // Exiting skips CloseRequested, so the window position is saved here.
+    window::save_placement(app);
+    // Runs the exit handler: fetchers close and running sessions are saved.
+    app.exit(0);
+}
+
 fn on_menu_event(app: &AppHandle, id: &str) {
     match id {
         ID_OPEN => window::show_main_window_async(app),
-        ID_EXIT => {
-            if let Some(lifecycle) = app.try_state::<Lifecycle>() {
-                lifecycle.request_quit();
-            }
-            // Exiting skips CloseRequested, so the window position is saved here.
-            window::save_placement(app);
-            // Runs the exit handler: fetchers close and running sessions are saved.
-            app.exit(0);
-        }
+        ID_EXIT => exit(app),
         other => {
             if let Some(game) = other
                 .strip_prefix(GAME_PREFIX)

@@ -31,6 +31,27 @@ uuid = "1.28.0"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_Registry"] }
+# The tray popup (Win32 window + Direct2D/DirectWrite); versions are the ones Tauri already locks.
+windows = { version = "0.62.2", features = [
+  "Win32_Foundation",
+  "Win32_Graphics_Direct2D",
+  "Win32_Graphics_Direct2D_Common",
+  "Win32_Graphics_DirectWrite",
+  "Win32_Graphics_Dwm",
+  "Win32_Graphics_Dxgi_Common",
+  "Win32_Graphics_Gdi",
+  "Win32_Graphics_Imaging",
+  "Win32_System_Com",
+  "Win32_System_LibraryLoader",
+  "Win32_UI_HiDpi",
+  "Win32_UI_Input_KeyboardAndMouse",
+  "Win32_UI_WindowsAndMessaging",
+] }
+windows-numerics = "0.3.1"
+
+[dev-dependencies]
+image = { version = "0.25.10", default-features = false, features = ["png"] }
+tempfile = "3.27.0"
 
 [lints]
 workspace = true
