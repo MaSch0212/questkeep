@@ -34,7 +34,8 @@ those commands and events.
 | `images/` | Image cache under `images/covers` and `images/backgrounds`. `CoverFetcher` (4 workers) tries each provider's cover candidates, local files before CDN URLs. `MetadataFetcher` (1 worker, at least 1.5 s between store requests) stores store metadata and a background per game. `SteamGridDb` (`images/steamgriddb.rs`) is a fallback source for covers and backgrounds when a user API key is set: used when the provider has no image (or only low-quality ones, see `covers_are_low_quality`), and for manual games. Global limiter of 2 requests/s, "nothing found" remembered in `games.extra`, key shared via `Library::artwork()` and updated by `save_settings`. |
 | `settings` | Small `settings.json` (serde, defaults on missing/corrupt file), including a per-provider config map (`providers.steam = { apiKey, steamId }`). |
 | `events` | `EventBus` with serializable `CoreEvent` enum; subscribers are callbacks. Plugin hooks attach here later. |
-| `platform/` | OS-specific bits: Steam install dirs (registry on Windows, XDG paths on Linux), opening URIs, process snapshots. Stubs on other targets. |
+| `platform/` | OS-specific bits: Steam install dirs (registry on Windows, XDG paths on Linux), opening URIs, process snapshots, installed store clients (`installed_store_clients`: Steam, Epic, GOG Galaxy, Xbox). Stubs on other targets. |
+| `tray` | Pure logic for the tray and window lifecycle: which games the tray menu lists (`tray_games`), close/minimize decisions, when an exit request is ignored, `--minimized` argument parsing. No Tauri dependency, fully unit-tested. |
 | `library` | `Library` facade used by the shell: wires db, providers, images, events. |
 | `seed` | Dev-only fake library generator (5,000 games) for performance checks. |
 
@@ -93,6 +94,34 @@ silently falls back to installed games only.
 2. `src-tauri` subscribes once at startup and emits each event to the webview as `core-event`.
 3. The UI store listens and refreshes the affected games.
 
+## Tray and window lifecycle (`src-tauri/src/{tray,window,autostart}.rs`)
+
+```
+ close button ── closeToTray? ──yes──▶ destroy main webview ──▶ app waits in the tray
+ minimize     ── minimizeToTray? ─yes─▶ (WebView2 renderer freed)   core keeps running
+                                              ▲                      (launcher, fetchers)
+ tray click / "Open Questkeep" / 2nd start ───┘ create_main_window
+ tray "Exit" ─▶ quit flag + app.exit(0) ─▶ RunEvent::Exit ─▶ close fetchers, save sessions
+```
+
+- The tray icon is created in `setup`. Its menu (recent games, Favorites submenu, Open Questkeep,
+  Store clients submenu, Exit) is rebuilt by one background thread that blocks on a channel fed by
+  an `EventBus` subscriber (`GamesChanged`, `GameRemoved`, `GameStarted`, `GameStopped`,
+  `LibraryScanned`). After a trigger it waits 2 s, coalesces further triggers, recomputes the menu
+  model and skips the rebuild when it is unchanged; menus are applied on the main thread. Idle cost
+  is zero: no timers, no polling (the launcher only polls while a game runs).
+- Hiding **destroys** the main window instead of hiding it. `RunEvent::ExitRequested` with no
+  exit code (last window gone) is ignored while the `hidden_to_tray` flag is set and no real exit
+  was requested; `app.exit(n)` always goes through. Store login windows (`signin-*`) are neither
+  closed nor handled by this logic. If the tray icon cannot be created, the close button quits.
+- Core events are emitted to the `main` window only; with no window that is a no-op. The UI
+  reloads games and running sessions when a new window starts, so nothing is lost while away.
+- Start with system: `tauri-plugin-autostart` registers `questkeep --minimized`, driven from
+  `save_settings` (the UI only toggles `startWithSystem`). With `--minimized` and
+  `startMinimized` on, startup scans run but no window is created.
+  `tauri-plugin-single-instance` (release builds) shows the running instance on a second start.
+- Settings: `closeToTray` (default on), `minimizeToTray`, `startWithSystem`, `startMinimized`.
+
 ## Launch and playtime
 
 - `Launcher::launch(game)` resolves the action, starts it, inserts a `play_sessions` row and
@@ -125,6 +154,7 @@ silently falls back to installed games only.
 | `sign_in_with_code(provider, code)` | Same without the window: a pasted code (GOG: also the whole `on_login_success` address; Epic: the `authorizationCode` value or the page JSON). Returns the new `AccountStatus`. |
 | `sign_out(provider)` | Deletes the stored tokens; returns the new `AccountStatus`. Games stay in the library. |
 | `app_info()` | Version, data dir, log path. |
+| `open_app_folder(kind)` | Opens the `"data"` or `"logs"` folder in the file manager from Rust (the opener plugin's JS API is not given path access). Other kinds are rejected. |
 | `seed_fake_library(count)` | Debug builds only. |
 
 ### Store accounts (GOG, Epic)

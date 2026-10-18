@@ -32,6 +32,10 @@ Tauri 2, Rust and SolidJS. Inspired by [Playnite](https://github.com/JosefNemec/
 - **Covers**: taken from local store caches or store CDNs, cached on disk.
 - **Keyboard friendly**: arrow keys in the grid, `Enter` for details, `Ctrl+Enter` to play,
   `Ctrl+F` to search.
+- **System tray**: closing the window can keep Questkeep running in the tray (the default), with
+  your ten most recently played games, your favorites and your installed store clients one click
+  away. While in the tray the window is fully closed, so Questkeep uses very little memory.
+  Optionally minimize to the tray and start with Windows (minimized to the tray).
 - **Portable mode**: put an empty `portable.txt` next to the executable to keep all data in a
   `data/` folder beside it.
 

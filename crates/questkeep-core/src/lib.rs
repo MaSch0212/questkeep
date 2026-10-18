@@ -15,6 +15,7 @@ pub mod platform;
 pub mod providers;
 pub mod seed;
 pub mod settings;
+pub mod tray;
 
 pub use error::{CoreError, Result};
 pub use library::{AppInfo, Library};

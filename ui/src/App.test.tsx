@@ -112,6 +112,10 @@ describe("App", () => {
       downloadCovers: true,
       fetchMetadata: true,
       steamGridDbApiKey: null,
+      closeToTray: true,
+      minimizeToTray: false,
+      startWithSystem: false,
+      startMinimized: true,
       providers: {},
     });
     render(() => <App />);

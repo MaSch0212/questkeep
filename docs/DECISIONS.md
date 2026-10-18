@@ -197,3 +197,27 @@ Short log of choices made while building. Newest at the bottom of each section.
 - **Epic catalog data is cached in memory per run** and fetched in namespace batches of up to 40
   items per request; covers (`DieselGameBoxTall`), backgrounds (`DieselGameBox`, `OfferImageWide`)
   and metadata reuse it. A disk cache is a follow-up.
+
+## Tray and autostart
+
+- **Hiding to the tray destroys the main window** rather than hiding it: a hidden WebView2 window
+  keeps its renderer (150-250 MB); recreating it takes well under a second and the UI reloads its
+  state from the core. The cost is that UI-only state (scroll position, open details) resets.
+- **A flag, not window counting, keeps the process alive**: `ExitRequested(code = None)` is
+  prevented only while `hidden_to_tray` is set and no tray Exit happened. Closing the window with
+  "close to tray" off still quits as before.
+- **Tray unavailable means the close button quits**: hiding with no way back would strand the app.
+- **Single instance in release builds only**: debug builds skip `tauri-plugin-single-instance` so a
+  dev or throwaway instance can run next to an installed one. A second start with `--minimized`
+  (autostart racing a manual start) does not raise the window.
+- **Autostart runs `--minimized`** and `startMinimized` decides whether that hides the window, so
+  the toggle can change without rewriting the registry entry. The entry is written before the
+  setting is saved (a refusal is shown and nothing is saved), and refreshed at startup in release
+  builds so an updated install path stays correct. Debug builds never touch it.
+- **Open folder goes through Rust** (`open_app_folder`) instead of widening `opener` ACL scopes to
+  the data directory, which is user-specific and can be portable.
+- **Menu rebuilds are debounced (2 s) and skipped when the model is unchanged**, because cover and
+  metadata downloads emit `GamesChanged` continuously during the first scan.
+- **Tray menu without icons**: items are text only; per-game icons would need decoding cached
+  images into menu icons for every rebuild.
+- **Events go to the `main` window only** (`emit_to`), so the login windows never receive them.

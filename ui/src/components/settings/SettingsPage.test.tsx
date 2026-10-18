@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from "@solidjs/testing-library";
+import { listen } from "@tauri-apps/api/event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Settings } from "../../bindings/Settings";
 import * as api from "../../lib/api";
@@ -11,7 +12,7 @@ vi.mock("@tauri-apps/api/core", () => ({
   convertFileSrc: (p: string) => p,
   invoke: vi.fn<() => void>(),
 }));
-vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn<() => void>() }));
+vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn<() => Promise<() => void>>() }));
 vi.mock("@tauri-apps/plugin-opener", () => ({
   openPath: vi.fn<() => void>(),
   openUrl: vi.fn<() => void>(),
@@ -23,12 +24,31 @@ function makeSettings(overrides: Partial<Settings> = {}): Settings {
     downloadCovers: true,
     fetchMetadata: true,
     steamGridDbApiKey: null,
+    closeToTray: true,
+    minimizeToTray: false,
+    startWithSystem: false,
+    startMinimized: true,
     providers: {
       epic: { token: "keep-me" },
       steam: { apiKey: "OLDKEY", extraFlag: 7 },
     },
     ...overrides,
   };
+}
+
+async function loadAppInfo(dataDir: string, logsDir: string) {
+  vi.mocked(listen).mockResolvedValue(() => undefined);
+  vi.mocked(api.listProviders).mockResolvedValue([]);
+  vi.mocked(api.runningGames).mockResolvedValue([]);
+  vi.mocked(api.listGames).mockResolvedValue([]);
+  vi.mocked(api.appInfo).mockResolvedValue({
+    version: "1",
+    dataDir,
+    logsDir,
+    portable: false,
+    devTools: false,
+  });
+  await store.init();
 }
 
 beforeEach(() => {
@@ -71,6 +91,87 @@ describe("SettingsPage", () => {
     );
   });
 
+  it("saves the tray toggles", async () => {
+    render(() => <SettingsPage />);
+    const closeToTray = await screen.findByRole("checkbox", {
+      name: "Close to the tray instead of quitting",
+    });
+    expect(closeToTray).toBeChecked();
+    await fireEvent.click(closeToTray);
+    await waitFor(() =>
+      expect(api.saveSettings).toHaveBeenLastCalledWith(
+        expect.objectContaining({ closeToTray: false }),
+      ),
+    );
+    await fireEvent.click(screen.getByRole("checkbox", { name: "Minimize to the tray" }));
+    await waitFor(() =>
+      expect(api.saveSettings).toHaveBeenLastCalledWith(
+        expect.objectContaining({ minimizeToTray: true }),
+      ),
+    );
+  });
+
+  it("enables start-minimized only while start-with-system is on", async () => {
+    render(() => <SettingsPage />);
+    const startWithSystem = await screen.findByRole("checkbox", {
+      name: "Start Questkeep when I sign in to my computer",
+    });
+    const minimized = screen.getByRole("checkbox", { name: "Start minimized to the tray" });
+    expect(minimized).toBeDisabled();
+    await fireEvent.click(startWithSystem);
+    await waitFor(() =>
+      expect(api.saveSettings).toHaveBeenLastCalledWith(
+        expect.objectContaining({ startWithSystem: true }),
+      ),
+    );
+    await waitFor(() => expect(minimized).toBeEnabled());
+    await fireEvent.click(minimized);
+    await waitFor(() =>
+      expect(api.saveSettings).toHaveBeenLastCalledWith(
+        expect.objectContaining({ startWithSystem: true, startMinimized: false }),
+      ),
+    );
+  });
+
+  it("reverts a toggle and shows the reason when saving fails", async () => {
+    vi.mocked(api.saveSettings).mockRejectedValue("Could not change the start-with-system setting");
+    render(() => <SettingsPage />);
+    const startWithSystem = await screen.findByRole("checkbox", {
+      name: "Start Questkeep when I sign in to my computer",
+    });
+    await fireEvent.click(startWithSystem);
+    await waitFor(() =>
+      expect(store.toasts().map((t) => t.message)).toContain(
+        "Could not change the start-with-system setting",
+      ),
+    );
+    expect(startWithSystem).not.toBeChecked();
+  });
+
+  it("opens the data and logs folders through the app, not the opener plugin", async () => {
+    vi.mocked(api.openAppFolder).mockResolvedValue(undefined);
+    await loadAppInfo("D:\\data", "D:\\data\\logs");
+    render(() => <SettingsPage />);
+    const [dataButton, logsButton] = await screen.findAllByRole("button", {
+      name: "Open folder",
+    });
+    await fireEvent.click(dataButton as HTMLElement);
+    await fireEvent.click(logsButton as HTMLElement);
+    expect(api.openAppFolder).toHaveBeenNthCalledWith(1, "data");
+    expect(api.openAppFolder).toHaveBeenNthCalledWith(2, "logs");
+  });
+
+  it("shows an error toast when a folder cannot be opened", async () => {
+    vi.mocked(api.openAppFolder).mockRejectedValue("Could not open the folder: nope");
+    await loadAppInfo("d", "l");
+    render(() => <SettingsPage />);
+    const [dataButton] = await screen.findAllByRole("button", { name: "Open folder" });
+    await fireEvent.click(dataButton as HTMLElement);
+    await waitFor(() =>
+      expect(store.toasts().map((t) => t.message)).toContain("Could not open the folder: nope"),
+    );
+  });
+
   it("hides the API key until asked and explains where it is stored", async () => {
     render(() => <SettingsPage />);
     const input = await screen.findByLabelText("Steam Web API key");
@@ -98,6 +199,10 @@ describe("SettingsPage", () => {
         downloadCovers: true,
         fetchMetadata: true,
         steamGridDbApiKey: null,
+        closeToTray: true,
+        minimizeToTray: false,
+        startWithSystem: false,
+        startMinimized: true,
         providers: {
           epic: { token: "keep-me" },
           steam: { apiKey: "NEWKEY", extraFlag: 7, steamId: "76561198000000000" },

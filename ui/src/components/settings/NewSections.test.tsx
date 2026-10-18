@@ -130,6 +130,10 @@ function makeSettings(overrides: Partial<Settings> = {}): Settings {
     downloadCovers: true,
     fetchMetadata: true,
     steamGridDbApiKey: null,
+    closeToTray: true,
+    minimizeToTray: false,
+    startWithSystem: false,
+    startMinimized: true,
     providers: { epic: { token: "keep-me" }, steam: { apiKey: "K" } },
     ...overrides,
   };

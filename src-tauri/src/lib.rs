@@ -1,7 +1,10 @@
 //! Thin Tauri shell: exposes core functionality as commands and forwards core events to the UI.
 
+mod autostart;
 mod commands;
 mod signin;
+mod tray;
+mod window;
 
 use std::sync::Arc;
 
@@ -14,7 +17,9 @@ use questkeep_core::images::{CoverFetcher, MetadataFetcher};
 use questkeep_core::launcher::Launcher;
 use questkeep_core::paths::DataPaths;
 use questkeep_core::providers::ProviderRegistry;
+use questkeep_core::tray::{self as tray_logic, MINIMIZED_ARG};
 use tauri::{Emitter, Manager, RunEvent};
+use tauri_plugin_autostart::MacosLauncher;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
@@ -124,8 +129,10 @@ fn build_state(app: &tauri::AppHandle) -> Result<(AppState, Option<WorkerGuard>)
     let events = EventBus::new();
     let handle = app.clone();
     events.subscribe(move |event| {
-        if let Err(err) = handle.emit(CORE_EVENT, event) {
-            tracing::warn!(%err, "could not forward event to the UI");
+        // Only the main window listens (never the store login windows). With no window (the
+        // app waits in the tray) this is a no-op.
+        if let Err(err) = handle.emit_to(window::MAIN_WINDOW, CORE_EVENT, event) {
+            tracing::debug!(%err, "could not forward event to the UI");
         }
     });
 
@@ -168,30 +175,6 @@ fn build_state(app: &tauri::AppHandle) -> Result<(AppState, Option<WorkerGuard>)
     ))
 }
 
-/// Creates the main window from its config (`"create": false` in `tauri.conf.json`) and shows it
-/// once setup succeeded, which also avoids a white flash.
-///
-/// Debug builds with `QUESTKEEP_HIDDEN=1` build it invisible, unfocused and off the taskbar, so the
-/// app can be driven through the WebView2 DevTools port while someone else uses the machine (e.g. a
-/// fullscreen game) without a window ever appearing or taking focus.
-fn create_main_window(app: &tauri::App) -> tauri::Result<()> {
-    let Some(config) = app.config().app.windows.iter().find(|w| w.label == "main") else {
-        return Ok(());
-    };
-    let keep_hidden =
-        cfg!(debug_assertions) && std::env::var("QUESTKEEP_HIDDEN").is_ok_and(|v| v == "1");
-    let mut builder = tauri::WebviewWindowBuilder::from_config(app.handle(), config)?;
-    if keep_hidden {
-        tracing::info!("QUESTKEEP_HIDDEN=1: creating the window hidden");
-        builder = builder.visible(false).focused(false).skip_taskbar(true);
-    }
-    let window = builder.build()?;
-    if !keep_hidden {
-        window.show()?;
-    }
-    Ok(())
-}
-
 /// Startup work that must not delay the window: provider scans and image/metadata downloads.
 fn spawn_startup_tasks(state: Arc<AppState>) {
     tauri::async_runtime::spawn_blocking(move || {
@@ -226,7 +209,23 @@ fn main_window_only(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let app = tauri::Builder::default()
+    let mut builder = tauri::Builder::default();
+    // Starting Questkeep again (e.g. from the Start menu while it waits in the tray) shows the
+    // running instance instead of opening a second process. Debug builds skip it so a dev
+    // instance can run next to an installed one.
+    if !cfg!(debug_assertions) {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            // An autostart racing with a manual start must not pop the window up.
+            if !tray_logic::parse_launch_args(&args).minimized {
+                window::show_main_window_async(app);
+            }
+        }));
+    }
+    let app = builder
+        .plugin(tauri_plugin_autostart::init(
+            MacosLauncher::LaunchAgent,
+            Some(vec![MINIMIZED_ARG]),
+        ))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -238,7 +237,21 @@ pub fn run() {
                 // Keep the log writer alive for the whole process.
                 app.manage(guard);
             }
-            create_main_window(app)?;
+            app.manage(window::Lifecycle::default());
+            let lifecycle = app.state::<window::Lifecycle>();
+            match tray::create(app.handle(), &state) {
+                Ok(()) => lifecycle.set_tray_available(true),
+                Err(err) => tracing::error!(%err, "could not create the tray icon"),
+            }
+            let settings = state.library.settings();
+            let args = tray_logic::parse_launch_args(std::env::args());
+            if tray_logic::start_in_tray(&settings, args, lifecycle.tray_available()) {
+                tracing::info!("started minimized: staying in the tray");
+                lifecycle.set_hidden_to_tray(true);
+            } else {
+                window::create_main_window(app.handle())?;
+            }
+            autostart::sync_on_startup(app.handle(), settings.start_with_system);
             spawn_startup_tasks(state);
             Ok(())
         })
@@ -259,6 +272,7 @@ pub fn run() {
             commands::app_info,
             commands::get_settings,
             commands::save_settings,
+            commands::open_app_folder,
             commands::seed_fake_library,
             commands::check_update,
             commands::install_update,
@@ -277,15 +291,26 @@ pub fn run() {
         }
     };
 
-    app.run(|handle, event| {
-        if let RunEvent::Exit = event
-            && let Some(state) = handle.try_state::<Arc<AppState>>()
-        {
-            tracing::info!("shutting down");
-            state.covers.close();
-            state.metadata.close();
-            // Stops trackers and saves the elapsed time of running games.
-            state.launcher.shutdown();
+    app.run(|handle, event| match event {
+        RunEvent::WindowEvent { label, event, .. } if label == window::MAIN_WINDOW => {
+            window::on_main_window_event(handle, &event);
         }
+        // The last window went away (or the app asked to exit). While the app waits in the tray
+        // only a real exit (tray "Exit") may end the process.
+        RunEvent::ExitRequested { code, api, .. } => {
+            if window::keep_running(handle, code) {
+                api.prevent_exit();
+            }
+        }
+        RunEvent::Exit => {
+            if let Some(state) = handle.try_state::<Arc<AppState>>() {
+                tracing::info!("shutting down");
+                state.covers.close();
+                state.metadata.close();
+                // Stops trackers and saves the elapsed time of running games.
+                state.launcher.shutdown();
+            }
+        }
+        _ => {}
     });
 }
