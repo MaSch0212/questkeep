@@ -1,6 +1,7 @@
 import EyeOff from "lucide-solid/icons/eye-off";
 import Eye from "lucide-solid/icons/eye";
 import ImageDown from "lucide-solid/icons/image-down";
+import PackageMinus from "lucide-solid/icons/package-minus";
 import Pencil from "lucide-solid/icons/pencil";
 import Star from "lucide-solid/icons/star";
 import X from "lucide-solid/icons/x";
@@ -14,6 +15,7 @@ import {
   refreshMetadata,
   removeCover,
   removeGame,
+  uninstallGame,
   updateGame,
 } from "../lib/actions";
 import { formatDate, formatPlaytime, formatRelativeDate, formatReleaseDate } from "../lib/format";
@@ -41,11 +43,18 @@ export function DetailsPanel(props: DetailsPanelProps) {
   const [draft, setDraft] = createSignal("");
   const [editingLaunch, setEditingLaunch] = createSignal(false);
   const [confirmingRemove, setConfirmingRemove] = createSignal(false);
+  const [confirmingUninstall, setConfirmingUninstall] = createSignal(false);
   const [descriptionOpen, setDescriptionOpen] = createSignal(false);
   const [heroFailed, setHeroFailed] = createSignal(false);
   const [nameInput, setNameInput] = createSignal<HTMLInputElement>();
+  const [uninstallButton, setUninstallButton] = createSignal<HTMLButtonElement>();
+  const [cancelUninstallButton, setCancelUninstallButton] = createSignal<HTMLButtonElement>();
 
   const running = () => store.isRunning(props.game.id);
+  const canUninstall = () =>
+    props.game.installed &&
+    props.game.sourceGameId !== null &&
+    store.providers().some((p) => p.id === props.game.source && p.canUninstall);
   const isManual = () => props.game.source === "manual";
   const isStoreGame = () => props.game.sourceGameId !== null;
   const heroUrl = () => (heroFailed() ? null : store.backgroundUrl(props.game));
@@ -60,6 +69,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
         setEditingName(false);
         setEditingLaunch(false);
         setConfirmingRemove(false);
+        setConfirmingUninstall(false);
         setDescriptionOpen(false);
         setHeroFailed(false);
       },
@@ -99,6 +109,25 @@ export function DetailsPanel(props: DetailsPanelProps) {
     const failure = await installGame(props.game.id);
     if (failure) setError(failure);
     else store.pushToast("info", "Install handed to the store client");
+  }
+
+  function askUninstall() {
+    setConfirmingUninstall(true);
+    queueMicrotask(() => cancelUninstallButton()?.focus());
+  }
+
+  function cancelUninstall() {
+    setConfirmingUninstall(false);
+    queueMicrotask(() => uninstallButton()?.focus());
+  }
+
+  async function uninstall() {
+    setError(null);
+    setConfirmingUninstall(false);
+    const failure = await uninstallGame(props.game.id);
+    if (failure) setError(failure);
+    else store.pushToast("info", "Uninstall handed to the store client");
+    queueMicrotask(() => uninstallButton()?.focus());
   }
 
   async function refreshStoreMetadata() {
@@ -352,6 +381,52 @@ export function DetailsPanel(props: DetailsPanelProps) {
         </Show>
 
         <div class="details__danger">
+          <Show when={canUninstall()}>
+            <Show
+              when={confirmingUninstall()}
+              fallback={
+                <button
+                  type="button"
+                  class="btn btn--danger"
+                  ref={setUninstallButton}
+                  onClick={askUninstall}
+                >
+                  <PackageMinus class="icon" aria-hidden="true" /> Uninstall
+                </button>
+              }
+            >
+              <div
+                role="group"
+                aria-label="Confirm uninstall"
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    cancelUninstall();
+                  }
+                }}
+              >
+                <p>Uninstall “{props.game.name}”? The store will ask to confirm.</p>
+                <div class="details__row">
+                  <button
+                    type="button"
+                    class="btn btn--danger-solid"
+                    onClick={() => void uninstall()}
+                  >
+                    Uninstall
+                  </button>
+                  <button
+                    type="button"
+                    class="btn"
+                    ref={setCancelUninstallButton}
+                    onClick={cancelUninstall}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </Show>
+          </Show>
           <Show
             when={confirmingRemove()}
             fallback={

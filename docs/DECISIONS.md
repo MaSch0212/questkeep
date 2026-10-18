@@ -206,6 +206,15 @@ Short log of choices made while building. Newest at the bottom of each section.
   `goggalaxy://installationScreen/<id>` (Galaxy also handles `installGame`, `openGameView`,
   `launchGame`), Epic `com.epicgames.launcher://apps/<namespace>%3A<itemId>%3A<appName>?action=install`
   with the ids from the signed-in library; the bare appName form only opens the launcher.
+- **Uninstall always delegates to the store, behind a UI confirm step.** Steam
+  `steam://uninstall/<id>` (same as Playnite). The Epic launcher and Galaxy have no known
+  uninstall URI (Galaxy's protocol commands are launch/install/focus/view only), so Epic opens
+  `com.epicgames.launcher://store/library` and GOG runs the game's own `unins000.exe` from the
+  registry install path (both as Playnite does). Xbox opens `ms-settings:appsfeatures`. Heroic and
+  Lutris have no documented uninstall protocol, so no button there. Provider-level
+  `can_uninstall` (not per game) keeps `ProviderInfo` the only thing the UI needs; per-game
+  failures (missing uninstaller) come back as readable errors. No DB write: the next scan flips
+  `installed`.
 
 
 ## Tray and autostart

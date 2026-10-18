@@ -231,7 +231,7 @@ describe("GOG Galaxy launch option", () => {
   it("saves the option and rescans GOG", async () => {
     await loadAppInfo("C:/data", "C:/data/logs");
     vi.mocked(api.listProviders).mockResolvedValue([
-      { id: "gog", name: "GOG", canScan: true, canScanOwned: false },
+      { id: "gog", name: "GOG", canScan: true, canScanOwned: false, canUninstall: true },
     ]);
     await store.init();
     vi.mocked(api.scanLibrary).mockResolvedValue({

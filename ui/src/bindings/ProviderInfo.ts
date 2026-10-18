@@ -3,4 +3,4 @@
 /**
  * Public description of a registered provider.
  */
-export type ProviderInfo = { id: string, name: string, canScan: boolean, canScanOwned: boolean, };
+export type ProviderInfo = { id: string, name: string, canScan: boolean, canScanOwned: boolean, canUninstall: boolean, };

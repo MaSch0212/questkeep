@@ -411,7 +411,21 @@ impl LibraryProvider for EpicProvider {
             ),
         }))
     }
+
+    fn can_uninstall(&self) -> bool {
+        self.heroic.is_none()
+    }
+
+    /// The Epic launcher has no uninstall URI, so this opens its library, where the game's menu
+    /// has Uninstall (Playnite does the same).
+    fn uninstall_action(&self, _source_game_id: &str) -> Option<PlayAction> {
+        self.can_uninstall()
+            .then(|| PlayAction::uri(EPIC_LIBRARY_URI))
+    }
 }
+
+/// Opens the Epic Games Launcher on its library page.
+const EPIC_LIBRARY_URI: &str = "com.epicgames.launcher://store/library";
 
 #[cfg(test)]
 mod tests {
@@ -648,6 +662,19 @@ mod tests {
             none.scan_installed(),
             Err(ProviderError::NotFound(_))
         ));
+    }
+
+    #[test]
+    fn uninstall_opens_the_launcher_library() {
+        let p = EpicProvider::default();
+        assert!(p.can_uninstall());
+        let action = p.uninstall_action("Sugar").unwrap();
+        assert_eq!(action.target, "com.epicgames.launcher://store/library");
+        assert_eq!(action.kind, crate::model::ActionKind::Uri);
+        let tmp = tempfile::tempdir().unwrap();
+        let heroic = EpicProvider::with_heroic(HeroicPaths::discover(tmp.path(), None, None));
+        assert!(!heroic.can_uninstall());
+        assert!(heroic.uninstall_action("Sugar").is_none());
     }
 
     #[test]

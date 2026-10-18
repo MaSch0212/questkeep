@@ -78,6 +78,20 @@ impl LibraryProvider for XboxProvider {
         valid.then(|| PlayAction::uri(format!("ms-windows-store://pdp/?PFN={source_game_id}")))
     }
 
+    fn can_uninstall(&self) -> bool {
+        cfg!(windows)
+    }
+
+    /// Opens Windows' "Installed apps" settings page; the user picks the game there and Windows
+    /// asks for confirmation. Nothing is uninstalled silently.
+    fn uninstall_action(&self, source_game_id: &str) -> Option<PlayAction> {
+        let valid = !source_game_id.is_empty()
+            && source_game_id
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'));
+        (valid && self.can_uninstall()).then(|| PlayAction::uri("ms-settings:appsfeatures"))
+    }
+
     fn covers_are_low_quality(&self) -> bool {
         true
     }
@@ -148,6 +162,16 @@ mod tests {
         );
         assert!(p.install_action("").is_none());
         assert!(p.install_action("a&b=c").is_none());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn uninstall_action_opens_installed_apps_settings() {
+        let p = XboxProvider::with_source(Vec::new);
+        assert!(p.can_uninstall());
+        let a = p.uninstall_action("Contoso.Racer_8wekyb3d8bbwe").unwrap();
+        assert_eq!(a.target, "ms-settings:appsfeatures");
+        assert!(p.uninstall_action("a&b=c").is_none());
     }
 
     #[cfg(windows)]

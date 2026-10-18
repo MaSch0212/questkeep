@@ -33,6 +33,14 @@ export function installGame(id: string): Promise<string | null> {
   return attempt(() => api.installGame(id));
 }
 
+/**
+ * Hands the uninstall to the store client or the game's uninstaller, which asks the user to
+ * confirm. Resolves to an error message, or null on success.
+ */
+export function uninstallGame(id: string): Promise<string | null> {
+  return attempt(() => api.uninstallGame(id));
+}
+
 /** Keyboard/double-click install: failures surface as a toast. */
 export async function installWithToast(id: string): Promise<void> {
   const error = await installGame(id);
