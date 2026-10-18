@@ -19,6 +19,7 @@ import {
   withLibraryView,
   type LibraryView,
 } from "./query";
+import { loadViewMode, saveViewMode, type ViewMode } from "./viewMode";
 
 export interface Toast {
   id: number;
@@ -40,6 +41,7 @@ function createAppStore() {
   const [seenSources, setSeenSources] = createSignal<ReadonlySet<string>>(new Set());
   const [toasts, setToasts] = createSignal<Toast[]>([]);
   const [coverVersions, setCoverVersions] = createStore<Record<string, number>>({});
+  const [viewMode, setViewModeSignal] = createSignal<ViewMode>(loadViewMode());
 
   const indexById = createMemo(() => {
     const map = new Map<string, number>();
@@ -117,9 +119,22 @@ function createAppStore() {
     });
   }
 
+  function imageUrl(game: Game, path: string | null): string | null {
+    if (path === null) return null;
+    return `${convertFileSrc(path)}?v=${coverVersions[game.id] ?? 0}`;
+  }
+
   function coverUrl(game: Game): string | null {
-    if (game.coverPath === null) return null;
-    return `${convertFileSrc(game.coverPath)}?v=${coverVersions[game.id] ?? 0}`;
+    return imageUrl(game, game.coverPath);
+  }
+
+  function backgroundUrl(game: Game): string | null {
+    return imageUrl(game, game.backgroundPath);
+  }
+
+  function setViewMode(mode: ViewMode) {
+    setViewModeSignal(mode);
+    saveViewMode(mode);
   }
 
   function selectGame(id: string | null) {
@@ -223,6 +238,7 @@ function createAppStore() {
       setAppInfo(null);
       setSeenSources(new Set<string>());
       setToasts([]);
+      setViewModeSignal(loadViewMode());
     });
   }
 
@@ -240,6 +256,8 @@ function createAppStore() {
     appInfo,
     sources,
     toasts,
+    viewMode,
+    setViewMode,
     // queries
     setSearch: (search: string | null) => updateQuery({ search }),
     setSort: (sort: SortField) => updateQuery({ sort, descending: defaultDescending(sort) }),
@@ -253,6 +271,7 @@ function createAppStore() {
     upsertGame,
     bumpCover,
     coverUrl,
+    backgroundUrl,
     // selection
     selectGame,
     selectAndOpen,

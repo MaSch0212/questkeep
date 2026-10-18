@@ -8,7 +8,7 @@ import {
   onMount,
   Show,
 } from "solid-js";
-import { launchWithToast } from "../lib/actions";
+import { activateGame } from "../lib/actions";
 import { isNavKey, nextIndex } from "../lib/gridNav";
 import { store } from "../lib/store";
 import { rowRange, rowTop, scrollTopForRow, visibleRows, type RowLayout } from "../lib/virtualRows";
@@ -53,9 +53,9 @@ function activeDescendant(): string | undefined {
   return game && store.selectedIndex() >= 0 ? tileDomId(game.id) : undefined;
 }
 
-function launchSelected() {
+function activateSelected() {
   const game = store.selectedGame();
-  if (game) void launchWithToast(game.id);
+  if (game) void activateGame(game.id);
 }
 
 /**
@@ -170,11 +170,11 @@ export function GameGrid() {
     }
     if (event.key === "Enter") {
       event.preventDefault();
-      if (event.ctrlKey || event.metaKey) launchSelected();
+      if (event.ctrlKey || event.metaKey) activateSelected();
       else store.openDetails();
     } else if (event.key === "F5") {
       event.preventDefault();
-      launchSelected();
+      activateSelected();
     }
   }
 
@@ -214,7 +214,7 @@ export function GameGrid() {
                     game={game}
                     selected={game.id === store.selectedId()}
                     onSelect={onSelect}
-                    onLaunch={(id) => void launchWithToast(id)}
+                    onLaunch={(id) => void activateGame(id)}
                   />
                 )}
               </For>

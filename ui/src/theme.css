@@ -94,6 +94,16 @@
   --qk-badge-size: 24px;
   --qk-scrollbar-size: 10px;
   --qk-dimmed-opacity: 0.45;
+  --qk-icon-size: 14px;
+  --qk-list-row-height: 52px;
+  --qk-list-padding: 8px;
+  --qk-list-thumb-width: 30px;
+  --qk-list-year-width: 72px;
+  --qk-list-columns: var(--qk-list-thumb-width) minmax(0, 3fr) minmax(0, 1fr) minmax(0, 1.2fr)
+    minmax(0, 1.2fr) minmax(0, 1.2fr) var(--qk-list-year-width);
+  --qk-details-hero-height: 170px;
+  --qk-details-hero-overlap: 90px;
+  --qk-description-clamp-lines: 5;
 }
 
 @media (prefers-reduced-motion: reduce) {
