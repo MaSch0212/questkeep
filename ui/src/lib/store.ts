@@ -203,16 +203,27 @@ function createAppStore() {
     }
   }
 
+  /** Shows the messages the app queued for the UI (e.g. "another build was started"). */
+  async function showNotices() {
+    try {
+      for (const notice of (await api.takeNotices()) ?? []) pushToast("info", notice);
+    } catch (error) {
+      pushToast("error", errorMessage(error));
+    }
+  }
+
   /** Loads initial data and subscribes to core events. Returns a cleanup function. */
   async function init(): Promise<() => void> {
-    let unlisten: (() => void) | undefined;
+    const unlisteners: (() => void)[] = [];
     let disposed = false;
-    const subscribe = listen<CoreEvent>("core-event", (e) => handleCoreEvent(e.payload)).then(
-      (fn) => {
-        if (disposed) fn();
-        else unlisten = fn;
-      },
-    );
+    const keep = (fn: () => void) => {
+      if (disposed) fn();
+      else unlisteners.push(fn);
+    };
+    const subscribe = Promise.all([
+      listen<CoreEvent>("core-event", (e) => handleCoreEvent(e.payload)).then(keep),
+      listen("app-notice", () => void showNotices()).then(keep),
+    ]);
     const loads = Promise.allSettled([
       api.listProviders().then(setProviders),
       api.appInfo().then(setAppInfo),
@@ -223,9 +234,10 @@ function createAppStore() {
         if (r.status === "rejected") pushToast("error", errorMessage(r.reason));
     });
     await Promise.all([subscribe.catch(() => undefined), loads]);
+    void showNotices();
     return () => {
       disposed = true;
-      unlisten?.();
+      for (const fn of unlisteners) fn();
       clearTimeout(refreshTimer);
     };
   }

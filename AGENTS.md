@@ -15,6 +15,7 @@ Guide for humans and coding agents working on Questkeep.
 | Add a changeset (every user-visible PR) | `pnpm changeset add <major\|minor\|patch> "summary"` |
 | Show version, pending changesets, next version | `pnpm changeset status` |
 | List installed Steam games (dev tool) | `cargo run -p questkeep-core --example scan_steam` |
+| Check executable icon extraction on real games (dev tool) | `cargo run -p questkeep-core --example exe_icons -- <out dir> <exe>...` |
 | Regenerate app icons from `assets/logo.svg` | `node scripts/make-icon.mjs && pnpm tauri icon assets/icon.svg -o src-tauri/icons` (tray glyphs: run `pnpm tauri icon assets/tray-dark.svg -o target/tray-dark`, same for `tray-light`, and copy `32x32.png`/`64x64.png` to `src-tauri/icons/tray-*.png`/`tray-*@2x.png`) |
 
 `pnpm check` runs, in order: rustfmt check, clippy (`-D warnings`), `cargo test --workspace`,

@@ -210,6 +210,29 @@ fn main_window_only(
     }
 }
 
+/// Name of the event that tells the UI to fetch queued notices (`take_notices`).
+const NOTICE_EVENT: &str = "app-notice";
+
+/// A second start of a *different* executable hands over to this one and exits; tell the user,
+/// or a newer build seems to run old code.
+fn note_second_start(app: &tauri::AppHandle, started: Option<&str>) {
+    let canonical = |p: &std::path::Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.into());
+    let Ok(running) = std::env::current_exe() else {
+        return;
+    };
+    let started = started.map(|s| canonical(std::path::Path::new(s)));
+    let Some(notice) = tray_logic::second_start_notice(&canonical(&running), started.as_deref())
+    else {
+        return;
+    };
+    tracing::info!(started = ?started, "a different executable handed over to this instance");
+    if let Some(lifecycle) = app.try_state::<window::Lifecycle>() {
+        lifecycle.push_notice(notice);
+    }
+    // An open window shows it now; a new window fetches it on start.
+    let _ = app.emit_to(window::MAIN_WINDOW, NOTICE_EVENT, ());
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut builder = tauri::Builder::default();
@@ -218,6 +241,7 @@ pub fn run() {
     // instance can run next to an installed one.
     if !cfg!(debug_assertions) {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            note_second_start(app, args.first().map(String::as_str));
             // An autostart racing with a manual start must not pop the window up.
             if !tray_logic::parse_launch_args(&args).minimized {
                 window::show_main_window_async(app);
@@ -281,6 +305,7 @@ pub fn run() {
             commands::get_settings,
             commands::save_settings,
             commands::open_app_folder,
+            commands::take_notices,
             commands::seed_fake_library,
             commands::check_update,
             commands::install_update,

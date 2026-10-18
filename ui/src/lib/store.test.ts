@@ -68,4 +68,34 @@ describe("store", () => {
     store.handleCoreEvent({ type: "gamesChanged", ids: ["g1"] });
     expect(store.coverUrl(game)).toBe("x.jpg?v=1");
   });
+
+  it("shows queued notices on start and when the app announces new ones", async () => {
+    const handlers: Record<string, () => void> = {};
+    const { listen } = await import("@tauri-apps/api/event");
+    vi.mocked(listen).mockImplementation((name, handler) => {
+      handlers[name] = handler as () => void;
+      return Promise.resolve(() => undefined);
+    });
+    vi.mocked(api.listProviders).mockResolvedValue([]);
+    vi.mocked(api.runningGames).mockResolvedValue([]);
+    vi.mocked(api.listGames).mockResolvedValue([]);
+    vi.mocked(api.appInfo).mockResolvedValue({
+      version: "1",
+      dataDir: "d",
+      logsDir: "l",
+      portable: false,
+      devTools: false,
+    });
+    vi.mocked(api.takeNotices)
+      .mockResolvedValueOnce(["Questkeep was started from another build"])
+      .mockResolvedValueOnce(["second"]);
+    await store.init();
+    await vi.waitFor(() =>
+      expect(store.toasts().map((t) => t.message)).toContain(
+        "Questkeep was started from another build",
+      ),
+    );
+    handlers["app-notice"]?.();
+    await vi.waitFor(() => expect(store.toasts().map((t) => t.message)).toContain("second"));
+  });
 });

@@ -275,3 +275,11 @@ Short log of choices made while building. Newest at the bottom of each section.
   `providers.<id>` before every scan (scans already store play actions). First user: GOG's
   `launchThroughGalaxy` (default off: direct launch also works for offline-installer games); the
   UI rescans GOG after the toggle changes so existing games switch immediately.
+- **Icons cut from a cover follow the cover**: such icons are marked (`extra.iconFromCover`) and
+  dropped when the cover is replaced (manually or by a SteamGridDB re-fetch); the tray queues a new
+  one. Store and executable icons are kept. A finished icon job leaves the "already queued" set, so
+  a dropped icon can be made again in the same run.
+- **A second start of a different executable is announced** in the running instance (toast via a
+  queued notice, `take_notices`): with close-to-tray on, an old build waiting in the tray otherwise
+  silently swallows starts of a newer build.
+

@@ -26,6 +26,8 @@ export const installGame = (id: string) => invoke<void>("install_game", { id });
 export const refreshMetadata = (id: string) => invoke<void>("refresh_metadata", { id });
 export const runningGames = () => invoke<string[]>("running_games");
 export const appInfo = () => invoke<AppInfo>("app_info");
+/** Messages the app queued for the UI (each returned once), e.g. after a second start. */
+export const takeNotices = () => invoke<string[]>("take_notices");
 export const getSettings = () => invoke<Settings>("get_settings");
 export const saveSettings = (settings: Settings) => invoke<void>("save_settings", { settings });
 /** Opens the app's data or logs folder in the file manager (done by the Rust side). */

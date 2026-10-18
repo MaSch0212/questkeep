@@ -215,7 +215,14 @@ fn store(shared: &Shared, game: &Game, kind: ImageKind, ext: &str, bytes: &[u8])
         .images
         .store_image(kind, game.id, ext, bytes)
         .and_then(|rel| match kind {
-            ImageKind::Cover => shared.db.set_cover_path(game.id, Some(&rel)),
+            ImageKind::Cover => shared
+                .db
+                .set_cover_path(game.id, Some(&rel))
+                .and_then(|()| {
+                    // A replaced cover (e.g. re-fetched from SteamGridDB) invalidates an icon cut
+                    // from the old one.
+                    super::drop_cover_icon(&shared.db, &shared.images, game).map(|_| ())
+                }),
             ImageKind::Background => shared.db.set_background_path(game.id, Some(&rel)),
             ImageKind::Icon => shared.db.set_icon_path(game.id, Some(&rel)),
         })
@@ -541,7 +548,7 @@ fn fetch_icon(shared: &MetadataShared, id: Uuid) -> bool {
     if has_file(&game.icon_path) {
         return false;
     }
-    let Some(png) = build_icon(shared, &game) else {
+    let Some((png, from_cover)) = build_icon(shared, &game) else {
         tracing::debug!(game = %id, "no icon found");
         if !has_file(&game.cover_path) {
             // The cover is the last resort and may still arrive; try again then.
@@ -549,16 +556,28 @@ fn fetch_icon(shared: &MetadataShared, id: Uuid) -> bool {
         }
         return false;
     };
-    shared
+    let stored = shared
         .images
         .store_image(ImageKind::Icon, id, "png", &png)
         .and_then(|rel| shared.db.set_icon_path(id, Some(&rel)))
+        .and_then(|()| {
+            shared.db.set_extra_value(
+                id,
+                super::ICON_FROM_COVER_KEY,
+                from_cover.then_some(serde_json::Value::Bool(true)),
+            )
+        })
         .inspect_err(|err| tracing::warn!(game = %id, %err, "could not store icon"))
-        .is_ok()
+        .is_ok();
+    // Done: the game may be queued again later (its icon is dropped when the cover it was made
+    // from changes); while an icon exists the tray does not ask for one.
+    forget();
+    stored
 }
 
-/// The 32 px icon PNG for a game from the first source that yields a valid image.
-fn build_icon(shared: &MetadataShared, game: &Game) -> Option<Vec<u8>> {
+/// The 32 px icon PNG for a game from the first source that yields a valid image, and whether it
+/// was cropped from the cover.
+fn build_icon(shared: &MetadataShared, game: &Game) -> Option<(Vec<u8>, bool)> {
     let from_provider = || {
         let source_id = game.source_game_id.as_deref()?;
         let provider = shared.providers.get(&game.source)?;
@@ -592,7 +611,10 @@ fn build_icon(shared: &MetadataShared, game: &Game) -> Option<Vec<u8>> {
         }
         icon_png_from_bytes(&std::fs::read(path).ok()?, SquareFrom::CoverTop)
     };
-    from_provider().or_else(from_executable).or_else(from_cover)
+    from_provider()
+        .or_else(from_executable)
+        .map(|png| (png, false))
+        .or_else(|| from_cover().map(|png| (png, true)))
 }
 
 fn load_file(path: &std::path::Path) -> Option<(&'static str, Vec<u8>)> {
@@ -913,8 +935,11 @@ mod tests {
             Duration::ZERO,
         );
         let ids = [from_store.id, from_cover.id, nothing.id];
-        assert_eq!(fetcher.enqueue_icons(ids), 3);
-        assert_eq!(fetcher.enqueue_icons([from_store.id]), 0, "queued once");
+        assert_eq!(
+            fetcher.enqueue_icons([ids[0], ids[1], ids[2], ids[0]]),
+            3,
+            "queued once"
+        );
 
         let start = Instant::now();
         loop {
@@ -948,11 +973,16 @@ mod tests {
         assert!(db.get_game(nothing.id).unwrap().icon_path.is_none());
         // Nothing to make an icon of, and no cover yet: asking again later is allowed.
         assert_eq!(fetcher.enqueue_icons([nothing.id]), 1);
-        assert_eq!(
-            fetcher.enqueue_icons([from_store.id]),
-            0,
-            "done games stay done"
-        );
+        // Only the icon cut from the cover is marked, so only it follows a new cover.
+        let marked = |id| {
+            db.get_game(id)
+                .unwrap()
+                .extra
+                .get(super::super::ICON_FROM_COVER_KEY)
+                .is_some()
+        };
+        assert!(marked(from_cover.id));
+        assert!(!marked(from_store.id));
         let changed = std::iter::from_fn(|| rx.try_recv().ok())
             .filter(|e| matches!(e, CoreEvent::GamesChanged { .. }))
             .count();

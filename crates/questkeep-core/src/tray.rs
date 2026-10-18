@@ -2,7 +2,7 @@
 //! when the close/minimize buttons hide the app instead, when the process may exit, and how the
 //! `--minimized` launch argument is read. The Tauri shell only applies these decisions.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use uuid::Uuid;
 
@@ -165,6 +165,30 @@ pub fn keep_running_without_windows(
 pub struct LaunchArgs {
     /// Started by the system at sign-in (`--minimized`).
     pub minimized: bool,
+}
+
+/// A message for the running instance when a second start handed over to it from a different
+/// executable (e.g. a newer build next to an older one still waiting in the tray): the new build
+/// does not run, which is confusing without a hint. Paths are compared case-insensitively with
+/// `/` and `\` treated alike; the caller canonicalizes them when possible. `None` for the same
+/// executable or when the second start's path is unknown.
+pub fn second_start_notice(running_exe: &Path, started_exe: Option<&Path>) -> Option<String> {
+    let started = started_exe?;
+    let normalize = |p: &Path| {
+        p.to_string_lossy()
+            .trim_start_matches(r"\\?\")
+            .replace('\\', "/")
+            .to_lowercase()
+    };
+    if started.as_os_str().is_empty() || normalize(running_exe) == normalize(started) {
+        return None;
+    }
+    Some(format!(
+        "Questkeep was started from {}, but this copy ({}) was already running, so it stays open. \
+         To use the other one, choose Exit in the tray first.",
+        started.display(),
+        running_exe.display()
+    ))
 }
 
 /// Reads the launch arguments (without the program name or with it; it is ignored either way).
@@ -393,5 +417,21 @@ mod tests {
             ..Settings::default()
         };
         assert!(!start_in_tray(&off, args, true));
+    }
+
+    #[test]
+    fn second_start_from_another_executable_explains_itself() {
+        let running = Path::new(r"\\?\E:\Apps\Questkeep\questkeep.exe");
+        assert_eq!(
+            second_start_notice(running, Some(Path::new("e:/apps/questkeep/QUESTKEEP.exe"))),
+            None,
+            "same file, different spelling"
+        );
+        assert_eq!(second_start_notice(running, None), None);
+        assert_eq!(second_start_notice(running, Some(Path::new(""))), None);
+        let notice =
+            second_start_notice(running, Some(Path::new(r"E:\dev\questkeep.exe"))).unwrap();
+        assert!(notice.contains(r"E:\dev\questkeep.exe"));
+        assert!(notice.contains("Exit in the tray"));
     }
 }

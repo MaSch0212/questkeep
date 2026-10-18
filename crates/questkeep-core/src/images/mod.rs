@@ -21,6 +21,26 @@ pub use icons::{
 pub(crate) use steamgriddb::checked_key;
 pub use steamgriddb::{Lookup, SteamGridDb};
 
+/// `games.extra` key set when the game's icon was cropped from its cover, so a new cover can
+/// replace the icon too (store and executable icons stay).
+pub(crate) const ICON_FROM_COVER_KEY: &str = "iconFromCover";
+
+/// Deletes the game's icon when it was made from the cover (the cover just changed); the tray
+/// then queues a new one. Returns whether an icon was dropped.
+pub(crate) fn drop_cover_icon(
+    db: &crate::db::Database,
+    images: &ImageCache,
+    game: &crate::model::Game,
+) -> Result<bool> {
+    if game.extra.get(ICON_FROM_COVER_KEY).is_none() {
+        return Ok(false);
+    }
+    images.remove_image(ImageKind::Icon, game.id)?;
+    db.set_icon_path(game.id, None)?;
+    db.set_extra_value(game.id, ICON_FROM_COVER_KEY, None)?;
+    Ok(true)
+}
+
 const ALLOWED_EXTENSIONS: [&str; 5] = ["jpg", "jpeg", "png", "webp", "gif"];
 /// Upper bound for user-picked and downloaded images.
 pub const MAX_IMAGE_BYTES: u64 = 20 * 1024 * 1024;

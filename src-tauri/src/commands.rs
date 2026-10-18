@@ -194,6 +194,13 @@ pub async fn save_settings(
     .await
 }
 
+/// Messages queued for the UI while it may not have existed (e.g. a second start of another
+/// executable); each is returned once.
+#[tauri::command]
+pub fn take_notices(lifecycle: State<'_, crate::window::Lifecycle>) -> Vec<String> {
+    lifecycle.take_notices()
+}
+
 /// Opens the data or logs folder (`kind` is `"data"` or `"logs"`) in the file manager. Done from
 /// Rust so the webview needs no permission to open arbitrary paths.
 #[tauri::command]

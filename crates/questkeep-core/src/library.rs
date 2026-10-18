@@ -248,6 +248,11 @@ impl Library {
             }
         };
         self.db.set_cover_path(id, relative.as_deref())?;
+        // An icon cropped from the old cover is made again from the new one.
+        let game = self.db.get_game(id)?;
+        if let Err(err) = crate::images::drop_cover_icon(&self.db, &self.images, &game) {
+            tracing::warn!(%err, %id, "could not drop the icon made from the old cover");
+        }
         self.events
             .publish(CoreEvent::GamesChanged { ids: vec![id] });
         self.get_game(id)
@@ -929,6 +934,51 @@ mod tests {
         let err = lib.scan("fake").unwrap_err().to_string();
         assert_eq!(err, "Fake scan failed: Fake store not installed");
         assert_eq!(lib.scan_all().len(), 1);
+    }
+
+    #[test]
+    fn new_cover_drops_only_icons_made_from_the_old_cover() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (lib, _) = library(tmp.path(), ProviderRegistry::new());
+        let exe = tmp.path().join("x.exe");
+        std::fs::write(&exe, b"").unwrap();
+        let add = |name: &str| {
+            lib.add_manual_game(&NewManualGame {
+                name: Some(name.into()),
+                executable: exe.display().to_string(),
+                args: None,
+                working_dir: None,
+                cover_image: None,
+            })
+            .unwrap()
+        };
+        let (cover_icon, own_icon) = (add("A"), add("B"));
+        for (game, from_cover) in [(&cover_icon, true), (&own_icon, false)] {
+            let rel = lib
+                .images
+                .store_image(ImageKind::Icon, game.id, "png", b"icon")
+                .unwrap();
+            lib.db.set_icon_path(game.id, Some(&rel)).unwrap();
+            if from_cover {
+                lib.db
+                    .set_extra_value(
+                        game.id,
+                        crate::images::ICON_FROM_COVER_KEY,
+                        Some(serde_json::Value::Bool(true)),
+                    )
+                    .unwrap();
+            }
+        }
+        let img = tmp.path().join("i.png");
+        std::fs::write(&img, b"png").unwrap();
+        let a = lib.set_cover(cover_icon.id, Some(&img)).unwrap();
+        assert!(
+            a.icon_path.is_none(),
+            "icon cut from the old cover is dropped"
+        );
+        assert!(a.extra.get(crate::images::ICON_FROM_COVER_KEY).is_none());
+        let b = lib.set_cover(own_icon.id, Some(&img)).unwrap();
+        assert!(b.icon_path.is_some(), "store/executable icons stay");
     }
 
     #[test]

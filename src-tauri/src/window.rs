@@ -28,6 +28,8 @@ pub struct Lifecycle {
     /// Last normal rectangle and maximized state, tracked while the window moves so a minimized
     /// window (whose position is off-screen) still saves where it was.
     placement: Mutex<Option<WindowPlacement>>,
+    /// Messages for the UI that arrived while it may not exist (e.g. from a second start).
+    notices: Mutex<Vec<String>>,
 }
 
 impl Lifecycle {
@@ -45,6 +47,18 @@ impl Lifecycle {
 
     pub fn request_quit(&self) {
         self.quit_requested.store(true, Ordering::SeqCst);
+    }
+
+    /// Queues a message for the UI (shown as a toast once the window asks for it).
+    pub fn push_notice(&self, notice: String) {
+        self.notices
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(notice);
+    }
+
+    pub fn take_notices(&self) -> Vec<String> {
+        std::mem::take(&mut *self.notices.lock().unwrap_or_else(PoisonError::into_inner))
     }
 }
 
