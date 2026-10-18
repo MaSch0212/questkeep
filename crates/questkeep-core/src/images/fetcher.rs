@@ -152,7 +152,7 @@ fn process(shared: &Shared, job: &CoverJob) {
     }
 }
 
-fn http_agent() -> ureq::Agent {
+pub(crate) fn http_agent() -> ureq::Agent {
     ureq::Agent::config_builder()
         .timeout_global(Some(Duration::from_secs(20)))
         .user_agent(concat!("Questkeep/", env!("CARGO_PKG_VERSION")))
