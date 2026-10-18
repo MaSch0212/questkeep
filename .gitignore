@@ -1,0 +1,32 @@
+# Rust
+target/
+**/*.rs.bk
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+.vite/
+coverage/
+
+# Tauri
+src-tauri/gen/schemas/
+src-tauri/target/
+
+# Local data (portable mode / dev)
+portable.txt
+data/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*~
