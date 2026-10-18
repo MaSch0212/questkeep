@@ -76,6 +76,15 @@ impl LibraryProvider for SteamProvider {
         is_app_id(app_id).then(|| PlayAction::uri(format!("steam://install/{app_id}")))
     }
 
+    fn can_uninstall(&self) -> bool {
+        true
+    }
+
+    /// Steam's own uninstall dialog (`steam://uninstall/<appid>`), which asks for confirmation.
+    fn uninstall_action(&self, app_id: &str) -> Option<PlayAction> {
+        is_app_id(app_id).then(|| PlayAction::uri(format!("steam://uninstall/{app_id}")))
+    }
+
     fn metadata(&self, app_id: &str) -> Result<Option<GameMetadata>, ProviderError> {
         web::fetch_metadata(app_id)
     }
@@ -593,6 +602,18 @@ mod tests {
             .owned_credentials(&serde_json::json!({ "apiKey": "k", "steamId": "42" }))
             .unwrap();
         assert_eq!(explicit.1, "42");
+    }
+
+    #[test]
+    fn uninstall_action_is_a_steam_uri() {
+        let p = SteamProvider::default();
+        assert!(p.can_uninstall());
+        assert_eq!(
+            p.uninstall_action("440"),
+            Some(PlayAction::uri("steam://uninstall/440"))
+        );
+        assert_eq!(p.uninstall_action("../x"), None);
+        assert_eq!(p.uninstall_action(""), None);
     }
 
     #[test]

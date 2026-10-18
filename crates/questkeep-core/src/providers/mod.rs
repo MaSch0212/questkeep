@@ -70,6 +70,19 @@ pub trait LibraryProvider: Send + Sync {
     fn install_action(&self, _source_game_id: &str) -> Option<PlayAction> {
         None
     }
+    /// Whether [`uninstall_action`](Self::uninstall_action) can work at all on this machine (the
+    /// UI only offers Uninstall for such providers). Individual games may still fail, e.g. when
+    /// their uninstaller is missing.
+    fn can_uninstall(&self) -> bool {
+        false
+    }
+    /// How to hand the uninstall of an installed game to its store client (e.g. the URI
+    /// `steam://uninstall/440`, or the game's own uninstaller). The store or uninstaller asks the
+    /// user to confirm; Questkeep never deletes files itself. `None` when this game can't be
+    /// uninstalled from Questkeep.
+    fn uninstall_action(&self, _source_game_id: &str) -> Option<PlayAction> {
+        None
+    }
     /// Store metadata (description, genres, ...). Called from a background thread with at most
     /// one request in flight per provider; `Ok(None)` means the store has no data for this game.
     fn metadata(&self, _source_game_id: &str) -> Result<Option<GameMetadata>, ProviderError> {
@@ -120,6 +133,7 @@ pub struct ProviderInfo {
     pub name: String,
     pub can_scan: bool,
     pub can_scan_owned: bool,
+    pub can_uninstall: bool,
 }
 
 /// Providers looked up by id.
@@ -175,6 +189,7 @@ impl ProviderRegistry {
                 name: p.name().to_string(),
                 can_scan: p.can_scan(),
                 can_scan_owned: p.can_scan_owned(),
+                can_uninstall: p.can_uninstall(),
             })
             .collect()
     }
@@ -245,7 +260,8 @@ mod tests {
                 id: "fake".into(),
                 name: "Fake Store".into(),
                 can_scan: true,
-                can_scan_owned: false
+                can_scan_owned: false,
+                can_uninstall: false
             }]
         );
         assert!(matches!(

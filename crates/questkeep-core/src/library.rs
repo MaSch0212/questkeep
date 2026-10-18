@@ -509,13 +509,46 @@ impl Library {
     /// scan picks the game up as installed.
     pub fn install_game(&self, id: Uuid) -> Result<()> {
         let action = self.install_action(id)?;
-        let started = match action.kind {
-            ActionKind::Uri => crate::platform::open_uri(&action.target),
-            ActionKind::File => std::process::Command::new(&action.target)
-                .spawn()
-                .map(|_| ()),
+        run_store_action(&action)
+            .map_err(|err| CoreError::Launch(format!("Could not start the install: {err}")))
+    }
+
+    /// The store action that uninstalls an installed game (a store URI or the game's own
+    /// uninstaller). The caller runs it; the store asks the user to confirm.
+    pub fn uninstall_action(&self, id: Uuid) -> Result<PlayAction> {
+        let game = self.db.get_game(id)?;
+        let not_uninstallable = || {
+            CoreError::Invalid(format!(
+                "'{}' can't be uninstalled from Questkeep.",
+                game.name
+            ))
         };
-        started.map_err(|err| CoreError::Launch(format!("Could not start the install: {err}")))
+        if !game.installed {
+            return Err(CoreError::Invalid(format!(
+                "'{}' is not installed.",
+                game.name
+            )));
+        }
+        let provider = self
+            .providers
+            .get(&game.source)
+            .ok_or_else(not_uninstallable)?;
+        let source_game_id = game
+            .source_game_id
+            .as_deref()
+            .ok_or_else(not_uninstallable)?;
+        provider
+            .uninstall_action(source_game_id)
+            .ok_or_else(not_uninstallable)
+    }
+
+    /// Hands the uninstall over to the store client or the game's uninstaller. Questkeep never
+    /// deletes files itself and writes nothing to the database: once the game is gone, the next
+    /// scan marks it as not installed.
+    pub fn uninstall_game(&self, id: Uuid) -> Result<()> {
+        let action = self.uninstall_action(id)?;
+        run_store_action(&action)
+            .map_err(|err| CoreError::Launch(format!("Could not start the uninstall: {err}")))
     }
 
     /// Dev tool: inserts `count` fake games to test performance.
@@ -525,6 +558,20 @@ impl Library {
         self.events
             .publish(CoreEvent::GamesChanged { ids: Vec::new() });
         Ok(inserted)
+    }
+}
+
+/// Opens a store URI or starts a program (installer or uninstaller) without tracking it.
+fn run_store_action(action: &PlayAction) -> std::io::Result<()> {
+    match action.kind {
+        ActionKind::Uri => crate::platform::open_uri(&action.target),
+        ActionKind::File => {
+            let mut command = std::process::Command::new(&action.target);
+            if let Some(dir) = &action.working_dir {
+                command.current_dir(dir);
+            }
+            command.spawn().map(|_| ())
+        }
     }
 }
 
@@ -710,6 +757,9 @@ mod tests {
         fn install_action(&self, id: &str) -> Option<PlayAction> {
             Some(PlayAction::uri(format!("acct://install/{id}")))
         }
+        fn uninstall_action(&self, id: &str) -> Option<PlayAction> {
+            (id == "1").then(|| PlayAction::uri(format!("acct://uninstall/{id}")))
+        }
     }
 
     #[test]
@@ -741,6 +791,12 @@ mod tests {
             lib.install_action(owned.id).unwrap().target,
             "acct://install/2"
         );
+        assert_eq!(
+            lib.uninstall_action(installed.id).unwrap().target,
+            "acct://uninstall/1"
+        );
+        let not_installed = lib.uninstall_action(owned.id).unwrap_err().to_string();
+        assert!(not_installed.contains("not installed"), "{not_installed}");
         let jobs = lib.missing_metadata_jobs().unwrap();
         assert_eq!(jobs.len(), 2);
         assert_eq!(jobs[0].game_id, installed.id, "installed games first");

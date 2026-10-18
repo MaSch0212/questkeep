@@ -14,6 +14,7 @@ mod api;
 mod install;
 #[cfg(windows)]
 mod registry;
+mod uninstall;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -186,6 +187,23 @@ impl LibraryProvider for GogProvider {
             .then(|| PlayAction::uri(format!("goggalaxy://installationScreen/{source_game_id}")))
     }
 
+    fn can_uninstall(&self) -> bool {
+        !matches!(self.installs, Installs::Heroic(_))
+    }
+
+    /// Starts the game's own GOG uninstaller (`unins000.exe` in the install folder), which asks
+    /// for confirmation. Galaxy's protocol has no uninstall command.
+    fn uninstall_action(&self, source_game_id: &str) -> Option<PlayAction> {
+        if !self.can_uninstall() || !api::is_product_id(source_game_id) {
+            return None;
+        }
+        let (records, _) = self.load_installs().ok()?;
+        let file = uninstall::find_uninstaller(&records, source_game_id)?;
+        let mut action = PlayAction::file(file.to_string_lossy());
+        action.working_dir = file.parent().map(|d| d.to_string_lossy().into_owned());
+        Some(action)
+    }
+
     fn metadata(&self, source_game_id: &str) -> Result<Option<GameMetadata>, ProviderError> {
         Ok(self.store_game(source_game_id)?.map(|game| game.metadata()))
     }
@@ -263,6 +281,30 @@ mod tests {
         assert_eq!(action.kind, ActionKind::Uri);
         assert_eq!(action.target, "goggalaxy://installationScreen/1207658924");
         assert!(p.install_action("1/../x").is_none());
+    }
+
+    #[test]
+    fn uninstall_action_runs_the_games_uninstaller() {
+        let tmp = tempfile::tempdir().unwrap();
+        fs::write(tmp.path().join("unins000.exe"), b"").unwrap();
+        let record = InstallRecord {
+            id: "1207658924".into(),
+            path: Some(tmp.path().to_string_lossy().into_owned()),
+            ..InstallRecord::default()
+        };
+        let p = GogProvider::with_records(vec![record], None);
+        assert!(p.can_uninstall());
+        let action = p.uninstall_action("1207658924").unwrap();
+        assert_eq!(action.kind, ActionKind::File);
+        assert_eq!(
+            PathBuf::from(&action.target),
+            tmp.path().join("unins000.exe")
+        );
+        assert!(p.uninstall_action("999").is_none(), "unknown game");
+        assert!(p.uninstall_action("1/../x").is_none());
+        let heroic = GogProvider::with_heroic(HeroicPaths::discover(tmp.path(), None, None));
+        assert!(!heroic.can_uninstall());
+        assert!(heroic.uninstall_action("1207658924").is_none());
     }
 
     #[test]

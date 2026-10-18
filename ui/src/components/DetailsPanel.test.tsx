@@ -18,6 +18,27 @@ beforeEach(() => {
   store.reset();
 });
 
+async function loadProviders(canUninstall: boolean) {
+  vi.mocked(api.listProviders).mockResolvedValue([
+    { id: "steam", name: "Steam", canScan: true, canScanOwned: true, canUninstall },
+  ]);
+  vi.mocked(api.appInfo).mockResolvedValue({
+    version: "0",
+    dataDir: "",
+    logsDir: "",
+    portable: false,
+    devTools: false,
+  });
+  vi.mocked(api.runningGames).mockResolvedValue([]);
+  vi.mocked(api.listGames).mockResolvedValue([]);
+  const { listen } = await import("@tauri-apps/api/event");
+  vi.mocked(listen).mockResolvedValue(() => undefined);
+  await store.init();
+}
+
+const steamGame = (overrides = {}) =>
+  makeGame({ source: "steam", sourceGameId: "440", ...overrides });
+
 describe("DetailsPanel", () => {
   it("launches the game with Play", async () => {
     vi.mocked(api.launchGame).mockResolvedValue(undefined);
@@ -99,6 +120,66 @@ describe("DetailsPanel", () => {
     expect(api.removeGame).not.toHaveBeenCalled();
     await fireEvent.click(screen.getByRole("button", { name: "Confirm remove" }));
     await waitFor(() => expect(api.removeGame).toHaveBeenCalledWith("g1"));
+  });
+
+  describe("Uninstall", () => {
+    it("is offered for installed games of providers that support it", async () => {
+      await loadProviders(true);
+      render(() => <DetailsPanel game={steamGame()} onClose={vi.fn<() => void>()} />);
+      expect(screen.getByRole("button", { name: "Uninstall" })).toBeInTheDocument();
+    });
+
+    it("is hidden for unsupported providers, manual games and uninstalled games", async () => {
+      await loadProviders(false);
+      const { unmount } = render(() => (
+        <DetailsPanel game={steamGame()} onClose={vi.fn<() => void>()} />
+      ));
+      expect(screen.queryByRole("button", { name: "Uninstall" })).toBeNull();
+      unmount();
+      await loadProviders(true);
+      const manual = render(() => <DetailsPanel game={makeGame()} onClose={vi.fn<() => void>()} />);
+      expect(screen.queryByRole("button", { name: "Uninstall" })).toBeNull();
+      manual.unmount();
+      render(() => (
+        <DetailsPanel game={steamGame({ installed: false })} onClose={vi.fn<() => void>()} />
+      ));
+      expect(screen.queryByRole("button", { name: "Uninstall" })).toBeNull();
+    });
+
+    it("asks for confirmation, focuses Cancel and only then uninstalls", async () => {
+      vi.mocked(api.uninstallGame).mockResolvedValue(undefined);
+      await loadProviders(true);
+      render(() => <DetailsPanel game={steamGame()} onClose={vi.fn<() => void>()} />);
+      await fireEvent.click(screen.getByRole("button", { name: "Uninstall" }));
+      expect(api.uninstallGame).not.toHaveBeenCalled();
+      expect(screen.getByText(/Uninstall “Hades”\? The store will ask to confirm\./)).toBeVisible();
+      await waitFor(() => expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus());
+      await fireEvent.click(screen.getByRole("button", { name: "Uninstall" }));
+      await waitFor(() => expect(api.uninstallGame).toHaveBeenCalledWith("g1"));
+    });
+
+    it("cancels with the Cancel button or Escape and returns focus", async () => {
+      await loadProviders(true);
+      const onClose = vi.fn<() => void>();
+      render(() => <DetailsPanel game={steamGame()} onClose={onClose} />);
+      await fireEvent.click(screen.getByRole("button", { name: "Uninstall" }));
+      await fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+      const button = screen.getByRole("button", { name: "Uninstall" });
+      await waitFor(() => expect(button).toHaveFocus());
+      await fireEvent.click(button);
+      await fireEvent.keyDown(screen.getByRole("button", { name: "Cancel" }), { key: "Escape" });
+      expect(screen.getByRole("button", { name: "Uninstall" })).toBeInTheDocument();
+      expect(api.uninstallGame).not.toHaveBeenCalled();
+    });
+
+    it("shows an error when the uninstall can't be started", async () => {
+      vi.mocked(api.uninstallGame).mockRejectedValue("Could not start the uninstall");
+      await loadProviders(true);
+      render(() => <DetailsPanel game={steamGame()} onClose={vi.fn<() => void>()} />);
+      await fireEvent.click(screen.getByRole("button", { name: "Uninstall" }));
+      await fireEvent.click(screen.getByRole("button", { name: "Uninstall" }));
+      expect(await screen.findByRole("alert")).toHaveTextContent("Could not start the uninstall");
+    });
   });
 
   it("offers Install instead of Play for games that are not installed", async () => {

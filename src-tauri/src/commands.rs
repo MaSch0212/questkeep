@@ -117,6 +117,12 @@ pub async fn install_game(state: State<'_, Arc<AppState>>, id: String) -> CmdRes
     blocking(state, move |s| s.library.install_game(parse_id(&id)?)).await
 }
 
+/// Hands the uninstall to the store client or the game's uninstaller, which asks the user.
+#[tauri::command]
+pub async fn uninstall_game(state: State<'_, Arc<AppState>>, id: String) -> CmdResult<()> {
+    blocking(state, move |s| s.library.uninstall_game(parse_id(&id)?)).await
+}
+
 /// Re-downloads store metadata (and a missing background) for one game in the background.
 #[tauri::command]
 pub async fn refresh_metadata(state: State<'_, Arc<AppState>>, id: String) -> CmdResult<()> {

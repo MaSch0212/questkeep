@@ -86,6 +86,12 @@ configured: owned games missing from the installed list are imported with `insta
 get the provider's `install_action()` instead of Play. A missing configuration (`NotConfigured`)
 silently falls back to installed games only.
 
+Installed games can be uninstalled through `Library::uninstall_game`, which runs the provider's
+`uninstall_action()` (Steam `steam://uninstall/<id>`, GOG the game's `unins000.exe`, the Epic
+launcher's library page, Xbox the Windows "Installed apps" settings). `ProviderInfo.can_uninstall`
+tells the UI whether to offer the button. Questkeep never deletes files or writes to the database
+for this; the store asks for confirmation and the next scan marks the game as not installed.
+
 ## Event flow
 
 1. Core operations publish `CoreEvent`s on the `EventBus`: `GamesChanged { ids }`,
