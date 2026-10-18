@@ -1,17 +1,23 @@
 # Roadmap
 
-Ideas deliberately left out of v0.1, roughly in priority order. Not a commitment.
+Ideas not built yet, roughly in priority order. Not a commitment.
 
-## Next (v0.2)
+## Done in v0.2
 
-- **Epic Games provider** (installed games from `%PROGRAMDATA%\Epic\EpicGamesLauncher\Data\Manifests`).
-- **GOG provider** (registry `HKLM\SOFTWARE\WOW6432Node\GOG.com\Games` / Galaxy database), then
-  **Xbox / Microsoft Store**.
-- **Steam owned (not installed) games** via `scan_owned()` and the Steam Web API, with an
-  "Install" action (`steam://install/<id>`).
-- **Import Steam playtime and last played** from `localconfig.vdf`.
-- **Metadata**: descriptions, genres, release dates, backgrounds (store APIs first, IGDB later).
-- **List view** as an alternative to the cover grid.
+Epic, GOG and Xbox installed games; Steam owned games, Install action, imported Steam playtime;
+store metadata and backgrounds (Steam, GOG); list view.
+
+## Next
+
+- **Account sign-in for Epic, GOG and Xbox** (OAuth, tokens in the OS keyring) to import owned
+  games, covers and metadata for those stores.
+- **Linux store support**: Heroic / Legendary (Epic, GOG) and Lutris libraries.
+- **Real covers for Epic and Xbox** (store catalog APIs or SteamGridDB); Xbox currently falls back
+  to square package logos.
+- **GOG: optional launch through Galaxy** (setting; the provider supports it) and the
+  `Uninstall\<id>_is1` registry fallback for installs missing from `GOG.com\Games`.
+- **IGDB metadata** for manual games and stores without a public API.
+- Uninstall action per provider.
 
 ## Later
 

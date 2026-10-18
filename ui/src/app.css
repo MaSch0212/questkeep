@@ -581,6 +581,10 @@ ul {
   padding: 0 var(--qk-space-5) var(--qk-space-5);
   overflow-y: auto;
 }
+/* Children keep their size and the panel scrolls; otherwise the hero and cover get squashed. */
+.details__scroll > * {
+  flex-shrink: 0;
+}
 .details__cover {
   width: var(--qk-details-cover-width);
   aspect-ratio: var(--qk-tile-aspect-ratio);

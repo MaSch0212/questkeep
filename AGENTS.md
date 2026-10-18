@@ -58,9 +58,9 @@ crates/questkeep-core/src/     all logic; no Tauri/UI dependency
   library.rs                   facade used by the shell (manual add, update, scan, covers, seed)
   model/                       Game, PlayAction, queries, sorting names (ts-rs exported)
   db/                          SQLite: migrations.rs (append-only), games.rs, sessions.rs
-  providers/                   LibraryProvider trait + registry; manual, steam/ (vdf.rs, scan.rs)
+  providers/                   LibraryProvider trait + registry; manual, steam/, epic/, gog/, xbox/
   launcher/                    launch + tracker threads (mod.rs), process matching (process.rs)
-  images/                      cover cache (mod.rs) + bounded background fetcher (fetcher.rs)
+  images/                      cover/background cache (mod.rs) + cover and metadata fetchers (fetcher.rs)
   events.rs                    EventBus + CoreEvent
   platform/                    registry, Steam paths, URI opening, argument handling (cfg-gated)
   settings.rs, paths.rs, seed.rs, error.rs
@@ -117,6 +117,11 @@ diff and running `pnpm check`.
      every test but did not scroll in the app (adapter/core version mismatch). **Always verify UI
      work in the running app** (DevTools protocol, see above) before accepting it.
   2. Tell UI agents to stop dev servers they start; a leftover Vite process confused later runs.
+- **v0.2: five parallel Sonnet agents in git worktrees** (Epic, GOG, Xbox, Steam extras, UI),
+  each committing to its own branch with a shared `CARGO_TARGET_DIR`, merged by hand. Only the
+  `providers/mod.rs` registration lines conflicted. Again the UI passed all jsdom tests but had a
+  layout bug (flex items shrinking in the details panel) that only the hidden-app screenshot
+  showed.
 - **Keep the orchestrator off `cargo fmt --all` while a Rust sub-agent edits files**; it rewrites
   their files under them. Format only after they finish.
 - Scripted multi-line edits through `sed`/`node -e` broke twice (escaping); prefer the Edit tool

@@ -9,18 +9,24 @@ Tauri 2, Rust and SolidJS. Inspired by [Playnite](https://github.com/JosefNemec/
 
 > **Status:** v0.1, early development. Expect rough edges.
 
-## Features (v0.1)
+## Features
 
 - **Steam**: detects installed games across all Steam library folders (Windows registry, Linux
   `~/.steam`, `~/.local/share/Steam`, Flatpak). Tools and runtimes are filtered out. Re-scans
-  update entries instead of duplicating them.
+  update entries instead of duplicating them. Imports Steam's own playtime and last played. With
+  your Steam Web API key (Settings) it also lists games you own but haven't installed, with an
+  Install button.
+- **Epic Games, GOG, Xbox / Microsoft Store** (Windows): detects installed games, DLC filtered
+  out. Owned-but-not-installed games for these stores need account sign-in and come later.
+- **Store metadata**: description, release date, developers, publishers, genres and a background
+  image from the Steam and GOG stores, fetched slowly in the background.
 - **Manual games**: add any executable with arguments, working directory and a cover image.
-- **Fast library**: virtualized cover grid that stays smooth with thousands of games;
+- **Fast library**: virtualized cover grid or list view that stays smooth with thousands of games;
   as-you-type search; sort by name, last played, playtime or date added; filter by source,
   favorites, hidden and installed.
 - **Launch and playtime**: starts games (executables or `steam://` URIs), detects when they stop,
   and records playtime, play count and last played. Sessions survive app exits and crashes.
-- **Covers**: taken from Steam's local cache or the Steam CDN, cached on disk.
+- **Covers**: taken from local store caches or store CDNs, cached on disk.
 - **Keyboard friendly**: arrow keys in the grid, `Enter` for details, `Ctrl+Enter` to play,
   `Ctrl+F` to search.
 - **Portable mode**: put an empty `portable.txt` next to the executable to keep all data in a
