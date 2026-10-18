@@ -1,0 +1,502 @@
+//! Epic Games Store provider: finds installed games from the Epic Games Launcher's local data
+//! (`LauncherInstalled.dat` and the `*.item` manifests). No network access and no Epic login.
+//!
+//! Library scanning of owned games (`can_scan_owned`) stays `false` on purpose: it needs an
+//! authenticated Epic account (OAuth), which is a future item. Likewise no covers or metadata:
+//! the manifests only carry a `VaultThumbnailUrl` for a few legacy entries, and Epic offers no
+//! reliable unauthenticated catalog API; scraping the launcher's web cache is not acceptable.
+//! Linux (Heroic/Legendary) is a future item too.
+
+// Logic derived from Playnite (MIT), see THIRD_PARTY_NOTICES.md
+
+use std::path::{Path, PathBuf};
+
+use serde::Deserialize;
+
+use super::{LibraryProvider, ProviderError};
+use crate::model::{ImportedGame, PlayAction};
+
+pub const EPIC_SOURCE: &str = "epic";
+
+/// Reads installed games from an Epic launcher data directory (the `Epic` folder under
+/// `%ProgramData%`, containing `UnrealEngineLauncher` and `EpicGamesLauncher`).
+#[derive(Debug, Clone, Default)]
+pub struct EpicProvider {
+    data_root: Option<PathBuf>,
+}
+
+impl EpicProvider {
+    /// Uses the launcher data of this machine (Windows only).
+    pub fn detect() -> Self {
+        Self {
+            data_root: default_data_root(),
+        }
+    }
+
+    /// Uses the given launcher data directory.
+    pub fn with_data_root(root: impl Into<PathBuf>) -> Self {
+        Self {
+            data_root: Some(root.into()),
+        }
+    }
+}
+
+#[cfg(windows)]
+fn default_data_root() -> Option<PathBuf> {
+    let program_data = std::env::var_os("ProgramData")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(r"C:\ProgramData"));
+    Some(program_data.join("Epic"))
+}
+
+#[cfg(not(windows))]
+fn default_data_root() -> Option<PathBuf> {
+    None
+}
+
+/// `LauncherInstalled.dat`.
+#[derive(Debug, Deserialize, Default)]
+#[serde(rename_all = "PascalCase")]
+struct LauncherInstalled {
+    #[serde(default)]
+    installation_list: Vec<InstalledApp>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+struct InstalledApp {
+    #[serde(default)]
+    install_location: Option<String>,
+    #[serde(default)]
+    app_name: Option<String>,
+}
+
+/// The fields of an `*.item` manifest that matter here.
+#[derive(Debug, Deserialize, Default)]
+#[serde(rename_all = "PascalCase")]
+struct Manifest {
+    #[serde(default)]
+    app_name: Option<String>,
+    #[serde(default)]
+    main_game_app_name: Option<String>,
+    #[serde(default)]
+    catalog_namespace: Option<String>,
+    #[serde(default)]
+    catalog_item_id: Option<String>,
+    #[serde(default)]
+    display_name: Option<String>,
+    #[serde(default)]
+    install_location: Option<String>,
+    #[serde(default)]
+    app_categories: Option<Vec<String>>,
+    #[serde(default)]
+    compatible_apps: Option<Vec<String>>,
+    #[serde(default)]
+    technical_type: Option<String>,
+}
+
+fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T, String> {
+    let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+    serde_json::from_str(text.trim_start_matches('\u{feff}')).map_err(|e| e.to_string())
+}
+
+fn non_empty(value: &Option<String>) -> Option<&str> {
+    value.as_deref().map(str::trim).filter(|s| !s.is_empty())
+}
+
+/// DLC and add-ons (unless launchable), Unreal Engine plugins and engine installs.
+fn is_not_a_game(m: &Manifest, app_name: &str) -> bool {
+    let cats = m.app_categories.as_deref().unwrap_or(&[]);
+    let launchable_addon = cats.iter().any(|c| c == "addons/launchable");
+    if cats.iter().any(|c| c == "addons") && !launchable_addon {
+        return true;
+    }
+    if let Some(main) = non_empty(&m.main_game_app_name)
+        && !main.eq_ignore_ascii_case(app_name)
+        && !launchable_addon
+    {
+        return true;
+    }
+    cats.iter().any(|c| c == "plugins" || c == "plugins/engine")
+        || m.compatible_apps
+            .as_deref()
+            .unwrap_or(&[])
+            .iter()
+            .any(|a| a.starts_with("UE_"))
+        || m.technical_type
+            .as_deref()
+            .is_some_and(|t| t.contains("plugins/engine"))
+}
+
+fn percent_encode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'~') {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
+}
+
+/// `com.epicgames.launcher://apps/<namespace>%3A<catalogItemId>%3A<appName>?action=launch&silent=true`
+fn launch_uri(namespace: &str, item_id: &str, app_name: &str) -> String {
+    format!(
+        "com.epicgames.launcher://apps/{}%3A{}%3A{}?action=launch&silent=true",
+        percent_encode(namespace),
+        percent_encode(item_id),
+        percent_encode(app_name)
+    )
+}
+
+fn same_path(a: &str, b: &str) -> bool {
+    let norm = |s: &str| s.replace('\\', "/").trim_end_matches('/').to_lowercase();
+    norm(a) == norm(b)
+}
+
+impl LibraryProvider for EpicProvider {
+    fn id(&self) -> &str {
+        EPIC_SOURCE
+    }
+
+    fn name(&self) -> &str {
+        "Epic Games"
+    }
+
+    fn scan_installed(&self) -> Result<Vec<ImportedGame>, ProviderError> {
+        let Some(root) = &self.data_root else {
+            return Err(ProviderError::NotFound(
+                "Epic Games Launcher support is only available on Windows for now".into(),
+            ));
+        };
+        let manifests_dir = root
+            .join("EpicGamesLauncher")
+            .join("Data")
+            .join("Manifests");
+        if !root.is_dir() || !manifests_dir.is_dir() {
+            return Err(ProviderError::NotFound(
+                "Epic Games Launcher data not found (is the launcher installed?)".into(),
+            ));
+        }
+
+        // The install list can be missing or stale; it is only used to resolve conflicts.
+        let list_path = root
+            .join("UnrealEngineLauncher")
+            .join("LauncherInstalled.dat");
+        let list: LauncherInstalled = if list_path.is_file() {
+            read_json(&list_path).unwrap_or_else(|e| {
+                tracing::warn!("could not parse {}: {e}", list_path.display());
+                LauncherInstalled::default()
+            })
+        } else {
+            LauncherInstalled::default()
+        };
+
+        let entries = std::fs::read_dir(&manifests_dir).map_err(|source| ProviderError::Io {
+            path: manifests_dir.display().to_string(),
+            source,
+        })?;
+        let mut paths: Vec<PathBuf> = entries
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| {
+                p.extension()
+                    .is_some_and(|x| x.eq_ignore_ascii_case("item"))
+            })
+            .collect();
+        paths.sort();
+
+        let mut games: Vec<ImportedGame> = Vec::new();
+        for path in paths {
+            let manifest: Manifest = match read_json(&path) {
+                Ok(m) => m,
+                Err(e) => {
+                    tracing::warn!("skipping Epic manifest {}: {e}", path.display());
+                    continue;
+                }
+            };
+            let Some(app_name) = non_empty(&manifest.app_name) else {
+                tracing::warn!("skipping Epic manifest without AppName: {}", path.display());
+                continue;
+            };
+            if is_not_a_game(&manifest, app_name) {
+                continue;
+            }
+            let listed = list
+                .installation_list
+                .iter()
+                .find(|a| non_empty(&a.app_name).is_some_and(|n| n.eq_ignore_ascii_case(app_name)));
+            let listed_dir = listed.and_then(|a| non_empty(&a.install_location));
+            // The manifest location can be stale after a move; the install list is preferred then.
+            let dir = [non_empty(&manifest.install_location), listed_dir]
+                .into_iter()
+                .flatten()
+                .find(|d| Path::new(d).is_dir());
+            let Some(dir) = dir else {
+                tracing::warn!("Epic game {app_name} has no existing install folder, skipped");
+                continue;
+            };
+            let name = non_empty(&manifest.display_name)
+                .map(str::to_string)
+                .or_else(|| {
+                    Path::new(dir)
+                        .file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                })
+                .unwrap_or_else(|| app_name.to_string());
+
+            let mut game = ImportedGame::installed(app_name, name);
+            game.install_dir = Some(dir.to_string());
+            if let (Some(ns), Some(item)) = (
+                non_empty(&manifest.catalog_namespace),
+                non_empty(&manifest.catalog_item_id),
+            ) {
+                game.play_action = Some(PlayAction::uri(launch_uri(ns, item, app_name)));
+            } else {
+                tracing::warn!("Epic game {app_name} has no catalog ids, cannot launch it");
+            }
+
+            // Several manifests for one game: the one matching the install list wins.
+            if let Some(existing) = games
+                .iter_mut()
+                .find(|g| g.source_game_id.eq_ignore_ascii_case(app_name))
+            {
+                if listed_dir.is_some_and(|l| same_path(l, dir)) {
+                    *existing = game;
+                }
+            } else {
+                games.push(game);
+            }
+        }
+        games.sort_by_cached_key(|g| (g.name.to_lowercase(), g.source_game_id.clone()));
+        Ok(games)
+    }
+
+    /// Opens the launcher's install page for the id. Whether Epic still honors this is
+    /// unverified (Playnite notes it shows an older dialog), so it is best effort.
+    fn install_action(&self, source_game_id: &str) -> Option<PlayAction> {
+        Some(PlayAction::uri(format!(
+            "com.epicgames.launcher://apps/{}?action=install",
+            percent_encode(source_game_id)
+        )))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use super::*;
+    use crate::model::ActionKind;
+
+    struct Env {
+        tmp: tempfile::TempDir,
+    }
+
+    impl Env {
+        fn new() -> Self {
+            let tmp = tempfile::tempdir().unwrap();
+            fs::create_dir_all(tmp.path().join("EpicGamesLauncher/Data/Manifests")).unwrap();
+            fs::create_dir_all(tmp.path().join("UnrealEngineLauncher")).unwrap();
+            Self { tmp }
+        }
+        fn root(&self) -> &Path {
+            self.tmp.path()
+        }
+        fn game_dir(&self, name: &str) -> String {
+            let d = self.root().join("games").join(name);
+            fs::create_dir_all(&d).unwrap();
+            d.to_string_lossy().into_owned()
+        }
+        fn manifest(&self, file: &str, json: &str) {
+            fs::write(
+                self.root()
+                    .join("EpicGamesLauncher/Data/Manifests")
+                    .join(file),
+                json,
+            )
+            .unwrap();
+        }
+        fn install_list(&self, json: &str) {
+            fs::write(
+                self.root()
+                    .join("UnrealEngineLauncher/LauncherInstalled.dat"),
+                json,
+            )
+            .unwrap();
+        }
+        fn scan(&self) -> Vec<ImportedGame> {
+            EpicProvider::with_data_root(self.root())
+                .scan_installed()
+                .unwrap()
+        }
+    }
+
+    /// A manifest JSON; `extra` is a JSON object whose fields are merged in.
+    fn item(app: &str, name: &str, dir: &str, extra: serde_json::Value) -> String {
+        let mut v = serde_json::json!({
+            "FormatVersion": 0,
+            "AppName": app,
+            "DisplayName": name,
+            "CatalogNamespace": "ns1",
+            "CatalogItemId": "item1",
+            "InstallLocation": dir,
+            "InstallSize": 123,
+        });
+        if let (Some(base), Some(add)) = (v.as_object_mut(), extra.as_object()) {
+            base.extend(add.clone());
+        }
+        v.to_string()
+    }
+
+    fn none() -> serde_json::Value {
+        serde_json::json!({})
+    }
+
+    #[test]
+    fn parses_installed_game() {
+        let env = Env::new();
+        let dir = env.game_dir("Fortnite");
+        env.manifest("a.item", &item("Sugar", "Sugar Game", &dir, none()));
+        let games = env.scan();
+        assert_eq!(games.len(), 1);
+        let g = &games[0];
+        assert_eq!(g.source_game_id, "Sugar");
+        assert_eq!(g.name, "Sugar Game");
+        assert_eq!(g.install_dir.as_deref(), Some(dir.as_str()));
+        let action = g.play_action.as_ref().unwrap();
+        assert_eq!(action.kind, ActionKind::Uri);
+        assert_eq!(
+            action.target,
+            "com.epicgames.launcher://apps/ns1%3Aitem1%3ASugar?action=launch&silent=true"
+        );
+    }
+
+    #[test]
+    fn skips_dlc_plugins_and_missing_folders() {
+        let env = Env::new();
+        let dir = env.game_dir("G");
+        env.manifest("game.item", &item("Main", "Main", &dir, none()));
+        env.manifest(
+            "dlc.item",
+            &item(
+                "Dlc",
+                "Dlc",
+                &dir,
+                serde_json::json!({"AppCategories": ["addons", "games"]}),
+            ),
+        );
+        env.manifest(
+            "dlc2.item",
+            &item(
+                "Dlc2",
+                "Dlc2",
+                &dir,
+                serde_json::json!({"MainGameAppName": "Main"}),
+            ),
+        );
+        env.manifest(
+            "plug.item",
+            &item(
+                "Plug",
+                "Plug",
+                &dir,
+                serde_json::json!({"AppCategories": ["plugins/engine"]}),
+            ),
+        );
+        env.manifest(
+            "ue.item",
+            &item(
+                "Ue",
+                "Ue",
+                &dir,
+                serde_json::json!({"CompatibleApps": ["UE_5.3"]}),
+            ),
+        );
+        env.manifest(
+            "gone.item",
+            &item("Gone", "Gone", "C:/definitely/not/here", none()),
+        );
+        env.manifest(
+            "launchable.item",
+            &item(
+                "Launch",
+                "Launch",
+                &dir,
+                serde_json::json!({
+                    "AppCategories": ["addons", "addons/launchable"],
+                    "MainGameAppName": "Main"
+                }),
+            ),
+        );
+        let ids: Vec<_> = env.scan().into_iter().map(|g| g.source_game_id).collect();
+        assert_eq!(ids, vec!["Launch", "Main"]);
+    }
+
+    #[test]
+    fn falls_back_to_install_list_location() {
+        let env = Env::new();
+        let real = env.game_dir("Moved");
+        env.manifest("a.item", &item("Moved", "Moved", "C:/old/place", none()));
+        env.install_list(
+            &serde_json::json!({"InstallationList":[{"AppName":"moved","InstallLocation":real}]})
+                .to_string(),
+        );
+        let games = env.scan();
+        assert_eq!(games[0].install_dir.as_deref(), Some(real.as_str()));
+    }
+
+    #[test]
+    fn duplicate_manifests_prefer_install_list_match() {
+        let env = Env::new();
+        let a = env.game_dir("A");
+        let b = env.game_dir("B");
+        env.manifest("1.item", &item("Dup", "Dup", &a, none()));
+        env.manifest("2.item", &item("Dup", "Dup", &b, none()));
+        env.install_list(
+            &serde_json::json!({"InstallationList":[{"AppName":"Dup","InstallLocation":b}]})
+                .to_string(),
+        );
+        let games = env.scan();
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].install_dir.as_deref(), Some(b.as_str()));
+    }
+
+    #[test]
+    fn malformed_files_do_not_panic() {
+        let env = Env::new();
+        let dir = env.game_dir("Ok");
+        env.manifest("ok.item", &item("Ok", "Ok", &dir, none()));
+        env.manifest("empty.item", "");
+        env.manifest("broken.item", "{ not json");
+        env.manifest("noname.item", "{}");
+        env.manifest("wrongtype.item", r#"{"AppName": 5}"#);
+        env.manifest("readme.txt", "ignored");
+        env.install_list("garbage");
+        let games = env.scan();
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].source_game_id, "Ok");
+    }
+
+    #[test]
+    fn missing_launcher_data_is_not_found() {
+        let tmp = tempfile::tempdir().unwrap();
+        let err = EpicProvider::with_data_root(tmp.path().join("nope"))
+            .scan_installed()
+            .unwrap_err();
+        assert!(matches!(err, ProviderError::NotFound(_)));
+        let err = EpicProvider::default().scan_installed().unwrap_err();
+        assert!(matches!(err, ProviderError::NotFound(_)));
+    }
+
+    #[test]
+    fn install_action_uri() {
+        let action = EpicProvider::default().install_action("Sugar").unwrap();
+        assert_eq!(
+            action.target,
+            "com.epicgames.launcher://apps/Sugar?action=install"
+        );
+        assert!(!EpicProvider::default().can_scan_owned());
+    }
+}

@@ -1,6 +1,7 @@
 //! Library providers: one per store. Adding a provider means implementing [`LibraryProvider`] and
 //! registering it; UI and database code stay untouched.
 
+pub mod epic;
 pub mod manual;
 pub mod steam;
 
@@ -114,6 +115,7 @@ impl ProviderRegistry {
         let mut registry = Self::new();
         registry.register(Arc::new(manual::ManualProvider));
         registry.register(Arc::new(steam::SteamProvider::detect()));
+        registry.register(Arc::new(epic::EpicProvider::detect()));
         registry
     }
 
