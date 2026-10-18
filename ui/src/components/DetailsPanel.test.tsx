@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@solidjs/testing-library";
+import { createSignal } from "solid-js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../lib/api";
 import { store } from "../lib/store";
@@ -120,6 +121,18 @@ describe("DetailsPanel", () => {
     expect(api.removeGame).not.toHaveBeenCalled();
     await fireEvent.click(screen.getByRole("button", { name: "Confirm remove" }));
     await waitFor(() => expect(api.removeGame).toHaveBeenCalledWith("g1"));
+  });
+
+  it("keeps an open confirmation when the list refreshes the same game", async () => {
+    const [game, setGame] = createSignal(makeGame());
+    render(() => <DetailsPanel game={game()} onClose={vi.fn<() => void>()} />);
+    await fireEvent.click(screen.getByRole("button", { name: "Remove from library" }));
+    // A refresh: a new object for the same game.
+    setGame(makeGame({ playtimeSeconds: 60 }));
+    expect(screen.getByRole("button", { name: "Confirm remove" })).toBeTruthy();
+    // Another game: the confirmation closes.
+    setGame(makeGame({ id: "g2" }));
+    expect(screen.queryByRole("button", { name: "Confirm remove" })).toBeNull();
   });
 
   describe("Uninstall", () => {

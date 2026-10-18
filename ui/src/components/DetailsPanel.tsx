@@ -5,7 +5,16 @@ import PackageMinus from "lucide-solid/icons/package-minus";
 import Pencil from "lucide-solid/icons/pencil";
 import Star from "lucide-solid/icons/star";
 import X from "lucide-solid/icons/x";
-import { createEffect, createSignal, For, on, onCleanup, onMount, Show } from "solid-js";
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  on,
+  onCleanup,
+  onMount,
+  Show,
+} from "solid-js";
 import type { Game } from "../bindings/Game";
 import {
   changeCover,
@@ -61,9 +70,12 @@ export function DetailsPanel(props: DetailsPanelProps) {
   const released = () => formatReleaseDate(props.game.releaseDate);
   const description = () => props.game.description?.trim() ?? "";
 
+  // A memo, so list refreshes (a new game object with the same id, every few seconds while covers
+  // download) don't count as switching games and close open editors and confirmations.
+  const gameId = createMemo(() => props.game.id);
   createEffect(
     on(
-      () => props.game.id,
+      gameId,
       () => {
         setError(null);
         setEditingName(false);
