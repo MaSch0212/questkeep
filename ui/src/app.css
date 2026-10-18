@@ -913,3 +913,43 @@ ul {
     transform: none;
   }
 }
+
+/* Accounts and updates */
+.account {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-2);
+  padding: var(--qk-space-3);
+  border: 1px solid var(--qk-color-border);
+  border-radius: var(--qk-radius-md);
+}
+.account__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--qk-space-3);
+}
+.account__info {
+  display: flex;
+  flex-direction: column;
+}
+.account__name {
+  font-weight: 600;
+}
+.account__disclosure {
+  align-self: flex-start;
+  text-decoration: none;
+}
+.account__chevron {
+}
+.account__chevron--open {
+  transform: rotate(90deg);
+}
+.account__steps {
+  padding-left: var(--qk-space-5);
+  color: var(--qk-color-text-muted);
+  font-size: var(--qk-font-size-sm);
+}
+.update-notes {
+  white-space: pre-line;
+}

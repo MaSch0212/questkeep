@@ -12,6 +12,8 @@ export function createSettingsModel() {
   const [apiKey, setApiKey] = createSignal("");
   const [steamId, setSteamId] = createSignal("");
   const [savingSteam, setSavingSteam] = createSignal(false);
+  const [gridDbKey, setGridDbKey] = createSignal("");
+  const [savingGridDb, setSavingGridDb] = createSignal(false);
 
   onMount(() => {
     api
@@ -20,6 +22,7 @@ export function createSettingsModel() {
         setSettings(loaded);
         setApiKey(textOf(loaded.providers.steam?.apiKey));
         setSteamId(textOf(loaded.providers.steam?.steamId));
+        setGridDbKey(loaded.steamGridDbApiKey ?? "");
       })
       .catch((error: unknown) => store.pushToast("error", errorMessage(error)));
   });
@@ -69,7 +72,38 @@ export function createSettingsModel() {
     }
   }
 
-  return { settings, apiKey, setApiKey, steamId, setSteamId, savingSteam, toggle, saveSteam };
+  async function saveGridDb() {
+    const previous = settings();
+    if (!previous || savingGridDb()) return;
+    const key = gridDbKey().trim();
+    const next: Settings = { ...previous, steamGridDbApiKey: key === "" ? null : key };
+    setSavingGridDb(true);
+    try {
+      await api.saveSettings(next);
+      setSettings(next);
+      setGridDbKey(key);
+      store.pushToast("info", key === "" ? "SteamGridDB key removed" : "SteamGridDB key saved");
+    } catch (error) {
+      store.pushToast("error", errorMessage(error));
+    } finally {
+      setSavingGridDb(false);
+    }
+  }
+
+  return {
+    settings,
+    apiKey,
+    setApiKey,
+    steamId,
+    setSteamId,
+    savingSteam,
+    gridDbKey,
+    setGridDbKey,
+    savingGridDb,
+    toggle,
+    saveSteam,
+    saveGridDb,
+  };
 }
 
 export type SettingsModel = ReturnType<typeof createSettingsModel>;

@@ -194,4 +194,23 @@ describe("DetailsPanel", () => {
     render(() => <DetailsPanel game={makeGame()} onClose={vi.fn<() => void>()} />);
     expect(screen.queryByRole("button", { name: "Refresh metadata" })).toBeNull();
   });
+
+  it("refetches artwork and toasts, or toasts the error", async () => {
+    vi.mocked(api.refetchArtwork).mockResolvedValueOnce(undefined);
+    render(() => <DetailsPanel game={makeGame()} onClose={vi.fn<() => void>()} />);
+    await fireEvent.click(screen.getByRole("button", { name: "Refetch artwork" }));
+    await waitFor(() => expect(api.refetchArtwork).toHaveBeenCalledWith("g1"));
+    await waitFor(() =>
+      expect(store.toasts().map((t) => t.message)).toContain("Fetching artwork…"),
+    );
+    vi.mocked(api.refetchArtwork).mockRejectedValueOnce(
+      "Add a SteamGridDB API key in the settings first.",
+    );
+    await fireEvent.click(screen.getByRole("button", { name: "Refetch artwork" }));
+    await waitFor(() =>
+      expect(store.toasts().map((t) => t.message)).toContain(
+        "Add a SteamGridDB API key in the settings first.",
+      ),
+    );
+  });
 });

@@ -102,3 +102,8 @@ export async function addGame(input: NewManualGame): Promise<{ game: Game } | { 
     return { error: errorMessage(error) };
   }
 }
+
+/** Replaces cover and background with SteamGridDB's; the result arrives as `gamesChanged`. */
+export function refetchArtwork(id: string): Promise<string | null> {
+  return attempt(() => api.refetchArtwork(id));
+}

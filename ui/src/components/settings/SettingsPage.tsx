@@ -2,10 +2,13 @@ import { For, type Component } from "solid-js";
 import { Dynamic } from "solid-js/web";
 import { store } from "../../lib/store";
 import { AboutSection } from "./AboutSection";
+import { AccountsSection } from "./AccountsSection";
+import { ArtworkSection } from "./ArtworkSection";
 import { DeveloperSection } from "./DeveloperSection";
 import { GeneralSection } from "./GeneralSection";
 import { LibrarySection } from "./LibrarySection";
 import { SteamSection } from "./SteamSection";
+import { UpdatesSection } from "./UpdatesSection";
 import { createSettingsModel, type SettingsModel } from "./useSettings";
 
 interface SectionDef {
@@ -21,12 +24,15 @@ const SECTIONS: SectionDef[] = [
   { id: "general", title: "General", component: GeneralSection },
   { id: "library", title: "Library and stores", component: LibrarySection },
   { id: "steam", title: "Steam account", component: SteamSection },
+  { id: "accounts", title: "Accounts", component: AccountsSection },
+  { id: "artwork", title: "Artwork", component: ArtworkSection },
   {
     id: "developer",
     title: "Developer",
     visible: () => store.appInfo()?.devTools === true,
     component: DeveloperSection,
   },
+  { id: "updates", title: "Updates", component: UpdatesSection },
   { id: "about", title: "About", component: AboutSection },
 ];
 

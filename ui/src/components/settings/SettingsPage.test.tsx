@@ -36,6 +36,7 @@ beforeEach(() => {
   store.reset();
   vi.mocked(api.getSettings).mockResolvedValue(makeSettings());
   vi.mocked(api.saveSettings).mockResolvedValue(undefined);
+  vi.mocked(api.accountStatus).mockResolvedValue([]);
 });
 
 describe("withSteamSettings", () => {
@@ -77,7 +78,7 @@ describe("SettingsPage", () => {
     expect(input).toHaveAttribute("type", "password");
     await fireEvent.click(screen.getByRole("button", { name: "Show API key" }));
     expect(input).toHaveAttribute("type", "text");
-    expect(screen.getByText(/stored unencrypted/)).toBeInTheDocument();
+    expect(screen.getAllByText(/stored unencrypted/).length).toBeGreaterThan(0);
     expect(screen.getByText(/last signed in to Steam/)).toBeInTheDocument();
   });
 

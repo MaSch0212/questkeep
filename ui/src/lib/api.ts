@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { AccountStatus } from "../bindings/AccountStatus";
 import type { AppInfo } from "../bindings/AppInfo";
 import type { Game } from "../bindings/Game";
 import type { GameQuery } from "../bindings/GameQuery";
@@ -28,3 +29,22 @@ export const appInfo = () => invoke<AppInfo>("app_info");
 export const getSettings = () => invoke<Settings>("get_settings");
 export const saveSettings = (settings: Settings) => invoke<void>("save_settings", { settings });
 export const seedFakeLibrary = (count: number) => invoke<number>("seed_fake_library", { count });
+
+export const refetchArtwork = (id: string) => invoke<void>("refetch_artwork", { id });
+
+export const accountStatus = () => invoke<AccountStatus[]>("account_status");
+/** Resolves `true` once signed in, `false` if the user closed the login window. Can take minutes. */
+export const signIn = (provider: string) => invoke<boolean>("sign_in", { provider });
+export const signInWithCode = (provider: string, code: string) =>
+  invoke<void>("sign_in_with_code", { provider, code });
+export const signOut = (provider: string) => invoke<void>("sign_out", { provider });
+
+export interface UpdateInfo {
+  version: string;
+  notes: string | null;
+  date: string | null;
+}
+/** Resolves `null` when up to date (always in dev builds). */
+export const checkUpdate = () => invoke<UpdateInfo | null>("check_update");
+/** Downloads, installs and restarts the app. */
+export const installUpdate = () => invoke<void>("install_update");
