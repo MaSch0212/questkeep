@@ -143,7 +143,10 @@ impl ProviderRegistry {
             epic::EpicProvider::detect()
                 .with_account(Arc::new(epic::EpicAccount::new(tokens.clone()))),
         ));
-        registry.register(Arc::new(xbox::XboxProvider::detect()));
+        registry.register(Arc::new(
+            xbox::XboxProvider::detect()
+                .with_account(Arc::new(xbox::XboxAccount::new(tokens.clone()))),
+        ));
         registry.register(Arc::new(
             gog::GogProvider::detect().with_account(Arc::new(gog::GogAccount::new(tokens))),
         ));

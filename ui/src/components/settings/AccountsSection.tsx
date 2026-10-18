@@ -25,6 +25,18 @@ const initialRow = (): RowState => ({
   submitting: false,
 });
 
+/** What to copy after signing in on the store's page, per store. */
+export function codeHint(provider: string): string {
+  switch (provider) {
+    case "epic":
+      return "Copy the authorizationCode value from the page that follows.";
+    case "xbox":
+      return "The browser ends on a blank page. Copy the whole address from its address bar.";
+    default:
+      return "Copy the code, or the whole address of the final page.";
+  }
+}
+
 export function AccountsSection() {
   const [accounts, setAccounts] = createSignal<AccountStatus[] | null>(null);
   const [rows, setRows] = createStore<Record<string, RowState>>({});
@@ -188,11 +200,7 @@ export function AccountsSection() {
                       >
                         <ol class="account__steps">
                           <li>Open the sign-in page in your normal browser and sign in.</li>
-                          <li>
-                            {account.provider === "epic"
-                              ? "Copy the authorizationCode value from the page that follows."
-                              : "Copy the code, or the whole address of the final page."}
-                          </li>
+                          <li>{codeHint(account.provider)}</li>
                           <li>Paste it below and submit.</li>
                         </ol>
                         <Show when={account.codeUrl}>

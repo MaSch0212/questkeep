@@ -159,8 +159,8 @@ Short log of choices made while building. Newest at the bottom of each section.
 - **"SteamGridDB had nothing" is remembered in `games.extra`** (`steamGridDbCoverCheckedAt`,
   `steamGridDbBackgroundCheckedAt`, RFC 3339) rather than a new column or migration: it is cheap,
   per image kind, and cleared by `refetch_artwork`. Network and key errors are not remembered.
-- **Providers flag poor covers with `LibraryProvider::covers_are_low_quality`** (Xbox: square
-  logos) rather than a per-candidate field: the quality is a property of the whole source, and a
+- **Providers flag poor covers with `LibraryProvider::covers_are_low_quality`** (Xbox used it for
+  square logos until it got Store posters, see "Xbox covers and sign-in") rather than a per-candidate field: the quality is a property of the whole source, and a
   default method keeps other providers untouched. With a key, SteamGridDB is tried first and the
   logo is the fallback. Covers already stored are never replaced automatically (a user-picked
   cover is indistinguishable from a fetched one); `refetch_artwork` replaces on request.
@@ -206,6 +206,63 @@ Short log of choices made while building. Newest at the bottom of each section.
   `goggalaxy://installationScreen/<id>` (Galaxy also handles `installGame`, `openGameView`,
   `launchGame`), Epic `com.epicgames.launcher://apps/<namespace>%3A<itemId>%3A<appName>?action=install`
   with the ids from the signed-in library; the bare appName form only opens the launcher.
+
+## Xbox covers and sign-in
+
+- **Covers, backgrounds and metadata come from the public Store display catalog, no account.**
+  `GET https://displaycatalog.mp.microsoft.com/v7.0/products/lookup?alternateId=PackageFamilyName&value=<pfn>&market=US&languages=en-us&fieldsTemplate=details`
+  returns the product for an installed or owned package directly (the `bigIds` form of
+  `/v7.0/products` returns the same shape but needs the 12-char Store id, which the manifest does
+  not carry; the PFN lookup avoids that step). Unknown packages answer 200 with `Products: []`.
+  Checked live and anonymously on 2026-10-18 with Halo Infinite (`Microsoft.254428597CFE2_8wekyb3d8bbwe`,
+  Store id `9PP5G1F0C2B6`). Fields used: `LocalizedProperties[0].Images[]` (`Poster` 1440x2160,
+  `SuperHeroArt`, `TitledHeroArt`, `Screenshot`; `//` URIs get `https:`), `ProductTitle`,
+  `DeveloperName`, `PublisherName`, `ProductDescription`, `MarketProperties[].OriginalReleaseDate`
+  (dates before 1970 are placeholders and dropped), `Properties.Categories`/`Category` as genres.
+  Answers (also "unknown") are cached in memory per run, one request per game for covers,
+  backgrounds and metadata together; failures are not cached.
+- **Cover choice**: `Poster`, then `BoxArt` only when its aspect ratio is within 0.06 of 2:3 (it is
+  usually square, 1080x1080, and is skipped); `BrandedKeyArt` (0.73) is not used. The package logo
+  stays as the last candidate for installed games. Background: `SuperHeroArt`, `TitledHeroArt`, the
+  first `Screenshot`.
+- **`covers_are_low_quality()` is now `false`** (the trait method has no game argument): posters
+  are real art and must beat SteamGridDB. Cost: a game without a catalog poster uses its square
+  logo before SteamGridDB is asked. A per-game flag is a trait change for later.
+- **Sign-in is the Microsoft account OAuth flow Playnite's Xbox library uses** (facts only, no code
+  copied). Public client id `38cd2fa8-66fd-4760-afb2-405eb65d5b0c`, scope `Xboxlive.signin
+  Xboxlive.offline_access`, redirect `https://login.live.com/oauth20_desktop.srf`:
+  1. `https://login.live.com/oauth20_authorize.srf?client_id=...&response_type=code&approval_prompt=auto&scope=...&redirect_uri=...`
+     (login window; the shell cancels the redirect to `oauth20_desktop.srf?code=` and takes the code).
+  2. `POST https://login.live.com/oauth20_token.srf` (form: `grant_type` `authorization_code` or
+     `refresh_token`, `code`/`refresh_token`, `scope`, `client_id`, `redirect_uri`) gives the Microsoft
+     access and refresh tokens. Only the refresh token is persisted (keyring), like Epic and GOG.
+  3. `POST https://user.auth.xboxlive.com/user/authenticate` (JSON, `x-xbl-contract-version: 1`,
+     `RelyingParty http://auth.xboxlive.com`, `AuthMethod RPS`, `SiteName user.auth.xboxlive.com`,
+     `RpsTicket d=<MS access token>`) gives the Xbox user token.
+  4. `POST https://xsts.auth.xboxlive.com/xsts/authorize` (JSON, `RelyingParty http://xboxlive.com`,
+     `SandboxId RETAIL`, `UserTokens [<user token>]`) gives the XSTS token with the claims `uhs`
+     (user hash), `xid` (XUID) and `gtg` (gamertag, shown as the account name). A 401 carries
+     `XErr` (no Xbox profile 2148916233, region 2148916235, adult verification 2148916236/7,
+     child account 2148916238); these become readable messages.
+  5. `GET https://titlehub.xboxlive.com/users/xuid(<xuid>)/titles/titlehistory/decoration/detail`
+     with `Authorization: XBL3.0 x=<uhs>;<xsts token>`, `x-xbl-contract-version: 2`. Titles with a
+     `pfn`, `type == "Game"` and the `PC` device are kept (one per package family, case-insensitive);
+     `titleHistory.lastTimePlayed` is the last played date (year < 2000 means never).
+  6. `POST https://userstats.xboxlive.com/batch` (JSON: `arrangebyfield xuid`, `xuids`, `stats`
+     of `MinutesPlayed` per `titleid`, 100 titles per request) gives playtime. Best effort: a
+     failure is logged and the library is imported without playtime.
+- **Xbox tokens are never stored**: steps 3 and 4 run again for every owned scan (two small
+  requests), so only the Microsoft refresh token, the XUID and the gamertag are persisted. The XUID
+  is checked to be numeric before it goes into a URL.
+- **Owned games use the package family name as id**, the same id as installed games; when an
+  installed game matches case-insensitively the installed game's spelling is used so the merge in
+  `Library::merge_owned` (exact match) works. The title history lists titles the account has
+  played, which includes Game Pass games, not only purchases.
+- **Generic addition**: `HttpRequest::post_json` (the Xbox services need JSON bodies); the body is
+  treated as a secret for redaction and hidden from `Debug`.
+- **The paste fallback accepts the whole address of the blank page** (`oauth20_desktop.srf?code=...`)
+  or the bare code; Microsoft codes may contain `*`, `!` and `$`, so Xbox has its own plausibility
+  check.
 
 
 ## Tray and autostart

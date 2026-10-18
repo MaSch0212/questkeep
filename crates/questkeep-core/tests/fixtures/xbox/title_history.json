@@ -1,0 +1,28 @@
+{
+  "xuid": "2535400000000001",
+  "titles": [
+    {
+      "titleId": "2043073184", "pfn": "Microsoft.254428597CFE2_8wekyb3d8bbwe", "bingId": "x", "windowsPhoneProductId": "5964b1a8-6f76-47ae-8463-7ba4e525f125",
+      "name": "Halo Infinite", "type": "Game", "devices": ["PC", "XboxSeries", "XboxOne"], "mediaItemType": "Application",
+      "detail": { "description": "Halo", "publisherName": "Xbox Game Studios", "developerName": "343 Industries", "releaseDate": "2021-11-15T00:00:00.0000000Z" },
+      "titleHistory": { "lastTimePlayed": "2026-10-10T18:30:00.1234567Z", "visible": true, "canHide": true }
+    },
+    {
+      "titleId": "1", "pfn": "Contoso.Racer_8wekyb3d8bbwe", "name": "Racer", "type": "Game", "devices": ["PC"],
+      "titleHistory": { "lastTimePlayed": "0001-01-01T00:00:00Z" }
+    },
+    {
+      "titleId": "2", "pfn": "Fabrikam.ConsoleOnly_abc123", "name": "Console Only", "type": "Game", "devices": ["XboxOne"],
+      "titleHistory": { "lastTimePlayed": "2026-01-01T00:00:00Z" }
+    },
+    {
+      "titleId": "3", "pfn": "Fabrikam.App_abc123", "name": "Some App", "type": "App", "devices": ["PC"]
+    },
+    {
+      "titleId": "4", "name": "No Package", "type": "Game", "devices": ["PC"]
+    },
+    {
+      "titleId": "5", "pfn": "contoso.racer_8wekyb3d8bbwe", "name": "Racer (duplicate)", "type": "Game", "devices": ["PC"]
+    }
+  ]
+}

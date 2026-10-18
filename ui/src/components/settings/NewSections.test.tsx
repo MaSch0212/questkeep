@@ -42,6 +42,16 @@ const epic = (over: Partial<AccountStatus> = {}): AccountStatus => ({
   ...over,
 });
 
+const xbox = (over: Partial<AccountStatus> = {}): AccountStatus => ({
+  provider: "xbox",
+  name: "Xbox",
+  signedIn: false,
+  displayName: null,
+  supportsCodeSignIn: true,
+  codeUrl: "https://login.live.com/oauth20_authorize.srf?client_id=1",
+  ...over,
+});
+
 beforeEach(() => {
   vi.clearAllMocks();
   store.reset();
@@ -100,6 +110,27 @@ describe("AccountsSection", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Submit code" }));
     await waitFor(() => expect(api.signInWithCode).toHaveBeenCalledWith("gog", "abc123"));
     await waitFor(() => expect(toasts()).toContain("Signed in to GOG. Importing your library…"));
+  });
+
+  it("lists Xbox from the account status and accepts the pasted redirect address", async () => {
+    vi.mocked(api.accountStatus).mockResolvedValue([xbox()]);
+    vi.mocked(api.signInWithCode).mockResolvedValue(xbox({ signedIn: true }));
+    render(() => <AccountsSection />);
+    expect(await screen.findByRole("group", { name: "Xbox" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sign in to Xbox" })).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole("button", { name: /Sign in with a code instead/ }));
+    expect(screen.getByText(/The browser ends on a blank page/)).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole("button", { name: "Open sign-in page" }));
+    expect(openUrl).toHaveBeenCalledWith(
+      "https://login.live.com/oauth20_authorize.srf?client_id=1",
+    );
+    const address = "https://login.live.com/oauth20_desktop.srf?code=M.C507_BAY.2.U.abcd1234";
+    await fireEvent.input(screen.getByLabelText("Xbox sign-in code"), {
+      target: { value: address },
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "Submit code" }));
+    await waitFor(() => expect(api.signInWithCode).toHaveBeenCalledWith("xbox", address));
+    await waitFor(() => expect(toasts()).toContain("Signed in to Xbox. Importing your library…"));
   });
 
   it("shows errors as toasts", async () => {
