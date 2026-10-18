@@ -15,6 +15,9 @@ $root = Split-Path -Parent $PSScriptRoot
 (Get-Process -Id $PID).PriorityClass = "BelowNormal"
 $env:CARGO_BUILD_JOBS = "$Jobs"
 $env:QUESTKEEP_HIDDEN = "1"
+# Own WebView2 profile: a running installed Questkeep uses the default one with different browser
+# arguments, and WebView2 refuses to share a profile across differing arguments (0x8007139F).
+$env:WEBVIEW2_USER_DATA_FOLDER = Join-Path $root "target\debug\webview2-hidden"
 $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = @(
   "--remote-debugging-port=$Port",
   "--disable-background-timer-throttling",

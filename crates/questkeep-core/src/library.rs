@@ -20,6 +20,7 @@ use crate::model::{
 use crate::paths::DataPaths;
 use crate::providers::{ProviderError, ProviderInfo, ProviderRegistry};
 use crate::settings::{Settings, SettingsStore};
+use crate::tray::{self, TrayGames};
 
 /// Static information about the running app, shown in settings.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -107,6 +108,26 @@ impl Library {
             portable: self.paths.is_portable(),
             dev_tools: cfg!(debug_assertions),
         }
+    }
+
+    /// The data or logs folder (`kind` is `"data"` or `"logs"`), for "open folder" buttons.
+    /// Anything else is rejected, so the UI cannot ask to open arbitrary paths.
+    pub fn app_folder(&self, kind: &str) -> Result<std::path::PathBuf> {
+        match kind {
+            "data" => Ok(self.paths.root().to_path_buf()),
+            "logs" => Ok(self.paths.logs_dir()),
+            other => Err(CoreError::Invalid(format!("Unknown folder '{other}'"))),
+        }
+    }
+
+    /// The game lists of the tray menu (recently played, favorites). One query over installed,
+    /// non-hidden games; the shell calls this on a background thread when the library changed.
+    pub fn tray_games(&self) -> Result<TrayGames> {
+        let games = self.db.list_games(&GameQuery {
+            installed_only: true,
+            ..GameQuery::default()
+        })?;
+        Ok(tray::tray_games(&games))
     }
 
     pub fn settings(&self) -> Settings {
@@ -563,6 +584,19 @@ mod tests {
             Library::with_database(paths, db, providers, events, secrets),
             seen,
         )
+    }
+
+    #[test]
+    fn app_folder_resolves_known_kinds_only() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (lib, _) = library(tmp.path(), ProviderRegistry::new());
+        assert_eq!(lib.app_folder("data").unwrap(), lib.paths().root());
+        assert_eq!(lib.app_folder("logs").unwrap(), lib.paths().logs_dir());
+        assert!(matches!(
+            lib.app_folder("../etc"),
+            Err(CoreError::Invalid(_))
+        ));
+        assert!(lib.app_folder("").is_err());
     }
 
     #[test]

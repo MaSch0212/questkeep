@@ -33,6 +33,14 @@ pub struct Settings {
     /// the stores don't have. Lives in the keyring, not in the file.
     #[serde(rename = "steamGridDbApiKey")]
     pub steamgriddb_api_key: Option<String>,
+    /// The close button hides Questkeep to the system tray instead of quitting.
+    pub close_to_tray: bool,
+    /// Minimizing the window hides Questkeep to the system tray.
+    pub minimize_to_tray: bool,
+    /// Start Questkeep when the user signs in to the computer.
+    pub start_with_system: bool,
+    /// When started by the system (`--minimized`), stay in the tray without opening the window.
+    pub start_minimized: bool,
 }
 
 impl Settings {
@@ -50,6 +58,10 @@ impl Default for Settings {
             fetch_metadata: true,
             providers: BTreeMap::new(),
             steamgriddb_api_key: None,
+            close_to_tray: true,
+            minimize_to_tray: false,
+            start_with_system: false,
+            start_minimized: true,
         }
     }
 }
@@ -287,6 +299,10 @@ mod tests {
                 serde_json::json!({ "apiKey": "k", "steamId": "1" }),
             )]),
             steamgriddb_api_key: Some("sgdb".into()),
+            close_to_tray: false,
+            minimize_to_tray: true,
+            start_with_system: true,
+            start_minimized: false,
         };
         store.save(&custom).unwrap();
         let raw = std::fs::read_to_string(&path).unwrap();
@@ -318,6 +334,8 @@ mod tests {
         let s = store_at(path).0.load();
         assert!(!s.scan_on_startup);
         assert!(s.download_covers);
+        assert!(s.close_to_tray && s.start_minimized);
+        assert!(!s.minimize_to_tray && !s.start_with_system);
     }
 
     #[test]

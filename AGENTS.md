@@ -45,7 +45,7 @@ playing a fullscreen game). Use:
 scripts/dev-hidden.ps1 -Portable   # hidden window, DevTools on :9222, low priority, throwaway data
 ```
 
-It sets `QUESTKEEP_HIDDEN=1` (debug builds only: the window is created invisible, unfocused and
+It sets `QUESTKEEP_HIDDEN=1` (debug builds only: no tray icon, the window is created invisible, unfocused and
 off the taskbar), disables WebView2 background throttling so the page keeps rendering, and runs
 cargo/node/the app at below-normal priority with a third of the cores as build jobs. Screenshots
 via `Page.captureScreenshot` still work. Also run other heavy commands (clippy, tests, release

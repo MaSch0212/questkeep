@@ -22,4 +22,20 @@ providers: Record<string, Record<string, unknown>>,
  * Optional SteamGridDB API key. When set, SteamGridDB supplies covers and backgrounds that
  * the stores don't have. Lives in the keyring, not in the file.
  */
-steamGridDbApiKey: string | null, };
+steamGridDbApiKey: string | null, 
+/**
+ * The close button hides Questkeep to the system tray instead of quitting.
+ */
+closeToTray: boolean, 
+/**
+ * Minimizing the window hides Questkeep to the system tray.
+ */
+minimizeToTray: boolean, 
+/**
+ * Start Questkeep when the user signs in to the computer.
+ */
+startWithSystem: boolean, 
+/**
+ * When started by the system (`--minimized`), stay in the tray without opening the window.
+ */
+startMinimized: boolean, };

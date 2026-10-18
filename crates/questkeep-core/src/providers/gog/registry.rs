@@ -12,10 +12,6 @@ const GAMES_KEYS: [&str; 2] = [
     r"SOFTWARE\WOW6432Node\GOG.com\Games",
     r"SOFTWARE\GOG.com\Games",
 ];
-const GALAXY_PATH_KEYS: [&str; 2] = [
-    r"SOFTWARE\WOW6432Node\GOG.com\GalaxyClient\paths",
-    r"SOFTWARE\GOG.com\GalaxyClient\paths",
-];
 
 fn text(key: &RegKey, name: &str) -> Option<String> {
     let value: String = key.get_value(name).ok()?;
@@ -51,10 +47,5 @@ pub(super) fn install_records() -> Option<Vec<InstallRecord>> {
 
 /// `GalaxyClient.exe` of the installed GOG Galaxy, when present on disk.
 pub(super) fn galaxy_client() -> Option<PathBuf> {
-    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-    GALAXY_PATH_KEYS.iter().find_map(|path| {
-        let key = hklm.open_subkey_with_flags(path, KEY_READ).ok()?;
-        let exe = PathBuf::from(text(&key, "client")?).join("GalaxyClient.exe");
-        exe.is_file().then_some(exe)
-    })
+    crate::platform::gog_galaxy_client()
 }

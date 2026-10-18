@@ -165,10 +165,26 @@ pub async fn get_settings(state: State<'_, Arc<AppState>>) -> CmdResult<Settings
 }
 
 #[tauri::command]
-pub async fn save_settings(state: State<'_, Arc<AppState>>, settings: Settings) -> CmdResult<()> {
+pub async fn save_settings(
+    app: tauri::AppHandle,
+    state: State<'_, Arc<AppState>>,
+    settings: Settings,
+) -> CmdResult<()> {
     blocking(state, move |s| {
         let had_key = s.library.artwork().is_configured();
-        s.library.save_settings(&settings)?;
+        let before = s.library.settings();
+        // Autostart first: when the system refuses, nothing is saved and the UI shows why.
+        if before.start_with_system != settings.start_with_system {
+            crate::autostart::set_enabled(&app, settings.start_with_system)
+                .map_err(CoreError::Invalid)?;
+        }
+        if let Err(err) = s.library.save_settings(&settings) {
+            if before.start_with_system != settings.start_with_system {
+                // Keep the startup entry and the saved setting in line.
+                let _ = crate::autostart::set_enabled(&app, before.start_with_system);
+            }
+            return Err(err);
+        }
         // A newly entered SteamGridDB key can fill in covers for games that had no source.
         if !had_key && s.library.artwork().is_configured() {
             s.queue_missing_covers();
@@ -176,6 +192,24 @@ pub async fn save_settings(state: State<'_, Arc<AppState>>, settings: Settings) 
         Ok(())
     })
     .await
+}
+
+/// Opens the data or logs folder (`kind` is `"data"` or `"logs"`) in the file manager. Done from
+/// Rust so the webview needs no permission to open arbitrary paths.
+#[tauri::command]
+pub async fn open_app_folder(
+    app: tauri::AppHandle,
+    state: State<'_, Arc<AppState>>,
+    kind: String,
+) -> CmdResult<()> {
+    use tauri_plugin_opener::OpenerExt;
+    let folder = blocking(state, move |s| s.library.app_folder(&kind)).await?;
+    app.opener()
+        .open_path(folder.display().to_string(), None::<&str>)
+        .map_err(|e| {
+            tracing::warn!(error = %e, "could not open a folder");
+            format!("Could not open the folder: {e}")
+        })
 }
 
 /// Sign-in state of every store with an account (GOG, Epic).
