@@ -29,6 +29,7 @@ those commands and events.
 | `model/` | `Game`, `PlayAction`, `ActionKind`, `TrackingMode`, `ImportedGame`, `NewManualGame`, `GameUpdate`, `GameQuery`, `SortField`. All `serde` + `ts-rs`. |
 | `db/` | `Database` (rusqlite connection behind a mutex), ordered migrations with `schema_version`, `games` repository (CRUD, query, upsert of imported games), `sessions` repository. |
 | `providers/` | `LibraryProvider` trait, `ProviderRegistry`, `steam` (VDF/ACF parser, library discovery, tool filter), `manual` helpers, `epic`/`gog` (Windows launchers; Heroic/Legendary on Linux through the shared `heroic` module), `xbox`, `lutris` (Linux, reads `pga.db`). |
+| `auth/` | Store account sign-in. `TokenStore` (`KeyringTokenStore` = system keyring, `MemoryTokenStore` for tests), `AccountSession` (lazy token load, refresh within 60 s of expiry or after a 401 with one retry, sign-out when the store rejects the refresh token), the injectable `Http` trait (`UreqHttp` redacts request secrets from errors), `AccountAuth` (what a provider exposes: status, login URL, code sign-in, sign-out) and `AccountStatus` (UI contract). GOG (`providers/gog/account.rs`) and Epic (`providers/epic/account.rs` + `web.rs`) implement it. |
 | `launcher/` | Starts games (`file` spawn or `uri` open), tracks sessions on a background thread per game, writes playtime. `ProcessProbe` trait keeps tracking testable. |
 | `images/` | Image cache under `images/covers` and `images/backgrounds`. `CoverFetcher` (4 workers) tries each provider's cover candidates, local files before CDN URLs. `MetadataFetcher` (1 worker, at least 1.5 s between store requests) stores store metadata and a background per game. `SteamGridDb` (`images/steamgriddb.rs`) is a fallback source for covers and backgrounds when a user API key is set: used when the provider has no image (or only low-quality ones, see `covers_are_low_quality`), and for manual games. Global limiter of 2 requests/s, "nothing found" remembered in `games.extra`, key shared via `Library::artwork()` and updated by `save_settings`. |
 | `settings` | Small `settings.json` (serde, defaults on missing/corrupt file), including a per-provider config map (`providers.steam = { apiKey, steamId }`). |
@@ -119,8 +120,24 @@ silently falls back to installed games only.
 | `install_game(id)` | Opens the provider's install action (e.g. `steam://install/440`). |
 | `refresh_metadata(id)` | Queues a metadata (and missing background) download for one game. |
 | `refetch_artwork(id)` | Clears the SteamGridDB "checked" markers and re-fetches cover and background from SteamGridDB, replacing the current ones. Errors without an API key. |
+| `account_status()` | `AccountStatus[]` for the stores with an account (GOG, Epic): signed in, display name, whether pasting a code is supported and where to get it. |
+| `sign_in(provider)` | Opens the store login window (no IPC access) and resolves `true` once the captured code was exchanged, the store scanned and downloads queued; `false` if the window was closed. Errors if a window for that store is already open. |
+| `sign_in_with_code(provider, code)` | Same without the window: a pasted code (GOG: also the whole `on_login_success` address; Epic: the `authorizationCode` value or the page JSON). Returns the new `AccountStatus`. |
+| `sign_out(provider)` | Deletes the stored tokens; returns the new `AccountStatus`. Games stay in the library. |
 | `app_info()` | Version, data dir, log path. |
 | `seed_fake_library(count)` | Debug builds only. |
+
+### Store accounts (GOG, Epic)
+
+Tokens live only in the system keyring (service `dev.masch0212.questkeep`, user = provider id); the
+stored blob holds the refresh token, account id and display name, never the access token (kept in
+memory; Epic's is longer than the Windows credential limit). The login window is a private-profile
+webview on the store's own login page; the shell cancels the redirect that carries the one-time
+code and passes the code to `Library::sign_in_with_code`, which exchanges it, saves the tokens and
+scans the provider. Providers get their `AccountSession` by constructor injection
+(`ProviderRegistry::with_builtin(Arc<dyn TokenStore>)`); signed out, `scan_owned` returns
+`NotConfigured` so `Library::scan` silently stays installed-only, and Epic covers/metadata are
+skipped (metadata returns an error so it is retried after sign-in).
 
 Payload types are generated into `ui/src/bindings/` by `ts-rs` during `cargo test`. The check
 script fails if the generated files differ from what's committed.

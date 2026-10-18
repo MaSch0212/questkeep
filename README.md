@@ -42,7 +42,8 @@ Requirements:
 - Rust (stable) and, on Windows, the Visual Studio Build Tools with the C++ workload
 - Node.js 24+ and pnpm 10
 - Linux only: the [Tauri system dependencies](https://tauri.app/start/prerequisites/)
-  (`libwebkit2gtk-4.1-dev`, `librsvg2-dev`, ...)
+  (`libwebkit2gtk-4.1-dev`, `librsvg2-dev`, ...) plus `libdbus-1-dev` and `pkg-config` (system
+  keyring for store sign-in)
 
 ```bash
 pnpm install

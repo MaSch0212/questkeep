@@ -1,12 +1,15 @@
 //! GOG provider: finds games installed by GOG Galaxy or the offline installers, and fetches
-//! description and artwork from GOG's public catalogue API. No login is involved.
+//! description and artwork from GOG's public catalogue API (no login needed for those).
 //!
 //! Installed games come from the Windows registry (`HKLM\SOFTWARE\WOW6432Node\GOG.com\Games`)
 //! plus the `goggame-<id>.info` manifest in each install folder. On Linux they come from Heroic
 //! Games Launcher (`super::heroic`) with the same product ids; Lutris is not read for GOG.
+//!
+//! Signing in to a GOG account (`account`) is optional and adds the owned-but-not-installed games.
 
 // Logic derived from Playnite (MIT), see THIRD_PARTY_NOTICES.md
 
+mod account;
 mod api;
 mod install;
 #[cfg(windows)]
@@ -14,12 +17,14 @@ mod registry;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
+pub use account::{GogAccount, LOGIN_SUCCESS_PREFIX};
 pub use install::InstallRecord;
 
 use super::heroic::{self, HeroicPaths};
 use super::{ImageCandidate, LibraryProvider, ProviderError};
+use crate::auth::AccountAuth;
 use crate::model::{GameMetadata, ImportedGame, PlayAction};
 
 pub const GOG_SOURCE: &str = "gog";
@@ -46,6 +51,8 @@ pub struct GogProvider {
     /// Launch through GOG Galaxy when it is installed (cloud saves, overlay, playtime). When
     /// `false`, or when Galaxy is missing, the manifest's primary executable is started directly.
     use_galaxy: bool,
+    /// Signed-in account, when the app supplies token storage.
+    account: Option<Arc<GogAccount>>,
     http: ureq::Agent,
     store_cache: Mutex<HashMap<String, Option<api::StoreGame>>>,
 }
@@ -77,9 +84,16 @@ impl GogProvider {
         Self {
             installs,
             use_galaxy: false,
+            account: None,
             http: api::http_agent(),
             store_cache: Mutex::new(HashMap::new()),
         }
+    }
+
+    /// Enables account sign-in and the owned-games list.
+    pub fn with_account(mut self, account: Arc<GogAccount>) -> Self {
+        self.account = Some(account);
+        self
     }
 
     /// Chooses between starting the executable directly (default; works for offline-installer
@@ -145,10 +159,20 @@ impl LibraryProvider for GogProvider {
         Ok(games)
     }
 
-    /// Listing the owned library needs a GOG login (OAuth), which Questkeep does not do, so only
-    /// installed games are imported.
+    /// The owned library needs a signed-in account; without one only installed games are imported.
     fn can_scan_owned(&self) -> bool {
-        false
+        self.account.is_some()
+    }
+
+    fn scan_owned(&self, _config: &serde_json::Value) -> Result<Vec<ImportedGame>, ProviderError> {
+        match &self.account {
+            Some(account) => account.fetch_owned(),
+            None => Err(ProviderError::Unsupported),
+        }
+    }
+
+    fn account(&self) -> Option<&dyn AccountAuth> {
+        self.account.as_deref().map(|a| a as &dyn AccountAuth)
     }
 
     /// Opens the game's page in GOG Galaxy, where it can be installed.

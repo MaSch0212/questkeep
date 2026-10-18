@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use uuid::Uuid;
 
+use crate::auth::AccountStatus;
 use crate::db::{Database, NewGameRecord};
 use crate::error::{CoreError, Result};
 use crate::events::{CoreEvent, EventBus};
@@ -230,6 +231,70 @@ impl Library {
 
     pub fn provider_infos(&self) -> Vec<ProviderInfo> {
         self.providers.infos()
+    }
+
+    fn account_provider(
+        &self,
+        provider_id: &str,
+    ) -> Result<Arc<dyn crate::providers::LibraryProvider>> {
+        let provider = self
+            .providers
+            .get(provider_id)
+            .ok_or_else(|| CoreError::UnknownProvider(provider_id.to_string()))?;
+        if provider.account().is_none() {
+            return Err(CoreError::Invalid(format!(
+                "{} has no account sign-in.",
+                provider.name()
+            )));
+        }
+        Ok(provider)
+    }
+
+    /// Sign-in state of every store that supports an account.
+    pub fn account_statuses(&self) -> Vec<AccountStatus> {
+        self.providers
+            .iter()
+            .filter_map(|p| p.account().map(|a| a.status()))
+            .collect()
+    }
+
+    /// The page the in-app login window opens for a provider.
+    pub fn login_url(&self, provider_id: &str) -> Result<String> {
+        let provider = self.account_provider(provider_id)?;
+        Ok(provider
+            .account()
+            .map(|a| a.login_url())
+            .unwrap_or_default())
+    }
+
+    /// Completes a sign-in with a code (or, for GOG, the redirect URL) captured by the login
+    /// window or pasted by the user, then scans the provider so owned games show up. A failing
+    /// scan is logged, not an error: the account is connected either way.
+    pub fn sign_in_with_code(&self, provider_id: &str, input: &str) -> Result<AccountStatus> {
+        let provider = self.account_provider(provider_id)?;
+        let Some(account) = provider.account() else {
+            return Err(CoreError::UnknownProvider(provider_id.to_string()));
+        };
+        account.sign_in_with_code(input)?;
+        // Metadata that needs the account was skipped or marked "none" while signed out.
+        if let Err(err) = self.db.reset_metadata_checked(provider.id()) {
+            tracing::warn!(%err, "could not reset metadata markers");
+        }
+        if let Err(err) = self.scan(provider_id) {
+            tracing::warn!(provider = provider_id, %err, "scan after sign-in failed");
+        }
+        Ok(account.status())
+    }
+
+    /// Forgets a provider's tokens. Games stay in the library; owned-only games are simply no
+    /// longer refreshed by scans.
+    pub fn sign_out(&self, provider_id: &str) -> Result<AccountStatus> {
+        let provider = self.account_provider(provider_id)?;
+        let Some(account) = provider.account() else {
+            return Err(CoreError::UnknownProvider(provider_id.to_string()));
+        };
+        account.sign_out()?;
+        Ok(account.status())
     }
 
     /// Runs a provider's installed-games scan, plus its owned-games scan when supported and
@@ -630,6 +695,131 @@ mod tests {
         assert_eq!(jobs.len(), 2);
         assert_eq!(jobs[0].game_id, installed.id, "installed games first");
         assert!(lib.metadata_job(owned.id).unwrap().is_some());
+    }
+
+    /// A store with an account: owned games appear after signing in with the right code.
+    struct SignInStore {
+        signed_in: std::sync::atomic::AtomicBool,
+    }
+    impl crate::auth::AccountAuth for SignInStore {
+        fn status(&self) -> AccountStatus {
+            AccountStatus {
+                provider: "acct".into(),
+                name: "Account".into(),
+                signed_in: self.signed_in.load(std::sync::atomic::Ordering::SeqCst),
+                display_name: None,
+                supports_code_sign_in: true,
+                code_url: None,
+            }
+        }
+        fn login_url(&self) -> String {
+            "https://login.test/".into()
+        }
+        fn sign_in_with_code(&self, input: &str) -> Result<(), crate::auth::AuthError> {
+            if input == "good-code-1234" {
+                self.signed_in
+                    .store(true, std::sync::atomic::Ordering::SeqCst);
+                Ok(())
+            } else {
+                Err(crate::auth::AuthError::Rejected("bad code".into()))
+            }
+        }
+        fn sign_out(&self) -> Result<(), crate::auth::AuthError> {
+            self.signed_in
+                .store(false, std::sync::atomic::Ordering::SeqCst);
+            Ok(())
+        }
+    }
+    struct SignInProvider(Arc<SignInStore>);
+    impl LibraryProvider for SignInProvider {
+        fn id(&self) -> &str {
+            "acct"
+        }
+        fn name(&self) -> &str {
+            "Account"
+        }
+        fn scan_installed(&self) -> Result<Vec<ImportedGame>, ProviderError> {
+            Ok(vec![ImportedGame::installed("1", "Installed")])
+        }
+        fn can_scan_owned(&self) -> bool {
+            true
+        }
+        fn scan_owned(&self, _: &serde_json::Value) -> Result<Vec<ImportedGame>, ProviderError> {
+            if crate::auth::AccountAuth::status(self.0.as_ref()).signed_in {
+                Ok(vec![ImportedGame::installed("2", "Owned")])
+            } else {
+                Err(ProviderError::NotConfigured(
+                    "Sign in to Account in Settings.".into(),
+                ))
+            }
+        }
+        fn account(&self) -> Option<&dyn crate::auth::AccountAuth> {
+            Some(self.0.as_ref())
+        }
+    }
+
+    #[test]
+    fn sign_in_scans_owned_games_and_sign_out_keeps_them() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Arc::new(SignInStore {
+            signed_in: false.into(),
+        });
+        let mut providers = ProviderRegistry::new();
+        providers.register(Arc::new(SignInProvider(store)));
+        providers.register(Arc::new(FakeStore(vec![ImportedGame::installed("9", "X")])));
+        let (lib, _) = library(tmp.path(), providers);
+
+        let statuses = lib.account_statuses();
+        assert_eq!(statuses.len(), 1, "only providers with an account");
+        assert!(!statuses[0].signed_in);
+        assert_eq!(lib.login_url("acct").unwrap(), "https://login.test/");
+        assert!(lib.login_url("fake").is_err());
+        assert!(matches!(
+            lib.login_url("nope"),
+            Err(CoreError::UnknownProvider(_))
+        ));
+
+        assert_eq!(
+            lib.scan("acct").unwrap().added,
+            1,
+            "signed out: installed only"
+        );
+        let err = lib.sign_in_with_code("acct", "wrong").unwrap_err();
+        assert_eq!(err.to_string(), "bad code");
+
+        let status = lib.sign_in_with_code("acct", "good-code-1234").unwrap();
+        assert!(status.signed_in);
+        assert_eq!(
+            lib.database().count_games().unwrap(),
+            2,
+            "scan after sign-in"
+        );
+
+        assert!(!lib.sign_out("acct").unwrap().signed_in);
+        assert_eq!(
+            lib.database().count_games().unwrap(),
+            2,
+            "games are not deleted"
+        );
+    }
+
+    #[test]
+    fn sign_in_makes_games_without_description_fetch_metadata_again() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Arc::new(SignInStore {
+            signed_in: false.into(),
+        });
+        let mut providers = ProviderRegistry::new();
+        providers.register(Arc::new(SignInProvider(store)));
+        let (lib, _) = library(tmp.path(), providers);
+        lib.scan("acct").unwrap();
+        let id = lib.missing_metadata_jobs().unwrap()[0].game_id;
+        lib.database()
+            .mark_metadata_checked(id, Utc::now())
+            .unwrap();
+        assert!(lib.missing_metadata_jobs().unwrap().is_empty());
+        lib.sign_in_with_code("acct", "good-code-1234").unwrap();
+        assert_eq!(lib.missing_metadata_jobs().unwrap().len(), 2);
     }
 
     #[test]

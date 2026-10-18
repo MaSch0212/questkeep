@@ -15,6 +15,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use crate::auth::{AccountAuth, TokenStore};
 use crate::model::{GameMetadata, ImportedGame, PlayAction};
 
 /// Errors a provider can report. Messages are shown to users.
@@ -74,6 +75,10 @@ pub trait LibraryProvider: Send + Sync {
     fn metadata(&self, _source_game_id: &str) -> Result<Option<GameMetadata>, ProviderError> {
         Ok(None)
     }
+    /// Account sign-in for this store, when the provider supports it (see [`crate::auth`]).
+    fn account(&self) -> Option<&dyn AccountAuth> {
+        None
+    }
     /// Where a portrait cover (2:3) for the game may be found, best first. Local files are
     /// preferred over downloads by convention.
     fn cover_candidates(&self, _source_game_id: &str) -> Vec<ImageCandidate> {
@@ -120,14 +125,20 @@ impl ProviderRegistry {
         Self::default()
     }
 
-    /// The providers shipped with Questkeep.
-    pub fn with_builtin() -> Self {
+    /// The providers shipped with Questkeep. Providers that support account sign-in keep their
+    /// tokens in `tokens` (the system keyring in the app).
+    pub fn with_builtin(tokens: Arc<dyn TokenStore>) -> Self {
         let mut registry = Self::new();
         registry.register(Arc::new(manual::ManualProvider));
         registry.register(Arc::new(steam::SteamProvider::detect()));
-        registry.register(Arc::new(epic::EpicProvider::detect()));
+        registry.register(Arc::new(
+            epic::EpicProvider::detect()
+                .with_account(Arc::new(epic::EpicAccount::new(tokens.clone()))),
+        ));
         registry.register(Arc::new(xbox::XboxProvider::detect()));
-        registry.register(Arc::new(gog::GogProvider::detect()));
+        registry.register(Arc::new(
+            gog::GogProvider::detect().with_account(Arc::new(gog::GogAccount::new(tokens))),
+        ));
         // Lutris only exists on Linux; leaving it out elsewhere keeps the provider list honest.
         #[cfg(not(windows))]
         registry.register(Arc::new(lutris::LutrisProvider::detect()));
@@ -141,6 +152,11 @@ impl ProviderRegistry {
 
     pub fn get(&self, id: &str) -> Option<Arc<dyn LibraryProvider>> {
         self.providers.get(id).cloned()
+    }
+
+    /// All providers, ordered by id.
+    pub fn iter(&self) -> impl Iterator<Item = &Arc<dyn LibraryProvider>> {
+        self.providers.values()
     }
 
     pub fn infos(&self) -> Vec<ProviderInfo> {
@@ -177,6 +193,36 @@ mod tests {
         fn scan_installed(&self) -> Result<Vec<ImportedGame>, ProviderError> {
             Ok(vec![])
         }
+    }
+
+    #[test]
+    fn builtin_epic_and_gog_support_account_sign_in() {
+        let registry =
+            ProviderRegistry::with_builtin(Arc::new(crate::auth::MemoryTokenStore::new()));
+        for id in ["epic", "gog"] {
+            let provider = registry.get(id).unwrap();
+            assert!(provider.can_scan_owned(), "{id}");
+            let status = provider.account().unwrap().status();
+            assert_eq!(status.provider, id);
+            assert!(!status.signed_in && status.supports_code_sign_in && status.code_url.is_some());
+            // Signed out: owned scan is silently skipped by Library (NotConfigured).
+            assert!(matches!(
+                provider.scan_owned(&serde_json::Value::Null),
+                Err(ProviderError::NotConfigured(_))
+            ));
+        }
+        assert!(registry.get("steam").unwrap().account().is_none());
+        assert!(matches!(
+            registry.get("epic").unwrap().metadata("Sugar"),
+            Err(ProviderError::NotConfigured(_))
+        ));
+        assert!(
+            registry
+                .get("epic")
+                .unwrap()
+                .cover_candidates("Sugar")
+                .is_empty()
+        );
     }
 
     #[test]

@@ -162,3 +162,36 @@ Short log of choices made while building. Newest at the bottom of each section.
   default method keeps other providers untouched. With a key, SteamGridDB is tried first and the
   logo is the fallback. Covers already stored are never replaced automatically (a user-picked
   cover is indistinguishable from a fetched one); `refetch_artwork` replaces on request.
+
+## Store account sign-in (GOG, Epic)
+
+- **Tokens only in the system keyring** (`keyring` 3.x: Windows Credential Manager, Linux Secret
+  Service, macOS Keychain), service `dev.masch0212.questkeep`, user = provider id. **No plain-file
+  fallback**: without a keyring (Linux without Secret Service) sign-in fails with a readable
+  message instead of writing secrets next to the library. This differs from the Steam and
+  SteamGridDB keys (plain text) on purpose: those are free read-only keys, these are account
+  sessions. Linux uses the `sync-secret-service` backend with `crypto-rust` (no OpenSSL), which
+  needs `libdbus-1-dev` + `pkg-config` to build.
+- **The access token is not persisted**, only refresh token, account id and display name: the
+  Windows credential blob is limited to 2560 bytes (UTF-16) and Epic's eg1 access tokens exceed it.
+  After a restart the first request refreshes (one extra call); refresh tokens rotate and are saved.
+- **Refresh failure semantics**: a rejected refresh token (HTTP 400/401/403) deletes the tokens and
+  reports "Sign in to <Store> again in Settings." (`NotConfigured`); a network or 5xx failure keeps
+  them. Signed out, owned scans are skipped silently and Epic metadata returns an error (not "no
+  data") so it is retried; `sign_in_with_code` resets the "checked" marker of games without a
+  description for that store.
+- **The login window has no IPC access.** It loads remote store pages, so `capabilities/default.json`
+  names only `main`, no remote-URL capability exists, and the invoke handler additionally rejects
+  every app command whose webview is not `main` (app commands are not covered by capabilities by
+  default). The window uses a private profile, allows only https navigations, and the code is
+  taken by cancelling the redirect (GOG: `on_login_success?code=`; Epic: a script on the
+  `api/redirect` JSON page navigates to `https://questkeep.invalid/epic-auth?code=`).
+- **Public client ids are embedded**: the GOG Galaxy and Epic launcher OAuth clients that
+  open-source launchers (Heroic/gogdl, Legendary, Playnite) use. They identify the client app, not
+  the user. Only URLs, parameter and field names were taken from the GPL projects, no code.
+- **Paste-a-code fallback** (`sign_in_with_code`) exists for both stores in case the embedded login
+  fails (captcha, webview problems): GOG accepts the code or the whole redirect address, Epic the
+  `authorizationCode` value or the page JSON.
+- **Epic catalog data is cached in memory per run** and fetched in namespace batches of up to 40
+  items per request; covers (`DieselGameBoxTall`), backgrounds (`DieselGameBox`, `OfferImageWide`)
+  and metadata reuse it. A disk cache is a follow-up.

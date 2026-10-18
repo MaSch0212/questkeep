@@ -1,0 +1,37 @@
+{
+  "page": 1,
+  "totalPages": 2,
+  "totalProducts": 3,
+  "productsPerPage": 2,
+  "contentSystemCompatibility": null,
+  "moviesCount": 0,
+  "tags": [],
+  "products": [
+    {
+      "isGalaxyCompatible": true,
+      "id": 1423049311,
+      "title": "Cyberpunk 2077",
+      "image": "//images-3.gog-statics.com/5643a7c831df452d29005caeca3cb0d1a3ca7c2d1d2fbd2a6fcd1b97e54d1b6f",
+      "url": "/game/cyberpunk_2077",
+      "slug": "cyberpunk_2077",
+      "worksOn": { "Windows": true, "Mac": false, "Linux": false }
+    },
+    {
+      "id": 1207658924,
+      "title": "  ",
+      "image": "//images-1.gog-statics.com/x"
+    },
+    {
+      "id": "1207658930",
+      "title": "The Witcher: Enhanced Edition",
+      "image": "//images-2.gog-statics.com/y"
+    },
+    {
+      "id": "not-a-number",
+      "title": "Broken"
+    },
+    {
+      "title": "No id"
+    }
+  ]
+}

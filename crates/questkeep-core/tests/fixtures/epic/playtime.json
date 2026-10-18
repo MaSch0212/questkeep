@@ -1,0 +1,6 @@
+[
+  { "artifactId": "Sugar", "totalTime": 5400, "namespace": "ns-sugar" },
+  { "artifactId": "Sugar", "totalTime": 600 },
+  { "artifactId": "Other", "totalTime": 60 },
+  { "bad": 1 }
+]

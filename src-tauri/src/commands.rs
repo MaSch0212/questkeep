@@ -4,6 +4,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use questkeep_core::auth::AccountStatus;
 use questkeep_core::model::{Game, GameQuery, GameUpdate, NewManualGame, ScanSummary};
 use questkeep_core::providers::ProviderInfo;
 use questkeep_core::settings::Settings;
@@ -175,6 +176,63 @@ pub async fn save_settings(state: State<'_, Arc<AppState>>, settings: Settings) 
         Ok(())
     })
     .await
+}
+
+/// Sign-in state of every store with an account (GOG, Epic).
+#[tauri::command]
+pub async fn account_status(state: State<'_, Arc<AppState>>) -> CmdResult<Vec<AccountStatus>> {
+    blocking(state, |s| Ok(s.library.account_statuses())).await
+}
+
+/// Opens the store's login window and waits for the result: true when the account is now
+/// signed in (owned games are scanned and covers/metadata queued), false when the window was
+/// closed without signing in.
+#[tauri::command]
+pub async fn sign_in(
+    app: tauri::AppHandle,
+    state: State<'_, Arc<AppState>>,
+    provider: String,
+) -> CmdResult<bool> {
+    let login_url = {
+        let provider = provider.clone();
+        blocking(state.clone(), move |s| s.library.login_url(&provider)).await?
+    };
+    match crate::signin::run(&app, &provider, &login_url).await? {
+        crate::signin::Outcome::Closed => Ok(false),
+        crate::signin::Outcome::Code(code) => {
+            blocking(state, move |s| {
+                s.library.sign_in_with_code(&provider, &code)?;
+                s.queue_downloads();
+                Ok(true)
+            })
+            .await
+        }
+    }
+}
+
+/// Signs in with a code (or, for GOG, the redirect address) the user pasted, for when the login
+/// window cannot be used. Scans the store afterwards.
+#[tauri::command]
+pub async fn sign_in_with_code(
+    state: State<'_, Arc<AppState>>,
+    provider: String,
+    code: String,
+) -> CmdResult<AccountStatus> {
+    blocking(state, move |s| {
+        let status = s.library.sign_in_with_code(&provider, &code)?;
+        s.queue_downloads();
+        Ok(status)
+    })
+    .await
+}
+
+/// Forgets the saved sign-in of a store. Games stay in the library.
+#[tauri::command]
+pub async fn sign_out(
+    state: State<'_, Arc<AppState>>,
+    provider: String,
+) -> CmdResult<AccountStatus> {
+    blocking(state, move |s| s.library.sign_out(&provider)).await
 }
 
 #[tauri::command]
