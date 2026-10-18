@@ -1,0 +1,28 @@
+[workspace]
+resolver = "3"
+members = ["crates/questkeep-core", "src-tauri"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/MaSch0212/questkeep"
+authors = ["Marc Schmidt"]
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+unused_must_use = "deny"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+unwrap_used = "warn"
+expect_used = "warn"
+dbg_macro = "warn"
+todo = "warn"
+print_stdout = "warn"
+print_stderr = "warn"
+
+[profile.release]
+codegen-units = 1
+lto = true
+strip = true

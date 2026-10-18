@@ -1,0 +1,10 @@
+# Supply-chain safety: only resolve crate versions published at least 2 days ago.
+# `min-publish-age` is stable from Cargo 1.100. On older stable toolchains the key is ignored, so
+# update the lockfile with `pnpm deps:rust` (nightly `cargo update`); stable builds keep the locked
+# versions.
+[registry]
+global-min-publish-age = "2 days"
+
+[env]
+# ts-rs writes generated TypeScript bindings here during `cargo test`.
+TS_RS_EXPORT_DIR = { value = "ui/src/bindings", relative = true }

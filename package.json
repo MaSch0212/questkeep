@@ -1,0 +1,17 @@
+{
+  "name": "questkeep-workspace",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "check": "node scripts/check.mjs",
+    "fix": "node scripts/check.mjs --fix",
+    "deps:rust": "cargo +nightly update"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0"
+  },
+  "packageManager": "pnpm@10.34.7"
+}

@@ -1,0 +1,6 @@
+/* Default dark theme. Every visual value used by the app is defined here. */
+:root {
+  color-scheme: dark;
+  --qk-color-bg: #121417;
+  --qk-color-text: #e6e8eb;
+}

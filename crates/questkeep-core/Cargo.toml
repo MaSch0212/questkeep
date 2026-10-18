@@ -1,0 +1,29 @@
+[package]
+name = "questkeep-core"
+description = "Core library of the Questkeep game launcher"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+chrono = { version = "0.4.45", features = ["serde"] }
+dirs = "7.0.0"
+rusqlite = { version = "0.40.2", features = ["bundled", "chrono", "serde_json"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+sysinfo = "0.39.6"
+thiserror = "2.0.21"
+tracing = "0.1.44"
+ts-rs = { version = "12.0.1", features = ["serde-json-impl", "no-serde-warnings", "chrono-impl", "uuid-impl"] }
+ureq = "3.4.2"
+uuid = { version = "1.28.0", features = ["v4", "serde"] }
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.56.0"
+
+[dev-dependencies]
+tempfile = "3.27.0"
+
+[lints]
+workspace = true
