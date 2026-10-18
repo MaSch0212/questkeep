@@ -4,6 +4,7 @@
 pub mod epic;
 pub mod manual;
 pub mod steam;
+pub mod xbox;
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -116,6 +117,7 @@ impl ProviderRegistry {
         registry.register(Arc::new(manual::ManualProvider));
         registry.register(Arc::new(steam::SteamProvider::detect()));
         registry.register(Arc::new(epic::EpicProvider::detect()));
+        registry.register(Arc::new(xbox::XboxProvider::detect()));
         registry
     }
 
