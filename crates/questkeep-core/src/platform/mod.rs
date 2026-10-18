@@ -55,11 +55,48 @@ pub fn open_uri(uri: &str) -> io::Result<()> {
     command.spawn().map(|_| ())
 }
 
+/// Program and arguments that open a URI on Windows. `shell:` targets (e.g.
+/// `shell:AppsFolder\<PackageFamilyName>!<AppId>` for Store apps) are not URL protocol handlers,
+/// so they go through `explorer.exe`; everything else through the registered protocol handler.
+#[cfg(windows)]
+fn windows_uri_parts(uri: &str) -> (&'static str, Vec<String>) {
+    if uri.len() >= 6 && uri[..6].eq_ignore_ascii_case("shell:") {
+        ("explorer.exe", vec![uri.to_string()])
+    } else {
+        (
+            "rundll32.exe",
+            vec!["url.dll,FileProtocolHandler".into(), uri.to_string()],
+        )
+    }
+}
+
 #[cfg(windows)]
 fn uri_command(uri: &str) -> Command {
-    let mut c = Command::new("rundll32.exe");
-    c.args(["url.dll,FileProtocolHandler", uri]);
+    let (program, args) = windows_uri_parts(uri);
+    let mut c = Command::new(program);
+    c.args(args);
     c
+}
+
+/// An installed AppX/MSIX package registered for the current user.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AppxPackage {
+    /// `<Name>_<Version>_<Arch>_<ResourceId>_<PublisherHash>`.
+    pub full_name: String,
+    /// Folder the package is installed in (may not exist or may be unreadable).
+    pub root: PathBuf,
+    /// Application ids (`Application Id` in the manifest) registered for the package.
+    pub app_ids: Vec<String>,
+}
+
+/// Packages registered for the current user (Windows only; empty elsewhere).
+pub fn appx_packages() -> Vec<AppxPackage> {
+    #[cfg(windows)]
+    {
+        windows::appx_packages()
+    }
+    #[cfg(not(windows))]
+    Vec::new()
 }
 
 #[cfg(target_os = "macos")]
@@ -160,6 +197,28 @@ mod tests {
             vec!["-config", "my file.cfg", "x y", "a b", ""]
         );
         assert_eq!(split_args(r#""say \"hi\"""#), vec![r#"say "hi""#]);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn shell_uris_open_through_explorer() {
+        let target = r"shell:AppsFolder\Pub.Game_8wekyb3d8bbwe!Game";
+        assert_eq!(
+            windows_uri_parts(target),
+            ("explorer.exe", vec![target.to_string()])
+        );
+        assert_eq!(windows_uri_parts("SHELL:AppsFolder\\x").0, "explorer.exe");
+        assert_eq!(
+            windows_uri_parts("steam://rungameid/440"),
+            (
+                "rundll32.exe",
+                vec![
+                    "url.dll,FileProtocolHandler".to_string(),
+                    "steam://rungameid/440".to_string()
+                ]
+            )
+        );
+        assert_eq!(windows_uri_parts("sh").0, "rundll32.exe");
     }
 
     #[test]
