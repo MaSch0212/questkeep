@@ -123,3 +123,17 @@ Short log of choices made while building. Newest at the bottom of each section.
   the tag and release creation and does not fit the tag-from-changesets flow). The update check is
   disabled in debug builds. Updater artifacts are opt-in (`tauri.updater.conf.json`, release only)
   because `createUpdaterArtifacts` needs the private key; plain builds and CI work without it.
+
+## Linux stores
+- **Same `source` + `source_game_id` on every OS for Epic and GOG.** On Linux the `epic` provider
+  reads Legendary/Heroic (`installed.json`, id = AppName) and `gog` reads Heroic's
+  `gog_store/installed.json` (id = GOG product id), so a library database moved between systems
+  keeps its games, playtime and favourites.
+- **Heroic games launch through `heroic://launch/<runner>/<appName>`** (a `uri` action with
+  `Directory` tracking on the install folder). Heroic's protocol handler accepts this path form and
+  `heroic://launch?appName=..&runner=..`; the path form also works in older releases. Heroic has no
+  install URI, so there is no install action. Standalone Legendary installs use
+  `legendary launch <app>` (a `file` action) when the binary is on `PATH`, otherwise no action.
+- **Lutris is read straight from `pga.db`** (read-only, temporary-copy fallback if locked) and
+  registered on non-Windows builds only. Steam-runner games are skipped; the game `directory` is
+  ignored for tracking when it is `/` or the home folder, since it would match every process.

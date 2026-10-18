@@ -5,7 +5,9 @@
 //! authenticated Epic account (OAuth), which is a future item. Likewise no covers or metadata:
 //! the manifests only carry a `VaultThumbnailUrl` for a few legacy entries, and Epic offers no
 //! reliable unauthenticated catalog API; scraping the launcher's web cache is not acceptable.
-//! Linux (Heroic/Legendary) is a future item too.
+//!
+//! On Linux the games come from Heroic Games Launcher / Legendary (`super::heroic`), with the same
+//! `AppName` ids as on Windows, and launch through Heroic's `heroic://launch/...` URI.
 
 // Logic derived from Playnite (MIT), see THIRD_PARTY_NOTICES.md
 
@@ -13,6 +15,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
+use super::heroic::{self, HeroicPaths};
 use super::{LibraryProvider, ProviderError};
 use crate::model::{ImportedGame, PlayAction};
 
@@ -23,13 +26,17 @@ pub const EPIC_SOURCE: &str = "epic";
 #[derive(Debug, Clone, Default)]
 pub struct EpicProvider {
     data_root: Option<PathBuf>,
+    /// Heroic/Legendary directories (Linux).
+    heroic: Option<HeroicPaths>,
 }
 
 impl EpicProvider {
-    /// Uses the launcher data of this machine (Windows only).
+    /// Uses the launcher data of this machine (Epic Games Launcher on Windows, Heroic/Legendary
+    /// elsewhere).
     pub fn detect() -> Self {
         Self {
             data_root: default_data_root(),
+            heroic: default_heroic(),
         }
     }
 
@@ -37,6 +44,15 @@ impl EpicProvider {
     pub fn with_data_root(root: impl Into<PathBuf>) -> Self {
         Self {
             data_root: Some(root.into()),
+            heroic: None,
+        }
+    }
+
+    /// Reads Heroic/Legendary data from the given directories (any platform; tests and tools).
+    pub fn with_heroic(paths: HeroicPaths) -> Self {
+        Self {
+            data_root: None,
+            heroic: Some(paths),
         }
     }
 }
@@ -52,6 +68,16 @@ fn default_data_root() -> Option<PathBuf> {
 #[cfg(not(windows))]
 fn default_data_root() -> Option<PathBuf> {
     None
+}
+
+#[cfg(windows)]
+fn default_heroic() -> Option<HeroicPaths> {
+    None
+}
+
+#[cfg(not(windows))]
+fn default_heroic() -> Option<HeroicPaths> {
+    Some(HeroicPaths::detect())
 }
 
 /// `LauncherInstalled.dat`.
@@ -165,9 +191,13 @@ impl LibraryProvider for EpicProvider {
     }
 
     fn scan_installed(&self) -> Result<Vec<ImportedGame>, ProviderError> {
+        if let Some(paths) = &self.heroic {
+            return heroic::legendary_games(paths);
+        }
         let Some(root) = &self.data_root else {
             return Err(ProviderError::NotFound(
-                "Epic Games Launcher support is only available on Windows for now".into(),
+                "Epic Games needs the Epic Games Launcher (Windows) or Heroic/Legendary (Linux)"
+                    .into(),
             ));
         };
         let manifests_dir = root
@@ -276,6 +306,11 @@ impl LibraryProvider for EpicProvider {
     /// Opens the launcher's install page for the id. Whether Epic still honors this is
     /// unverified (Playnite notes it shows an older dialog), so it is best effort.
     fn install_action(&self, source_game_id: &str) -> Option<PlayAction> {
+        // Heroic's protocol handler has no install command (it only offers to install when
+        // launching an uninstalled game), so there is nothing to open.
+        if self.heroic.is_some() {
+            return None;
+        }
         Some(PlayAction::uri(format!(
             "com.epicgames.launcher://apps/{}?action=install",
             percent_encode(source_game_id)
@@ -488,6 +523,36 @@ mod tests {
         assert!(matches!(err, ProviderError::NotFound(_)));
         let err = EpicProvider::default().scan_installed().unwrap_err();
         assert!(matches!(err, ProviderError::NotFound(_)));
+    }
+
+    #[test]
+    fn heroic_mode_scans_legendary_and_has_no_install_action() {
+        let tmp = tempfile::tempdir().unwrap();
+        let game = tmp.path().join("g/Sugar");
+        fs::create_dir_all(&game).unwrap();
+        let dir = tmp.path().join(".config/heroic/legendaryConfig/legendary");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            dir.join("installed.json"),
+            serde_json::json!({"Sugar": {"app_name": "Sugar", "title": "Sugar Game",
+                "install_path": game, "is_dlc": false, "platform": "Windows"}})
+            .to_string(),
+        )
+        .unwrap();
+        let p = EpicProvider::with_heroic(HeroicPaths::discover(tmp.path(), None, None));
+        let games = p.scan_installed().unwrap();
+        assert_eq!(games[0].source_game_id, "Sugar");
+        assert_eq!(
+            games[0].play_action.as_ref().unwrap().target,
+            "heroic://launch/legendary/Sugar"
+        );
+        assert!(p.install_action("Sugar").is_none());
+        let empty = tempfile::tempdir().unwrap();
+        let none = EpicProvider::with_heroic(HeroicPaths::discover(empty.path(), None, None));
+        assert!(matches!(
+            none.scan_installed(),
+            Err(ProviderError::NotFound(_))
+        ));
     }
 
     #[test]

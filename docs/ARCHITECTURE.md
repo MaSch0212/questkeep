@@ -28,7 +28,7 @@ those commands and events.
 | `error` | `CoreError` (`thiserror`), serialized to the UI as a readable message. |
 | `model/` | `Game`, `PlayAction`, `ActionKind`, `TrackingMode`, `ImportedGame`, `NewManualGame`, `GameUpdate`, `GameQuery`, `SortField`. All `serde` + `ts-rs`. |
 | `db/` | `Database` (rusqlite connection behind a mutex), ordered migrations with `schema_version`, `games` repository (CRUD, query, upsert of imported games), `sessions` repository. |
-| `providers/` | `LibraryProvider` trait, `ProviderRegistry`, `steam` (VDF/ACF parser, library discovery, tool filter), `manual` helpers. |
+| `providers/` | `LibraryProvider` trait, `ProviderRegistry`, `steam` (VDF/ACF parser, library discovery, tool filter), `manual` helpers, `epic`/`gog` (Windows launchers; Heroic/Legendary on Linux through the shared `heroic` module), `xbox`, `lutris` (Linux, reads `pga.db`). |
 | `launcher/` | Starts games (`file` spawn or `uri` open), tracks sessions on a background thread per game, writes playtime. `ProcessProbe` trait keeps tracking testable. |
 | `images/` | Image cache under `images/covers` and `images/backgrounds`. `CoverFetcher` (4 workers) tries each provider's cover candidates, local files before CDN URLs. `MetadataFetcher` (1 worker, at least 1.5 s between store requests) stores store metadata and a background per game. |
 | `settings` | Small `settings.json` (serde, defaults on missing/corrupt file), including a per-provider config map (`providers.steam = { apiKey, steamId }`). |
