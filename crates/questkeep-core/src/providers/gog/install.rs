@@ -31,6 +31,8 @@ pub struct InstallRecord {
 
 /// One `...\Windows\CurrentVersion\Uninstall\<id>_is1` key of a GOG installer, with the numeric
 /// product id already extracted from the key name.
+// Only the Windows registry scan builds these; the logic is tested on every platform.
+#[cfg_attr(not(windows), allow(dead_code))]
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct UninstallEntry {
     pub id: String,
@@ -41,6 +43,7 @@ pub struct UninstallEntry {
 
 /// The numeric GOG product id of an Inno Setup key name (`1423049311_is1`). Other installers use
 /// the same suffix (`Git_is1`, `{GUID}_is1`), so anything that is not all digits is rejected.
+#[cfg_attr(not(windows), allow(dead_code))]
 pub fn product_id_of_uninstall_key(key_name: &str) -> Option<&str> {
     let id = key_name.strip_suffix("_is1")?;
     (!id.is_empty() && id.len() <= 20 && id.chars().all(|c| c.is_ascii_digit())).then_some(id)
@@ -49,6 +52,7 @@ pub fn product_id_of_uninstall_key(key_name: &str) -> Option<&str> {
 /// Adds what the `Uninstall` keys know to the records of `GOG.com\Games`: the uninstaller of
 /// known products, and products that GOG's own key does not list at all (their `.info` file then
 /// decides whether they are a game, an add-on or something else).
+#[cfg_attr(not(windows), allow(dead_code))]
 pub fn merge_uninstall_entries(records: &mut Vec<InstallRecord>, entries: Vec<UninstallEntry>) {
     for entry in entries {
         let location = non_empty(&entry.install_location)
