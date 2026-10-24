@@ -3,6 +3,7 @@
 
 mod fetcher;
 mod icons;
+mod igdb;
 mod steamgriddb;
 
 use std::path::{Path, PathBuf};
@@ -18,6 +19,8 @@ pub use icons::{
     ICON_SIZE, IconRgba, SquareFrom, icon_png_from_bytes, icon_png_from_rgba, load_icon_rgba,
     load_image_filled, scale_icon,
 };
+pub(crate) use igdb::CHECKED_KEY as IGDB_CHECKED_KEY;
+pub use igdb::{Igdb, IgdbLookup};
 pub(crate) use steamgriddb::checked_key;
 pub use steamgriddb::{Lookup, SteamGridDb};
 

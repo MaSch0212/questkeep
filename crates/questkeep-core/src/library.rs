@@ -12,7 +12,9 @@ use crate::auth::{AccountStatus, TokenStore};
 use crate::db::{Database, NewGameRecord};
 use crate::error::{CoreError, Result};
 use crate::events::{CoreEvent, EventBus};
-use crate::images::{CoverJob, ImageCache, ImageKind, MetadataJob, SteamGridDb};
+use crate::images::{
+    CoverJob, IGDB_CHECKED_KEY, Igdb, ImageCache, ImageKind, MetadataJob, SteamGridDb,
+};
 use crate::model::{
     ActionKind, Game, GameQuery, GameUpdate, ImportedGame, MANUAL_SOURCE, NewManualGame,
     PlayAction, ScanSummary, display_name_from_path,
@@ -44,6 +46,8 @@ pub struct Library {
     settings: SettingsStore,
     /// Shared with the fetchers; `save_settings` keeps its API key current.
     artwork: SteamGridDb,
+    /// Shared with the metadata fetcher; `save_settings` keeps its credentials current.
+    igdb: Igdb,
 }
 
 impl Library {
@@ -69,9 +73,11 @@ impl Library {
         secrets: Arc<dyn TokenStore>,
     ) -> Self {
         let settings = SettingsStore::new(paths.settings_file(), secrets);
+        let loaded = settings.load();
         Self {
             images: ImageCache::new(paths.clone()),
-            artwork: SteamGridDb::new(settings.load().steamgriddb_api_key),
+            artwork: SteamGridDb::new(loaded.steamgriddb_api_key),
+            igdb: Igdb::new(loaded.igdb_client_id, loaded.igdb_client_secret),
             settings,
             paths,
             db,
@@ -143,7 +149,16 @@ impl Library {
         self.settings.save(settings)?;
         self.artwork
             .set_api_key(settings.steamgriddb_api_key.clone());
+        self.igdb.set_credentials(
+            settings.igdb_client_id.clone(),
+            settings.igdb_client_secret.clone(),
+        );
         Ok(())
+    }
+
+    /// The IGDB client, to hand to the metadata fetcher.
+    pub fn igdb(&self) -> &Igdb {
+        &self.igdb
     }
 
     /// The SteamGridDB client, to hand to the image fetchers.
@@ -463,9 +478,11 @@ impl Library {
         })
     }
 
-    /// Metadata jobs for store games whose metadata was never fetched.
+    /// Metadata jobs for store games whose metadata was never fetched and, when IGDB is
+    /// configured, for every game without a description that IGDB was not asked about yet
+    /// (manual games, stores without metadata, games a store had nothing for).
     pub fn missing_metadata_jobs(&self) -> Result<Vec<MetadataJob>> {
-        Ok(self
+        let mut jobs: Vec<MetadataJob> = self
             .db
             .games_needing_metadata()?
             .into_iter()
@@ -473,24 +490,42 @@ impl Library {
             .map(|(game_id, source, source_game_id)| MetadataJob {
                 game_id,
                 source,
-                source_game_id,
+                source_game_id: Some(source_game_id),
             })
-            .collect())
+            .collect();
+        if self.igdb.is_configured() {
+            let known: std::collections::HashSet<Uuid> = jobs.iter().map(|j| j.game_id).collect();
+            jobs.extend(
+                self.db
+                    .games_without_description()?
+                    .into_iter()
+                    .filter(|g| !known.contains(&g.id) && g.extra.get(IGDB_CHECKED_KEY).is_none())
+                    .map(|g| MetadataJob {
+                        game_id: g.id,
+                        source: g.source,
+                        source_game_id: g.source_game_id,
+                    }),
+            );
+        }
+        Ok(jobs)
     }
 
-    /// Metadata job for one game (to refresh it on demand); `None` for games without a store.
+    /// Metadata job for one game (to refresh it on demand). A refresh also lets IGDB look at the
+    /// game again, so its "nothing found" marker is cleared. `None` for games that neither a
+    /// store nor IGDB can serve.
     pub fn metadata_job(&self, id: Uuid) -> Result<Option<MetadataJob>> {
         let game = self.db.get_game(id)?;
-        Ok(match game.source_game_id {
-            Some(source_game_id) if self.providers.get(&game.source).is_some() => {
-                Some(MetadataJob {
-                    game_id: id,
-                    source: game.source,
-                    source_game_id,
-                })
-            }
-            _ => None,
-        })
+        let from_store =
+            game.source_game_id.is_some() && self.providers.get(&game.source).is_some();
+        if !from_store && !self.igdb.is_configured() {
+            return Ok(None);
+        }
+        self.db.set_extra_value(id, IGDB_CHECKED_KEY, None)?;
+        Ok(Some(MetadataJob {
+            game_id: id,
+            source: game.source,
+            source_game_id: game.source_game_id,
+        }))
     }
 
     /// The store action that installs a game that is owned but not installed. The caller opens
@@ -979,6 +1014,55 @@ mod tests {
                 .is_none(),
             "marker cleared"
         );
+    }
+
+    #[test]
+    fn igdb_credentials_enable_metadata_jobs_for_manual_games() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (lib, _) = library(tmp.path(), ProviderRegistry::new());
+        std::fs::write(tmp.path().join("hades.exe"), b"x").unwrap();
+        let game = lib
+            .add_manual_game(&NewManualGame {
+                name: Some("Hades".into()),
+                executable: tmp.path().join("hades.exe").display().to_string(),
+                args: None,
+                working_dir: None,
+                cover_image: None,
+            })
+            .unwrap();
+        assert!(lib.missing_metadata_jobs().unwrap().is_empty());
+        assert!(lib.metadata_job(game.id).unwrap().is_none());
+
+        let mut settings = lib.settings();
+        settings.igdb_client_id = Some("id".into());
+        assert!(!lib.igdb().is_configured(), "the secret is missing");
+        settings.igdb_client_secret = Some("secret".into());
+        lib.save_settings(&settings).unwrap();
+        assert!(lib.igdb().is_configured());
+        // Credentials come back through the keyring-backed settings.
+        assert_eq!(lib.settings().igdb_client_secret.as_deref(), Some("secret"));
+
+        let jobs = lib.missing_metadata_jobs().unwrap();
+        assert_eq!(jobs.len(), 1);
+        assert_eq!(jobs[0].game_id, game.id);
+        assert_eq!(jobs[0].source_game_id, None);
+
+        // "IGDB had nothing" is remembered until the user asks for a refresh.
+        lib.database()
+            .set_extra_value(game.id, IGDB_CHECKED_KEY, Some("x".into()))
+            .unwrap();
+        assert!(lib.missing_metadata_jobs().unwrap().is_empty());
+        assert!(lib.metadata_job(game.id).unwrap().is_some());
+        assert_eq!(
+            lib.missing_metadata_jobs().unwrap().len(),
+            1,
+            "marker cleared"
+        );
+
+        settings.igdb_client_secret = None;
+        lib.save_settings(&settings).unwrap();
+        assert!(!lib.igdb().is_configured());
+        assert!(lib.missing_metadata_jobs().unwrap().is_empty());
     }
 
     #[test]

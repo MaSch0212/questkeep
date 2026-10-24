@@ -33,6 +33,11 @@ pub struct Settings {
     /// the stores don't have. Lives in the keyring, not in the file.
     #[serde(rename = "steamGridDbApiKey")]
     pub steamgriddb_api_key: Option<String>,
+    /// Optional IGDB (Twitch application) Client ID. With the secret, IGDB supplies descriptions,
+    /// genres and the like for games whose store has none. Lives in the keyring, not in the file.
+    pub igdb_client_id: Option<String>,
+    /// Optional IGDB (Twitch application) Client Secret. Lives in the keyring, not in the file.
+    pub igdb_client_secret: Option<String>,
     /// The close button hides Questkeep to the system tray instead of quitting.
     pub close_to_tray: bool,
     /// Minimizing the window hides Questkeep to the system tray.
@@ -58,6 +63,8 @@ impl Default for Settings {
             fetch_metadata: true,
             providers: BTreeMap::new(),
             steamgriddb_api_key: None,
+            igdb_client_id: None,
+            igdb_client_secret: None,
             close_to_tray: true,
             minimize_to_tray: false,
             start_with_system: false,
@@ -73,7 +80,7 @@ struct SecretField {
     set: fn(&mut Settings, Option<String>),
 }
 
-const SECRETS: [SecretField; 2] = [
+const SECRETS: [SecretField; 4] = [
     SecretField {
         keyring_user: "setting:steam.apiKey",
         get: steam_key,
@@ -83,6 +90,16 @@ const SECRETS: [SecretField; 2] = [
         keyring_user: "setting:steamGridDbApiKey",
         get: |s| s.steamgriddb_api_key.clone(),
         set: |s, value| s.steamgriddb_api_key = value,
+    },
+    SecretField {
+        keyring_user: "setting:igdbClientId",
+        get: |s| s.igdb_client_id.clone(),
+        set: |s, value| s.igdb_client_id = value,
+    },
+    SecretField {
+        keyring_user: "setting:igdbClientSecret",
+        get: |s| s.igdb_client_secret.clone(),
+        set: |s, value| s.igdb_client_secret = value,
     },
 ];
 
@@ -299,6 +316,8 @@ mod tests {
                 serde_json::json!({ "apiKey": "k", "steamId": "1" }),
             )]),
             steamgriddb_api_key: Some("sgdb".into()),
+            igdb_client_id: Some("twitch-id".into()),
+            igdb_client_secret: Some("twitch-secret".into()),
             close_to_tray: false,
             minimize_to_tray: true,
             start_with_system: true,
@@ -307,7 +326,10 @@ mod tests {
         store.save(&custom).unwrap();
         let raw = std::fs::read_to_string(&path).unwrap();
         assert!(
-            !raw.contains("sgdb") && !raw.contains("apiKey"),
+            !raw.contains("sgdb")
+                && !raw.contains("apiKey")
+                && !raw.contains("twitch-id")
+                && !raw.contains("twitch-secret"),
             "no secrets in the file: {raw}"
         );
         assert!(raw.contains("steamId"));
@@ -318,6 +340,12 @@ mod tests {
                 .as_deref(),
             Some("sgdb")
         );
+        for (user, expected) in [
+            ("setting:igdbClientId", "twitch-id"),
+            ("setting:igdbClientSecret", "twitch-secret"),
+        ] {
+            assert_eq!(secrets.load(user).unwrap().as_deref(), Some(expected));
+        }
         assert_eq!(store.load(), custom);
         // A fresh store (a new process) reads the secrets back from the keyring.
         let reopened = SettingsStore::new(path, secrets.clone());
@@ -344,7 +372,7 @@ mod tests {
         let path = tmp.path().join("settings.json");
         std::fs::write(
             &path,
-            r#"{"providers":{"steam":{"apiKey":"OLD","steamId":"7"}},"steamGridDbApiKey":"GRID"}"#,
+            r#"{"providers":{"steam":{"apiKey":"OLD","steamId":"7"}},"steamGridDbApiKey":"GRID","igdbClientSecret":"TWITCH"}"#,
         )
         .unwrap();
         let (store, secrets) = store_at(path.clone());
@@ -352,8 +380,12 @@ mod tests {
         assert_eq!(s.provider_config("steam")["apiKey"], "OLD");
         assert_eq!(s.provider_config("steam")["steamId"], "7");
         assert_eq!(s.steamgriddb_api_key.as_deref(), Some("GRID"));
+        assert_eq!(s.igdb_client_secret.as_deref(), Some("TWITCH"));
         let raw = std::fs::read_to_string(&path).unwrap();
-        assert!(!raw.contains("OLD") && !raw.contains("GRID"), "{raw}");
+        assert!(
+            !raw.contains("OLD") && !raw.contains("GRID") && !raw.contains("TWITCH"),
+            "{raw}"
+        );
         assert!(raw.contains("steamId"));
         assert_eq!(
             secrets.load("setting:steam.apiKey").unwrap().as_deref(),
@@ -387,6 +419,14 @@ mod tests {
         store.save(&s).unwrap();
         assert!(secrets.load("setting:steamGridDbApiKey").unwrap().is_none());
         assert!(store.load().steamgriddb_api_key.is_none());
+
+        s.igdb_client_id = Some("id".into());
+        s.igdb_client_secret = Some("secret".into());
+        store.save(&s).unwrap();
+        s.igdb_client_secret = None;
+        store.save(&s).unwrap();
+        assert!(secrets.load("setting:igdbClientSecret").unwrap().is_none());
+        assert_eq!(store.load().igdb_client_id.as_deref(), Some("id"));
     }
 
     #[test]

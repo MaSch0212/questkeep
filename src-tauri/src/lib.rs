@@ -165,6 +165,7 @@ fn build_state(app: &tauri::AppHandle) -> Result<(AppState, Option<WorkerGuard>)
         providers,
         events,
         library.artwork().clone(),
+        library.igdb().clone(),
         METADATA_INTERVAL,
     );
     Ok((

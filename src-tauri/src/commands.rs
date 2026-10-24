@@ -178,6 +178,7 @@ pub async fn save_settings(
 ) -> CmdResult<()> {
     blocking(state, move |s| {
         let had_key = s.library.artwork().is_configured();
+        let had_igdb = s.library.igdb().is_configured();
         let before = s.library.settings();
         // Autostart first: when the system refuses, nothing is saved and the UI shows why.
         if before.start_with_system != settings.start_with_system {
@@ -194,6 +195,10 @@ pub async fn save_settings(
         // A newly entered SteamGridDB key can fill in covers for games that had no source.
         if !had_key && s.library.artwork().is_configured() {
             s.queue_missing_covers();
+        }
+        // New IGDB credentials can fill in metadata for games whose store has none.
+        if !had_igdb && s.library.igdb().is_configured() {
+            s.queue_missing_metadata();
         }
         Ok(())
     })

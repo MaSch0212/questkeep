@@ -7,6 +7,7 @@ import { ArtworkSection } from "./ArtworkSection";
 import { DeveloperSection } from "./DeveloperSection";
 import { GeneralSection } from "./GeneralSection";
 import { LibrarySection } from "./LibrarySection";
+import { MetadataSection } from "./MetadataSection";
 import { SteamSection } from "./SteamSection";
 import { UpdatesSection } from "./UpdatesSection";
 import { createSettingsModel, type SettingsModel } from "./useSettings";
@@ -26,6 +27,7 @@ const SECTIONS: SectionDef[] = [
   { id: "steam", title: "Steam account", component: SteamSection },
   { id: "accounts", title: "Accounts", component: AccountsSection },
   { id: "artwork", title: "Artwork", component: ArtworkSection },
+  { id: "metadata", title: "Metadata", component: MetadataSection },
   {
     id: "developer",
     title: "Developer",
