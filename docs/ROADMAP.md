@@ -20,16 +20,17 @@ uninstallers; per-game low-quality covers; Epic catalog cache on disk; GOG games
 to skip Game Pass titles; Heroic Amazon (Nile) and sideloaded games; owned games
 from Heroic/Lutris libraries; IGDB metadata for games without store data.
 
+Also: GOG playtime from GOG Galaxy's local database; IGDB fills missing genres (Epic genres).
+
 ## Next
 
-- **GOG playtime**: the profile stats endpoint refuses the Galaxy token (403); needs an endpoint
-  that accepts it, or a web-session sign-in.
-- **Verify live**: IGDB with real credentials, Heroic Nile/sideload files on a real Linux machine.
-- **Epic genres**: only the Cloudflare-protected store GraphQL has them; IGDB could fill genres
-  for games that have a store description but none.
-- **Per-game Epic launcher uninstall**, if Epic ever documents a URI.
-- **Game Pass by entitlement** instead of the Game Pass catalog (collections API), so bought games
-  that are also in Game Pass stay.
+- **Verify on Linux**: Heroic Amazon (Nile) and sideloaded games, owned games from Heroic/Lutris.
+- **GOG playtime without Galaxy** (Linux/Heroic): no web endpoint accepts the Galaxy token.
+
+## Blocked
+
+- **Per-game Epic launcher uninstall**: no URI exists; revisit if Epic documents one.
+- **Game Pass by entitlement**: the entitlement API is for publishers only (see DECISIONS).
 
 ## Later
 

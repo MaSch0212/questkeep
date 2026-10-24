@@ -8,6 +8,7 @@ pub mod heroic;
 pub mod heroic_sideload;
 pub mod lutris;
 pub mod manual;
+mod sqlite;
 pub mod steam;
 pub mod xbox;
 

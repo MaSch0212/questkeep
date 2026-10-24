@@ -486,8 +486,9 @@ impl Library {
     }
 
     /// Metadata jobs for store games whose metadata was never fetched and, when IGDB is
-    /// configured, for every game without a description that IGDB was not asked about yet
-    /// (manual games, stores without metadata, games a store had nothing for).
+    /// configured, for every game without a description or genres that IGDB was not asked about
+    /// yet (manual games, stores without metadata or without genres, such as Epic). Those jobs
+    /// carry no store id: the store was asked already (or there is none), so only IGDB is asked.
     pub fn missing_metadata_jobs(&self) -> Result<Vec<MetadataJob>> {
         let mut jobs: Vec<MetadataJob> = self
             .db
@@ -504,7 +505,7 @@ impl Library {
             let known: std::collections::HashSet<Uuid> = jobs.iter().map(|j| j.game_id).collect();
             jobs.extend(
                 self.db
-                    .games_without_description()?
+                    .games_missing_metadata()?
                     .into_iter()
                     .filter(|g| {
                         !known.contains(&g.id)
@@ -514,7 +515,7 @@ impl Library {
                     .map(|g| MetadataJob {
                         game_id: g.id,
                         source: g.source,
-                        source_game_id: g.source_game_id,
+                        source_game_id: None,
                     }),
             );
         }
@@ -1049,6 +1050,40 @@ mod tests {
         let fake = lib.database().list_games(&Default::default()).unwrap()[0].clone();
         assert!(lib.metadata_job(fake.id).is_err());
         assert!(lib.refetch_artwork(fake.id).is_err());
+    }
+
+    #[test]
+    fn store_games_without_genres_get_igdb_only_jobs() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (lib, _) = library(tmp.path(), ProviderRegistry::new());
+        let game = lib
+            .database()
+            .insert_game(
+                &NewGameRecord {
+                    name: "Alan Wake 2".into(),
+                    source: "epic".into(),
+                    source_game_id: Some("Bonsai".into()),
+                    ..Default::default()
+                },
+                Utc::now(),
+            )
+            .unwrap();
+        let store = crate::model::GameMetadata {
+            description: Some("From Epic.".into()),
+            ..Default::default()
+        };
+        lib.database()
+            .set_metadata(game.id, &store, Utc::now())
+            .unwrap();
+        let mut settings = lib.settings();
+        settings.igdb_client_id = Some("id".into());
+        settings.igdb_client_secret = Some("secret".into());
+        lib.save_settings(&settings).unwrap();
+
+        let jobs = lib.missing_metadata_jobs().unwrap();
+        assert_eq!(jobs.len(), 1);
+        assert_eq!(jobs[0].game_id, game.id);
+        assert_eq!(jobs[0].source_game_id, None, "the store was asked already");
     }
 
     #[test]

@@ -12,6 +12,7 @@
 
 mod account;
 mod api;
+mod galaxy_db;
 mod install;
 #[cfg(windows)]
 mod registry;
@@ -63,16 +64,21 @@ pub struct GogProvider {
     http: ureq::Agent,
     store_cache: Mutex<HashMap<String, Option<api::StoreGame>>>,
     cover_cache: Mutex<HashMap<String, Option<String>>>,
+    /// GOG Galaxy's local database, the source of playtime (Windows with Galaxy).
+    galaxy_db: Option<PathBuf>,
 }
 
 impl GogProvider {
-    /// Reads the installs of this machine.
+    /// Reads the installs (and, with Galaxy, the playtime) of this machine.
     pub fn detect() -> Self {
         #[cfg(windows)]
         let installs = Installs::System;
         #[cfg(not(windows))]
         let installs = Installs::Heroic(HeroicPaths::detect());
-        Self::new(installs)
+        Self {
+            galaxy_db: galaxy_db::default_path(),
+            ..Self::new(installs)
+        }
     }
 
     /// Reads Heroic data from the given directories (any platform; tests and tools).
@@ -96,6 +102,34 @@ impl GogProvider {
             http: api::http_agent(),
             store_cache: Mutex::new(HashMap::new()),
             cover_cache: Mutex::new(HashMap::new()),
+            galaxy_db: None,
+        }
+    }
+
+    /// Reads playtime and last played dates from this GOG Galaxy database.
+    pub fn with_galaxy_db(mut self, path: impl Into<PathBuf>) -> Self {
+        self.galaxy_db = Some(path.into());
+        self
+    }
+
+    /// Fills in playtime and last played from Galaxy's database. Best effort: without Galaxy, or
+    /// when the database can't be read, games keep what they have.
+    fn add_galaxy_playtime(&self, games: &mut [ImportedGame]) {
+        let Some(path) = &self.galaxy_db else {
+            return;
+        };
+        let times = match galaxy_db::read_playtime(path) {
+            Ok(times) => times,
+            Err(err) => {
+                tracing::warn!(%err, "could not read GOG Galaxy playtime");
+                return;
+            }
+        };
+        for game in games {
+            if let Some(time) = times.get(&game.source_game_id) {
+                game.playtime_seconds = game.playtime_seconds.max(Some(time.seconds));
+                game.last_played = game.last_played.max(time.last_played);
+            }
         }
     }
 
@@ -186,6 +220,7 @@ impl LibraryProvider for GogProvider {
             self.use_galaxy.load(Ordering::Relaxed),
         );
         games.sort_by_cached_key(|g| (g.name.to_lowercase(), g.source_game_id.clone()));
+        self.add_galaxy_playtime(&mut games);
         Ok(games)
     }
 
@@ -221,7 +256,10 @@ impl LibraryProvider for GogProvider {
             }
             games
         };
-        owned_with_local(self.account.as_ref().map(|a| a.fetch_owned()), local, "GOG")
+        let mut games =
+            owned_with_local(self.account.as_ref().map(|a| a.fetch_owned()), local, "GOG")?;
+        self.add_galaxy_playtime(&mut games);
+        Ok(games)
     }
 
     fn account(&self) -> Option<&dyn AccountAuth> {
@@ -420,6 +458,44 @@ mod tests {
             .unwrap();
         let names: Vec<_> = games.iter().map(|g| g.name.as_str()).collect();
         assert_eq!(names, ["Alpha", "zebra"]);
+    }
+
+    #[test]
+    fn installed_games_get_galaxy_playtime() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("game");
+        fs::create_dir_all(&dir).unwrap();
+        let record = InstallRecord {
+            id: "1423049311".into(),
+            game_name: Some("Cyberpunk 2077".into()),
+            path: Some(dir.to_string_lossy().into_owned()),
+            exe: Some(dir.join("g.exe").to_string_lossy().into_owned()),
+            ..Default::default()
+        };
+        let db = tmp.path().join("galaxy-2.0.db");
+        rusqlite::Connection::open(&db)
+            .unwrap()
+            .execute_batch(
+                "CREATE TABLE GameTimes(userId INT64, releaseKey TEXT, minutesInGame INTEGER);
+                 CREATE TABLE LastPlayedDates(userId INT64, gameReleaseKey TEXT, lastPlayedDate TEXT);
+                 INSERT INTO GameTimes VALUES (1, 'gog_1423049311', 90);
+                 INSERT INTO LastPlayedDates VALUES (1, 'gog_1423049311', '2026-03-06 17:22:46');",
+            )
+            .unwrap();
+        let games = GogProvider::with_records(vec![record.clone()], None)
+            .with_galaxy_db(&db)
+            .scan_installed()
+            .unwrap();
+        assert_eq!(games[0].playtime_seconds, Some(5_400));
+        assert!(games[0].last_played.is_some());
+
+        // An unreadable database only costs the playtime.
+        let games = GogProvider::with_records(vec![record], None)
+            .with_galaxy_db(tmp.path().join("missing.db"))
+            .scan_installed()
+            .unwrap();
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].playtime_seconds, None);
     }
 
     #[test]

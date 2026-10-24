@@ -189,10 +189,12 @@ Short log of choices made while building. Newest at the bottom of each section.
   keyring (`setting:igdbClientId`, `setting:igdbClientSecret`); the id isn't secret, but one
   mechanism was simpler. The app token (`client_credentials`) stays in memory and is renewed on
   expiry or a 401; the secret goes in the form body, never the URL.
-- **Asked only when the store has nothing**: manual games, games of unregistered providers, and
-  games whose provider's `metadata()` is `Ok(None)` (e.g. Lutris, sideloaded). Only games without a
-  description, and only empty fields are filled, so store data and user edits are never
-  overwritten. Manual games are enqueued only when IGDB is configured.
+- **Asked only for what the store lacks**: games without a description or without genres
+  (manual games, unregistered providers, `metadata()` = `Ok(None)` such as Lutris, and Epic, whose
+  catalog has no genres). Only empty fields are filled, so store data and user edits are never
+  overwritten. Jobs for games whose store was already asked carry no store id, so only IGDB is
+  asked. Manual games are enqueued only when IGDB is configured. Verified live 2026-10-25 with
+  the maintainer's credentials (a manual "Minecraft" got description and genres).
 - **Exact normalized name match only** (lowercase alphanumerics, `&` = "and", leading "the"
   dropped; release year breaks ties): a wrong description is worse than none. Misses are remembered
   in `games.extra.igdbCheckedAt` (cleared by a metadata refresh); network and credential errors
@@ -283,10 +285,17 @@ Short log of choices made while building. Newest at the bottom of each section.
 - **GOG covers: gamesdb `vertical_cover` first** (`https://gamesdb.gog.com/platforms/gog/external_releases/<id>`,
   `game.vertical_cover.url_format` with `{formatter}` empty and `{ext}` `jpg`: a 2:3 image; checked
   anonymously 2026-10-25), then the v2 `boxArtImage` (342x482). Cached per id in memory.
-- **No GOG playtime yet.** Playnite reads `/u/<username>/games/stats` (minutes and `lastSession`
-  per game) with web-session cookies; `embed.gog.com/u/<username>/games/stats` answered 403 to the
-  Galaxy bearer token in a live signed-in scan (2026-10-25), and no documented Galaxy-token
-  endpoint was found, so the request was removed instead of failing on every scan.
+- **GOG playtime comes from GOG Galaxy's local database**, not the web. Playnite reads
+  `/u/<username>/games/stats` with web-session cookies; `embed.gog.com/u/<username>/games/stats`
+  answered 403 to the Galaxy bearer token in a live signed-in scan (2026-10-25). Galaxy itself keeps
+  `%ProgramData%\GOG.com\Galaxy\storage\galaxy-2.0.db` with `GameTimes(userId, releaseKey,
+  minutesInGame)` and `LastPlayedDates(userId, gameReleaseKey, lastPlayedDate)`, release keys
+  `gog_<product id>` (checked on the maintainer's PC: 160 GOG rows, plus rows for other stores,
+  which are ignored). Dates have no zone and are read as UTC (unverified). Applied to installed
+  and owned games; no Galaxy (or Linux) means no GOG playtime.
+- **Other programs' SQLite databases are read through `providers::sqlite::read_foreign`**:
+  read-only first, then a temporary copy that includes the `-wal` file (Galaxy's recent changes
+  live there until it checkpoints). Lutris uses the same helper.
 
 ## Xbox covers and sign-in
 
@@ -315,7 +324,10 @@ Short log of choices made while building. Newest at the bottom of each section.
   (checked anonymously 2026-10-25: a header object, then ~515 `{"id": "<Store id>"}`), compared
   with each owned title's catalog `ProductId`. The title history can't tell a purchase from a Game
   Pass play, and the entitlement (collections) API needs another token audience we couldn't verify,
-  so bought games that are also in Game Pass are left out too while not installed. Installed games
+  so bought games that are also in Game Pass are left out too while not installed. The documented
+  entitlement API (`collections.mp.microsoft.com/v9.0/collections/publisherQuery`, Game Pass =
+  `acquisitionType: Recurring`) is a service-to-service API for a title's publisher (Azure AD
+  auth; unauthorized callers see `Single`), so a launcher can't use it. Installed games
   are always kept. A failing list keeps everything. Games already imported stay, because scans
   never delete games.
 - **Sign-in is the Microsoft account OAuth flow Playnite's Xbox library uses** (facts only, no code

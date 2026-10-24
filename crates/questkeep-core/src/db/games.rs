@@ -20,9 +20,9 @@ const COLUMNS: &str = "id, name, sorting_name, source, source_game_id, installed
 /// `extra` key set when the user renamed a store game, so re-scans keep their name.
 const USER_RENAMED: &str = "userRenamed";
 
-/// A game that has no description (see [`Database::games_without_description`]).
+/// A game without description or genres (see [`Database::games_missing_metadata`]).
 #[derive(Debug, Clone)]
-pub struct GameWithoutDescription {
+pub struct GameMissingMetadata {
     pub id: Uuid,
     pub source: String,
     pub source_game_id: Option<String>,
@@ -518,12 +518,13 @@ impl Database {
         Ok(out)
     }
 
-    /// Games without a description, manual ones included:
-    /// `(id, source, source_game_id, extra)`.
-    pub fn games_without_description(&self) -> Result<Vec<GameWithoutDescription>> {
+    /// Games without a description or without genres (the fields IGDB can fill), manual ones
+    /// included.
+    pub fn games_missing_metadata(&self) -> Result<Vec<GameMissingMetadata>> {
         let conn = self.conn();
         let mut stmt = conn.prepare(
-            "SELECT id, source, source_game_id, extra FROM games WHERE description IS NULL \
+            "SELECT id, source, source_game_id, extra FROM games \
+             WHERE description IS NULL OR genres = '[]' \
              ORDER BY installed DESC, sorting_name",
         )?;
         let rows = stmt.query_map([], |r| {
@@ -539,7 +540,7 @@ impl Database {
             let (id, source, source_game_id, extra) = row?;
             if let Ok(id) = Uuid::parse_str(&id) {
                 let extra = serde_json::from_str(&extra).unwrap_or(serde_json::Value::Null);
-                out.push(GameWithoutDescription {
+                out.push(GameMissingMetadata {
                     id,
                     source,
                     source_game_id,

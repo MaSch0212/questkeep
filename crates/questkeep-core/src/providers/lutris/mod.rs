@@ -12,8 +12,8 @@
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
+use rusqlite::Connection;
 use rusqlite::types::Value;
-use rusqlite::{Connection, OpenFlags};
 
 use super::{ImageCandidate, LibraryProvider, ProviderError};
 use crate::model::{ImportedGame, PlayAction, TrackingMode};
@@ -338,42 +338,13 @@ fn read_service_games(conn: &Connection) -> rusqlite::Result<Vec<ServiceGame>> {
     Ok(out)
 }
 
-fn read_db_readonly<T>(
-    path: &Path,
-    read: fn(&Connection) -> rusqlite::Result<T>,
-) -> rusqlite::Result<T> {
-    let conn = Connection::open_with_flags(
-        path,
-        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
-    )?;
-    read(&conn)
-}
-
 /// Runs `read` on `pga.db`; falls back to a temporary copy when the original can't be read (for
 /// example because Lutris holds a lock).
 fn read_db<T>(
     path: &Path,
     read: fn(&Connection) -> rusqlite::Result<T>,
 ) -> Result<T, ProviderError> {
-    let first = match read_db_readonly(path, read) {
-        Ok(rows) => return Ok(rows),
-        Err(e) => e,
-    };
-    tracing::debug!(
-        "reading {} directly failed ({first}), trying a copy",
-        path.display()
-    );
-    let copy = std::env::temp_dir().join(format!("questkeep-lutris-{}.db", uuid::Uuid::new_v4()));
-    let result = std::fs::copy(path, &copy)
-        .map_err(|e| e.to_string())
-        .and_then(|_| read_db_readonly(&copy, read).map_err(|e| e.to_string()));
-    let _ = std::fs::remove_file(&copy);
-    result.map_err(|e| {
-        ProviderError::Parse(format!(
-            "could not read the Lutris database {}: {first}; copy: {e}",
-            path.display()
-        ))
-    })
+    super::sqlite::read_foreign(path, "Lutris database", read)
 }
 
 impl LibraryProvider for LutrisProvider {

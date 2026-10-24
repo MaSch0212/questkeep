@@ -11,7 +11,7 @@ use rusqlite::Connection;
 
 use crate::error::Result;
 
-pub use games::{GameWithoutDescription, NewGameRecord};
+pub use games::{GameMissingMetadata, NewGameRecord};
 pub use sessions::OpenSession;
 
 /// The library database. One connection guarded by a mutex: SQLite serializes writes anyway and

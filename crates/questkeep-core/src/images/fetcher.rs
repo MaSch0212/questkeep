@@ -303,7 +303,7 @@ fn first_image(
 pub struct MetadataJob {
     pub game_id: Uuid,
     pub source: String,
-    /// `None` for manual games; those are only served by IGDB.
+    /// `None`: only IGDB is asked (manual games, or the store was asked before).
     pub source_game_id: Option<String>,
 }
 
@@ -478,10 +478,14 @@ fn fetch_metadata(shared: &MetadataShared, job: &MetadataJob, last_request: &mut
         }
         *last_request = Some(Instant::now());
         changed = match provider.metadata(source_id) {
-            Ok(Some(meta)) => shared
-                .db
-                .set_metadata(job.game_id, &meta, Utc::now())
-                .is_ok(),
+            Ok(Some(meta)) => {
+                // IGDB fills what the store left empty (Epic has no genres, for one).
+                ask_igdb = meta.description.is_none() || meta.genres.is_empty();
+                shared
+                    .db
+                    .set_metadata(job.game_id, &meta, Utc::now())
+                    .is_ok()
+            }
             Ok(None) => {
                 if let Err(err) = shared.db.mark_metadata_checked(job.game_id, Utc::now()) {
                     tracing::warn!(game = %job.game_id, %err, "could not mark metadata");
@@ -528,7 +532,9 @@ fn fetch_igdb(shared: &MetadataShared, id: Uuid) -> bool {
     let Ok(Some(game)) = shared.db.find_game(id) else {
         return false;
     };
-    if game.description.is_some() || game.extra.get(IGDB_CHECKED_KEY).is_some() {
+    // Only games missing a description or genres (e.g. Epic, whose catalog has no genres).
+    let complete = game.description.is_some() && !game.genres.is_empty();
+    if complete || game.extra.get(IGDB_CHECKED_KEY).is_some() {
         return false;
     }
     let lookup = IgdbLookup {
@@ -539,7 +545,7 @@ fn fetch_igdb(shared: &MetadataShared, id: Uuid) -> bool {
         Ok(Some(found)) => {
             let existing = &game;
             let merged = GameMetadata {
-                description: found.description,
+                description: existing.description.clone().or(found.description),
                 release_date: existing.release_date.clone().or(found.release_date),
                 developers: keep_or(&existing.developers, found.developers),
                 publishers: keep_or(&existing.publishers, found.publishers),
@@ -1208,6 +1214,8 @@ mod tests {
     const IGDB_ALPHA: &str = r#"[{"id":1,"name":"Alpha","summary":"From IGDB.",
         "first_release_date":1431993600,"genres":[{"name":"Puzzle"}],
         "involved_companies":[{"developer":true,"publisher":false,"company":{"name":"Dev Co"}}]}]"#;
+    const IGDB_GAMMA: &str = r#"[{"id":2,"name":"Gamma","summary":"IGDB text.",
+        "genres":[{"name":"Strategy"}],"involved_companies":[]}]"#;
 
     #[test]
     fn igdb_fills_in_what_the_store_cannot_and_nothing_else() {
@@ -1235,7 +1243,12 @@ mod tests {
         let err = mk("Delta", "partial", Some("err"));
 
         // Token, then one search per game IGDB is asked about; a further request would get a 500.
-        let server = serve(vec![(200, IGDB_TOKEN), (200, IGDB_ALPHA), (200, "[]")]);
+        let server = serve(vec![
+            (200, IGDB_TOKEN),
+            (200, IGDB_ALPHA),
+            (200, "[]"),
+            (200, IGDB_GAMMA),
+        ]);
         let igdb = Igdb::with_endpoints(
             Some("id".into()),
             Some("secret".into()),
@@ -1284,12 +1297,10 @@ mod tests {
             "no IGDB data is remembered"
         );
 
+        // The store had a description but no genres: IGDB adds genres, the store text stays.
         let has = db.get_game(has.id).unwrap();
         assert_eq!(has.description.as_deref(), Some("From the store."));
-        assert!(
-            has.genres.is_empty(),
-            "store data is not topped up from IGDB"
-        );
+        assert_eq!(has.genres, vec!["Strategy".to_string()]);
         let err = db.get_game(err.id).unwrap();
         assert!(
             err.metadata_updated_at.is_none(),
@@ -1298,8 +1309,8 @@ mod tests {
         assert!(err.extra.get(IGDB_CHECKED_KEY).is_none());
         assert_eq!(
             server.requests.lock().unwrap().len(),
-            3,
-            "only games without store data reach IGDB"
+            4,
+            "only games missing store data reach IGDB"
         );
     }
 
