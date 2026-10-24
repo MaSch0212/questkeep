@@ -25,7 +25,7 @@ use std::sync::{Arc, Mutex};
 pub use account::{GogAccount, LOGIN_SUCCESS_PREFIX};
 pub use install::InstallRecord;
 
-use super::heroic::{self, HeroicPaths};
+use super::heroic::{self, HeroicPaths, owned_with_local};
 
 /// Setting key (under `providers.gog`) for launching through GOG Galaxy.
 pub const LAUNCH_THROUGH_GALAXY: &str = "launchThroughGalaxy";
@@ -200,14 +200,28 @@ impl LibraryProvider for GogProvider {
 
     /// The owned library needs a signed-in account; without one only installed games are imported.
     fn can_scan_owned(&self) -> bool {
-        self.account.is_some()
+        self.account.is_some() || matches!(self.installs, Installs::Heroic(_))
     }
 
+    /// The account's library; on Linux also the libraries Heroic and Lutris cached, which need
+    /// no sign-in here.
     fn scan_owned(&self, _config: &serde_json::Value) -> Result<Vec<ImportedGame>, ProviderError> {
-        match &self.account {
-            Some(account) => account.fetch_owned(),
-            None => Err(ProviderError::Unsupported),
-        }
+        let local = || {
+            let Installs::Heroic(paths) = &self.installs else {
+                return Vec::new();
+            };
+            #[allow(unused_mut)] // only extended on Linux
+            let mut games = heroic::gog_owned_games(paths).unwrap_or_else(|err| {
+                tracing::debug!(%err, "no Heroic GOG library");
+                Vec::new()
+            });
+            #[cfg(not(windows))]
+            if let Ok(lutris) = super::lutris::LutrisProvider::detect().owned_for_service("gog") {
+                games = heroic::union_owned(games, lutris);
+            }
+            games
+        };
+        owned_with_local(self.account.as_ref().map(|a| a.fetch_owned()), local, "GOG")
     }
 
     fn account(&self) -> Option<&dyn AccountAuth> {

@@ -420,8 +420,10 @@ mod tests {
 
     #[test]
     fn builtin_registration_supports_account_sign_in() {
-        let registry =
-            crate::providers::ProviderRegistry::with_builtin(Arc::new(MemoryTokenStore::new()));
+        let registry = crate::providers::ProviderRegistry::with_builtin(
+            Arc::new(MemoryTokenStore::new()),
+            None,
+        );
         let xbox = registry.get("xbox").unwrap();
         assert!(xbox.can_scan_owned());
         let status = xbox.account().unwrap().status();

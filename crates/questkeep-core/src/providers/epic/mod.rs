@@ -18,7 +18,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use serde::Deserialize;
 
-use super::heroic::{self, HeroicPaths};
+use super::heroic::{self, HeroicPaths, owned_with_local};
 use super::{ImageCandidate, LibraryProvider, ProviderError};
 use crate::auth::{AccountAuth, system_clock};
 use crate::model::{GameMetadata, ImportedGame, PlayAction};
@@ -513,15 +513,32 @@ impl LibraryProvider for EpicProvider {
         Ok(games)
     }
 
+    /// The account's library; on Linux also the libraries Heroic and Lutris cached, which need
+    /// no sign-in here.
     fn can_scan_owned(&self) -> bool {
-        self.account.is_some()
+        self.account.is_some() || self.heroic.is_some()
     }
 
     fn scan_owned(&self, _config: &serde_json::Value) -> Result<Vec<ImportedGame>, ProviderError> {
-        match &self.account {
-            Some(account) => account.scan_owned(),
-            None => Err(ProviderError::Unsupported),
-        }
+        let local = || {
+            #[allow(unused_mut)] // only extended on Linux
+            let mut games = match self.heroic.as_ref().map(heroic::legendary_owned_games) {
+                Some(Ok(games)) => games,
+                Some(Err(err)) => {
+                    tracing::debug!(%err, "no Heroic Epic library");
+                    Vec::new()
+                }
+                None => Vec::new(),
+            };
+            #[cfg(not(windows))]
+            if self.heroic.is_some()
+                && let Ok(lutris) = super::lutris::LutrisProvider::detect().owned_for_service("egs")
+            {
+                games = heroic::union_owned(games, lutris);
+            }
+            games
+        };
+        owned_with_local(self.account.as_ref().map(|a| a.scan_owned()), local, "Epic")
     }
 
     fn account(&self) -> Option<&dyn AccountAuth> {

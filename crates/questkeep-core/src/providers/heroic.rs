@@ -480,6 +480,46 @@ fn merge_owned(mut installed: Vec<ImportedGame>, entries: Vec<LibraryEntry>) -> 
     installed
 }
 
+/// `base` plus the games of `more` whose id (any letter case) `base` lacks. Used by the Epic and
+/// GOG providers to add the libraries Heroic and Lutris cached to the account's owned list.
+pub fn union_owned(mut base: Vec<ImportedGame>, more: Vec<ImportedGame>) -> Vec<ImportedGame> {
+    for game in more {
+        if !base
+            .iter()
+            .any(|g| g.source_game_id.eq_ignore_ascii_case(&game.source_game_id))
+        {
+            base.push(game);
+        }
+    }
+    base
+}
+
+/// Combines an account's owned scan (`None` without account support) with the locally cached
+/// libraries `local` (only read when needed). The account's list wins; local games fill the
+/// gaps. A failing or signed-out account still yields the local games; with none either, the
+/// account's error (or `NotConfigured`) is returned so `Library` skips the owned scan.
+pub fn owned_with_local(
+    account: Option<Result<Vec<ImportedGame>, ProviderError>>,
+    local: impl FnOnce() -> Vec<ImportedGame>,
+    store: &str,
+) -> Result<Vec<ImportedGame>, ProviderError> {
+    let local = local();
+    match account {
+        Some(Ok(games)) => Ok(union_owned(games, local)),
+        Some(Err(err)) if local.is_empty() => Err(err),
+        Some(Err(err)) => {
+            if !matches!(err, ProviderError::NotConfigured(_)) {
+                tracing::warn!(%err, "{store} account library failed; using the local libraries");
+            }
+            Ok(local)
+        }
+        None if local.is_empty() => Err(ProviderError::NotConfigured(format!(
+            "No {store} library found."
+        ))),
+        None => Ok(local),
+    }
+}
+
 /// Whether Heroic has a cached Epic library.
 pub fn has_legendary_library(paths: &HeroicPaths) -> bool {
     !cached_library(paths, "legendary_library.json", "library").is_empty()
@@ -773,6 +813,40 @@ mod tests {
 
     use super::*;
     use crate::model::ActionKind;
+
+    #[test]
+    fn account_library_wins_and_local_libraries_fill_gaps() {
+        let owned = |id: &str| ImportedGame {
+            installed: false,
+            ..ImportedGame::installed(id, id)
+        };
+        let ids = |r: Result<Vec<ImportedGame>, ProviderError>| -> Vec<String> {
+            r.unwrap().into_iter().map(|g| g.source_game_id).collect()
+        };
+        let local = || vec![owned("a"), owned("C")];
+        assert_eq!(
+            ids(owned_with_local(
+                Some(Ok(vec![owned("A"), owned("b")])),
+                local,
+                "Epic"
+            )),
+            ["A", "b", "C"]
+        );
+        let signed_out = || Some(Err(ProviderError::NotConfigured("sign in".into())));
+        assert_eq!(
+            ids(owned_with_local(signed_out(), local, "Epic")),
+            ["a", "C"]
+        );
+        assert!(matches!(
+            owned_with_local(signed_out(), Vec::new, "Epic"),
+            Err(ProviderError::NotConfigured(_))
+        ));
+        assert_eq!(ids(owned_with_local(None, local, "Epic")), ["a", "C"]);
+        assert!(matches!(
+            owned_with_local(None, Vec::new, "Epic"),
+            Err(ProviderError::NotConfigured(_))
+        ));
+    }
 
     fn write(path: &Path, text: &str) {
         fs::create_dir_all(path.parent().unwrap()).unwrap();

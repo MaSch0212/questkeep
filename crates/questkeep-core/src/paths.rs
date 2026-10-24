@@ -75,6 +75,11 @@ impl DataPaths {
         self.root.join("settings.json")
     }
 
+    /// Store answers kept between runs (e.g. the Epic catalog); safe to delete.
+    pub fn cache_dir(&self) -> PathBuf {
+        self.root.join("cache")
+    }
+
     /// Where the main window was last placed.
     pub fn window_file(&self) -> PathBuf {
         self.root.join("window.json")

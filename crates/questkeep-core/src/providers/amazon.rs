@@ -68,6 +68,12 @@ impl LibraryProvider for AmazonProvider {
         heroic::nile_games(&self.paths, true)
     }
 
+    /// Heroic's Amazon `art_cover` is a store background or icon, not 2:3 box art, so
+    /// SteamGridDB goes first when configured.
+    fn covers_are_low_quality(&self, _source_game_id: &str) -> bool {
+        true
+    }
+
     fn cover_candidates(&self, source_game_id: &str) -> Vec<ImageCandidate> {
         heroic::nile_library(&self.paths)
             .into_iter()

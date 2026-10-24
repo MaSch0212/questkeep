@@ -140,7 +140,7 @@ fn build_state(app: &tauri::AppHandle) -> Result<(AppState, Option<WorkerGuard>)
     });
 
     let keyring: Arc<KeyringTokenStore> = Arc::new(KeyringTokenStore::new());
-    let providers = ProviderRegistry::with_builtin(keyring.clone());
+    let providers = ProviderRegistry::with_builtin(keyring.clone(), Some(&paths.cache_dir()));
     let library = Library::open(paths, providers.clone(), events.clone(), keyring)
         .map_err(|e| e.to_string())?;
     match library.database().recover_open_sessions() {

@@ -12,6 +12,7 @@ pub mod steam;
 pub mod xbox;
 
 use std::collections::BTreeMap;
+use std::path::Path;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
@@ -154,15 +155,18 @@ impl ProviderRegistry {
     }
 
     /// The providers shipped with Questkeep. Providers that support account sign-in keep their
-    /// tokens in `tokens` (the system keyring in the app).
-    pub fn with_builtin(tokens: Arc<dyn TokenStore>) -> Self {
+    /// tokens in `tokens` (the system keyring in the app). Store answers worth keeping between
+    /// runs go below `cache_dir` (`DataPaths::cache_dir`); `None` keeps them in memory only.
+    pub fn with_builtin(tokens: Arc<dyn TokenStore>, cache_dir: Option<&Path>) -> Self {
         let mut registry = Self::new();
         registry.register(Arc::new(manual::ManualProvider));
         registry.register(Arc::new(steam::SteamProvider::detect()));
-        registry.register(Arc::new(
-            epic::EpicProvider::detect()
-                .with_account(Arc::new(epic::EpicAccount::new(tokens.clone()))),
-        ));
+        let mut epic = epic::EpicProvider::detect()
+            .with_account(Arc::new(epic::EpicAccount::new(tokens.clone())));
+        if let Some(dir) = cache_dir {
+            epic = epic.with_cache_dir(dir);
+        }
+        registry.register(Arc::new(epic));
         registry.register(Arc::new(
             xbox::XboxProvider::detect()
                 .with_account(Arc::new(xbox::XboxAccount::new(tokens.clone()))),
@@ -234,7 +238,7 @@ mod tests {
     #[test]
     fn builtin_epic_and_gog_support_account_sign_in() {
         let registry =
-            ProviderRegistry::with_builtin(Arc::new(crate::auth::MemoryTokenStore::new()));
+            ProviderRegistry::with_builtin(Arc::new(crate::auth::MemoryTokenStore::new()), None);
         for id in ["epic", "gog"] {
             let provider = registry.get(id).unwrap();
             assert!(provider.can_scan_owned(), "{id}");
