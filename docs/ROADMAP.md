@@ -26,6 +26,8 @@ Also: GOG playtime from GOG Galaxy's local database; IGDB fills missing genres (
 
 - **Verify on Linux**: Heroic Amazon (Nile) and sideloaded games, owned games from Heroic/Lutris.
 - **GOG playtime without Galaxy** (Linux/Heroic): no web endpoint accepts the Galaxy token.
+- **Ubisoft and Amazon follow-ups**: try launch/install/uninstall live; owned games need an
+  account sign-in (their local ownership data is encrypted); tray entries for both launchers.
 
 ## Blocked
 

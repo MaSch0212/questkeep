@@ -61,7 +61,8 @@ crates/questkeep-core/src/     all logic; no Tauri/UI dependency
   library.rs                   facade used by the shell (manual add, update, scan, covers, seed)
   model/                       Game, PlayAction, queries, sorting names (ts-rs exported)
   db/                          SQLite: migrations.rs (append-only), games.rs, sessions.rs
-  providers/                   LibraryProvider trait + registry; manual, steam/, epic/, gog/, xbox/
+  providers/                   LibraryProvider trait + registry; manual, steam/, epic/, gog/, xbox/,
+                               ubisoft/, amazon/, heroic (Linux helpers), lutris/, sqlite (foreign DBs)
   auth/                        store account sign-in: keyring TokenStore, AccountSession, Http, AccountStatus
   launcher/                    launch + tracker threads (mod.rs), process matching (process.rs)
   images/                      cover/background cache (mod.rs) + cover and metadata fetchers (fetcher.rs)

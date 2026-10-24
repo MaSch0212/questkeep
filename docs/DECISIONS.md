@@ -367,6 +367,30 @@ Short log of choices made while building. Newest at the bottom of each section.
   check.
 
 
+## Ubisoft Connect and Amazon Games (Windows)
+
+- **Ubisoft installs come from `HKLM\SOFTWARE\WOW6432Node\Ubisoft\Launcher\Installs\<id>`**
+  (`InstallDir` uses `/` and a trailing slash; normalized). Names: the launcher's product cache,
+  then `Uninstall\Uplay Install <id>` `DisplayName`, then the folder name. Launch
+  `uplay://launch/<id>/0` (the form Ubisoft's shortcuts use) with `Directory` tracking, since the
+  URI starts the launcher first; install `uplay://install/<id>`, uninstall `uplay://uninstall/<id>`
+  (the registry's own `UninstallString` runs exactly that). Checked 2026-10-25 with Trackmania (5595).
+- **The `configurations` cache is a catalogue, not a library**: protobuf (repeated field 1 =
+  `{1: uplay id, 2: install id, 3: YAML}`), 676 products on the maintainer's PC including games he
+  doesn't own and DLC. Playnite imports it as the library; we only take names and artwork from it.
+  The ownership cache is encrypted, so owned-but-not-installed Ubisoft games would need an online
+  sign-in (not built). Artwork URLs are under
+  `https://ubistatic3-a.akamaihd.net/orbit/uplay_launcher_3_0/assets/`; thumbnails are 240x280
+  (about 6:7), so `covers_are_low_quality` is `true` and SteamGridDB goes first.
+- **Amazon on Windows reads the Amazon Games app's SQLite files** in
+  `%LOCALAPPDATA%\Amazon Games\Data\Games\Sql\` through `read_foreign`: installed games from
+  `GameInstallInfo.sqlite` (`DbSet`: `Id`, `InstallDirectory`, `ProductTitle`, `Installed`), icon and
+  backgrounds from `ProductDetails.sqlite` (`game_product_info`, a cache of viewed store pages; no
+  portrait art). The id is the Amazon product UUID, the same as Nile's `product.id` on Linux
+  (per Playnite; not compared on a machine with both). `Entitlements.sqlite` is DPAPI-encrypted, so
+  there are no owned games without a sign-in. Launch `amazon-games://play/<id>`, install
+  `amazon-games://install/<id>`; the app has no uninstall URI, so Uninstall opens the app.
+
 ## Tray and autostart
 
 - **Hiding to the tray destroys the main window** rather than hiding it: a hidden WebView2 window
