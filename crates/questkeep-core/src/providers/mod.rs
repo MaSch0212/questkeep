@@ -10,6 +10,7 @@ pub mod lutris;
 pub mod manual;
 mod sqlite;
 pub mod steam;
+pub mod ubisoft;
 pub mod xbox;
 
 use std::collections::BTreeMap;
@@ -175,6 +176,7 @@ impl ProviderRegistry {
         registry.register(Arc::new(
             gog::GogProvider::detect().with_account(Arc::new(gog::GogAccount::new(tokens))),
         ));
+        registry.register(Arc::new(ubisoft::UbisoftProvider::detect()));
         // Lutris only exists on Linux; leaving it out elsewhere keeps the provider list honest.
         #[cfg(not(windows))]
         registry.register(Arc::new(lutris::LutrisProvider::detect()));

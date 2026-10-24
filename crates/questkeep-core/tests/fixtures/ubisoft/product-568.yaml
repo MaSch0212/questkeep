@@ -1,0 +1,20 @@
+version: 2.0
+root:
+  name: l1
+  sort_string: Tom Clancy's The Division 01
+  background_image: 93277d0454885dcebf1ffd30dc75bf7f.jpg
+  thumb_image: l2
+  icon_image: b42e7d967e3b646523c970a28645384e.ico
+  start_game:
+    online:
+      executables:
+      - shortcut_name: Tom Clancy's The Division
+        path:
+          relative: TheDivision.exe
+localizations:
+  default:
+    l1: Tom Clancy's The Division™
+    l2: 20245d0356a609a8f2968aec287443a3.jpg
+    l3: Tom Clancy's The Division™ - Season Pass
+  fr-FR:
+    l1: Tom Clancy's The Division™ (fr)

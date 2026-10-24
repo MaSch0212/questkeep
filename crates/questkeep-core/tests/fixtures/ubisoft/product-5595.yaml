@@ -1,0 +1,78 @@
+version: 2.0
+root:
+  name: Trackmania
+  background_image: 6b7da0564c173293938428c11930afa0.jpg
+  thumb_image: 29af1426c8ea0ed58abcc96195c45ef7.jpg
+  logo_image: 3ef7644fa8876ca454a90e2b936d32f9.png
+  splash_image: 562969058e8378ddbb54d0ab009e74d5.jpg
+  help_url: https://www.ubisoft.com/help
+  facebook_url: https://www.facebook.com/trackmania
+  homepage_url: https://trackmania.com/
+  forum_url: https://discord.gg/ubisoftofficial
+  streams:
+    link: https://www.twitch.tv/trackmania
+  overlay_notifications_position: bottom_right
+  overlay_virtual_control_enabled: no
+  overlay_notifications: []
+  icon_image: 8231e71808581ef4d3499fe96ecdf921.ico
+  start_game:
+    online:
+      overlay_required: yes
+      overlay_shop_enabled: yes
+      overlay_shop_default_enabled: yes
+      overlay_shop_sigma: yes
+      overlay_browser_home_url: https://www.trackmania.com/
+      overlay_product_activation_enabled: yes
+      overlay_supported: yes
+      executables:
+      - shortcut_name: Trackmania
+        path:
+          relative: Trackmania.exe
+        working_directory:
+          register: HKEY_LOCAL_MACHINE\SOFTWARE\Ubisoft\Launcher\Installs\5595\InstallDir
+    offline:
+      executables:
+      - shortcut_name: Trackmania
+        path:
+          relative: Trackmania.exe
+        working_directory:
+          register: HKEY_LOCAL_MACHINE\SOFTWARE\Ubisoft\Launcher\Installs\5595\InstallDir
+  overlay_injection_method: sdk
+  upn_enabled: true
+  installer:
+    game_identifier: Trackmania
+    publisher: Ubisoft
+    help_url: https://support.ubi.com
+    about_url: https://trackmania.com/
+  digital_distribution:
+    version: 60
+  change_language_enabled: yes
+  game_invites_enabled: yes
+  club:
+    enabled: yes
+    challenges_enabled: yes
+  news:
+    thread: TrackmaniaNext
+  game_page_modules:
+    player_stats:
+      size: 2
+    friends:
+      size: 1
+    streams:
+      size: 1
+  player_stats:
+    items:
+    - id: TotalPlaytime
+    - id: SoloPlaytime
+    - id: LivePlaytime
+    - id: ClubPlaytime
+    - id: CreatePlaytime
+  app_id: 86263886-327a-4328-ac69-527f0d20a237
+  space_id: 5d20614c-234d-4cc8-934d-11ff07c2de69
+  streaming:
+    share_play:
+      enabled: yes
+      session_limit: 60
+  share_play: yes
+  show_properties: yes
+localizations: {}
