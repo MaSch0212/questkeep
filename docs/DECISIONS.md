@@ -241,9 +241,18 @@ Short log of choices made while building. Newest at the bottom of each section.
   usually square, 1080x1080, and is skipped); `BrandedKeyArt` (0.73) is not used. The package logo
   stays as the last candidate for installed games. Background: `SuperHeroArt`, `TitledHeroArt`, the
   first `Screenshot`.
-- **`covers_are_low_quality()` is now `false`** (the trait method has no game argument): posters
-  are real art and must beat SteamGridDB. Cost: a game without a catalog poster uses its square
-  logo before SteamGridDB is asked. A per-game flag is a trait change for later.
+- **`covers_are_low_quality(source_game_id)` is per game**: Xbox answers `true` only when the
+  Store catalog has no poster for that game (its cached answer, so no extra request); then
+  SteamGridDB goes first and the square package logo is the fallback. Posters still beat
+  SteamGridDB.
+- **"Don't import Game Pass games" (`providers.xbox.hideGamePass`) uses the public PC Game Pass
+  list**, `https://catalog.gamepass.com/sigls/v2?id=fdd9e2a7-0fee-49f6-ad69-4354098401ff&language=en-us&market=US`
+  (checked anonymously 2026-10-25: a header object, then ~515 `{"id": "<Store id>"}`), compared
+  with each owned title's catalog `ProductId`. The title history can't tell a purchase from a Game
+  Pass play, and the entitlement (collections) API needs another token audience we couldn't verify,
+  so bought games that are also in Game Pass are left out too while not installed. Installed games
+  are always kept. A failing list keeps everything. Games already imported stay, because scans
+  never delete games.
 - **Sign-in is the Microsoft account OAuth flow Playnite's Xbox library uses** (facts only, no code
   copied). Public client id `38cd2fa8-66fd-4760-afb2-405eb65d5b0c`, scope `Xboxlive.signin
   Xboxlive.offline_access`, redirect `https://login.live.com/oauth20_desktop.srf`:

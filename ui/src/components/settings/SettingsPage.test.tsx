@@ -251,6 +251,24 @@ describe("GOG Galaxy launch option", () => {
     expect(saved?.providers.steam).toEqual({ apiKey: "OLDKEY", extraFlag: 7 });
   });
 
+  it("saves the Xbox Game Pass option and rescans Xbox", async () => {
+    await loadAppInfo("C:/data", "C:/data/logs");
+    vi.mocked(api.listProviders).mockResolvedValue([
+      { id: "xbox", name: "Xbox", canScan: true, canScanOwned: true, canUninstall: true },
+    ]);
+    await store.init();
+    vi.mocked(api.scanLibrary).mockResolvedValue({ added: 0, updated: 0, uninstalled: 0 });
+    render(() => <SettingsPage />);
+    const toggle = await screen.findByRole("checkbox", {
+      name: "Don't import Game Pass games from my Xbox account",
+    });
+    expect((toggle as HTMLInputElement).checked).toBe(false);
+    fireEvent.change(toggle, { target: { checked: true } });
+    await waitFor(() => expect(api.scanLibrary).toHaveBeenCalledWith("xbox"));
+    const saved = vi.mocked(api.saveSettings).mock.calls.at(-1)?.[0];
+    expect(saved?.providers.xbox).toEqual({ hideGamePass: true });
+  });
+
   it("is hidden without the GOG provider", async () => {
     await loadAppInfo("C:/data", "C:/data/logs");
     render(() => <SettingsPage />);

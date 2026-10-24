@@ -168,7 +168,8 @@ fn process(shared: &Shared, job: &CoverJob) {
         };
         let low_quality = provider
             .as_ref()
-            .is_some_and(|p| p.covers_are_low_quality());
+            .zip(job.source_game_id.as_deref())
+            .is_some_and(|(p, id)| p.covers_are_low_quality(id));
         if low_quality && sgdb_wanted {
             // Square logos and the like: real box art first, the logo only as a fallback.
             sgdb(ImageKind::Cover).or_else(from_provider)

@@ -3,6 +3,9 @@ import type { Settings } from "../bindings/Settings";
 /** Key under `providers.gog` that makes installed GOG games start through GOG Galaxy. */
 export const GOG_LAUNCH_THROUGH_GALAXY = "launchThroughGalaxy";
 
+/** Key under `providers.xbox` that leaves PC Game Pass titles out of the owned Xbox games. */
+export const XBOX_HIDE_GAME_PASS = "hideGamePass";
+
 /** A boolean provider option (`providers.<id>.<key>`), false when unset or not a boolean. */
 export function providerFlag(settings: Settings, providerId: string, key: string): boolean {
   return settings.providers[providerId]?.[key] === true;

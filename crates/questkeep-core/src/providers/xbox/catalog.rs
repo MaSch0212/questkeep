@@ -9,7 +9,7 @@
 //! `Products` list. Results are cached in memory for the run (one request per game, shared by
 //! covers, backgrounds and metadata).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use serde::Deserialize;
@@ -329,6 +329,12 @@ impl Catalog {
             .unwrap_or_else(PoisonError::into_inner)
             .insert(key, product.clone());
         Ok(product)
+    }
+
+    /// The Store ids currently in PC Game Pass (not cached: the list changes over time and is
+    /// read once per owned scan).
+    pub fn game_pass_pc_games(&self) -> Result<HashSet<String>, ProviderError> {
+        super::game_pass::fetch_pc_games(self.http.as_ref())
     }
 
     /// Cover candidates; lookup failures only mean "none" here (logged).

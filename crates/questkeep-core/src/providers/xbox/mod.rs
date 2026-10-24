@@ -13,10 +13,13 @@
 
 mod account;
 mod catalog;
+mod game_pass;
 mod manifest;
 mod scan;
 
+use std::collections::HashSet;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use super::{ImageCandidate, LibraryProvider, ProviderError};
 use crate::auth::{AccountAuth, Http, UreqHttp};
@@ -30,12 +33,17 @@ pub const XBOX_SOURCE: &str = "xbox";
 /// Where the provider gets packages from; replaceable in tests.
 type PackageSource = fn() -> Vec<AppxPackage>;
 
-#[derive(Debug, Clone)]
+/// Setting key (under `providers.xbox`) for leaving PC Game Pass titles out of the owned list.
+pub const HIDE_GAME_PASS: &str = "hideGamePass";
+
+#[derive(Debug)]
 pub struct XboxProvider {
     packages: PackageSource,
     catalog: Arc<catalog::Catalog>,
     /// Signed-in account, when the app supplies token storage.
     account: Option<Arc<XboxAccount>>,
+    /// Set from the `hideGamePass` setting before each scan ([`LibraryProvider::configure`]).
+    hide_game_pass: AtomicBool,
 }
 
 impl XboxProvider {
@@ -50,17 +58,52 @@ impl XboxProvider {
         self
     }
 
-    /// `http` is used for the Store catalog lookups.
+    /// `http` is used for the Store and Game Pass catalog lookups.
     fn new(packages: PackageSource, http: Arc<dyn Http>) -> Self {
         Self {
             packages,
             catalog: Arc::new(catalog::Catalog::new(http)),
             account: None,
+            hide_game_pass: AtomicBool::new(false),
         }
     }
 
     fn entries(&self) -> Vec<scan::GameEntry> {
         scan::scan_packages(&(self.packages)())
+    }
+
+    /// Drops the not-installed games that are currently in PC Game Pass. The title history
+    /// cannot tell a purchase from a Game Pass play, so a bought game that is also in Game Pass
+    /// is left out too while it is not installed. Each game costs one (cached) Store catalog
+    /// lookup; when the Game Pass list or a lookup fails, games are kept.
+    fn without_game_pass(
+        &self,
+        games: Vec<ImportedGame>,
+        installed: &HashSet<String>,
+    ) -> Vec<ImportedGame> {
+        let game_pass = match self.catalog.game_pass_pc_games() {
+            Ok(ids) => ids,
+            Err(err) => {
+                tracing::warn!(%err, "could not read the Game Pass catalog; keeping all titles");
+                return games;
+            }
+        };
+        games
+            .into_iter()
+            .filter(|game| {
+                if installed.contains(&game.source_game_id) {
+                    return true;
+                }
+                let store_id = match self.catalog.product(&game.source_game_id) {
+                    Ok(product) => product.and_then(|p| p.store_id.clone()),
+                    Err(err) => {
+                        tracing::debug!(game = %game.source_game_id, %err, "catalog lookup failed");
+                        None
+                    }
+                };
+                !store_id.is_some_and(|id| game_pass.contains(&id.to_ascii_uppercase()))
+            })
+            .collect()
     }
 }
 
@@ -99,6 +142,7 @@ impl LibraryProvider for XboxProvider {
         };
         let mut games = account.fetch_owned()?;
         let installed = self.entries();
+        let mut installed_ids = HashSet::new();
         for game in &mut games {
             if let Some(entry) = installed.iter().find(|e| {
                 e.game
@@ -106,9 +150,22 @@ impl LibraryProvider for XboxProvider {
                     .eq_ignore_ascii_case(&game.source_game_id)
             }) {
                 game.source_game_id = entry.game.source_game_id.clone();
+                installed_ids.insert(game.source_game_id.clone());
             }
         }
+        if self.hide_game_pass.load(Ordering::Relaxed) {
+            games = self.without_game_pass(games, &installed_ids);
+        }
         Ok(games)
+    }
+
+    /// `{ "hideGamePass": true }` leaves PC Game Pass titles out of the owned list.
+    fn configure(&self, config: &serde_json::Value) {
+        let hide = config
+            .get(HIDE_GAME_PASS)
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false);
+        self.hide_game_pass.store(hide, Ordering::Relaxed);
     }
 
     fn account(&self) -> Option<&dyn AccountAuth> {
@@ -147,11 +204,11 @@ impl LibraryProvider for XboxProvider {
         (valid && self.can_uninstall()).then(|| PlayAction::uri("ms-settings:appsfeatures"))
     }
 
-    /// `false`: the Store catalog's posters are real 2:3 art and win over SteamGridDB. The trait
-    /// cannot say this per game, so for a game without catalog poster the square package logo
-    /// (the last candidate) is used before SteamGridDB is asked.
-    fn covers_are_low_quality(&self) -> bool {
-        false
+    /// The Store catalog's posters are real 2:3 art and win over SteamGridDB; a game without one
+    /// only has its square package logo, so SteamGridDB goes first. The catalog answer is cached,
+    /// so this costs no extra request.
+    fn covers_are_low_quality(&self, source_game_id: &str) -> bool {
+        self.catalog.covers(source_game_id).is_empty()
     }
 
     fn background_candidates(&self, source_game_id: &str) -> Vec<ImageCandidate> {
@@ -293,7 +350,11 @@ mod tests {
             "poster only, and no package without a scan"
         );
         assert!(matches!(&covers[0], ImageCandidate::Url(u) if u.contains("apps.3823.")));
-        assert!(!p.covers_are_low_quality());
+        assert!(!p.covers_are_low_quality(id));
+        assert!(
+            p.covers_are_low_quality("Contoso.Unknown_8wekyb3d8bbwe"),
+            "no poster: logo only"
+        );
         let backgrounds = p.background_candidates(id);
         assert!(matches!(&backgrounds[0], ImageCandidate::Url(u) if u.contains("apps.47030.")));
         let meta = p.metadata(id).unwrap().unwrap();
@@ -319,6 +380,42 @@ mod tests {
         assert_eq!(covers.len(), 2);
         assert!(matches!(covers[0], ImageCandidate::Url(_)));
         assert!(matches!(covers[1], ImageCandidate::File(_)));
+    }
+
+    #[test]
+    fn game_pass_titles_are_left_out_unless_installed() {
+        let handler = |req: &HttpRequest| {
+            if req.url.starts_with("https://catalog.gamepass.com/") {
+                response(200, r#"[{"siglId":"x"},{"id":"9PP5G1F0C2B6"}]"#)
+            } else if req.url.contains("value=Contoso.Racer_8wekyb3d8bbwe") {
+                response(200, CATALOG)
+            } else {
+                response(200, r#"{"Products":[]}"#)
+            }
+        };
+        let p = XboxProvider::new(Vec::new, Arc::new(FakeHttp::new(handler)));
+        let owned = |id: &str| ImportedGame {
+            installed: false,
+            ..ImportedGame::installed(id, id)
+        };
+        let games = vec![
+            owned("Contoso.Racer_8wekyb3d8bbwe"), // in Game Pass (fixture product 9PP5G1F0C2B6)
+            owned("Contoso.Bought_8wekyb3d8bbwe"), // not in the catalog
+        ];
+        let kept = p.without_game_pass(games.clone(), &HashSet::new());
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0].source_game_id, "Contoso.Bought_8wekyb3d8bbwe");
+        let installed = HashSet::from(["Contoso.Racer_8wekyb3d8bbwe".to_string()]);
+        assert_eq!(p.without_game_pass(games.clone(), &installed).len(), 2);
+
+        // The Game Pass list is unreachable: nothing is hidden.
+        let offline = provider(Vec::new);
+        assert_eq!(offline.without_game_pass(games, &HashSet::new()).len(), 2);
+
+        p.configure(&serde_json::json!({ "hideGamePass": true }));
+        assert!(p.hide_game_pass.load(Ordering::Relaxed));
+        p.configure(&serde_json::Value::Null);
+        assert!(!p.hide_game_pass.load(Ordering::Relaxed));
     }
 
     #[test]

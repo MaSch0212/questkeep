@@ -2,7 +2,11 @@ import { For, Show } from "solid-js";
 import { createStore } from "solid-js/store";
 import * as api from "../../lib/api";
 import { errorMessage } from "../../lib/errors";
-import { GOG_LAUNCH_THROUGH_GALAXY, providerFlag } from "../../lib/providerSettings";
+import {
+  GOG_LAUNCH_THROUGH_GALAXY,
+  XBOX_HIDE_GAME_PASS,
+  providerFlag,
+} from "../../lib/providerSettings";
 import { scanSummaryText } from "../../lib/query";
 import { store } from "../../lib/store";
 import type { SettingsModel } from "./useSettings";
@@ -75,6 +79,31 @@ export function LibrarySection(props: { model: SettingsModel }) {
             <p class="muted">
               Galaxy adds cloud saves, its overlay and playtime tracking. Games Galaxy doesn't know
               (offline installers) and PCs without Galaxy still start the game directly.
+            </p>
+          </>
+        )}
+      </Show>
+      <Show when={store.providers().some((p) => p.id === "xbox") && props.model.settings()}>
+        {(current) => (
+          <>
+            <label class="check">
+              <input
+                type="checkbox"
+                checked={providerFlag(current(), "xbox", XBOX_HIDE_GAME_PASS)}
+                onChange={(e) =>
+                  void props.model.setProviderOption(
+                    "xbox",
+                    XBOX_HIDE_GAME_PASS,
+                    e.currentTarget.checked,
+                  )
+                }
+              />
+              <span>Don't import Game Pass games from my Xbox account</span>
+            </label>
+            <p class="muted">
+              Games in PC Game Pass are only listed while installed. Xbox can't tell a bought game
+              from a Game Pass one, so games you bought that are also in Game Pass are left out too.
+              Games already in your library stay; hide or remove them there.
             </p>
           </>
         )}
