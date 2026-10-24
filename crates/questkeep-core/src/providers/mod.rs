@@ -1,9 +1,11 @@
 //! Library providers: one per store. Adding a provider means implementing [`LibraryProvider`] and
 //! registering it; UI and database code stay untouched.
 
+pub mod amazon;
 pub mod epic;
 pub mod gog;
 pub mod heroic;
+pub mod heroic_sideload;
 pub mod lutris;
 pub mod manual;
 pub mod steam;
@@ -171,6 +173,10 @@ impl ProviderRegistry {
         // Lutris only exists on Linux; leaving it out elsewhere keeps the provider list honest.
         #[cfg(not(windows))]
         registry.register(Arc::new(lutris::LutrisProvider::detect()));
+        #[cfg(not(windows))]
+        registry.register(Arc::new(amazon::AmazonProvider::detect()));
+        #[cfg(not(windows))]
+        registry.register(Arc::new(heroic_sideload::HeroicSideloadProvider::detect()));
         registry
     }
 

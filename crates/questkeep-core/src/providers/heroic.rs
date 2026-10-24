@@ -407,6 +407,366 @@ pub fn gog_games(paths: &HeroicPaths) -> Result<Vec<ImportedGame>, ProviderError
     Ok(games)
 }
 
+// ---- Heroic's cached store libraries (owned games) -------------------------------------------
+//
+// Heroic caches each store's library as `<config>/store_cache/<name>.json` (a flat key-value
+// file; the list is under one key): `legendary_library.json` -> `"library"`, `gog_library.json` ->
+// `"games"`, `nile_library.json` -> `"library"`. The entries are Heroic's unified `GameInfo`
+// (`app_name`, `title`, `art_cover`, `art_square`, `is_installed`, ...).
+
+/// A game of one of Heroic's cached store libraries.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LibraryEntry {
+    pub id: String,
+    pub title: String,
+    /// Cover image URL (Heroic's `art_cover`, else `art_square`).
+    pub cover: Option<String>,
+}
+
+/// Parses a cache file's `GameInfo` list: `{"<key>": [...]}` or a bare array. Entries without
+/// `app_name` or `title` are dropped.
+pub fn parse_library_entries(json: &str, key: &str) -> Vec<LibraryEntry> {
+    let Ok(value) = serde_json::from_str::<Value>(json.trim_start_matches('\u{feff}')) else {
+        return Vec::new();
+    };
+    let list = value.get(key).unwrap_or(&value);
+    let mut out = Vec::new();
+    for entry in list.as_array().into_iter().flatten() {
+        let (Some(id), Some(title)) = (str_field(entry, "app_name"), str_field(entry, "title"))
+        else {
+            continue;
+        };
+        out.push(LibraryEntry {
+            id: id.to_string(),
+            title: title.to_string(),
+            cover: str_field(entry, "art_cover")
+                .or_else(|| str_field(entry, "art_square"))
+                .map(str::to_string),
+        });
+    }
+    out
+}
+
+/// The entries of `store_cache/<name>.json` over all Heroic config dirs (first one wins per id).
+fn cached_library(paths: &HeroicPaths, name: &str, key: &str) -> Vec<LibraryEntry> {
+    let mut out: Vec<LibraryEntry> = Vec::new();
+    for dir in &paths.config_dirs {
+        let Ok(text) = std::fs::read_to_string(dir.join("store_cache").join(name)) else {
+            continue;
+        };
+        for e in parse_library_entries(&text, key) {
+            if !out.iter().any(|o| o.id == e.id) {
+                out.push(e);
+            }
+        }
+    }
+    out
+}
+
+/// Owned games from `entries` that are not in `installed`, as `installed: false` games.
+fn merge_owned(mut installed: Vec<ImportedGame>, entries: Vec<LibraryEntry>) -> Vec<ImportedGame> {
+    for e in entries {
+        if installed
+            .iter()
+            .any(|g| g.source_game_id.eq_ignore_ascii_case(&e.id))
+        {
+            continue;
+        }
+        let mut game = ImportedGame::installed(&e.id, &e.title);
+        game.installed = false;
+        installed.push(game);
+    }
+    installed.sort_by_cached_key(|g| (g.name.to_lowercase(), g.source_game_id.clone()));
+    installed
+}
+
+/// Whether Heroic has a cached Epic library.
+pub fn has_legendary_library(paths: &HeroicPaths) -> bool {
+    !cached_library(paths, "legendary_library.json", "library").is_empty()
+}
+
+/// Whether Heroic has a cached GOG library.
+pub fn has_gog_library(paths: &HeroicPaths) -> bool {
+    !cached_library(paths, "gog_library.json", "games").is_empty()
+}
+
+/// All Epic games Heroic knows (its cached library): installed ones come from
+/// [`legendary_games`] (so they keep their play action), the rest have `installed: false`. Ids
+/// are Epic `AppName`s, like the installed games and the Epic API scan.
+pub fn legendary_owned_games(paths: &HeroicPaths) -> Result<Vec<ImportedGame>, ProviderError> {
+    let installed = legendary_games(paths)?;
+    let entries = cached_library(paths, "legendary_library.json", "library");
+    Ok(merge_owned(installed, entries))
+}
+
+/// All GOG games Heroic knows, see [`legendary_owned_games`]. Ids are GOG product ids. Heroic's
+/// pseudo entry for the GOG redistributables (`gog-redist`) and other non-numeric ids are skipped.
+pub fn gog_owned_games(paths: &HeroicPaths) -> Result<Vec<ImportedGame>, ProviderError> {
+    let installed = gog_games(paths)?;
+    let mut entries = cached_library(paths, "gog_library.json", "games");
+    entries.retain(|e| !e.id.is_empty() && e.id.bytes().all(|b| b.is_ascii_digit()));
+    Ok(merge_owned(installed, entries))
+}
+
+// ---- Amazon Games (Nile) ---------------------------------------------------------------------
+//
+// Heroic's Nile runner keeps `nile_config/nile/installed.json` (a list of `{id, version, path}`),
+// `nile_config/nile/library.json` (Nile's raw library: a list of `{id, product: {id, title,
+// productDetail: {iconUrl, details: {backgroundUrl1, backgroundUrl2, logoUrl}}}}`) and the unified
+// cache `store_cache/nile_library.json` (`{"library": [GameInfo]}`). The game id everywhere is the
+// Amazon product id (`product.id`, Heroic's `app_name`).
+
+/// An entry of Nile's `installed.json`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NileInstall {
+    pub id: String,
+    pub path: String,
+}
+
+/// Parses Nile's `installed.json` (a list, or `{"installed": [...]}`). Entries without id or path
+/// are dropped.
+pub fn parse_nile_installed(json: &str) -> Result<Vec<NileInstall>, String> {
+    let value: Value =
+        serde_json::from_str(json.trim_start_matches('\u{feff}')).map_err(|e| e.to_string())?;
+    let list = value.get("installed").unwrap_or(&value);
+    let Some(list) = list.as_array() else {
+        return Err("expected a JSON list".into());
+    };
+    Ok(list
+        .iter()
+        .filter_map(|e| {
+            Some(NileInstall {
+                id: str_field(e, "id")?.to_string(),
+                path: str_field(e, "path")?.to_string(),
+            })
+        })
+        .collect())
+}
+
+/// Parses Nile's raw `library.json`. The cover mirrors Heroic's `art_cover`
+/// (`backgroundUrl2`, else the icon).
+pub fn parse_nile_library(json: &str) -> Vec<LibraryEntry> {
+    let Ok(value) = serde_json::from_str::<Value>(json.trim_start_matches('\u{feff}')) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for entry in value.as_array().into_iter().flatten() {
+        let product = entry.get("product").unwrap_or(entry);
+        let (Some(id), Some(title)) = (str_field(product, "id"), str_field(product, "title"))
+        else {
+            continue;
+        };
+        let detail = product.get("productDetail");
+        let cover = detail
+            .and_then(|d| d.get("details"))
+            .and_then(|d| str_field(d, "backgroundUrl2"))
+            .or_else(|| detail.and_then(|d| str_field(d, "iconUrl")));
+        out.push(LibraryEntry {
+            id: id.to_string(),
+            title: title.to_string(),
+            cover: cover.map(str::to_string),
+        });
+    }
+    out
+}
+
+/// Heroic's cached Amazon library, falling back to Nile's raw `library.json`.
+pub fn nile_library(paths: &HeroicPaths) -> Vec<LibraryEntry> {
+    let mut out = cached_library(paths, "nile_library.json", "library");
+    for dir in &paths.config_dirs {
+        let file = dir.join("nile_config").join("nile").join("library.json");
+        let Ok(text) = std::fs::read_to_string(file) else {
+            continue;
+        };
+        for e in parse_nile_library(&text) {
+            if !out.iter().any(|o| o.id == e.id) {
+                out.push(e);
+            }
+        }
+    }
+    out
+}
+
+/// Installed Amazon games from Heroic (Nile). With `owned`, the library's other games follow with
+/// `installed: false`.
+pub fn nile_games(paths: &HeroicPaths, owned: bool) -> Result<Vec<ImportedGame>, ProviderError> {
+    if paths.config_dirs.is_empty() {
+        return Err(ProviderError::NotFound(
+            "Heroic Games Launcher was not found; Amazon games are read from Heroic".into(),
+        ));
+    }
+    let library = nile_library(paths);
+    let mut games: Vec<ImportedGame> = Vec::new();
+    for dir in &paths.config_dirs {
+        let file = dir.join("nile_config").join("nile").join("installed.json");
+        let text = match std::fs::read_to_string(&file) {
+            Ok(t) => t,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(e) => {
+                tracing::warn!("ignoring unreadable {}: {e}", file.display());
+                continue;
+            }
+        };
+        let installs = match parse_nile_installed(&text) {
+            Ok(i) => i,
+            Err(e) => {
+                tracing::warn!("ignoring malformed {}: {e}", file.display());
+                continue;
+            }
+        };
+        for install in installs {
+            if games.iter().any(|g| g.source_game_id == install.id) {
+                continue;
+            }
+            if !Path::new(&install.path).is_dir() {
+                tracing::warn!(
+                    "Amazon game {} has no existing install folder, skipped",
+                    install.id
+                );
+                continue;
+            }
+            let name = library
+                .iter()
+                .find(|e| e.id == install.id)
+                .map(|e| e.title.clone())
+                .or_else(|| dir_name(&install.path))
+                .unwrap_or_else(|| install.id.clone());
+            let mut game = ImportedGame::installed(&install.id, name);
+            game.install_dir = Some(install.path.clone());
+            game.play_action = Some(heroic_action("nile", &install.id, &install.path));
+            games.push(game);
+        }
+    }
+    if owned {
+        return Ok(merge_owned(games, library));
+    }
+    games.sort_by_cached_key(|g| (g.name.to_lowercase(), g.source_game_id.clone()));
+    Ok(games)
+}
+
+// ---- Sideloaded apps -------------------------------------------------------------------------
+//
+// Heroic's "Add a game" entries live in `sideload_apps/library.json` as `{"games": [{"runner":
+// "sideload", "app_name", "title", "install": {"executable", "platform"}, "folder_name",
+// "art_cover", "art_square", "is_installed", "browserUrl", ...}]}`. `platform` is `Windows`,
+// `linux`, `Mac` or `Browser`.
+
+/// A sideloaded Heroic app.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SideloadApp {
+    pub app_name: String,
+    pub title: String,
+    pub executable: Option<String>,
+    pub platform: Option<String>,
+    pub installed: bool,
+    pub is_browser: bool,
+    /// Heroic's `art_cover`: a URL or a local path (optionally `file://`).
+    pub cover: Option<String>,
+}
+
+pub fn parse_sideload_library(json: &str) -> Result<Vec<SideloadApp>, String> {
+    let value: Value =
+        serde_json::from_str(json.trim_start_matches('\u{feff}')).map_err(|e| e.to_string())?;
+    let Some(list) = value.get("games").and_then(Value::as_array) else {
+        return Err("missing \"games\" list".into());
+    };
+    let mut out = Vec::new();
+    for entry in list {
+        let (Some(app_name), Some(title)) =
+            (str_field(entry, "app_name"), str_field(entry, "title"))
+        else {
+            continue;
+        };
+        let install = entry.get("install");
+        let platform = install
+            .and_then(|i| str_field(i, "platform"))
+            .map(str::to_string);
+        out.push(SideloadApp {
+            app_name: app_name.to_string(),
+            title: title.to_string(),
+            executable: install
+                .and_then(|i| str_field(i, "executable"))
+                .map(str::to_string),
+            installed: entry.get("is_installed").and_then(Value::as_bool) != Some(false),
+            is_browser: str_field(entry, "browserUrl").is_some()
+                || platform
+                    .as_deref()
+                    .is_some_and(|p| p.eq_ignore_ascii_case("browser")),
+            platform,
+            cover: str_field(entry, "art_cover")
+                .or_else(|| str_field(entry, "art_square"))
+                .map(str::to_string),
+        });
+    }
+    Ok(out)
+}
+
+/// All sideloaded apps over the Heroic config dirs (first one wins per app name).
+pub fn sideload_apps(paths: &HeroicPaths) -> Vec<SideloadApp> {
+    let mut out: Vec<SideloadApp> = Vec::new();
+    for dir in &paths.config_dirs {
+        let file = dir.join("sideload_apps").join("library.json");
+        let Ok(text) = std::fs::read_to_string(&file) else {
+            continue;
+        };
+        match parse_sideload_library(&text) {
+            Ok(list) => {
+                for app in list {
+                    if !out.iter().any(|o| o.app_name == app.app_name) {
+                        out.push(app);
+                    }
+                }
+            }
+            Err(e) => tracing::warn!("ignoring malformed {}: {e}", file.display()),
+        }
+    }
+    out
+}
+
+/// Sideloaded games that exist on disk. Browser apps and macOS apps have nothing to track or run
+/// here and are skipped. A folder that would match every process (`/`, the home folder) is not
+/// used for tracking.
+pub fn sideload_games(paths: &HeroicPaths) -> Result<Vec<ImportedGame>, ProviderError> {
+    if paths.config_dirs.is_empty() {
+        return Err(ProviderError::NotFound(
+            "Heroic Games Launcher was not found".into(),
+        ));
+    }
+    let home = dirs::home_dir();
+    let mut games = Vec::new();
+    for app in sideload_apps(paths) {
+        let is_mac = app
+            .platform
+            .as_deref()
+            .is_some_and(|p| p.eq_ignore_ascii_case("mac"));
+        if !app.installed || app.is_browser || is_mac {
+            continue;
+        }
+        let Some(exe) = app.executable.as_deref().filter(|e| Path::new(e).is_file()) else {
+            tracing::warn!(
+                "sideloaded game {} has no existing executable, skipped",
+                app.app_name
+            );
+            continue;
+        };
+        let dir = Path::new(exe)
+            .parent()
+            .filter(|p| p.parent().is_some() && home.as_deref() != Some(*p))
+            .map(|p| p.display().to_string());
+        let mut game = ImportedGame::installed(&app.app_name, &app.title);
+        game.install_dir = dir.clone();
+        let mut action = PlayAction::uri(launch_uri("sideload", &app.app_name));
+        if let Some(dir) = dir {
+            action.tracking = TrackingMode::Directory;
+            action.tracking_path = Some(dir);
+        }
+        game.play_action = Some(action);
+        games.push(game);
+    }
+    games.sort_by_cached_key(|g| (g.name.to_lowercase(), g.source_game_id.clone()));
+    Ok(games)
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs;
@@ -678,5 +1038,215 @@ mod tests {
             u.install_dir.as_deref(),
             Some(g2.display().to_string().as_str())
         );
+    }
+
+    #[test]
+    fn owned_epic_and_gog_merge_with_installed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path();
+        let hero = home.join(".config/heroic");
+        let a = home.join("Games/A");
+        let w = home.join("Games/W");
+        fs::create_dir_all(&a).unwrap();
+        fs::create_dir_all(&w).unwrap();
+        write(
+            &hero.join("legendaryConfig/legendary/installed.json"),
+            &legendary_json(&[("Aaa", "Alpha", &a, false, "Windows")]),
+        );
+        write(
+            &hero.join("store_cache/legendary_library.json"),
+            r#"{"library": [
+                {"app_name": "Aaa", "title": "Alpha (cached)", "runner": "legendary", "is_installed": true},
+                {"app_name": "Bbb", "title": "Beta", "art_cover": "https://x/b.jpg", "runner": "legendary"},
+                {"app_name": "NoTitle"}
+            ], "__timestamp.library": "Mon"}"#,
+        );
+        write(
+            &hero.join("gog_store/installed.json"),
+            &serde_json::json!({"installed": [{"appName": "1", "install_path": w}]}).to_string(),
+        );
+        write(
+            &hero.join("store_cache/gog_library.json"),
+            r#"{"games": [
+                {"app_name": "1", "title": "Witcher"},
+                {"app_name": "2", "title": "Cyberpunk", "art_square": "https://x/c.jpg"},
+                {"app_name": "gog-redist", "title": "Redistributables", "is_installed": true}
+            ]}"#,
+        );
+        let paths = HeroicPaths::discover(home, None, None);
+        assert!(has_legendary_library(&paths) && has_gog_library(&paths));
+
+        let epic = legendary_owned_games(&paths).unwrap();
+        let view: Vec<_> = epic
+            .iter()
+            .map(|g| (g.source_game_id.as_str(), g.name.as_str(), g.installed))
+            .collect();
+        assert_eq!(view, [("Aaa", "Alpha", true), ("Bbb", "Beta", false)]);
+        assert!(epic[0].play_action.is_some() && epic[1].play_action.is_none());
+
+        let gog = gog_owned_games(&paths).unwrap();
+        let view: Vec<_> = gog
+            .iter()
+            .map(|g| (g.source_game_id.as_str(), g.installed))
+            .collect();
+        assert_eq!(view, [("2", false), ("1", true)]);
+        assert_eq!(gog[1].name, "Witcher");
+
+        let empty = tempfile::tempdir().unwrap();
+        let none = HeroicPaths::discover(empty.path(), None, None);
+        assert!(!has_gog_library(&none));
+        assert!(matches!(
+            gog_owned_games(&none),
+            Err(ProviderError::NotFound(_))
+        ));
+    }
+
+    #[test]
+    fn parses_nile_files() {
+        let list = parse_nile_installed(
+            r#"[{"id": "amzn1.adg.product.1", "version": "v1", "path": "/g/A"},
+                {"id": "x"}, {"path": "/y"}]"#,
+        )
+        .unwrap();
+        assert_eq!(
+            list,
+            vec![NileInstall {
+                id: "amzn1.adg.product.1".into(),
+                path: "/g/A".into()
+            }]
+        );
+        assert_eq!(
+            parse_nile_installed(r#"{"installed": []}"#).unwrap(),
+            vec![]
+        );
+        assert!(parse_nile_installed("{}").is_err());
+        assert!(parse_nile_installed("nope").is_err());
+
+        let lib = parse_nile_library(
+            r#"[{"id": "e1", "product": {"id": "amzn1.adg.product.1", "title": "Fez",
+                  "productDetail": {"iconUrl": "https://i/icon.png",
+                  "details": {"backgroundUrl2": "https://i/bg2.jpg", "logoUrl": "https://i/l.png"}}}},
+                {"id": "e2", "product": {"id": "amzn1.adg.product.2", "title": "Icon only",
+                  "productDetail": {"iconUrl": "https://i/i2.png"}}},
+                {"id": "e3", "product": {"title": "no product id"}},
+                {"product": {"id": "p4"}}]"#,
+        );
+        assert_eq!(lib.len(), 2);
+        assert_eq!(lib[0].cover.as_deref(), Some("https://i/bg2.jpg"));
+        assert_eq!(lib[1].cover.as_deref(), Some("https://i/i2.png"));
+        assert_eq!(lib[1].title, "Icon only");
+    }
+
+    #[test]
+    fn nile_installed_and_owned_games() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path();
+        let hero = home.join(".config/heroic");
+        let fez = home.join("Games/Fez");
+        fs::create_dir_all(&fez).unwrap();
+        write(
+            &hero.join("nile_config/nile/installed.json"),
+            &serde_json::json!([
+                {"id": "amzn1.adg.product.1", "version": "v1", "path": fez},
+                {"id": "amzn1.adg.product.gone", "version": "v1", "path": home.join("gone")}
+            ])
+            .to_string(),
+        );
+        write(
+            &hero.join("store_cache/nile_library.json"),
+            r#"{"library": [
+                {"app_name": "amzn1.adg.product.1", "title": "Fez", "art_cover": "https://i/fez.jpg"},
+                {"app_name": "amzn1.adg.product.2", "title": "Ball", "art_square": "https://i/ball.png"}
+            ]}"#,
+        );
+        // Nile's own library only adds games the cache lacks.
+        write(
+            &hero.join("nile_config/nile/library.json"),
+            r#"[{"id": "e", "product": {"id": "amzn1.adg.product.3", "title": "Raw"}},
+                {"id": "e", "product": {"id": "amzn1.adg.product.2", "title": "Ball (raw)"}}]"#,
+        );
+        let paths = HeroicPaths::discover(home, None, None);
+
+        let installed = nile_games(&paths, false).unwrap();
+        assert_eq!(installed.len(), 1);
+        assert_eq!(installed[0].name, "Fez");
+        let action = installed[0].play_action.as_ref().unwrap();
+        assert_eq!(action.target, "heroic://launch/nile/amzn1.adg.product.1");
+        assert_eq!(action.tracking, TrackingMode::Directory);
+
+        let owned = nile_games(&paths, true).unwrap();
+        let view: Vec<_> = owned
+            .iter()
+            .map(|g| (g.name.as_str(), g.installed))
+            .collect();
+        assert_eq!(view, [("Ball", false), ("Fez", true), ("Raw", false)]);
+        assert_eq!(
+            nile_library(&paths)
+                .iter()
+                .find(|e| e.id.ends_with(".2"))
+                .and_then(|e| e.cover.as_deref()),
+            Some("https://i/ball.png")
+        );
+
+        let empty = tempfile::tempdir().unwrap();
+        assert!(matches!(
+            nile_games(&HeroicPaths::discover(empty.path(), None, None), false),
+            Err(ProviderError::NotFound(_))
+        ));
+    }
+
+    #[test]
+    fn sideloaded_games() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path();
+        let hero = home.join(".config/heroic");
+        let dir = home.join("Games/Indie");
+        fs::create_dir_all(&dir).unwrap();
+        let exe = dir.join("indie.exe");
+        fs::write(&exe, "").unwrap();
+        write(
+            &hero.join("sideload_apps/library.json"),
+            &serde_json::json!({"games": [
+                {"runner": "sideload", "app_name": "abc123", "title": "Indie",
+                 "install": {"executable": exe, "platform": "Windows"}, "is_installed": true,
+                 "art_cover": "file:///covers/indie.png"},
+                {"runner": "sideload", "app_name": "web", "title": "Web",
+                 "install": {"platform": "Browser"}, "browserUrl": "https://x", "is_installed": true},
+                {"runner": "sideload", "app_name": "mac", "title": "Mac",
+                 "install": {"executable": exe, "platform": "Mac"}},
+                {"runner": "sideload", "app_name": "gone", "title": "Gone",
+                 "install": {"executable": home.join("nope.exe"), "platform": "linux"}},
+                {"runner": "sideload", "app_name": "off", "title": "Off",
+                 "install": {"executable": exe}, "is_installed": false},
+                {"title": "no id"}
+            ]})
+            .to_string(),
+        );
+        let paths = HeroicPaths::discover(home, None, None);
+        let games = sideload_games(&paths).unwrap();
+        assert_eq!(games.len(), 1);
+        let g = &games[0];
+        assert_eq!(
+            (g.source_game_id.as_str(), g.name.as_str()),
+            ("abc123", "Indie")
+        );
+        assert_eq!(
+            g.install_dir.as_deref(),
+            Some(dir.display().to_string().as_str())
+        );
+        let action = g.play_action.as_ref().unwrap();
+        assert_eq!(action.target, "heroic://launch/sideload/abc123");
+        assert_eq!(action.tracking, TrackingMode::Directory);
+        assert_eq!(
+            sideload_apps(&paths)[0].cover.as_deref(),
+            Some("file:///covers/indie.png")
+        );
+        assert!(parse_sideload_library("{}").is_err());
+        assert!(parse_sideload_library("x").is_err());
+        let empty = tempfile::tempdir().unwrap();
+        assert!(matches!(
+            sideload_games(&HeroicPaths::discover(empty.path(), None, None)),
+            Err(ProviderError::NotFound(_))
+        ));
     }
 }
