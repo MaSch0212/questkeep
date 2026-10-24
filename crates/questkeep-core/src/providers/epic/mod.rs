@@ -20,10 +20,11 @@ use serde::Deserialize;
 
 use super::heroic::{self, HeroicPaths};
 use super::{ImageCandidate, LibraryProvider, ProviderError};
-use crate::auth::AccountAuth;
+use crate::auth::{AccountAuth, system_clock};
 use crate::model::{GameMetadata, ImportedGame, PlayAction};
 
 mod account;
+mod cache;
 mod public;
 mod web;
 
@@ -45,6 +46,8 @@ pub struct EpicProvider {
     account: Option<Arc<EpicAccount>>,
     /// Account-free catalog access for installed games.
     public: Arc<public::PublicCatalog>,
+    /// Where catalog answers are cached on disk, when the app supplies a directory.
+    cache_dir: Option<PathBuf>,
     /// Catalog ids by lowercase appName, read from the installed-game data on demand.
     ids: Arc<Mutex<HashMap<String, CatalogIds>>>,
 }
@@ -69,7 +72,30 @@ impl EpicProvider {
 
     /// Enables account sign-in, the owned-games list, covers and metadata.
     pub fn with_account(mut self, account: Arc<EpicAccount>) -> Self {
+        if let Some(dir) = &self.cache_dir {
+            account.set_disk_cache(Arc::new(cache::CatalogDiskCache::for_account(
+                dir,
+                system_clock(),
+            )));
+        }
         self.account = Some(account);
+        self
+    }
+
+    /// Keeps Epic catalog answers (covers, backgrounds, metadata) on disk below `dir`, usually
+    /// the app's data directory, so they survive restarts (see `cache` for the expiry). Works in
+    /// either order with [`with_account`](Self::with_account).
+    pub fn with_cache_dir(mut self, dir: impl Into<PathBuf>) -> Self {
+        let dir = dir.into();
+        self.public
+            .set_disk_cache(Arc::new(cache::CatalogDiskCache::new(&dir, system_clock())));
+        if let Some(account) = &self.account {
+            account.set_disk_cache(Arc::new(cache::CatalogDiskCache::for_account(
+                &dir,
+                system_clock(),
+            )));
+        }
+        self.cache_dir = Some(dir);
         self
     }
 
@@ -547,16 +573,65 @@ impl LibraryProvider for EpicProvider {
         }))
     }
 
+    /// Windows: the Epic launcher. Linux: only possible for games of a standalone Legendary
+    /// (with `legendary` on `PATH`); Heroic has no uninstall protocol.
     fn can_uninstall(&self) -> bool {
-        self.heroic.is_none()
+        match &self.heroic {
+            None => true,
+            Some(paths) => {
+                paths.legendary_bin.is_some() && paths.legendary.iter().any(|s| !s.via_heroic)
+            }
+        }
     }
 
-    /// The Epic launcher has no uninstall URI, so this opens its library, where the game's menu
-    /// has Uninstall (Playnite does the same).
-    fn uninstall_action(&self, _source_game_id: &str) -> Option<PlayAction> {
-        self.can_uninstall()
-            .then(|| PlayAction::uri(EPIC_LIBRARY_URI))
+    /// The Epic launcher has no per-game uninstall URI (searched the launcher's files and the web;
+    /// nothing documented or known to work, 2026-10-25), so on Windows this opens its library,
+    /// where the game's menu has Uninstall (Playnite does the same). Games installed by a
+    /// standalone Legendary are uninstalled per game with `legendary uninstall <app> -y`
+    /// (Legendary's own command; the UI asks first). Heroic-managed games have no action.
+    fn uninstall_action(&self, source_game_id: &str) -> Option<PlayAction> {
+        match &self.heroic {
+            None => Some(PlayAction::uri(EPIC_LIBRARY_URI)),
+            Some(paths) => legendary_uninstall_action(paths, source_game_id),
+        }
     }
+}
+
+/// `legendary uninstall <app> -y` when `app_name` is installed in a standalone Legendary
+/// directory (not one Heroic manages).
+fn legendary_uninstall_action(paths: &HeroicPaths, app_name: &str) -> Option<PlayAction> {
+    let bin = paths.legendary_bin.as_ref()?;
+    // The name ends up on a command line, so only plain Legendary ids are accepted.
+    let plain = !app_name.is_empty()
+        && app_name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'))
+        && !app_name.starts_with('-');
+    if !plain {
+        return None;
+    }
+    let installed_in = |via_heroic: bool| {
+        paths
+            .legendary
+            .iter()
+            .filter(|s| s.via_heroic == via_heroic)
+            .any(|source| {
+                std::fs::read_to_string(source.dir.join("installed.json"))
+                    .ok()
+                    .and_then(|text| heroic::parse_legendary_installed(&text).ok())
+                    .is_some_and(|list| {
+                        list.iter()
+                            .any(|i| i.app_name.eq_ignore_ascii_case(app_name))
+                    })
+            })
+    };
+    // A game that Heroic also manages must be uninstalled in Heroic, which keeps its own state.
+    if !installed_in(false) || installed_in(true) {
+        return None;
+    }
+    let mut action = PlayAction::file(bin.display().to_string());
+    action.args = Some(format!("uninstall {app_name} -y"));
+    Some(action)
 }
 
 /// Opens the Epic Games Launcher on its library page.
@@ -982,6 +1057,143 @@ mod tests {
         let heroic = EpicProvider::with_heroic(HeroicPaths::discover(tmp.path(), None, None));
         assert!(!heroic.can_uninstall());
         assert!(heroic.uninstall_action("Sugar").is_none());
+    }
+
+    /// A home with Heroic's Legendary (game `H`, also listed standalone as `Both`) and a
+    /// standalone Legendary (games `S`, `Both`, `-flag`), plus a `legendary` executable if asked.
+    fn legendary_home(with_bin: bool) -> (tempfile::TempDir, HeroicPaths) {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path();
+        let installed = |ids: &[&str]| {
+            let entries: serde_json::Map<String, serde_json::Value> = ids
+                .iter()
+                .map(|id| {
+                    let dir = home.join("games").join(id.trim_start_matches('-'));
+                    fs::create_dir_all(&dir).unwrap();
+                    (
+                        (*id).to_string(),
+                        serde_json::json!({"app_name": id, "title": id, "install_path": dir,
+                            "is_dlc": false, "platform": "Windows"}),
+                    )
+                })
+                .collect();
+            serde_json::Value::Object(entries).to_string()
+        };
+        let put = |path: &str, text: String| {
+            let file = home.join(path);
+            fs::create_dir_all(file.parent().unwrap()).unwrap();
+            fs::write(file, text).unwrap();
+        };
+        put(
+            ".config/heroic/legendaryConfig/legendary/installed.json",
+            installed(&["H", "Both"]),
+        );
+        put(
+            ".config/legendary/installed.json",
+            installed(&["S", "Both", "-flag"]),
+        );
+        let path = if with_bin {
+            put("bin/legendary", String::new());
+            Some(std::env::join_paths([home.join("bin")]).unwrap())
+        } else {
+            None
+        };
+        let paths = HeroicPaths::discover(home, None, path.as_deref());
+        (tmp, paths)
+    }
+
+    #[test]
+    fn standalone_legendary_games_uninstall_through_legendary() {
+        let (_tmp, paths) = legendary_home(true);
+        let bin = paths.legendary_bin.clone().unwrap();
+        let p = EpicProvider::with_heroic(paths);
+        assert!(p.can_uninstall());
+        let action = p.uninstall_action("S").unwrap();
+        assert_eq!(action.kind, crate::model::ActionKind::File);
+        assert_eq!(action.target, bin.display().to_string());
+        assert_eq!(action.args.as_deref(), Some("uninstall S -y"));
+        // Case-insensitive like the rest of the Epic ids.
+        assert!(p.uninstall_action("s").is_some());
+    }
+
+    #[test]
+    fn heroic_managed_and_unknown_games_have_no_uninstall_action() {
+        let (_tmp, paths) = legendary_home(true);
+        let p = EpicProvider::with_heroic(paths);
+        assert!(p.uninstall_action("H").is_none(), "managed by Heroic");
+        assert!(p.uninstall_action("Both").is_none(), "Heroic wins");
+        assert!(p.uninstall_action("Missing").is_none());
+        assert!(
+            p.uninstall_action("-flag").is_none(),
+            "would read as an option"
+        );
+        assert!(p.uninstall_action("a b").is_none());
+        assert!(p.uninstall_action("").is_none());
+    }
+
+    #[test]
+    fn standalone_legendary_needs_the_executable_to_uninstall() {
+        let (_tmp, paths) = legendary_home(false);
+        let p = EpicProvider::with_heroic(paths);
+        assert!(!p.can_uninstall());
+        assert!(p.uninstall_action("S").is_none());
+        // Heroic alone (no standalone directory) cannot uninstall either.
+        let tmp = tempfile::tempdir().unwrap();
+        fs::create_dir_all(tmp.path().join(".config/heroic/legendaryConfig/legendary")).unwrap();
+        let heroic_only = HeroicPaths {
+            legendary_bin: Some(tmp.path().join("legendary")),
+            ..HeroicPaths::discover(tmp.path(), None, None)
+        };
+        assert!(!EpicProvider::with_heroic(heroic_only).can_uninstall());
+    }
+
+    #[test]
+    fn cache_dir_applies_in_either_order() {
+        use crate::auth::MemoryTokenStore;
+        let tmp = tempfile::tempdir().unwrap();
+        let account = || Arc::new(EpicAccount::new(Arc::new(MemoryTokenStore::new())));
+        // Smoke test: both orders build, and the folder is only created by writes.
+        let a = EpicProvider::default()
+            .with_cache_dir(tmp.path())
+            .with_account(account());
+        let b = EpicProvider::default()
+            .with_account(account())
+            .with_cache_dir(tmp.path());
+        assert_eq!(a.cache_dir, b.cache_dir);
+        assert!(!tmp.path().join("epic-catalog").exists());
+        assert!(a.account.is_some() && b.account.is_some());
+    }
+
+    #[test]
+    fn catalog_images_are_cached_on_disk_across_providers() {
+        let env = Env::new();
+        let dir = env.game_dir("Sugar");
+        env.manifest(
+            "a.item",
+            &item(
+                "Sugar",
+                "Sugar Game",
+                &dir,
+                serde_json::json!({"CatalogNamespace": "ns-sugar", "CatalogItemId": "sugar-item"}),
+            ),
+        );
+        let cache = tempfile::tempdir().unwrap();
+        let (first, http) = provider_with_fake_epic(&env);
+        let first = first.with_cache_dir(cache.path());
+        assert!(!first.cover_candidates("Sugar").is_empty());
+        let calls = http.urls().len();
+        assert!(calls > 0);
+
+        // "Restart": a new provider with no network at all still finds the covers.
+        let second = EpicProvider::with_data_root(env.root())
+            .with_public(public::PublicCatalog::with(
+                Arc::new(crate::auth::testing::FakeHttp::new(|_| {
+                    Err("offline".into())
+                })),
+                Arc::new(|| 10),
+            ))
+            .with_cache_dir(cache.path());
+        assert!(!second.cover_candidates("Sugar").is_empty());
     }
 
     #[test]

@@ -8,16 +8,17 @@
 //! launchers; no code.
 //!
 //! The app token lives in memory only and is never written anywhere. Catalog answers are cached
-//! for the run (`None` = Epic does not know the item). Transport errors are not cached, so a
-//! later lookup retries.
+//! for the run (`None` = Epic does not know the item) and, when a disk cache is set, across runs
+//! (see `cache`). Transport errors are not cached, so a later lookup retries.
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
 use serde::Deserialize;
 
 use super::super::ProviderError;
 use super::account::{CATALOG_URL, token_request};
+use super::cache::CatalogDiskCache;
 use super::web::{self, CatalogItem};
 use crate::auth::{Clock, Http, HttpRequest, UreqHttp, system_clock, url_encode};
 
@@ -61,6 +62,8 @@ pub struct PublicCatalog {
     http: Arc<dyn Http>,
     clock: Clock,
     state: Mutex<State>,
+    /// Optional persistent layer below the in-memory cache.
+    disk: OnceLock<Arc<CatalogDiskCache>>,
 }
 
 impl PublicCatalog {
@@ -75,7 +78,14 @@ impl PublicCatalog {
             http,
             clock,
             state: Mutex::new(State::default()),
+            disk: OnceLock::new(),
         }
+    }
+
+    /// Keeps answers on disk as well (fresh entries replace network requests). Only the first
+    /// call has an effect.
+    pub fn set_disk_cache(&self, cache: Arc<CatalogDiskCache>) {
+        let _ = self.disk.set(cache);
     }
 
     fn state(&self) -> std::sync::MutexGuard<'_, State> {
@@ -115,6 +125,12 @@ impl PublicCatalog {
         if let Some(cached) = self.state().items.get(item_id) {
             return Ok(cached.clone());
         }
+        if let Some(stored) = self.disk.get().and_then(|d| d.get(item_id)) {
+            self.state()
+                .items
+                .insert(item_id.to_string(), stored.clone());
+            return Ok(stored);
+        }
         let url = catalog_item_url(namespace, item_id);
         let mut retried = false;
         let response = loop {
@@ -142,6 +158,9 @@ impl PublicCatalog {
                 )));
             }
         };
+        if let Some(disk) = self.disk.get() {
+            disk.put(item_id, found.as_deref());
+        }
         self.state()
             .items
             .insert(item_id.to_string(), found.clone());
@@ -309,6 +328,72 @@ mod tests {
             Arc::new(|| 5),
         );
         assert!(rejected.item("n", "x").is_err());
+    }
+
+    #[test]
+    fn disk_cache_survives_a_restart_and_covers_unknown_items() {
+        let tmp = tempfile::tempdir().unwrap();
+        let clock: Clock = Arc::new(|| 5);
+        let disk = || Arc::new(CatalogDiskCache::new(tmp.path(), Arc::new(|| 5)));
+        let http = Arc::new(FakeHttp::new(|req| {
+            if req.url.contains("/oauth/token") {
+                response(200, APP_TOKEN)
+            } else if req.url.contains("id=sugar-item") {
+                response(200, CATALOG)
+            } else {
+                response(404, "")
+            }
+        }));
+        let first = PublicCatalog::with(http.clone(), clock.clone());
+        first.set_disk_cache(disk());
+        assert!(first.item("ns-sugar", "sugar-item").unwrap().is_some());
+        assert!(first.item("ns-sugar", "missing").unwrap().is_none());
+        assert_eq!(http.urls().len(), 3, "token + two catalog requests");
+
+        // New run, same folder: no network at all.
+        let offline = Arc::new(FakeHttp::new(|_| Err("offline".into())));
+        let second = PublicCatalog::with(offline.clone(), clock);
+        second.set_disk_cache(disk());
+        let item = second.item("ns-sugar", "sugar-item").unwrap().unwrap();
+        assert_eq!(item.cover_urls()[0], "https://cdn.example/sugar-tall.jpg");
+        assert!(second.item("ns-sugar", "missing").unwrap().is_none());
+        assert!(offline.urls().is_empty());
+    }
+
+    #[test]
+    fn expired_disk_entries_are_fetched_again() {
+        let tmp = tempfile::tempdir().unwrap();
+        let now = Arc::new(AtomicI64::new(1_000));
+        let clock_now = now.clone();
+        let clock: Clock = Arc::new(move || clock_now.load(Ordering::SeqCst));
+        let http = Arc::new(FakeHttp::new(|req| {
+            if req.url.contains("/oauth/token") {
+                response(200, APP_TOKEN)
+            } else {
+                response(200, CATALOG)
+            }
+        }));
+        let make = || {
+            let catalog = PublicCatalog::with(http.clone(), clock.clone());
+            catalog.set_disk_cache(Arc::new(CatalogDiskCache::new(tmp.path(), clock.clone())));
+            catalog
+        };
+        make().item("ns-sugar", "sugar-item").unwrap();
+        let requests = || {
+            http.urls()
+                .iter()
+                .filter(|u| u.contains("/bulk/items"))
+                .count()
+        };
+        assert_eq!(requests(), 1);
+        make().item("ns-sugar", "sugar-item").unwrap();
+        assert_eq!(requests(), 1, "fresh entry");
+        now.store(
+            1_000 + super::super::cache::ITEM_TTL_SECS + 1,
+            Ordering::SeqCst,
+        );
+        make().item("ns-sugar", "sugar-item").unwrap();
+        assert_eq!(requests(), 2, "expired entry");
     }
 
     #[test]

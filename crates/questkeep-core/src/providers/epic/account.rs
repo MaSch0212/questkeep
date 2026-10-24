@@ -8,13 +8,14 @@
 // Logic derived from Playnite (MIT), see THIRD_PARTY_NOTICES.md
 
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
 use serde::Deserialize;
 use serde_json::Value;
 
 use super::super::ProviderError;
 use super::EPIC_SOURCE;
+use super::cache::CatalogDiskCache;
 use super::web::{self, CatalogItem, LibraryRecord};
 use crate::auth::{
     AccountAuth, AccountSession, AccountStatus, AuthError, Clock, Http, HttpRequest, HttpResponse,
@@ -146,6 +147,8 @@ pub struct EpicAccount {
     session: AccountSession,
     http: Arc<dyn Http>,
     cache: Mutex<Cache>,
+    /// Optional persistent layer below the in-memory catalog cache.
+    disk: OnceLock<Arc<CatalogDiskCache>>,
 }
 
 impl std::fmt::Debug for EpicAccount {
@@ -173,7 +176,14 @@ impl EpicAccount {
             ),
             http,
             cache: Mutex::new(Cache::default()),
+            disk: OnceLock::new(),
         }
+    }
+
+    /// Keeps catalog answers on disk as well (fresh entries replace network requests). Only the
+    /// first call has an effect.
+    pub fn set_disk_cache(&self, cache: Arc<CatalogDiskCache>) {
+        let _ = self.disk.set(cache);
     }
 
     fn cache(&self) -> std::sync::MutexGuard<'_, Cache> {
@@ -219,10 +229,17 @@ impl EpicAccount {
     /// Fetches the catalog items that are not cached yet, one request per namespace batch.
     fn fetch_catalog(&self, records: &[LibraryRecord]) -> Result<(), ProviderError> {
         let missing: BTreeMap<String, Vec<String>> = {
-            let cache = self.cache();
+            let mut cache = self.cache();
             let mut by_namespace: BTreeMap<String, Vec<String>> = BTreeMap::new();
             for record in records {
                 if !cache.catalog.contains_key(&record.catalog_item_id) {
+                    // A fresh disk entry (also "unknown") saves the request.
+                    if let Some(stored) =
+                        self.disk.get().and_then(|d| d.get(&record.catalog_item_id))
+                    {
+                        cache.catalog.insert(record.catalog_item_id.clone(), stored);
+                        continue;
+                    }
                     let ids = by_namespace.entry(record.namespace.clone()).or_default();
                     if !ids.contains(&record.catalog_item_id) {
                         ids.push(record.catalog_item_id.clone());
@@ -246,9 +263,11 @@ impl EpicAccount {
                 let mut items = web::parse_catalog(&response.body)?;
                 let mut cache = self.cache();
                 for id in batch {
-                    cache
-                        .catalog
-                        .insert(id.clone(), items.remove(id).map(Arc::new));
+                    let found = items.remove(id).map(Arc::new);
+                    if let Some(disk) = self.disk.get() {
+                        disk.put(id, found.as_deref());
+                    }
+                    cache.catalog.insert(id.clone(), found);
                 }
             }
         }
@@ -657,6 +676,29 @@ mod tests {
         account.catalog_item("Sugar").unwrap().unwrap();
         assert_eq!(catalog_calls.load(Ordering::SeqCst), 1);
         assert!(account.catalog_item("NotOwned").unwrap().is_none());
+    }
+
+    #[test]
+    fn disk_cached_catalog_answers_skip_the_catalog_request() {
+        let tmp = tempfile::tempdir().unwrap();
+        let disk = || {
+            Arc::new(CatalogDiskCache::for_account(
+                tmp.path(),
+                Arc::new(|| 1_000),
+            ))
+        };
+        let (first, _, first_calls) = signed_in_account();
+        first.set_disk_cache(disk());
+        first.scan_owned().unwrap();
+        assert_eq!(first_calls.load(Ordering::SeqCst), 1);
+
+        // A new run with the same cache folder: library fetched again, catalog not.
+        let (second, _, second_calls) = signed_in_account();
+        second.set_disk_cache(disk());
+        let games = second.scan_owned().unwrap();
+        assert_eq!(second_calls.load(Ordering::SeqCst), 0);
+        assert!(games.iter().any(|g| g.source_game_id == "Sugar"));
+        assert!(second.catalog_item("sugar").unwrap().is_some());
     }
 
     #[test]

@@ -7,14 +7,14 @@
 
 use std::collections::HashMap;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::super::ProviderError;
 use crate::model::GameMetadata;
 
 /// One entry of the account's library (an owned asset).
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryRecord {
     #[serde(default)]
@@ -66,7 +66,7 @@ pub fn parse_library_page(
     Ok((records, cursor))
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KeyImage {
     #[serde(default, rename = "type")]
     pub kind: String,
@@ -74,13 +74,13 @@ pub struct KeyImage {
     pub url: String,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 struct Category {
     #[serde(default)]
     path: String,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ReleaseInfo {
     #[serde(default)]
@@ -88,7 +88,7 @@ struct ReleaseInfo {
 }
 
 /// A catalog item: the store listing of an asset.
-#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CatalogItem {
     #[serde(default)]
@@ -201,6 +201,41 @@ impl CatalogItem {
             .map(str::to_string)
     }
 
+    /// Genre names from `genre/<name>` (or `genres/<name>`) categories, `-`/`_` turned into
+    /// spaces and capitalised.
+    ///
+    /// Checked live (2026-10-25, 120+ namespaces): the public catalog only has structural
+    /// categories (`games`, `applications`, `addons`, `audience`, ...), no genre or tag data, and
+    /// the store's genre tags sit behind the bot-protected GraphQL endpoint. So this is a
+    /// whitelist that yields nothing today and keeps working if Epic starts to publish genres;
+    /// structural categories must never show up as genres.
+    fn genres(&self) -> Vec<String> {
+        let mut out: Vec<String> = Vec::new();
+        for category in self.categories.as_deref().unwrap_or_default() {
+            let Some((prefix, name)) = category.path.split_once('/') else {
+                continue;
+            };
+            if !prefix.eq_ignore_ascii_case("genre") && !prefix.eq_ignore_ascii_case("genres") {
+                continue;
+            }
+            let words: Vec<String> = name
+                .split(['-', '_', '/'])
+                .filter(|w| !w.is_empty())
+                .map(|w| {
+                    let mut chars = w.chars();
+                    chars.next().map_or_else(String::new, |first| {
+                        first.to_uppercase().chain(chars).collect()
+                    })
+                })
+                .collect();
+            let genre = words.join(" ");
+            if !genre.is_empty() && !out.contains(&genre) {
+                out.push(genre);
+            }
+        }
+        out
+    }
+
     pub fn metadata(&self) -> GameMetadata {
         let text = |s: &Option<String>| {
             s.as_deref()
@@ -230,7 +265,7 @@ impl CatalogItem {
             release_date,
             developers,
             publishers: self.attribute("publisherName").into_iter().collect(),
-            genres: Vec::new(),
+            genres: self.genres(),
         }
     }
 }
@@ -363,6 +398,30 @@ mod tests {
         assert_eq!(sparse.description.as_deref(), Some("Long text."));
         assert_eq!(sparse.release_date.as_deref(), Some("2019-01-01"));
         assert_eq!(CatalogItem::default().metadata(), GameMetadata::default());
+    }
+
+    #[test]
+    fn genres_come_only_from_genre_categories() {
+        // Recorded shape of a live game (Fortnite, 2026-10-25): structural categories only.
+        let live: CatalogItem = serde_json::from_str(
+            r#"{"id":"x","title":"Fortnite","categories":[{"path":"games"},{"path":"applications"},
+               {"path":"audience/everyone"},{"path":"addons/launchable"},{"path":"public"}]}"#,
+        )
+        .unwrap();
+        assert!(live.metadata().genres.is_empty());
+        let items = parse_catalog(CATALOG).unwrap();
+        assert!(items["sugar-item"].metadata().genres.is_empty());
+
+        let tagged: CatalogItem = serde_json::from_str(
+            r#"{"id":"x","title":"T","categories":[{"path":"games"},{"path":"genre/role-playing"},
+               {"path":"Genres/action_adventure"},{"path":"genre/role-playing"},{"path":"genre/"},
+               {"path":"genre"},{"path":"genre/shooter/co-op"}]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            tagged.metadata().genres,
+            ["Role Playing", "Action Adventure", "Shooter Co Op"]
+        );
     }
 
     #[test]
