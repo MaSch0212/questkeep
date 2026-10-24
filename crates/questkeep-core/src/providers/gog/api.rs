@@ -196,6 +196,42 @@ pub fn fetch_game(http: &ureq::Agent, id: &str) -> Result<Option<StoreGame>, Pro
     StoreGame::parse(&body).map(Some)
 }
 
+/// The Galaxy product database, anonymous. Its `vertical_cover` is the portrait (2:3) cover that
+/// Galaxy shows in its library; the v2 API's `boxArtImage` is older and lower resolution.
+const GAMESDB_URL: &str = "https://gamesdb.gog.com/platforms/gog/external_releases";
+
+/// The portrait cover URL from a `external_releases` answer. The `url_format` is a template
+/// (`{formatter}` is an optional size suffix, `{ext}` the format); the empty formatter gives the
+/// original 300x450 image, and JPEG is used because every image decoder handles it.
+pub fn parse_vertical_cover(json: &str) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(json).ok()?;
+    let template = value
+        .pointer("/game/vertical_cover/url_format")?
+        .as_str()?
+        .replace("{formatter}", "")
+        .replace("{ext}", "jpg");
+    (!template.contains('{'))
+        .then(|| normalize_url(&template))
+        .flatten()
+}
+
+/// Fetches the portrait cover URL. `Ok(None)` when GOG has none or does not know the id.
+pub fn fetch_vertical_cover(http: &ureq::Agent, id: &str) -> Result<Option<String>, ProviderError> {
+    if !is_product_id(id) {
+        return Ok(None);
+    }
+    let mut response = match http.get(&format!("{GAMESDB_URL}/{id}")).call() {
+        Ok(response) => response,
+        Err(ureq::Error::StatusCode(404)) => return Ok(None),
+        Err(err) => return Err(ProviderError::Network(err.to_string())),
+    };
+    let body = response
+        .body_mut()
+        .read_to_string()
+        .map_err(|e| ProviderError::Network(e.to_string()))?;
+    Ok(parse_vertical_cover(&body))
+}
+
 /// Converts the HTML of a store description to plain text: tags are removed, block elements
 /// become line breaks, list items get a `- ` bullet, scripts/styles/videos are dropped, common
 /// entities are decoded and whitespace is normalised.
@@ -317,6 +353,25 @@ mod tests {
     use super::*;
 
     const FIXTURE: &str = include_str!("../../../tests/fixtures/gog/v2_game.json");
+
+    #[test]
+    fn vertical_cover_comes_from_the_gamesdb_template() {
+        let json = include_str!("../../../tests/fixtures/gog/gamesdb_release.json");
+        assert_eq!(
+            parse_vertical_cover(json).as_deref(),
+            Some(
+                "https://images.gog.com/8b37ef624d6f8a4092c43daed92660cde499434f8c0a2078f342bc34f4e752f2.jpg?namespace=gamesdb"
+            )
+        );
+        assert_eq!(parse_vertical_cover(r#"{"game":{}}"#), None);
+        assert_eq!(parse_vertical_cover("nope"), None);
+        assert_eq!(
+            parse_vertical_cover(
+                r#"{"game":{"vertical_cover":{"url_format":"ftp://x{formatter}"}}}"#
+            ),
+            None
+        );
+    }
 
     #[test]
     fn strips_html_to_readable_text() {

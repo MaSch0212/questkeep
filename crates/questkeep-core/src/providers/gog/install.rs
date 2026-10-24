@@ -24,6 +24,79 @@ pub struct InstallRecord {
     pub working_dir: Option<String>,
     /// Set for DLC and add-ons: the id of the game they extend.
     pub depends_on: Option<String>,
+    /// `UninstallString` of the product's `Uninstall\<id>_is1` key (the Inno Setup uninstaller,
+    /// quoted path plus optional arguments).
+    pub uninstall_string: Option<String>,
+}
+
+/// One `...\Windows\CurrentVersion\Uninstall\<id>_is1` key of a GOG installer, with the numeric
+/// product id already extracted from the key name.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct UninstallEntry {
+    pub id: String,
+    pub display_name: Option<String>,
+    pub uninstall_string: Option<String>,
+    pub install_location: Option<String>,
+}
+
+/// The numeric GOG product id of an Inno Setup key name (`1423049311_is1`). Other installers use
+/// the same suffix (`Git_is1`, `{GUID}_is1`), so anything that is not all digits is rejected.
+pub fn product_id_of_uninstall_key(key_name: &str) -> Option<&str> {
+    let id = key_name.strip_suffix("_is1")?;
+    (!id.is_empty() && id.len() <= 20 && id.chars().all(|c| c.is_ascii_digit())).then_some(id)
+}
+
+/// Adds what the `Uninstall` keys know to the records of `GOG.com\Games`: the uninstaller of
+/// known products, and products that GOG's own key does not list at all (their `.info` file then
+/// decides whether they are a game, an add-on or something else).
+pub fn merge_uninstall_entries(records: &mut Vec<InstallRecord>, entries: Vec<UninstallEntry>) {
+    for entry in entries {
+        let location = non_empty(&entry.install_location)
+            .map(str::to_string)
+            .or_else(|| {
+                let (file, _) = split_command(entry.uninstall_string.as_deref()?);
+                file.parent().map(|p| p.to_string_lossy().into_owned())
+            });
+        match records.iter_mut().find(|r| r.id == entry.id) {
+            Some(record) => {
+                if record.uninstall_string.is_none() {
+                    record.uninstall_string = entry.uninstall_string;
+                }
+                if non_empty(&record.path).is_none() {
+                    record.path = location;
+                }
+            }
+            None => records.push(InstallRecord {
+                id: entry.id,
+                game_name: entry.display_name,
+                path: location,
+                uninstall_string: entry.uninstall_string,
+                ..InstallRecord::default()
+            }),
+        }
+    }
+}
+
+/// Splits a registry command line into the program and its arguments: `"C:\a b\x.exe" /silent`
+/// or an unquoted `C:\a b\x.exe /silent`.
+pub fn split_command(command: &str) -> (PathBuf, Option<String>) {
+    let command = command.trim();
+    let (file, rest) = if let Some(quoted) = command.strip_prefix('"') {
+        match quoted.split_once('"') {
+            Some((file, rest)) => (file, rest),
+            None => (quoted, ""),
+        }
+    } else {
+        match command.to_ascii_lowercase().find(".exe") {
+            Some(end) => command.split_at(end + 4),
+            None => (command, ""),
+        }
+    };
+    let args = rest.trim();
+    (
+        PathBuf::from(file),
+        (!args.is_empty()).then(|| args.to_string()),
+    )
 }
 
 /// The parts of `goggame-<id>.info` that Questkeep uses.
@@ -70,7 +143,7 @@ impl GameInfo {
 }
 
 /// Reads and parses `<dir>/goggame-<id>.info`. `None` when missing or malformed.
-fn read_info(dir: &Path, id: &str) -> Option<GameInfo> {
+pub(super) fn read_info(dir: &Path, id: &str) -> Option<GameInfo> {
     let file = dir.join(format!("goggame-{id}.info"));
     let text = std::fs::read_to_string(&file).ok()?;
     match GameInfo::parse(&text) {
@@ -403,6 +476,133 @@ mod tests {
         let evil = r#"{"gameId":"9","name":"Evil","playTasks":[{"isPrimary":true,"type":"FileTask","path":"..\\..\\evil.exe"}]}"#;
         let dir = installed(tmp.path(), "9", Some(evil));
         assert!(games_from_records(&[record("9", &dir)], None, true).is_empty());
+    }
+
+    #[test]
+    fn only_numeric_inno_keys_are_gog_products() {
+        assert_eq!(
+            product_id_of_uninstall_key("1423049311_is1"),
+            Some("1423049311")
+        );
+        for other in [
+            "Git_is1",
+            "{0A1B2C3D-0000-1111-2222-333344445555}_is1",
+            "Playnite_is1",
+            "_is1",
+            "123",
+            "12a_is1",
+        ] {
+            assert_eq!(product_id_of_uninstall_key(other), None, "{other}");
+        }
+    }
+
+    #[test]
+    fn splits_registry_command_lines() {
+        let (file, args) = split_command(r#""F:\GOG Games\Cyberpunk 2077\unins000.exe""#);
+        assert_eq!(
+            file,
+            PathBuf::from(r"F:\GOG Games\Cyberpunk 2077\unins000.exe")
+        );
+        assert_eq!(args, None);
+        let (file, args) = split_command(r#" "C:\a b\unins000.exe" /SILENT /LOG="x y" "#);
+        assert_eq!(file, PathBuf::from(r"C:\a b\unins000.exe"));
+        assert_eq!(args.as_deref(), Some(r#"/SILENT /LOG="x y""#));
+        let (file, args) = split_command(r"C:\a b\UNINS000.EXE /VERYSILENT");
+        assert_eq!(file, PathBuf::from(r"C:\a b\UNINS000.EXE"));
+        assert_eq!(args.as_deref(), Some("/VERYSILENT"));
+    }
+
+    fn entry(id: &str, name: &str, dir: &str, n: u8) -> UninstallEntry {
+        UninstallEntry {
+            id: id.into(),
+            display_name: Some(name.into()),
+            uninstall_string: Some(format!("\"{dir}\\unins00{n}.exe\"")),
+            install_location: Some(format!("{dir}\\")),
+        }
+    }
+
+    /// Installs that only the `Uninstall` keys know become games; add-ons in the same folder do
+    /// not, and known records only gain the uninstaller.
+    #[test]
+    fn uninstall_keys_add_missing_installs_but_not_dlc() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("Cyberpunk 2077");
+        fs::create_dir_all(&dir).unwrap();
+        let info = |id: &str, root: &str, tasks: &str| {
+            format!(
+                r#"{{"gameId":"{id}","rootGameId":"{root}","name":"Cyberpunk {id}","playTasks":[{tasks}]}}"#
+            )
+        };
+        let play = r#"{"isPrimary":true,"type":"FileTask","path":"REDprelauncher.exe"}"#;
+        for (id, root, tasks) in [
+            ("1423049311", "1423049311", play),
+            ("1256837418", "1423049311", ""),
+            ("1597316373", "1423049311", ""),
+        ] {
+            fs::write(
+                dir.join(format!("goggame-{id}.info")),
+                info(id, root, tasks),
+            )
+            .unwrap();
+        }
+        let dir_text = dir.to_string_lossy().into_owned();
+        let entries = vec![
+            entry("1423049311", "Cyberpunk 2077", &dir_text, 0),
+            entry(
+                "1256837418",
+                "Cyberpunk 2077: Phantom Liberty",
+                &dir_text,
+                1,
+            ),
+            entry("1597316373", "Cyberpunk 2077 REDmod", &dir_text, 2),
+            UninstallEntry {
+                id: "1423049311".into(),
+                uninstall_string: Some("\"duplicate.exe\"".into()),
+                ..UninstallEntry::default()
+            },
+        ];
+
+        let mut records = Vec::new();
+        merge_uninstall_entries(&mut records, entries.clone());
+        assert_eq!(records.len(), 3);
+        assert_eq!(
+            records[0].uninstall_string.as_deref(),
+            Some(format!("\"{dir_text}\\unins000.exe\"").as_str()),
+            "the first key of an id wins"
+        );
+        let games = games_from_records(&records, None, false);
+        assert_eq!(games.len(), 1, "add-ons do not become games");
+        assert_eq!(games[0].source_game_id, "1423049311");
+        assert_eq!(games[0].name, "Cyberpunk 1423049311");
+
+        // A record from GOG.com\Games keeps its fields and gains the uninstaller and path.
+        let mut known = vec![InstallRecord {
+            id: "1423049311".into(),
+            exe: Some("x.exe".into()),
+            ..Default::default()
+        }];
+        merge_uninstall_entries(&mut known, entries);
+        assert_eq!(known.len(), 3);
+        assert_eq!(known[0].exe.as_deref(), Some("x.exe"));
+        assert!(known[0].uninstall_string.is_some());
+        assert!(known[0].path.as_deref().unwrap().starts_with(&dir_text));
+    }
+
+    #[test]
+    fn missing_install_location_comes_from_the_uninstaller_path() {
+        let mut records = Vec::new();
+        merge_uninstall_entries(
+            &mut records,
+            vec![UninstallEntry {
+                id: "5".into(),
+                uninstall_string: Some(r#""F:\G\Game\unins000.exe""#.into()),
+                ..UninstallEntry::default()
+            }],
+        );
+        assert_eq!(
+            PathBuf::from(records[0].path.as_deref().unwrap()),
+            PathBuf::from(r"F:\G\Game")
+        );
     }
 
     #[test]

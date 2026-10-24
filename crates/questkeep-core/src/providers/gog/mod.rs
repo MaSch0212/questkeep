@@ -1,8 +1,9 @@
 //! GOG provider: finds games installed by GOG Galaxy or the offline installers, and fetches
 //! description and artwork from GOG's public catalogue API (no login needed for those).
 //!
-//! Installed games come from the Windows registry (`HKLM\SOFTWARE\WOW6432Node\GOG.com\Games`)
-//! plus the `goggame-<id>.info` manifest in each install folder. On Linux they come from Heroic
+//! Installed games come from the Windows registry (`HKLM\SOFTWARE\WOW6432Node\GOG.com\Games`,
+//! plus the `Uninstall\<id>_is1` keys for installs missing there) and the `goggame-<id>.info`
+//! manifest in each install folder. On Linux they come from Heroic
 //! Games Launcher (`super::heroic`) with the same product ids; Lutris is not read for GOG.
 //!
 //! Signing in to a GOG account (`account`) is optional and adds the owned-but-not-installed games.
@@ -61,6 +62,7 @@ pub struct GogProvider {
     account: Option<Arc<GogAccount>>,
     http: ureq::Agent,
     store_cache: Mutex<HashMap<String, Option<api::StoreGame>>>,
+    cover_cache: Mutex<HashMap<String, Option<String>>>,
 }
 
 impl GogProvider {
@@ -93,6 +95,7 @@ impl GogProvider {
             account: None,
             http: api::http_agent(),
             store_cache: Mutex::new(HashMap::new()),
+            cover_cache: Mutex::new(HashMap::new()),
         }
     }
 
@@ -119,6 +122,23 @@ impl GogProvider {
             Installs::System => system_installs(),
             Installs::Heroic(_) => Ok((Vec::new(), None)),
         }
+    }
+
+    /// The portrait cover URL from the Galaxy product database; cached like [`Self::store_game`].
+    fn vertical_cover(&self, id: &str) -> Result<Option<String>, ProviderError> {
+        if let Ok(cache) = self.cover_cache.lock()
+            && let Some(hit) = cache.get(id)
+        {
+            return Ok(hit.clone());
+        }
+        let url = api::fetch_vertical_cover(&self.http, id)?;
+        if let Ok(mut cache) = self.cover_cache.lock() {
+            if cache.len() >= CACHE_LIMIT {
+                cache.clear();
+            }
+            cache.insert(id.to_string(), url.clone());
+        }
+        Ok(url)
     }
 
     /// The catalogue entry for a game; network results (including "unknown game") are cached.
@@ -209,16 +229,21 @@ impl LibraryProvider for GogProvider {
         !matches!(self.installs, Installs::Heroic(_))
     }
 
-    /// Starts the game's own GOG uninstaller (`unins000.exe` in the install folder), which asks
-    /// for confirmation. Galaxy's protocol has no uninstall command.
+    /// Starts the game's own GOG uninstaller (the `UninstallString` of its `Uninstall\<id>_is1`
+    /// key, else `unins000.exe` in the install folder), which asks for confirmation. Galaxy's
+    /// protocol has no uninstall command.
     fn uninstall_action(&self, source_game_id: &str) -> Option<PlayAction> {
         if !self.can_uninstall() || !api::is_product_id(source_game_id) {
             return None;
         }
         let (records, _) = self.load_installs().ok()?;
-        let file = uninstall::find_uninstaller(&records, source_game_id)?;
-        let mut action = PlayAction::file(file.to_string_lossy());
-        action.working_dir = file.parent().map(|d| d.to_string_lossy().into_owned());
+        let uninstaller = uninstall::find_uninstaller(&records, source_game_id)?;
+        let mut action = PlayAction::file(uninstaller.file.to_string_lossy());
+        action.args = uninstaller.args;
+        action.working_dir = uninstaller
+            .file
+            .parent()
+            .map(|d| d.to_string_lossy().into_owned());
         Some(action)
     }
 
@@ -226,22 +251,29 @@ impl LibraryProvider for GogProvider {
         Ok(self.store_game(source_game_id)?.map(|game| game.metadata()))
     }
 
-    /// Box art from the catalogue API. This does one small request, which is fine because the
-    /// image fetcher calls it from its background worker. Galaxy's local web cache is not used:
-    /// its file names are hashes with no stable mapping to product ids.
+    /// Portrait cover from the Galaxy product database, then the catalogue API's box art. This
+    /// does up to two small requests, which is fine because the image fetcher calls it from its
+    /// background worker. Galaxy's local web cache is not used: its file names are hashes with no
+    /// stable mapping to product ids.
     fn cover_candidates(&self, source_game_id: &str) -> Vec<ImageCandidate> {
-        match self.store_game(source_game_id) {
-            Ok(Some(game)) => game
-                .cover_urls()
-                .into_iter()
-                .map(ImageCandidate::Url)
-                .collect(),
-            Ok(None) => Vec::new(),
-            Err(err) => {
-                tracing::debug!("GOG cover lookup for {source_game_id} failed: {err}");
-                Vec::new()
-            }
+        let mut urls: Vec<String> = Vec::new();
+        match self.vertical_cover(source_game_id) {
+            Ok(Some(url)) => urls.push(url),
+            Ok(None) => {}
+            Err(err) => tracing::debug!("GOG portrait cover for {source_game_id} failed: {err}"),
         }
+        match self.store_game(source_game_id) {
+            Ok(Some(game)) => {
+                for url in game.cover_urls() {
+                    if !urls.contains(&url) {
+                        urls.push(url);
+                    }
+                }
+            }
+            Ok(None) => {}
+            Err(err) => tracing::debug!("GOG cover lookup for {source_game_id} failed: {err}"),
+        }
+        urls.into_iter().map(ImageCandidate::Url).collect()
     }
 
     /// The store icon, from the same (cached) catalogue entry as the cover.
