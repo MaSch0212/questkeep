@@ -1,0 +1,12 @@
+{
+  "id": "51811581085313589",
+  "platform_id": "gog",
+  "external_id": "1423049311",
+  "title": { "en-US": "Cyberpunk 2077" },
+  "game": {
+    "id": "51152725611062641",
+    "vertical_cover": { "url_format": "https://images.gog.com/8b37ef624d6f8a4092c43daed92660cde499434f8c0a2078f342bc34f4e752f2{formatter}.{ext}?namespace=gamesdb" },
+    "cover": { "url_format": "https://images.gog.com/aaaa{formatter}.{ext}?namespace=gamesdb" },
+    "square_icon": { "url_format": "https://images.gog.com/bbbb{formatter}.{ext}?namespace=gamesdb" }
+  }
+}
