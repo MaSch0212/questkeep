@@ -274,8 +274,8 @@ describe("DetailsPanel", () => {
     );
   });
 
-  it("refreshes metadata for store games only", async () => {
-    vi.mocked(api.refreshMetadata).mockResolvedValue(undefined);
+  it("refreshes metadata, or shows why it can't", async () => {
+    vi.mocked(api.refreshMetadata).mockResolvedValueOnce(undefined);
     const { unmount } = render(() => (
       <DetailsPanel game={makeGame({ sourceGameId: "1145360" })} onClose={vi.fn<() => void>()} />
     ));
@@ -285,8 +285,12 @@ describe("DetailsPanel", () => {
       expect(store.toasts().map((t) => t.message)).toContain("Refreshing metadata…"),
     );
     unmount();
+    // Manual games have the button too; without IGDB the core explains what is missing.
+    const reason = "Add IGDB credentials in Settings → Metadata to get metadata for this game.";
+    vi.mocked(api.refreshMetadata).mockRejectedValueOnce(reason);
     render(() => <DetailsPanel game={makeGame()} onClose={vi.fn<() => void>()} />);
-    expect(screen.queryByRole("button", { name: "Refresh metadata" })).toBeNull();
+    await fireEvent.click(screen.getByRole("button", { name: "Refresh metadata" }));
+    await waitFor(() => expect(screen.getByText(reason)).toBeTruthy());
   });
 
   it("refetches artwork and toasts, or toasts the error", async () => {

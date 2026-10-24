@@ -51,7 +51,13 @@ pub async fn add_manual_game(
     state: State<'_, Arc<AppState>>,
     input: NewManualGame,
 ) -> CmdResult<Game> {
-    blocking(state, move |s| s.library.add_manual_game(&input)).await
+    blocking(state, move |s| {
+        let game = s.library.add_manual_game(&input)?;
+        // Cover (SteamGridDB) and metadata (IGDB) right away, not only on the next start.
+        s.queue_downloads();
+        Ok(game)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -127,9 +133,8 @@ pub async fn uninstall_game(state: State<'_, Arc<AppState>>, id: String) -> CmdR
 #[tauri::command]
 pub async fn refresh_metadata(state: State<'_, Arc<AppState>>, id: String) -> CmdResult<()> {
     blocking(state, move |s| {
-        if let Some(job) = s.library.metadata_job(parse_id(&id)?)? {
-            s.metadata.enqueue([job]);
-        }
+        let job = s.library.metadata_job(parse_id(&id)?)?;
+        s.metadata.enqueue([job]);
         Ok(())
     })
     .await

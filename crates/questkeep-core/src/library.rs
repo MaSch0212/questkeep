@@ -522,21 +522,26 @@ impl Library {
     }
 
     /// Metadata job for one game (to refresh it on demand). A refresh also lets IGDB look at the
-    /// game again, so its "nothing found" marker is cleared. `None` for games that neither a
-    /// store nor IGDB can serve.
-    pub fn metadata_job(&self, id: Uuid) -> Result<Option<MetadataJob>> {
+    /// game again, so its "nothing found" marker is cleared. An error for games that neither a
+    /// store nor IGDB can serve (readable, so the UI can say why nothing happens).
+    pub fn metadata_job(&self, id: Uuid) -> Result<MetadataJob> {
         let game = self.db.get_game(id)?;
+        if is_fake_source(&game.source) {
+            return Err(CoreError::Invalid("Fake games don't get metadata.".into()));
+        }
         let from_store =
             game.source_game_id.is_some() && self.providers.get(&game.source).is_some();
-        if is_fake_source(&game.source) || (!from_store && !self.igdb.is_configured()) {
-            return Ok(None);
+        if !from_store && !self.igdb.is_configured() {
+            return Err(CoreError::Invalid(
+                "Add IGDB credentials in Settings → Metadata to get metadata for this game.".into(),
+            ));
         }
         self.db.set_extra_value(id, IGDB_CHECKED_KEY, None)?;
-        Ok(Some(MetadataJob {
+        Ok(MetadataJob {
             game_id: id,
             source: game.source,
             source_game_id: game.source_game_id,
-        }))
+        })
     }
 
     /// The store action that installs a game that is owned but not installed. The caller opens
@@ -854,7 +859,7 @@ mod tests {
         let jobs = lib.missing_metadata_jobs().unwrap();
         assert_eq!(jobs.len(), 2);
         assert_eq!(jobs[0].game_id, installed.id, "installed games first");
-        assert!(lib.metadata_job(owned.id).unwrap().is_some());
+        assert!(lib.metadata_job(owned.id).is_ok());
     }
 
     /// A store with an account: owned games appear after signing in with the right code.
@@ -1042,7 +1047,7 @@ mod tests {
         assert!(lib.missing_cover_jobs().unwrap().is_empty());
         assert!(lib.missing_metadata_jobs().unwrap().is_empty());
         let fake = lib.database().list_games(&Default::default()).unwrap()[0].clone();
-        assert!(lib.metadata_job(fake.id).unwrap().is_none());
+        assert!(lib.metadata_job(fake.id).is_err());
         assert!(lib.refetch_artwork(fake.id).is_err());
     }
 
@@ -1061,7 +1066,7 @@ mod tests {
             })
             .unwrap();
         assert!(lib.missing_metadata_jobs().unwrap().is_empty());
-        assert!(lib.metadata_job(game.id).unwrap().is_none());
+        assert!(lib.metadata_job(game.id).is_err());
 
         let mut settings = lib.settings();
         settings.igdb_client_id = Some("id".into());
@@ -1082,7 +1087,7 @@ mod tests {
             .set_extra_value(game.id, IGDB_CHECKED_KEY, Some("x".into()))
             .unwrap();
         assert!(lib.missing_metadata_jobs().unwrap().is_empty());
-        assert!(lib.metadata_job(game.id).unwrap().is_some());
+        assert!(lib.metadata_job(game.id).is_ok());
         assert_eq!(
             lib.missing_metadata_jobs().unwrap().len(),
             1,

@@ -65,7 +65,6 @@ export function DetailsPanel(props: DetailsPanelProps) {
     props.game.sourceGameId !== null &&
     store.providers().some((p) => p.id === props.game.source && p.canUninstall);
   const isManual = () => props.game.source === "manual";
-  const isStoreGame = () => props.game.sourceGameId !== null;
   const heroUrl = () => (heroFailed() ? null : store.backgroundUrl(props.game));
   const released = () => formatReleaseDate(props.game.releaseDate);
   const description = () => props.game.description?.trim() ?? "";
@@ -142,7 +141,8 @@ export function DetailsPanel(props: DetailsPanelProps) {
     queueMicrotask(() => uninstallButton()?.focus());
   }
 
-  async function refreshStoreMetadata() {
+  /** Store games ask their store (then IGDB); others only IGDB, which the core may refuse. */
+  async function refreshGameMetadata() {
     setError(null);
     const failure = await refreshMetadata(props.game.id);
     if (failure) setError(failure);
@@ -369,11 +369,9 @@ export function DetailsPanel(props: DetailsPanelProps) {
         </div>
 
         <div class="details__row">
-          <Show when={isStoreGame()}>
-            <button type="button" class="btn" onClick={() => void refreshStoreMetadata()}>
-              Refresh metadata
-            </button>
-          </Show>
+          <button type="button" class="btn" onClick={() => void refreshGameMetadata()}>
+            Refresh metadata
+          </button>
           <button type="button" class="btn" onClick={() => void refetchGameArtwork()}>
             <ImageDown class="icon" aria-hidden="true" /> Refetch artwork
           </button>
