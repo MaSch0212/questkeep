@@ -24,6 +24,15 @@ providers: Record<string, Record<string, unknown>>,
  */
 steamGridDbApiKey: string | null, 
 /**
+ * Optional IGDB (Twitch application) Client ID. With the secret, IGDB supplies descriptions,
+ * genres and the like for games whose store has none. Lives in the keyring, not in the file.
+ */
+igdbClientId: string | null, 
+/**
+ * Optional IGDB (Twitch application) Client Secret. Lives in the keyring, not in the file.
+ */
+igdbClientSecret: string | null, 
+/**
  * The close button hides Questkeep to the system tray instead of quitting.
  */
 closeToTray: boolean, 

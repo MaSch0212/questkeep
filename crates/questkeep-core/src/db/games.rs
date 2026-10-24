@@ -20,6 +20,15 @@ const COLUMNS: &str = "id, name, sorting_name, source, source_game_id, installed
 /// `extra` key set when the user renamed a store game, so re-scans keep their name.
 const USER_RENAMED: &str = "userRenamed";
 
+/// A game that has no description (see [`Database::games_without_description`]).
+#[derive(Debug, Clone)]
+pub struct GameWithoutDescription {
+    pub id: Uuid,
+    pub source: String,
+    pub source_game_id: Option<String>,
+    pub extra: serde_json::Value,
+}
+
 /// Data needed to insert a new game.
 #[derive(Debug, Clone, Default)]
 pub struct NewGameRecord {
@@ -504,6 +513,38 @@ impl Database {
             let (id, source, source_game_id) = row?;
             if let Ok(id) = Uuid::parse_str(&id) {
                 out.push((id, source, source_game_id));
+            }
+        }
+        Ok(out)
+    }
+
+    /// Games without a description, manual ones included:
+    /// `(id, source, source_game_id, extra)`.
+    pub fn games_without_description(&self) -> Result<Vec<GameWithoutDescription>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT id, source, source_game_id, extra FROM games WHERE description IS NULL \
+             ORDER BY installed DESC, sorting_name",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, Option<String>>(2)?,
+                r.get::<_, String>(3)?,
+            ))
+        })?;
+        let mut out = Vec::new();
+        for row in rows {
+            let (id, source, source_game_id, extra) = row?;
+            if let Ok(id) = Uuid::parse_str(&id) {
+                let extra = serde_json::from_str(&extra).unwrap_or(serde_json::Value::Null);
+                out.push(GameWithoutDescription {
+                    id,
+                    source,
+                    source_game_id,
+                    extra,
+                });
             }
         }
         Ok(out)

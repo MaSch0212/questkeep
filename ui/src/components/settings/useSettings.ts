@@ -15,6 +15,9 @@ export function createSettingsModel() {
   const [savingSteam, setSavingSteam] = createSignal(false);
   const [gridDbKey, setGridDbKey] = createSignal("");
   const [savingGridDb, setSavingGridDb] = createSignal(false);
+  const [igdbClientId, setIgdbClientId] = createSignal("");
+  const [igdbClientSecret, setIgdbClientSecret] = createSignal("");
+  const [savingIgdb, setSavingIgdb] = createSignal(false);
 
   onMount(() => {
     api
@@ -24,6 +27,8 @@ export function createSettingsModel() {
         setApiKey(textOf(loaded.providers.steam?.apiKey));
         setSteamId(textOf(loaded.providers.steam?.steamId));
         setGridDbKey(loaded.steamGridDbApiKey ?? "");
+        setIgdbClientId(loaded.igdbClientId ?? "");
+        setIgdbClientSecret(loaded.igdbClientSecret ?? "");
       })
       .catch((error: unknown) => store.pushToast("error", errorMessage(error)));
   });
@@ -115,6 +120,33 @@ export function createSettingsModel() {
     }
   }
 
+  async function saveIgdb() {
+    const previous = settings();
+    if (!previous || savingIgdb()) return;
+    const id = igdbClientId().trim();
+    const secret = igdbClientSecret().trim();
+    const next: Settings = {
+      ...previous,
+      igdbClientId: id === "" ? null : id,
+      igdbClientSecret: secret === "" ? null : secret,
+    };
+    setSavingIgdb(true);
+    try {
+      await api.saveSettings(next);
+      setSettings(next);
+      setIgdbClientId(id);
+      setIgdbClientSecret(secret);
+      store.pushToast(
+        "info",
+        id === "" && secret === "" ? "IGDB credentials removed" : "IGDB credentials saved",
+      );
+    } catch (error) {
+      store.pushToast("error", errorMessage(error));
+    } finally {
+      setSavingIgdb(false);
+    }
+  }
+
   return {
     settings,
     apiKey,
@@ -125,10 +157,16 @@ export function createSettingsModel() {
     gridDbKey,
     setGridDbKey,
     savingGridDb,
+    igdbClientId,
+    setIgdbClientId,
+    igdbClientSecret,
+    setIgdbClientSecret,
+    savingIgdb,
     toggle,
     setProviderOption,
     saveSteam,
     saveGridDb,
+    saveIgdb,
   };
 }
 

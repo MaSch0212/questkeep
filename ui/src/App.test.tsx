@@ -112,6 +112,8 @@ describe("App", () => {
       downloadCovers: true,
       fetchMetadata: true,
       steamGridDbApiKey: null,
+      igdbClientId: null,
+      igdbClientSecret: null,
       closeToTray: true,
       minimizeToTray: false,
       startWithSystem: false,

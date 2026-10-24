@@ -20,11 +20,12 @@ use chrono::Utc;
 use uuid::Uuid;
 
 use super::icons::{SquareFrom, icon_png_from_bytes, icon_png_from_rgba};
+use super::igdb::{CHECKED_KEY as IGDB_CHECKED_KEY, Igdb, IgdbLookup, release_year};
 use super::steamgriddb::{Lookup, SteamGridDb, checked_key};
 use super::{ImageCache, ImageKind, MAX_IMAGE_BYTES};
 use crate::db::Database;
 use crate::events::{CoreEvent, EventBus};
-use crate::model::{ActionKind, Game};
+use crate::model::{ActionKind, Game, GameMetadata};
 use crate::providers::{ImageCandidate, LibraryProvider, ProviderRegistry};
 
 /// One game whose cover should be fetched.
@@ -294,12 +295,14 @@ fn first_image(
     })
 }
 
-/// One game whose store metadata (and background) should be fetched.
+/// One game whose metadata (and background) should be fetched: from its store, or, when the
+/// store has none (or the game has no store), from IGDB.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MetadataJob {
     pub game_id: Uuid,
     pub source: String,
-    pub source_game_id: String,
+    /// `None` for manual games; those are only served by IGDB.
+    pub source_game_id: Option<String>,
 }
 
 struct MetadataShared {
@@ -308,6 +311,7 @@ struct MetadataShared {
     providers: ProviderRegistry,
     events: EventBus,
     artwork: SteamGridDb,
+    igdb: Igdb,
     http: ureq::Agent,
     interval: Duration,
     /// Games waiting in the queue, so repeated enqueues don't pile up duplicates.
@@ -339,6 +343,7 @@ impl MetadataFetcher {
         providers: ProviderRegistry,
         events: EventBus,
         artwork: SteamGridDb,
+        igdb: Igdb,
         interval: Duration,
     ) -> Self {
         let shared = Arc::new(MetadataShared {
@@ -347,6 +352,7 @@ impl MetadataFetcher {
             providers,
             events,
             artwork,
+            igdb,
             http: http_agent(),
             interval,
             queued: Mutex::new(HashSet::new()),
@@ -444,14 +450,21 @@ fn process_metadata(
     job: &MetadataJob,
     last_request: &mut Option<Instant>,
 ) {
-    if let Some(provider) = shared.providers.get(&job.source) {
+    let store = job
+        .source_game_id
+        .as_deref()
+        .and_then(|id| shared.providers.get(&job.source).map(|p| (p, id)));
+    // Games without a store (manual ones) can only get metadata from IGDB.
+    let mut ask_igdb = store.is_none();
+    let mut changed = false;
+    if let Some((provider, source_id)) = &store {
         if let Some(elapsed) = last_request.map(|t| t.elapsed())
             && elapsed < shared.interval
         {
             std::thread::sleep(shared.interval - elapsed);
         }
         *last_request = Some(Instant::now());
-        let mut changed = match provider.metadata(&job.source_game_id) {
+        changed = match provider.metadata(source_id) {
             Ok(Some(meta)) => shared
                 .db
                 .set_metadata(job.game_id, &meta, Utc::now())
@@ -460,6 +473,8 @@ fn process_metadata(
                 if let Err(err) = shared.db.mark_metadata_checked(job.game_id, Utc::now()) {
                     tracing::warn!(game = %job.game_id, %err, "could not mark metadata");
                 }
+                // The store has nothing: IGDB may.
+                ask_igdb = true;
                 false
             }
             // Not marked as checked, so it is retried on the next start.
@@ -468,7 +483,12 @@ fn process_metadata(
                 false
             }
         };
-        changed |= fetch_background(shared, provider.as_ref(), job);
+    }
+    if ask_igdb {
+        changed |= fetch_igdb(shared, job.game_id);
+    }
+    if let Some((provider, source_id)) = &store {
+        changed |= fetch_background(shared, provider.as_ref(), job.game_id, source_id);
         // Last step: the store data is cached by now, so this adds no request for most stores.
         shared
             .icons_seen
@@ -476,11 +496,11 @@ fn process_metadata(
             .unwrap_or_else(PoisonError::into_inner)
             .insert(job.game_id);
         changed |= fetch_icon(shared, job.game_id);
-        if changed {
-            shared.events.publish(CoreEvent::GamesChanged {
-                ids: vec![job.game_id],
-            });
-        }
+    }
+    if changed {
+        shared.events.publish(CoreEvent::GamesChanged {
+            ids: vec![job.game_id],
+        });
     }
     shared
         .queued
@@ -489,19 +509,82 @@ fn process_metadata(
         .remove(&job.game_id);
 }
 
+/// Asks IGDB for the game's metadata and stores it. Nothing the store provided is replaced: only
+/// empty fields are filled. "IGDB had nothing" is remembered in `extra`; errors (offline, rate
+/// limit, bad credentials) are only logged so they are retried later. Returns whether metadata
+/// was stored.
+fn fetch_igdb(shared: &MetadataShared, id: Uuid) -> bool {
+    if !shared.igdb.is_configured() {
+        return false;
+    }
+    let Ok(Some(game)) = shared.db.find_game(id) else {
+        return false;
+    };
+    if game.description.is_some() || game.extra.get(IGDB_CHECKED_KEY).is_some() {
+        return false;
+    }
+    let lookup = IgdbLookup {
+        name: &game.name,
+        year: release_year(game.release_date.as_deref()),
+    };
+    match shared.igdb.fetch_metadata(&lookup) {
+        Ok(Some(found)) => {
+            let existing = &game;
+            let merged = GameMetadata {
+                description: found.description,
+                release_date: existing.release_date.clone().or(found.release_date),
+                developers: keep_or(&existing.developers, found.developers),
+                publishers: keep_or(&existing.publishers, found.publishers),
+                genres: keep_or(&existing.genres, found.genres),
+            };
+            shared
+                .db
+                .set_metadata(id, &merged, Utc::now())
+                .inspect_err(
+                    |err| tracing::warn!(game = %id, %err, "could not store IGDB metadata"),
+                )
+                .is_ok()
+        }
+        Ok(None) => {
+            let marker = serde_json::Value::String(Utc::now().to_rfc3339());
+            if let Err(err) = shared
+                .db
+                .set_extra_value(id, IGDB_CHECKED_KEY, Some(marker))
+            {
+                tracing::warn!(game = %id, %err, "could not remember the IGDB miss");
+            }
+            false
+        }
+        Err(err) => {
+            tracing::debug!(game = %id, %err, "IGDB lookup failed");
+            false
+        }
+    }
+}
+
+/// The existing list when it has entries, else the fetched one.
+fn keep_or(existing: &[String], fetched: Vec<String>) -> Vec<String> {
+    if existing.is_empty() {
+        fetched
+    } else {
+        existing.to_vec()
+    }
+}
+
 /// Stores a background if the game has none yet. Returns whether one was stored.
 fn fetch_background(
     shared: &MetadataShared,
     provider: &dyn LibraryProvider,
-    job: &MetadataJob,
+    game_id: Uuid,
+    source_game_id: &str,
 ) -> bool {
-    let Ok(Some(game)) = shared.db.find_game(job.game_id) else {
+    let Ok(Some(game)) = shared.db.find_game(game_id) else {
         return false;
     };
     if game.background_path.is_some() {
         return false;
     }
-    let candidates = provider.background_candidates(&job.source_game_id);
+    let candidates = provider.background_candidates(source_game_id);
     let found = first_image(&shared.http, &candidates).or_else(|| {
         (shared.artwork.is_configured() && !is_checked(&game, ImageKind::Background))
             .then(|| {
@@ -520,9 +603,9 @@ fn fetch_background(
     };
     shared
         .images
-        .store_image(ImageKind::Background, job.game_id, ext, &bytes)
-        .and_then(|rel| shared.db.set_background_path(job.game_id, Some(&rel)))
-        .inspect_err(|err| tracing::warn!(game = %job.game_id, %err, "could not store background"))
+        .store_image(ImageKind::Background, game_id, ext, &bytes)
+        .and_then(|rel| shared.db.set_background_path(game_id, Some(&rel)))
+        .inspect_err(|err| tracing::warn!(game = %game_id, %err, "could not store background"))
         .is_ok()
 }
 
@@ -677,7 +760,7 @@ mod tests {
 
     use super::*;
     use crate::db::NewGameRecord;
-    use crate::model::{GameMetadata, ImportedGame};
+    use crate::model::ImportedGame;
     use crate::paths::DataPaths;
     use crate::providers::ProviderError;
 
@@ -826,12 +909,13 @@ mod tests {
             providers,
             EventBus::new(),
             SteamGridDb::new(None),
+            Igdb::new(None, None),
             Duration::ZERO,
         );
         let jobs = games.iter().map(|g| MetadataJob {
             game_id: g.id,
             source: "meta".into(),
-            source_game_id: g.source_game_id.clone().unwrap(),
+            source_game_id: g.source_game_id.clone(),
         });
         assert_eq!(fetcher.enqueue(jobs), 3);
 
@@ -932,6 +1016,7 @@ mod tests {
             providers,
             events,
             SteamGridDb::new(None),
+            Igdb::new(None, None),
             Duration::ZERO,
         );
         let ids = [from_store.id, from_cover.id, nothing.id];
@@ -1021,6 +1106,7 @@ mod tests {
             providers: ProviderRegistry::new(),
             events: EventBus::new(),
             artwork: SteamGridDb::new(None),
+            igdb: Igdb::new(None, None),
             http: http_agent(),
             interval: Duration::ZERO,
             queued: Mutex::new(HashSet::new()),
@@ -1035,5 +1121,188 @@ mod tests {
         std::fs::remove_file(images.resolve(&rel).unwrap()).unwrap();
         assert!(fetch_icon(&shared, game.id));
         assert!(images.resolve(&rel).is_some());
+    }
+
+    /// A store that has metadata for "has", none for "none" and fails for "err".
+    struct PartialStore;
+    impl LibraryProvider for PartialStore {
+        fn id(&self) -> &str {
+            "partial"
+        }
+        fn name(&self) -> &str {
+            "Partial"
+        }
+        fn scan_installed(&self) -> Result<Vec<ImportedGame>, ProviderError> {
+            Ok(vec![])
+        }
+        fn metadata(&self, id: &str) -> Result<Option<GameMetadata>, ProviderError> {
+            match id {
+                "has" => Ok(Some(GameMetadata {
+                    description: Some("From the store.".into()),
+                    ..Default::default()
+                })),
+                "none" => Ok(None),
+                _ => Err(ProviderError::Network("offline".into())),
+            }
+        }
+    }
+
+    const IGDB_TOKEN: &str = r#"{"access_token":"t","expires_in":3600,"token_type":"bearer"}"#;
+    const IGDB_ALPHA: &str = r#"[{"id":1,"name":"Alpha","summary":"From IGDB.",
+        "first_release_date":1431993600,"genres":[{"name":"Puzzle"}],
+        "involved_companies":[{"developer":true,"publisher":false,"company":{"name":"Dev Co"}}]}]"#;
+
+    #[test]
+    fn igdb_fills_in_what_the_store_cannot_and_nothing_else() {
+        use super::super::igdb::test_server::serve;
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = DataPaths::new(tmp.path().join("data"));
+        paths.ensure_dirs().unwrap();
+        let db = Arc::new(Database::open_in_memory().unwrap());
+        let mk = |name: &str, source: &str, id: Option<&str>| {
+            db.insert_game(
+                &NewGameRecord {
+                    name: name.into(),
+                    source: source.into(),
+                    source_game_id: id.map(str::to_string),
+                    ..Default::default()
+                },
+                Utc::now(),
+            )
+            .unwrap()
+        };
+        // Queue order is request order: the store's "none" game, then the manual one.
+        let none = mk("Alpha", "partial", Some("none"));
+        let manual = mk("Beta", "manual", None);
+        let has = mk("Gamma", "partial", Some("has"));
+        let err = mk("Delta", "partial", Some("err"));
+
+        // Token, then one search per game IGDB is asked about; a further request would get a 500.
+        let server = serve(vec![(200, IGDB_TOKEN), (200, IGDB_ALPHA), (200, "[]")]);
+        let igdb = Igdb::with_endpoints(
+            Some("id".into()),
+            Some("secret".into()),
+            Duration::ZERO,
+            format!("{}/token", server.base),
+            format!("{}/games", server.base),
+        );
+        let mut providers = ProviderRegistry::new();
+        providers.register(Arc::new(PartialStore));
+        let fetcher = MetadataFetcher::new(
+            db.clone(),
+            ImageCache::new(paths),
+            providers,
+            EventBus::new(),
+            SteamGridDb::new(None),
+            igdb,
+            Duration::ZERO,
+        );
+        let jobs = [&none, &manual, &has, &err].map(|g| MetadataJob {
+            game_id: g.id,
+            source: g.source.clone(),
+            source_game_id: g.source_game_id.clone(),
+        });
+        assert_eq!(fetcher.enqueue(jobs), 4);
+
+        let start = Instant::now();
+        while !fetcher.shared.queued.lock().unwrap().is_empty() {
+            assert!(
+                start.elapsed() < Duration::from_secs(5),
+                "jobs did not finish"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let none = db.get_game(none.id).unwrap();
+        assert_eq!(none.description.as_deref(), Some("From IGDB."));
+        assert_eq!(none.developers, vec!["Dev Co".to_string()]);
+        assert_eq!(none.genres, vec!["Puzzle".to_string()]);
+        assert_eq!(none.release_date.as_deref(), Some("2015-05-19"));
+        assert!(none.metadata_updated_at.is_some());
+        assert!(none.extra.get(IGDB_CHECKED_KEY).is_none());
+
+        let manual = db.get_game(manual.id).unwrap();
+        assert!(manual.description.is_none());
+        assert!(
+            manual.extra.get(IGDB_CHECKED_KEY).is_some(),
+            "no IGDB data is remembered"
+        );
+
+        let has = db.get_game(has.id).unwrap();
+        assert_eq!(has.description.as_deref(), Some("From the store."));
+        assert!(
+            has.genres.is_empty(),
+            "store data is not topped up from IGDB"
+        );
+        let err = db.get_game(err.id).unwrap();
+        assert!(
+            err.metadata_updated_at.is_none(),
+            "store errors are retried"
+        );
+        assert!(err.extra.get(IGDB_CHECKED_KEY).is_none());
+        assert_eq!(
+            server.requests.lock().unwrap().len(),
+            3,
+            "only games without store data reach IGDB"
+        );
+    }
+
+    #[test]
+    fn igdb_errors_are_not_remembered_and_unconfigured_igdb_is_skipped() {
+        use super::super::igdb::test_server::serve;
+        let tmp = tempfile::tempdir().unwrap();
+        let db = Arc::new(Database::open_in_memory().unwrap());
+        let game = db
+            .insert_game(
+                &NewGameRecord {
+                    name: "Alpha".into(),
+                    source: "manual".into(),
+                    ..Default::default()
+                },
+                Utc::now(),
+            )
+            .unwrap();
+        let shared_with = |igdb: Igdb| MetadataShared {
+            db: db.clone(),
+            images: ImageCache::new(DataPaths::new(tmp.path())),
+            providers: ProviderRegistry::new(),
+            events: EventBus::new(),
+            artwork: SteamGridDb::new(None),
+            igdb,
+            http: http_agent(),
+            interval: Duration::ZERO,
+            queued: Mutex::new(HashSet::new()),
+            icons_seen: Mutex::new(HashSet::new()),
+        };
+        let marked = || {
+            db.get_game(game.id)
+                .unwrap()
+                .extra
+                .get(IGDB_CHECKED_KEY)
+                .is_some()
+        };
+
+        assert!(!fetch_igdb(&shared_with(Igdb::new(None, None)), game.id));
+        assert!(!marked(), "not configured: nothing recorded");
+
+        let server = serve(vec![(200, IGDB_TOKEN), (429, "{}"), (200, IGDB_ALPHA)]);
+        let igdb = Igdb::with_endpoints(
+            Some("id".into()),
+            Some("secret".into()),
+            Duration::ZERO,
+            format!("{}/token", server.base),
+            format!("{}/games", server.base),
+        );
+        let shared = shared_with(igdb);
+        assert!(!fetch_igdb(&shared, game.id));
+        assert!(!marked(), "a rate limit is retried later");
+        assert!(fetch_igdb(&shared, game.id), "the retry succeeds");
+        assert_eq!(
+            db.get_game(game.id).unwrap().description.as_deref(),
+            Some("From IGDB.")
+        );
+        assert!(
+            !fetch_igdb(&shared, game.id),
+            "a game with a description is left alone"
+        );
     }
 }
