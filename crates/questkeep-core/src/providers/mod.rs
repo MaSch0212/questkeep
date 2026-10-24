@@ -178,7 +178,7 @@ impl ProviderRegistry {
         // Lutris only exists on Linux; leaving it out elsewhere keeps the provider list honest.
         #[cfg(not(windows))]
         registry.register(Arc::new(lutris::LutrisProvider::detect()));
-        #[cfg(not(windows))]
+        // Amazon reads the Amazon Games app on Windows and Heroic elsewhere.
         registry.register(Arc::new(amazon::AmazonProvider::detect()));
         #[cfg(not(windows))]
         registry.register(Arc::new(heroic_sideload::HeroicSideloadProvider::detect()));
