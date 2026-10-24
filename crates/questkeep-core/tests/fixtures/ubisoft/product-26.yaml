@@ -1,0 +1,30 @@
+#--------------------------------------------------------------------------
+# ASSASSIN'S CREED BROTHERHOOD
+#--------------------------------------------------------------------------
+version: 2.0
+root:
+  dev:
+    require_legacy_game_password: online_only
+  name: l1
+  background_image: 4ad3ac2608472d45a625e1f7370847e0.jpg
+  thumb_image: 17319894db2463c9d82d789b3e46461f.jpg
+  logo_image: 20493274a62f9aaf2238b623de13433c.png
+  dialog_image: 43e1a6d703ea53464174be624cedb042.png
+  icon_image: e2542c609a749837c8f89d52026be9a4.ico
+  background_color: 37566a
+  sort_string: "Assassin's Creed 03"
+  start_game:
+    online:
+      executables:
+        - path:
+            relative: ACBSP.exe
+          working_directory:
+            register: HKEY_LOCAL_MACHINE\SOFTWARE\Ubisoft\Assassin's Creed Brotherhood\GameUpdate\installdir
+  uplay:
+    game_code: ACB
+  space_id: 5
+localizations:
+  default:
+    l1: Assassin's Creed® Brotherhood
+  zh-CN:
+    l1: 刺客信条：兄弟会
