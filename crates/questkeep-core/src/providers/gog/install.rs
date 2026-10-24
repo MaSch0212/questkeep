@@ -592,6 +592,8 @@ mod tests {
         assert!(known[0].path.as_deref().unwrap().starts_with(&dir_text));
     }
 
+    // Registry paths use `\`, which is only a separator on Windows.
+    #[cfg(windows)]
     #[test]
     fn missing_install_location_comes_from_the_uninstaller_path() {
         let mut records = Vec::new();
