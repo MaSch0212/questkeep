@@ -356,3 +356,6 @@ Short log of choices made while building. Newest at the bottom of each section.
   queued notice, `take_notices`): with close-to-tray on, an old build waiting in the tray otherwise
   silently swallows starts of a newer build.
 
+- **Custom title bar (`decorations: false`)** drawn by `TitleBar.tsx`; the native shadow and
+  resize edges stay. Its caption buttons are out of the tab order like native ones (Win+Up/Down,
+  Alt+F4 remain the keyboard paths). Windows 11 Snap Layouts on hover over maximize is lost for now.

@@ -72,7 +72,87 @@ ul {
 .app {
   display: grid;
   grid-template-columns: var(--qk-sidebar-width) minmax(0, 1fr);
+  grid-template-rows: var(--qk-titlebar-height) minmax(0, 1fr);
   height: 100%;
+}
+
+/* Title bar (replaces the native window frame). Its brand cell continues the sidebar column. */
+.titlebar {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: var(--qk-sidebar-width) minmax(0, 1fr) auto;
+  user-select: none;
+}
+.titlebar__brand {
+  grid-column: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--qk-space-2);
+  padding: 0 calc(var(--qk-space-3) + var(--qk-space-2));
+  background: var(--qk-color-surface);
+  border-right: 1px solid var(--qk-color-border);
+}
+/* Let drags on the brand fall through to its drag region. */
+.titlebar__brand > * {
+  pointer-events: none;
+}
+.titlebar__brand .titlebar__logo {
+  width: var(--qk-titlebar-logo-size);
+  transition: color var(--qk-duration-fast) var(--qk-easing);
+}
+.titlebar__wordmark {
+  font-size: var(--qk-font-size-sm);
+  font-weight: var(--qk-font-weight-bold);
+  letter-spacing: 0.04em;
+  color: var(--qk-color-text-muted);
+  transition: color var(--qk-duration-fast) var(--qk-easing);
+}
+.titlebar--inactive .titlebar__logo,
+.titlebar--inactive .titlebar__wordmark,
+.titlebar--inactive .titlebar__button {
+  color: var(--qk-color-text-faint);
+}
+.titlebar__controls {
+  grid-column: 3;
+  display: flex;
+}
+.titlebar__button {
+  display: grid;
+  place-items: center;
+  width: var(--qk-titlebar-button-width);
+  height: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--qk-color-text-muted);
+  cursor: default;
+  transition:
+    background var(--qk-duration-fast) var(--qk-easing),
+    color var(--qk-duration-fast) var(--qk-easing);
+}
+.titlebar__button:hover {
+  background: var(--qk-color-surface-hover);
+  color: var(--qk-color-text);
+}
+.titlebar__button:active {
+  background: var(--qk-color-surface-raised);
+}
+.titlebar__button--close:hover,
+.titlebar__button--close:active {
+  background: var(--qk-color-close-hover);
+  color: var(--qk-color-close-hover-text);
+}
+.titlebar__icon {
+  width: var(--qk-titlebar-icon-size);
+  height: var(--qk-titlebar-icon-size);
+  stroke-width: var(--qk-titlebar-icon-stroke);
+}
+.titlebar__icon--small {
+  width: var(--qk-titlebar-icon-size-small);
+  height: var(--qk-titlebar-icon-size-small);
+}
+.titlebar__icon--mirrored {
+  transform: scaleX(-1);
 }
 .app__main {
   display: flex;
@@ -105,20 +185,11 @@ ul {
   display: flex;
   flex-direction: column;
   gap: var(--qk-space-2);
-  padding: var(--qk-space-4) var(--qk-space-3);
+  /* The title bar above already provides the top spacing. */
+  padding: var(--qk-space-2) var(--qk-space-3) var(--qk-space-4);
   background: var(--qk-color-surface);
   border-right: 1px solid var(--qk-color-border);
   overflow-y: auto;
-}
-.sidebar__brand {
-  display: flex;
-  align-items: center;
-  gap: var(--qk-space-2);
-  padding: 0 var(--qk-space-2) var(--qk-space-3);
-}
-.sidebar__wordmark {
-  font-size: var(--qk-font-size-lg);
-  font-weight: var(--qk-font-weight-bold);
 }
 .sidebar__title,
 .sidebar__heading {

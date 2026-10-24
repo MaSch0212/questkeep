@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { AccountStatus } from "../bindings/AccountStatus";
 import type { AppInfo } from "../bindings/AppInfo";
 import type { Game } from "../bindings/Game";
@@ -53,3 +54,15 @@ export interface UpdateInfo {
 export const checkUpdate = () => invoke<UpdateInfo | null>("check_update");
 /** Downloads, installs and restarts the app. */
 export const installUpdate = () => invoke<void>("install_update");
+
+// Window controls for the custom title bar. Close and minimize still go through the shell's
+// close/minimize-to-tray handling.
+export const minimizeWindow = () => getCurrentWindow().minimize();
+export const toggleMaximizeWindow = () => getCurrentWindow().toggleMaximize();
+export const closeWindow = () => getCurrentWindow().close();
+export const isWindowMaximized = () => getCurrentWindow().isMaximized();
+/** Resolves to an unlisten function. */
+export const onWindowResized = (handler: () => void) => getCurrentWindow().onResized(handler);
+/** Resolves to an unlisten function. */
+export const onWindowFocusChanged = (handler: (focused: boolean) => void) =>
+  getCurrentWindow().onFocusChanged((event) => handler(event.payload));

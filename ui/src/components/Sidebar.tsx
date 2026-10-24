@@ -2,7 +2,6 @@ import Settings from "lucide-solid/icons/settings";
 import { For } from "solid-js";
 import { libraryView, type LibraryView } from "../lib/query";
 import { store } from "../lib/store";
-import { Logo } from "./Logo";
 
 const VIEWS: { id: LibraryView; label: string }[] = [
   { id: "all", label: "All games" },
@@ -21,10 +20,6 @@ const view = () => libraryView(store.query());
 export function Sidebar(props: SidebarProps) {
   return (
     <nav class="sidebar" aria-label="Library navigation">
-      <div class="sidebar__brand">
-        <Logo class="logo" />
-        <span class="sidebar__wordmark">Questkeep</span>
-      </div>
       <h1 class="sidebar__title">Library</h1>
 
       <ul class="sidebar__list">

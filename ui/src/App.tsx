@@ -6,6 +6,7 @@ import { GameGrid } from "./components/GameGrid";
 import { GameList } from "./components/GameList";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { Sidebar } from "./components/Sidebar";
+import { TitleBar } from "./components/TitleBar";
 import { Toasts } from "./components/Toasts";
 import { TopBar } from "./components/TopBar";
 import { store } from "./lib/store";
@@ -72,6 +73,7 @@ export function App() {
 
   return (
     <div class="app">
+      <TitleBar />
       <Sidebar onAdd={() => setAdding(true)} />
       <div class="app__main">
         {/* Stays mounted (just hidden) on other pages so the search box keeps its text. */}

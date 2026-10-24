@@ -29,6 +29,8 @@
   --qk-color-title-on-cover: #ffffff;
   --qk-color-badge-border: #ffffff1f;
   --qk-color-cursor: #6c7381;
+  --qk-color-close-hover: #c42b1c;
+  --qk-color-close-hover-text: #ffffff;
 
   /* Placeholder cover gradients: hue is set per tile, the rest comes from here */
   --qk-placeholder-saturation: 38%;
@@ -78,6 +80,12 @@
 
   /* Component sizes */
   --qk-sidebar-width: 220px;
+  --qk-titlebar-height: 44px;
+  --qk-titlebar-button-width: 46px;
+  --qk-titlebar-logo-size: 20px;
+  --qk-titlebar-icon-size: 16px;
+  --qk-titlebar-icon-size-small: 12px;
+  --qk-titlebar-icon-stroke: 1.5;
   --qk-topbar-height: 56px;
   --qk-details-width: 380px;
   /* Content width from which details sit beside the library instead of overlaying it. Read by
