@@ -27,6 +27,7 @@ use crate::db::Database;
 use crate::events::{CoreEvent, EventBus};
 use crate::model::{ActionKind, Game, GameMetadata};
 use crate::providers::{ImageCandidate, LibraryProvider, ProviderRegistry};
+use crate::seed::is_fake_source;
 
 /// One game whose cover should be fetched.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -148,7 +149,7 @@ fn process(shared: &Shared, job: &CoverJob) {
     let Ok(Some(game)) = shared.db.find_game(job.game_id) else {
         return;
     };
-    if game.cover_path.is_some() && !job.force {
+    if (game.cover_path.is_some() && !job.force) || is_fake_source(&game.source) {
         return;
     }
     let provider = job
@@ -451,6 +452,17 @@ fn process_metadata(
     job: &MetadataJob,
     last_request: &mut Option<Instant>,
 ) {
+    if !is_fake_source(&job.source) {
+        fetch_metadata(shared, job, last_request);
+    }
+    shared
+        .queued
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .remove(&job.game_id);
+}
+
+fn fetch_metadata(shared: &MetadataShared, job: &MetadataJob, last_request: &mut Option<Instant>) {
     let store = job
         .source_game_id
         .as_deref()
@@ -503,11 +515,6 @@ fn process_metadata(
             ids: vec![job.game_id],
         });
     }
-    shared
-        .queued
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .remove(&job.game_id);
 }
 
 /// Asks IGDB for the game's metadata and stores it. Nothing the store provided is replaced: only
@@ -629,7 +636,8 @@ fn fetch_icon(shared: &MetadataShared, id: Uuid) -> bool {
         path.as_deref()
             .is_some_and(|p| shared.images.resolve(p).is_some())
     };
-    if has_file(&game.icon_path) {
+    // Fake games stay in the "attempted" set, so the tray doesn't queue them again this run.
+    if has_file(&game.icon_path) || is_fake_source(&game.source) {
         return false;
     }
     let Some((png, from_cover)) = build_icon(shared, &game) else {
@@ -851,6 +859,54 @@ mod tests {
         );
         std::thread::sleep(Duration::from_millis(50));
         assert!(db.get_game(g2.id).unwrap().cover_path.is_none());
+    }
+
+    #[test]
+    fn fake_games_are_skipped_even_when_queued() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = DataPaths::new(tmp.path().join("data"));
+        paths.ensure_dirs().unwrap();
+        let covers = tmp.path().join("covers");
+        std::fs::create_dir_all(&covers).unwrap();
+        std::fs::write(covers.join("1.bin"), [0xFF, 0xD8, 0xFF, 0xE0, 1, 2]).unwrap();
+        let db = Arc::new(Database::open_in_memory().unwrap());
+        let mk = |source: &str| {
+            db.insert_game(
+                &NewGameRecord {
+                    name: source.into(),
+                    source: source.into(),
+                    source_game_id: Some("1".into()),
+                    ..Default::default()
+                },
+                Utc::now(),
+            )
+            .unwrap()
+        };
+        let (fake, real) = (mk(crate::seed::FAKE_SOURCE), mk("local"));
+        let mut providers = ProviderRegistry::new();
+        providers.register(Arc::new(LocalCovers(covers)));
+        let fetcher = CoverFetcher::new(
+            db.clone(),
+            ImageCache::new(paths),
+            providers,
+            EventBus::new(),
+            SteamGridDb::new(None),
+            1,
+        );
+        // Both jobs point at a provider with a cover; only the real game gets it.
+        let job = |g: &crate::model::Game| CoverJob {
+            game_id: g.id,
+            source: "local".into(),
+            source_game_id: Some("1".into()),
+            force: false,
+        };
+        fetcher.enqueue([job(&fake), job(&real)]);
+        let start = Instant::now();
+        while db.get_game(real.id).unwrap().cover_path.is_none() {
+            assert!(start.elapsed() < Duration::from_secs(5));
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(db.get_game(fake.id).unwrap().cover_path.is_none());
     }
 
     struct MetaStore(std::path::PathBuf);

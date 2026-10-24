@@ -6,6 +6,12 @@ use crate::model::PlayAction;
 /// Source id used for fake games so they can be told apart (and filtered) easily.
 pub const FAKE_SOURCE: &str = "fake";
 
+/// Whether a game comes from the fake library. Such games never get covers, icons or metadata:
+/// their invented names would only cost SteamGridDB and IGDB requests that find nothing.
+pub fn is_fake_source(source: &str) -> bool {
+    source == FAKE_SOURCE
+}
+
 const ADJECTIVES: [&str; 16] = [
     "Ancient",
     "Broken",

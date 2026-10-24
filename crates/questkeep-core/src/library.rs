@@ -21,6 +21,7 @@ use crate::model::{
 };
 use crate::paths::DataPaths;
 use crate::providers::{ProviderError, ProviderInfo, ProviderRegistry};
+use crate::seed::is_fake_source;
 use crate::settings::{Settings, SettingsStore};
 use crate::tray::{self, TrayGames};
 
@@ -430,7 +431,8 @@ impl Library {
 
     /// Cover-fetch jobs for games that don't have a cover yet. Store games always get a job (their
     /// provider is asked first). Manual games and games of unregistered providers can only be
-    /// served by SteamGridDB, so they get a job only when an API key is configured.
+    /// served by SteamGridDB, so they get a job only when an API key is configured. Fake games
+    /// never get one.
     pub fn missing_cover_jobs(&self) -> Result<Vec<CoverJob>> {
         let has_key = self
             .settings()
@@ -441,7 +443,9 @@ impl Library {
             .games_without_cover()?
             .into_iter()
             .filter(|(_, source, source_game_id)| {
-                has_key || (source_game_id.is_some() && self.providers.get(source).is_some())
+                !is_fake_source(source)
+                    && (has_key
+                        || (source_game_id.is_some() && self.providers.get(source).is_some()))
             })
             .map(|(game_id, source, source_game_id)| CoverJob {
                 game_id,
@@ -457,6 +461,9 @@ impl Library {
     /// fetcher (which also handles the background). Fails when no API key is configured.
     pub fn refetch_artwork(&self, id: Uuid) -> Result<CoverJob> {
         let game = self.db.get_game(id)?;
+        if is_fake_source(&game.source) {
+            return Err(CoreError::Invalid("Fake games don't get artwork.".into()));
+        }
         if !self
             .settings()
             .steamgriddb_api_key
@@ -499,7 +506,11 @@ impl Library {
                 self.db
                     .games_without_description()?
                     .into_iter()
-                    .filter(|g| !known.contains(&g.id) && g.extra.get(IGDB_CHECKED_KEY).is_none())
+                    .filter(|g| {
+                        !known.contains(&g.id)
+                            && !is_fake_source(&g.source)
+                            && g.extra.get(IGDB_CHECKED_KEY).is_none()
+                    })
                     .map(|g| MetadataJob {
                         game_id: g.id,
                         source: g.source,
@@ -517,7 +528,7 @@ impl Library {
         let game = self.db.get_game(id)?;
         let from_store =
             game.source_game_id.is_some() && self.providers.get(&game.source).is_some();
-        if !from_store && !self.igdb.is_configured() {
+        if is_fake_source(&game.source) || (!from_store && !self.igdb.is_configured()) {
             return Ok(None);
         }
         self.db.set_extra_value(id, IGDB_CHECKED_KEY, None)?;
@@ -1014,6 +1025,25 @@ mod tests {
                 .is_none(),
             "marker cleared"
         );
+    }
+
+    #[test]
+    fn fake_games_never_get_artwork_or_metadata_jobs() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (lib, _) = library(tmp.path(), ProviderRegistry::new());
+        lib.seed_fake_library(20).unwrap();
+        let mut settings = lib.settings();
+        settings.steamgriddb_api_key = Some("test-key".into());
+        settings.igdb_client_id = Some("id".into());
+        settings.igdb_client_secret = Some("secret".into());
+        lib.save_settings(&settings).unwrap();
+        assert!(lib.artwork().is_configured() && lib.igdb().is_configured());
+
+        assert!(lib.missing_cover_jobs().unwrap().is_empty());
+        assert!(lib.missing_metadata_jobs().unwrap().is_empty());
+        let fake = lib.database().list_games(&Default::default()).unwrap()[0].clone();
+        assert!(lib.metadata_job(fake.id).unwrap().is_none());
+        assert!(lib.refetch_artwork(fake.id).is_err());
     }
 
     #[test]
