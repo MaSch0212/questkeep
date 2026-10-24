@@ -14,20 +14,22 @@ the release workflow.
 ## Done for v0.2
 
 Xbox account sign-in (owned PC games, playtime); Xbox covers, backgrounds and descriptions from the
-Microsoft Store catalog; Epic covers without sign-in (public catalog); Uninstall action per store.
+Microsoft Store catalog; Epic covers without sign-in (public catalog); Uninstall action per store;
+custom title bar. Follow-ups: Legendary per-game uninstall; GOG `Uninstall\<id>_is1` installs and
+uninstallers; per-game low-quality covers; Epic catalog cache on disk; GOG gamesdb covers; option
+to skip Game Pass titles; Heroic Amazon (Nile) and sideloaded games; owned games
+from Heroic/Lutris libraries; IGDB metadata for games without store data.
 
 ## Next
 
-- **Uninstall follow-ups**: per-game Epic uninstall (it only opens the launcher library).
-- **GOG**: use the `Uninstall\<id>_is1` registry key both for installs missing from
-  `GOG.com\Games` and as the uninstaller (today only `unins000.exe` in the install folder).
-- **Covers**: per-game `covers_are_low_quality` (Xbox games without a Poster still get a logo
-  before SteamGridDB).
-- **Sign-in follow-ups**: persist the Epic catalog cache on disk, GOG playtime and covers from the
-  signed-in library, Epic genres, an option to hide Game Pass titles from Xbox title history.
-- **Linux stores, follow-ups**: Heroic Amazon (Nile) and sideloaded games, owned-but-not-installed
-  games from Heroic/Lutris service libraries.
-- **IGDB metadata** for manual games and stores without a public API.
+- **GOG playtime**: the profile stats endpoint refuses the Galaxy token (403); needs an endpoint
+  that accepts it, or a web-session sign-in.
+- **Verify live**: IGDB with real credentials, Heroic Nile/sideload files on a real Linux machine.
+- **Epic genres**: only the Cloudflare-protected store GraphQL has them; IGDB could fill genres
+  for games that have a store description but none.
+- **Per-game Epic launcher uninstall**, if Epic ever documents a URI.
+- **Game Pass by entitlement** instead of the Game Pass catalog (collections API), so bought games
+  that are also in Game Pass stay.
 
 ## Later
 

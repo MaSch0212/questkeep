@@ -7,10 +7,8 @@
 //!
 //! Fetching and parsing are separate, so every parser is tested with fixtures.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
-use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -28,9 +26,6 @@ const REDIRECT_URI: &str = "https://embed.gog.com/on_login_success?origin=client
 const TOKEN_URL: &str = "https://auth.gog.com/token";
 const USER_DATA_URL: &str = "https://embed.gog.com/userData.json";
 const PRODUCTS_URL: &str = "https://embed.gog.com/account/getFilteredProducts";
-/// Per-game playtime of the account (`/u/<username>/games/stats`, the data behind the profile's
-/// games page): paged JSON with the minutes played and the last session of each game.
-const STATS_URL: &str = "https://embed.gog.com/u";
 /// The login redirect; the shell watches for navigations to this prefix.
 pub const LOGIN_SUCCESS_PREFIX: &str = "https://embed.gog.com/on_login_success";
 /// Upper bound for pages of the owned list (a guard against a server that never stops).
@@ -170,68 +165,6 @@ pub fn parse_filtered_products(body: &str) -> Result<(Vec<ImportedGame>, u32), P
     Ok((games, total_pages))
 }
 
-/// Playtime of one game from the stats list.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Playtime {
-    pub seconds: u64,
-    pub last_played: Option<DateTime<Utc>>,
-}
-
-fn parse_session_time(text: &str) -> Option<DateTime<Utc>> {
-    DateTime::parse_from_rfc3339(text)
-        .or_else(|_| DateTime::parse_from_str(text, "%Y-%m-%dT%H:%M:%S%z"))
-        .ok()
-        .map(|d| d.with_timezone(&Utc))
-}
-
-/// One page of the games stats list: playtime per product id (games without playtime are left
-/// out) and the page count. GOG answers `"stats": []` for never-played games and an object keyed
-/// by account id otherwise; with several entries the largest playtime wins.
-pub fn parse_games_stats(body: &str) -> Result<(HashMap<String, Playtime>, u32), ProviderError> {
-    let unreadable = || {
-        ProviderError::Parse("GOG returned an unexpected response for the playtime list.".into())
-    };
-    let json: Value = serde_json::from_str(body).map_err(|_| unreadable())?;
-    let items = json
-        .pointer("/_embedded/items")
-        .and_then(Value::as_array)
-        .ok_or_else(unreadable)?;
-    let pages = json
-        .get("pages")
-        .and_then(Value::as_u64)
-        .and_then(|p| u32::try_from(p).ok())
-        .unwrap_or(1);
-    let mut out: HashMap<String, Playtime> = HashMap::new();
-    for item in items {
-        let id = match item.pointer("/game/id") {
-            Some(Value::Number(n)) => n.to_string(),
-            Some(Value::String(s)) => s.clone(),
-            _ => continue,
-        };
-        let Some(stats) = item.get("stats").and_then(Value::as_object) else {
-            continue;
-        };
-        for entry in stats.values() {
-            let minutes = entry.get("playtime").and_then(Value::as_u64).unwrap_or(0);
-            if minutes == 0 {
-                continue;
-            }
-            let candidate = Playtime {
-                seconds: minutes * 60,
-                last_played: entry
-                    .get("lastSession")
-                    .and_then(Value::as_str)
-                    .and_then(parse_session_time),
-            };
-            let best = out.entry(id.clone()).or_insert(candidate);
-            if candidate.seconds > best.seconds {
-                *best = candidate;
-            }
-        }
-    }
-    Ok((out, pages))
-}
-
 /// A GOG account: sign-in, status and the owned games.
 pub struct GogAccount {
     session: AccountSession,
@@ -287,55 +220,7 @@ impl GogAccount {
         }
         games.sort_by_cached_key(|g| (g.name.to_lowercase(), g.source_game_id.clone()));
         games.dedup_by(|a, b| a.source_game_id == b.source_game_id);
-        let stats = self.fetch_playtime().unwrap_or_else(|err| {
-            tracing::warn!(%err, "could not fetch GOG playtime");
-            HashMap::new()
-        });
-        for game in &mut games {
-            if let Some(time) = stats.get(&game.source_game_id) {
-                game.playtime_seconds = Some(time.seconds);
-                game.last_played = time.last_played;
-            }
-        }
         Ok(games)
-    }
-
-    /// Playtime per product id. Best effort: the caller imports the library without it on any
-    /// failure. Sent without `AccountSession::send` on purpose: a 401 there signs the user out,
-    /// and this is a side endpoint that must never cost the sign-in.
-    fn fetch_playtime(&self) -> Result<HashMap<String, Playtime>, ProviderError> {
-        let token = self.session.access_token()?;
-        let username = match self.session.display_name() {
-            Some(name) => name,
-            None => self
-                .fetch_user_name(&token)
-                .ok_or_else(|| ProviderError::NotFound("GOG account name unknown".into()))?,
-        };
-        let mut all = HashMap::new();
-        let mut page = 1;
-        loop {
-            let url = format!(
-                "{STATS_URL}/{}/games/stats?sort=recent_playtime&order=desc&page={page}",
-                url_encode(&username)
-            );
-            let response = self
-                .http
-                .send(&HttpRequest::get(url).bearer(&token))
-                .map_err(ProviderError::Network)?;
-            if !response.ok() {
-                return Err(ProviderError::Network(format!(
-                    "GOG returned HTTP {} for the playtime list",
-                    response.status
-                )));
-            }
-            let (batch, pages) = parse_games_stats(&response.body)?;
-            all.extend(batch);
-            if page >= pages.min(MAX_PAGES) {
-                break;
-            }
-            page += 1;
-        }
-        Ok(all)
     }
 
     pub fn is_signed_in(&self) -> bool {
@@ -488,87 +373,6 @@ mod tests {
         assert!(none.is_empty() && pages == 1);
     }
 
-    const STATS_FIXTURE: &str = include_str!("../../../tests/fixtures/gog/games_stats.json");
-
-    #[test]
-    fn parses_games_stats() {
-        let (stats, pages) = parse_games_stats(STATS_FIXTURE).unwrap();
-        assert_eq!(pages, 1);
-        let cp = stats["1423049311"];
-        assert_eq!(cp.seconds, 125 * 60);
-        assert_eq!(
-            cp.last_played.map(|d| d.to_rfc3339()).as_deref(),
-            Some("2024-03-05T18:30:12+00:00")
-        );
-        assert!(!stats.contains_key("1207658924"), "zero minutes");
-        assert!(
-            !stats.contains_key("1207658930"),
-            "empty array means never played"
-        );
-        assert_eq!(stats["1456460669"].seconds, 30 * 60, "largest entry wins");
-        assert!(stats["1456460669"].last_played.is_some());
-        assert!(parse_games_stats("{}").is_err());
-        assert!(parse_games_stats("nope").is_err());
-    }
-
-    type StatsAnswer = fn(&HttpRequest) -> Result<HttpResponse, String>;
-
-    fn signed_in_account(stats: StatsAnswer) -> (GogAccount, Arc<FakeHttp>) {
-        let (account, store, http) = make_account(move |req| {
-            if req.url.starts_with(TOKEN_URL) {
-                response(200, TOKEN_FIXTURE)
-            } else if req.url.starts_with(PRODUCTS_URL) {
-                response(
-                    200,
-                    r#"{"totalPages":1,"products":[{"id":1423049311,"title":"Cyberpunk 2077"},{"id":5,"title":"Other"}]}"#,
-                )
-            } else if req.url.starts_with(STATS_URL) {
-                stats(req)
-            } else {
-                response(404, "")
-            }
-        });
-        store
-            .save(
-                "gog",
-                r#"{"refreshToken":"gog-refresh-token-value","displayName":"Ann B"}"#,
-            )
-            .unwrap();
-        (account, http)
-    }
-
-    #[test]
-    fn owned_scan_adds_playtime() {
-        let (account, http) = signed_in_account(|_| response(200, STATS_FIXTURE));
-        let games = account.fetch_owned().unwrap();
-        assert_eq!(games[0].source_game_id, "1423049311");
-        assert_eq!(games[0].playtime_seconds, Some(7_500));
-        assert!(games[0].last_played.is_some());
-        assert_eq!(games[1].playtime_seconds, None);
-        assert!(http.urls().iter().any(|u| u
-            == "https://embed.gog.com/u/Ann%20B/games/stats?sort=recent_playtime&order=desc&page=1"));
-    }
-
-    #[test]
-    fn owned_scan_survives_a_playtime_failure() {
-        let failures: [StatsAnswer; 4] = [
-            |_| response(403, ""),
-            |_| response(401, ""),
-            |_| response(200, "<html>"),
-            |_| Err("offline".into()),
-        ];
-        for failing in failures {
-            let (account, _) = signed_in_account(failing);
-            let games = account.fetch_owned().unwrap();
-            assert_eq!(games.len(), 2);
-            assert!(games.iter().all(|g| g.playtime_seconds.is_none()));
-            assert!(
-                account.is_signed_in(),
-                "a refused stats call keeps the sign-in"
-            );
-        }
-    }
-
     fn make_account(
         handler: impl Fn(&HttpRequest) -> Result<HttpResponse, String> + Send + Sync + 'static,
     ) -> (GogAccount, Arc<MemoryTokenStore>, Arc<FakeHttp>) {
@@ -684,9 +488,6 @@ mod tests {
                 return response(200, TOKEN_FIXTURE);
             }
             assert_eq!(req.headers[0].1, "Bearer gog-access-token-value");
-            if req.url.starts_with(STATS_URL) {
-                return response(404, "");
-            }
             seen.fetch_add(1, Ordering::SeqCst);
             if req.url.ends_with("page=1") {
                 response(200, PRODUCTS_FIXTURE)

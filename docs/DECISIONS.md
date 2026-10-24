@@ -144,6 +144,22 @@ Short log of choices made while building. Newest at the bottom of each section.
 - **Lutris is read straight from `pga.db`** (read-only, temporary-copy fallback if locked) and
   registered on non-Windows builds only. Steam-runner games are skipped; the game `directory` is
   ignored for tracking when it is `/` or the home folder, since it would match every process.
+- **Amazon Games through Heroic's Nile runner** as provider `amazon` (non-Windows): installed games
+  from `nile_config/nile/installed.json` (`{id, version, path}`), owned ones from
+  `store_cache/nile_library.json` (`library`) and Nile's own `library.json`; id = Amazon product id
+  (`product.id`), so a later Windows Amazon provider can share it. Launch `heroic://launch/nile/<id>`.
+  Heroic's `art_cover` is a background or icon, so `covers_are_low_quality` is `true`.
+- **Heroic sideloaded apps are their own provider `heroic`** ("Heroic (sideloaded)"):
+  they belong to no store and Heroic gives them random ids. `sideload_apps/library.json`
+  (`games`), launched via `heroic://launch/sideload/<app_name>`; browser and Mac apps are skipped.
+- **Owned games without sign-in on Linux**: Epic and GOG add the libraries Heroic cached
+  (`store_cache/legendary_library.json` key `library`, `gog_library.json` key `games`) and Lutris's
+  `service_games` of the `egs` / `gog` services (their `appid` is the AppName / product id) to the
+  account's owned list (`heroic::owned_with_local`: the account wins, local entries fill gaps, a
+  signed-out or failing account still gives the local list). Lutris's own owned scan lists only
+  services no provider covers (`<service>:<appid>`, no action; Steam, Epic, GOG and Amazon are
+  skipped). Shapes come from Heroic's and Lutris's public source (2026-10-25); the Nile file shapes
+  and Lutris service names other than `egs`, `gog`, `steam` were not seen on a real machine.
 
 ## Artwork (SteamGridDB)
 
@@ -164,6 +180,26 @@ Short log of choices made while building. Newest at the bottom of each section.
   default method keeps other providers untouched. With a key, SteamGridDB is tried first and the
   logo is the fallback. Covers already stored are never replaced automatically (a user-picked
   cover is indistinguishable from a fetched one); `refetch_artwork` replaces on request.
+
+## Metadata (IGDB)
+
+- **IGDB is a fallback metadata source built like SteamGridDB**: `Library` owns one shared
+  `Igdb` client, `save_settings` updates its credentials in place, and a 401/403 (or a refused
+  token request) marks them rejected until they change. Twitch Client ID and Secret both live in the
+  keyring (`setting:igdbClientId`, `setting:igdbClientSecret`); the id isn't secret, but one
+  mechanism was simpler. The app token (`client_credentials`) stays in memory and is renewed on
+  expiry or a 401; the secret goes in the form body, never the URL.
+- **Asked only when the store has nothing**: manual games, games of unregistered providers, and
+  games whose provider's `metadata()` is `Ok(None)` (e.g. Lutris, sideloaded). Only games without a
+  description, and only empty fields are filled, so store data and user edits are never
+  overwritten. Manual games are enqueued only when IGDB is configured.
+- **Exact normalized name match only** (lowercase alphanumerics, `&` = "and", leading "the"
+  dropped; release year breaks ties): a wrong description is worse than none. Misses are remembered
+  in `games.extra.igdbCheckedAt` (cleared by a metadata refresh); network and credential errors
+  are not.
+- **One global limiter, ≥ 300 ms between IGDB requests** (IGDB allows 4/s), separate from the
+  1.5 s store interval so a store miss followed by IGDB doesn't wait twice. Not verified against
+  the live API (no credentials during development).
 
 ## Store account sign-in (GOG, Epic)
 
@@ -196,7 +232,18 @@ Short log of choices made while building. Newest at the bottom of each section.
   `authorizationCode` value or the page JSON.
 - **Epic catalog data is cached in memory per run** and fetched in namespace batches of up to 40
   items per request; covers (`DieselGameBoxTall`), backgrounds (`DieselGameBox`, `OfferImageWide`)
-  and metadata reuse it. A disk cache is a follow-up.
+  and metadata reuse it.
+- **The Epic catalog is also cached on disk**, one JSON file per catalog item below
+  `<data>/cache/epic-catalog` (public token) and `epic-catalog-account` (signed in; the two tokens
+  may see different items, so one's "unknown" must not hide an item from the other). Items stay
+  fresh for 7 days, "unknown item" for 1 day; corrupt, expired or future-dated files are misses;
+  writes are temp file + rename and I/O errors are only logged. `ProviderRegistry::with_builtin`
+  takes the cache dir (`DataPaths::cache_dir`).
+- **No Epic genres.** Checked live 2026-10-25: `bulk/items` has only structural categories
+  (`games`, `applications`, `addons`, ...) across 120+ namespaces and no genre attributes; the
+  public store product page has feature tags only (`CO_OP`, `SINGLE_PLAYER`). Named genres exist
+  only in the store GraphQL, which sits behind a Cloudflare challenge we don't work around.
+  `metadata()` would read `genre/<name>` categories if Epic ever adds them.
 - **Epic artwork works without an account.** The installed manifests (and Legendary's
   `metadata/<app>.json`) carry namespace + catalog item id; the catalog `bulk/items` endpoint accepts
   an app-only token from the launcher's public client (`client_credentials`, verified live), so no
@@ -222,6 +269,24 @@ Short log of choices made while building. Newest at the bottom of each section.
   `can_uninstall` (not per game) keeps `ProviderInfo` the only thing the UI needs; per-game
   failures (missing uninstaller) come back as readable errors. No DB write: the next scan flips
   `installed`.
+- **Epic per-game uninstall only for standalone Legendary** (`legendary uninstall <app> -y`, the
+  store tool deleting its own install; Questkeep already asked). No per-game launcher URI was found
+  (web search and the launcher's files, 2026-10-25), so the Windows launcher still opens its
+  library. Heroic-managed games have no action. The app name is checked (`[A-Za-z0-9_.-]`, no
+  leading `-`) because it goes on a command line.
+- **GOG reads `Uninstall\<productId>_is1` too** (HKLM and HKCU, native and WOW6432Node), for
+  installs missing from `GOG.com\Games` and as the uninstaller (`UninstallString`, arguments kept;
+  `unins000.exe` in the folder is the fallback). Only numeric key names count (Inno Setup apps use
+  `_is1` as well). DLCs share the game's folder with their own `unins00N.exe`
+  (Cyberpunk 2077 + Phantom Liberty + REDmod on the maintainer's PC), so records whose
+  `goggame-<id>.info` `rootGameId` differs, or with `dependsOn`, are neither games nor uninstallable.
+- **GOG covers: gamesdb `vertical_cover` first** (`https://gamesdb.gog.com/platforms/gog/external_releases/<id>`,
+  `game.vertical_cover.url_format` with `{formatter}` empty and `{ext}` `jpg`: a 2:3 image; checked
+  anonymously 2026-10-25), then the v2 `boxArtImage` (342x482). Cached per id in memory.
+- **No GOG playtime yet.** Playnite reads `/u/<username>/games/stats` (minutes and `lastSession`
+  per game) with web-session cookies; `embed.gog.com/u/<username>/games/stats` answered 403 to the
+  Galaxy bearer token in a live signed-in scan (2026-10-25), and no documented Galaxy-token
+  endpoint was found, so the request was removed instead of failing on every scan.
 
 ## Xbox covers and sign-in
 
