@@ -7,6 +7,7 @@
 mod http;
 mod session;
 mod store;
+mod web_account;
 
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -14,6 +15,7 @@ use ts_rs::TS;
 pub use http::{Http, HttpRequest, HttpResponse, Method, UreqHttp, redact_secrets};
 pub use session::{AccountSession, Clock, REFRESH_MARGIN_SECS, RefreshFn, system_clock};
 pub use store::{KEYRING_SERVICE, KeyringTokenStore, MemoryTokenStore, TokenSet, TokenStore};
+pub use web_account::{WebAccount, WebAccountSpec, WebCapture, parse_web_capture};
 
 #[cfg(test)]
 pub(crate) use http::testing;
@@ -88,7 +90,7 @@ pub trait AccountAuth: Send + Sync {
 }
 
 /// A store sign-in kept as a browser session in its own profile, for stores whose website is the
-/// only way to sign in (Steam). The app implements it with a hidden webview; the core never sees
+/// only way to sign in (Steam, Battle.net, EA). The app implements it with a hidden webview; the core never sees
 /// cookies, only what the store's own page hands out.
 pub trait WebSession: Send + Sync {
     /// Loads the store's page with the saved session and returns the capture address its page

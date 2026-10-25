@@ -12,23 +12,115 @@
 //! Games start through `battlenet://game/<product code>` and uninstall through the "Blizzard
 //! Uninstaller" command of the game's Windows "Apps" entry (`--uid=<install id>`).
 //!
-//! Owned games that are not installed would need a Battle.net web sign-in; not done yet.
+//! Owned games come from the Battle.net account website, the way Playnite's Battle.net library
+//! reads them: the login window signs in on account.battle.net in a browser profile of its own
+//! ([`WebAccount`]), and before a scan a hidden window opens the account page, whose script reads
+//! `/api/games-and-subs` (and the BattleTag from `/api/details`) with that session and reports
+//! them through [`CAPTURE_PREFIX`]. Each game account's `titleId` is the product's four-letter
+//! code as a big-endian number (`WTCG` = 1465140039), which maps to the install's product code.
+//! Classic games bought as CD keys (`/api/classic-games`) are not installed through Battle.net and
+//! are left out.
 
 // Logic derived from Playnite (MIT), see THIRD_PARTY_NOTICES.md
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::DateTime;
 use serde::Deserialize;
 
 use super::{ImageCandidate, LibraryProvider, ProviderError};
+use crate::auth::{AccountAuth, WebAccount, WebAccountSpec};
 use crate::model::{ImportedGame, PlayAction};
 
 pub const BATTLENET_SOURCE: &str = "battlenet";
 /// Product codes of the agent and the Battle.net app itself.
 const NOT_GAMES: [&str; 2] = ["agent", "bna"];
+/// The page the login window opens; it signs in through Battle.net's own login and ends on the
+/// account overview. The hidden window opens it too: it renews the session's cookies.
+pub const LOGIN_URL: &str = "https://account.battle.net/oauth2/authorization/account-settings";
+pub const SESSION_URL: &str = LOGIN_URL;
+/// Navigations to this address carry what the account page reported; the window never loads it.
+pub const CAPTURE_PREFIX: &str = "https://questkeep.invalid/battlenet-session";
+/// A capture this recent is reused (the scan right after signing in).
+const CAPTURE_REUSE_SECS: i64 = 120;
+/// Product codes that differ from the lower-case title code.
+const CODE_OVERRIDES: [(&str, &str); 3] = [("wtcg", "hsb"), ("fen", "fenris"), ("vipr", "viper")];
+
+/// What the account sign-in needs to know about Battle.net.
+pub const ACCOUNT_SPEC: WebAccountSpec = WebAccountSpec {
+    provider: BATTLENET_SOURCE,
+    name: "Battle.net",
+    login_url: LOGIN_URL,
+    capture_prefix: CAPTURE_PREFIX,
+};
+
+/// The four-letter code packed into an account `titleId` (`1465140039` → `WTCG`).
+pub fn title_code(title_id: i64) -> Option<String> {
+    let bytes = u32::try_from(title_id).ok()?.to_be_bytes();
+    let code: String = bytes
+        .iter()
+        .skip_while(|&&b| b == 0)
+        .map(|&b| b as char)
+        .collect();
+    (!code.is_empty() && code.chars().all(|c| c.is_ascii_alphanumeric())).then_some(code)
+}
+
+/// The install product code (the game's id here) for a title code.
+pub fn product_code(title_code: &str) -> String {
+    let lower = title_code.to_ascii_lowercase();
+    CODE_OVERRIDES
+        .iter()
+        .find(|(title, _)| *title == lower)
+        .map_or(lower, |(_, code)| (*code).to_string())
+}
+
+/// One owned title as the account page reports it (`games` capture parameter).
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct OwnedTitle {
+    title_id: i64,
+    #[serde(default)]
+    localized_game_name: Option<String>,
+}
+
+/// Owned games from the `games` capture parameter (the `gameAccounts` list of
+/// `/api/games-and-subs`): one per product, ids as install product codes.
+pub fn parse_owned(json: &str) -> Result<Vec<ImportedGame>, ProviderError> {
+    let titles: Vec<OwnedTitle> = serde_json::from_str(json)
+        .map_err(|e| ProviderError::Parse(format!("Battle.net games list: {e}")))?;
+    let mut games: Vec<ImportedGame> = Vec::new();
+    for title in titles {
+        let Some(code) = title_code(title.title_id).map(|c| product_code(&c)) else {
+            tracing::debug!(title = title.title_id, "unknown Battle.net title id");
+            continue;
+        };
+        // Several game accounts (e.g. WoW regions) share one product.
+        if games.iter().any(|g| g.source_game_id == code) {
+            continue;
+        }
+        let name = title
+            .localized_game_name
+            .as_deref()
+            .map(clean_name)
+            .filter(|n| !n.is_empty())
+            .unwrap_or_else(|| code.clone());
+        let mut game = ImportedGame::installed(code, name);
+        game.installed = false;
+        games.push(game);
+    }
+    Ok(games)
+}
+
+/// Strips trademark signs and surplus whitespace from a title.
+fn clean_name(name: &str) -> String {
+    name.replace(['\u{2122}', '\u{00ae}', '\u{00a9}'], "")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
 
 /// One install from `product.db`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -197,6 +289,7 @@ pub struct BattleNetProvider {
     /// The agent's data folder (`product.db`, `aggregate.json`); `None` off Windows.
     agent_dir: Option<PathBuf>,
     uninstallers: Uninstallers,
+    account: Option<Arc<WebAccount>>,
 }
 
 impl BattleNetProvider {
@@ -204,7 +297,14 @@ impl BattleNetProvider {
         Self {
             agent_dir: cfg!(windows).then(default_agent_dir),
             uninstallers: Uninstallers::System,
+            account: None,
         }
+    }
+
+    /// Adds the account sign-in, which lists owned games that are not installed.
+    pub fn with_account(mut self, account: Arc<WebAccount>) -> Self {
+        self.account = Some(account);
+        self
     }
 
     /// Reads `product.db` and `aggregate.json` from `agent_dir` (tests and tools).
@@ -212,6 +312,7 @@ impl BattleNetProvider {
         Self {
             agent_dir: Some(agent_dir),
             uninstallers: Uninstallers::Fixed(uninstallers),
+            account: None,
         }
     }
 
@@ -335,6 +436,31 @@ impl LibraryProvider for BattleNetProvider {
             .collect();
         games.sort_by_cached_key(|g| (g.name.to_lowercase(), g.source_game_id.clone()));
         Ok(games)
+    }
+
+    fn can_scan_owned(&self) -> bool {
+        self.account.is_some()
+    }
+
+    fn scan_owned(&self, _config: &serde_json::Value) -> Result<Vec<ImportedGame>, ProviderError> {
+        let Some(account) = &self.account else {
+            return Err(ProviderError::Unsupported);
+        };
+        let capture = account.capture(CAPTURE_REUSE_SECS)?;
+        let games = capture.get("games").ok_or_else(|| {
+            ProviderError::Parse("The Battle.net account page did not list any games.".into())
+        })?;
+        parse_owned(games)
+    }
+
+    fn account(&self) -> Option<&dyn AccountAuth> {
+        self.account.as_deref().map(|a| a as &dyn AccountAuth)
+    }
+
+    /// Opens the game's page in Battle.net, which offers the install.
+    fn install_action(&self, source_game_id: &str) -> Option<PlayAction> {
+        (self.agent_dir.is_some() && source_game_id.chars().all(|c| c.is_ascii_alphanumeric()))
+            .then(|| PlayAction::uri(format!("battlenet://game/{source_game_id}")))
     }
 
     fn can_uninstall(&self) -> bool {
@@ -539,6 +665,81 @@ mod tests {
         );
         assert!(provider.uninstall_action("wow").is_none(), "no Apps entry");
         assert!(provider.uninstall_action("d3").is_none(), "not installed");
+    }
+
+    #[test]
+    fn maps_account_titles_to_product_codes() {
+        assert_eq!(title_code(1_465_140_039).as_deref(), Some("WTCG"));
+        assert_eq!(title_code(5_730_135).as_deref(), Some("WoW"));
+        assert_eq!(title_code(17_459).as_deref(), Some("D3"));
+        assert_eq!(title_code(0), None);
+        assert_eq!(title_code(-1), None);
+        assert_eq!(title_code(0x0102_0304), None);
+        assert_eq!(product_code("WTCG"), "hsb");
+        assert_eq!(product_code("Fen"), "fenris");
+        assert_eq!(product_code("Pro"), "pro");
+
+        let games = parse_owned(
+            r#"[{"titleId":1465140039,"localizedGameName":"Hearthstone®"},
+                {"titleId":5730135,"localizedGameName":"World of Warcraft"},
+                {"titleId":5730135,"localizedGameName":"World of Warcraft"},
+                {"titleId":4613486},{"titleId":1}]"#,
+        )
+        .unwrap();
+        let ids: Vec<_> = games
+            .iter()
+            .map(|g| (g.source_game_id.as_str(), g.name.as_str(), g.installed))
+            .collect();
+        assert_eq!(
+            ids,
+            [
+                ("hsb", "Hearthstone", false),
+                ("wow", "World of Warcraft", false),
+                ("fenris", "fenris", false),
+            ]
+        );
+        assert!(parse_owned("{}").is_err());
+    }
+
+    #[test]
+    fn owned_scan_needs_an_account_and_installs_through_battlenet() {
+        let (_tmp, provider) = provider(false);
+        assert!(!provider.can_scan_owned());
+        assert!(matches!(
+            provider.scan_owned(&serde_json::Value::Null),
+            Err(ProviderError::Unsupported)
+        ));
+        let provider = provider.with_account(Arc::new(WebAccount::new(
+            ACCOUNT_SPEC,
+            Arc::new(crate::auth::MemoryTokenStore::new()),
+            None,
+        )));
+        assert!(provider.can_scan_owned());
+        assert!(matches!(
+            provider.scan_owned(&serde_json::Value::Null),
+            Err(ProviderError::NotConfigured(_))
+        ));
+        provider
+            .account()
+            .unwrap()
+            .sign_in_with_code(&format!(
+                "{CAPTURE_PREFIX}?name=Ann%231234&games={}",
+                crate::auth::url_encode(
+                    r#"[{"titleId":1465140039,"localizedGameName":"Hearthstone"}]"#
+                )
+            ))
+            .unwrap();
+        assert_eq!(
+            provider.account().unwrap().status().display_name.as_deref(),
+            Some("Ann#1234")
+        );
+        let owned = provider.scan_owned(&serde_json::Value::Null).unwrap();
+        assert_eq!(owned[0].source_game_id, "hsb");
+        assert_eq!(
+            provider.install_action("d3").unwrap().target,
+            "battlenet://game/d3"
+        );
+        assert!(provider.install_action("d3/../x").is_none());
     }
 
     #[test]

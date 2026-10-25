@@ -1,5 +1,5 @@
-//! The login window for store accounts (GOG, Epic, Xbox, Amazon, Steam) and the hidden window
-//! that renews the Steam store session.
+//! The login window for store accounts (GOG, Epic, Xbox, Amazon, Steam, Battle.net, EA) and the
+//! hidden window that reads the website sessions of Steam, Battle.net and EA.
 //!
 //! It is a separate window that loads the store's own login page. It has no IPC access: the
 //! capability file only names the `main` window, and `lib.rs` rejects every command that does not
@@ -8,11 +8,13 @@
 //! the core. The window runs in a private (non-persistent) browser profile, so no store session
 //! outlives the sign-in.
 //!
-//! Steam is the exception: it has no code for other applications, only its website session. Its
-//! window uses a persistent profile of its own (`<data>/webview/steam`), and a script on store
-//! pages reports the page's Web API token through a capture navigation (see
-//! `questkeep_core::providers::steam`). Before a scan a hidden window loads a store page with that
-//! profile, which lets Steam renew the session itself. Signing out deletes the profile's data.
+//! Steam, Battle.net and EA are the exception: they have no code for other applications, only
+//! their website session. Their windows use a persistent profile per store
+//! (`<data>/webview/<store>`), and a script on the store's pages reports what Questkeep needs
+//! through a capture navigation: Steam's Web API token, Battle.net's owned games, an EA access
+//! token (see `questkeep_core::providers::{steam, battlenet, ea}`). Before a scan a hidden window
+//! loads such a page with that profile, which lets the store renew the session itself. Signing
+//! out deletes the profile's data.
 
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -22,6 +24,13 @@ use std::time::Duration;
 use questkeep_core::auth::{WebSession, query_param};
 use questkeep_core::providers::amazon::{
     CODE_PARAM as AMAZON_CODE_PARAM, LOGIN_RETURN_PREFIX as AMAZON_RETURN_PREFIX,
+};
+use questkeep_core::providers::battlenet::{
+    CAPTURE_PREFIX as BATTLENET_CAPTURE_PREFIX, SESSION_URL as BATTLENET_SESSION_URL,
+};
+use questkeep_core::providers::ea::{
+    CAPTURE_PREFIX as EA_CAPTURE_PREFIX, LOGIN_DONE_PREFIX as EA_LOGIN_DONE_PREFIX,
+    SESSION_URL as EA_SESSION_URL,
 };
 use questkeep_core::providers::gog::LOGIN_SUCCESS_PREFIX;
 use questkeep_core::providers::steam::{CAPTURE_PREFIX as STEAM_CAPTURE_PREFIX, SESSION_URL};
@@ -96,14 +105,118 @@ const STEAM_SCRIPT: &str = r#"
 })();
 "#;
 
-fn steam_script(report_signed_out: bool) -> String {
-    STEAM_SCRIPT.replace(
-        "REPORT_SIGNED_OUT",
-        if report_signed_out { "true" } else { "false" },
-    )
+/// Runs on Battle.net pages. On the account site (after the login, or when the session is still
+/// valid) it reads the owned games and the BattleTag with the page's own session and reports
+/// them. On a login page the hidden window reports a signed-out session.
+const BATTLENET_SCRIPT: &str = r##"
+(function () {
+  var reportSignedOut = REPORT_SIGNED_OUT;
+  var target = "https://questkeep.invalid/battlenet-session";
+  var host = location.hostname;
+  if (host !== "battle.net" && !/\.battle\.net$/.test(host)) return;
+  if (/^\/login/.test(location.pathname)) {
+    if (reportSignedOut) {
+      setTimeout(function () { location.href = target + "?signedout=1"; }, 5000);
+    }
+    return;
+  }
+  if (host !== "account.battle.net" || /^\/(callback|oauth2)\//.test(location.pathname)) return;
+  function get(path, anyStatus) {
+    return fetch(path, { credentials: "include", headers: { Accept: "application/json" } })
+      .then(function (r) {
+        if (!r.ok && !anyStatus) throw new Error("http " + r.status);
+        return r.json();
+      });
+  }
+  function tag(details) {
+    var t = details && details.battleTag;
+    if (t && typeof t === "object") return t.name ? t.name + (t.code ? "#" + t.code : "") : "";
+    return typeof t === "string" ? t : "";
+  }
+  get("/api/", true).then(function (status) {
+    if (!status || !status.authenticated) throw new Error("signedout");
+    return Promise.all([
+      get("/api/games-and-subs"),
+      get("/api/details").catch(function () { return null; })
+    ]);
+  }).then(function (r) {
+    var games = ((r[0] && r[0].gameAccounts) || []).map(function (g) {
+      return { titleId: g.titleId, localizedGameName: g.localizedGameName };
+    });
+    location.href = target + "?name=" + encodeURIComponent(tag(r[1])) +
+      "&games=" + encodeURIComponent(JSON.stringify(games));
+  }).catch(function (e) {
+    if (reportSignedOut && e && e.message === "signedout") location.href = target + "?signedout=1";
+  });
+})();
+"##;
+
+/// Runs on EA pages. On the login page it ticks "Remember me" once, so the session outlives the
+/// window. On the token page (`connect/auth` for `nucleus:rest`, which answers with JSON) it
+/// reports the access token, or in the hidden window a signed-out session.
+const EA_SCRIPT: &str = r##"
+(function () {
+  var reportSignedOut = REPORT_SIGNED_OUT;
+  var target = "https://questkeep.invalid/ea-session";
+  if (location.hostname === "signin.ea.com") {
+    var tries = 0;
+    var tick = setInterval(function () {
+      var box = document.getElementById("rememberMe");
+      if (box || ++tries > 40) clearInterval(tick);
+      if (box && !box.checked) box.click();
+    }, 250);
+    return;
+  }
+  if (location.hostname !== "accounts.ea.com" || location.pathname !== "/connect/auth" ||
+      location.search.indexOf("nucleus") < 0) return;
+  function capture() {
+    var data = null;
+    try { data = JSON.parse(document.body.innerText); } catch (e) {}
+    if (data && data.access_token) {
+      location.href = target + "?token=" + encodeURIComponent(data.access_token) +
+        "&expires=" + encodeURIComponent(data.expires_in || "");
+    } else if (reportSignedOut) {
+      location.href = target + "?signedout=1";
+    }
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", capture);
+  } else {
+    capture();
+  }
+})();
+"##;
+
+/// Whether the store's sign-in is its website session, kept in a persistent profile.
+fn uses_web_profile(provider: &str) -> bool {
+    matches!(provider, "steam" | "battlenet" | "ea")
 }
 
-/// How long the hidden window may take to report the Steam session.
+/// The page script of a website-session store; `report_signed_out` in the hidden window.
+fn page_script(provider: &str, report_signed_out: bool) -> Option<String> {
+    let script = match provider {
+        "steam" => STEAM_SCRIPT,
+        "battlenet" => BATTLENET_SCRIPT,
+        "ea" => EA_SCRIPT,
+        _ => return None,
+    };
+    Some(script.replace(
+        "REPORT_SIGNED_OUT",
+        if report_signed_out { "true" } else { "false" },
+    ))
+}
+
+/// The page the hidden window loads to read a store's session.
+fn session_url(provider: &str) -> Option<&'static str> {
+    match provider {
+        "steam" => Some(SESSION_URL),
+        "battlenet" => Some(BATTLENET_SESSION_URL),
+        "ea" => Some(EA_SESSION_URL),
+        _ => None,
+    }
+}
+
+/// How long the hidden window may take to report a store session.
 const SESSION_TIMEOUT: Duration = Duration::from_secs(45);
 
 /// How a login window ended.
@@ -144,7 +257,11 @@ fn classify(provider: &str, url: &str) -> Navigation {
             && query_param(url, AMAZON_CODE_PARAM).is_some())
         .then(|| query_param(url, AMAZON_CODE_PARAM)),
         // The core reads the whole capture address.
-        "steam" => is_steam_capture(url).then(|| Some(url.to_string())),
+        "steam" => is_capture(url, STEAM_CAPTURE_PREFIX).then(|| Some(url.to_string())),
+        "battlenet" => is_capture(url, BATTLENET_CAPTURE_PREFIX).then(|| Some(url.to_string())),
+        // EA's website login ends on login_check; the core then reads the new session.
+        "ea" => (is_capture(url, EA_CAPTURE_PREFIX) || is_capture(url, EA_LOGIN_DONE_PREFIX))
+            .then(|| Some(url.to_string())),
         _ => None,
     };
     if let Some(code) = captured {
@@ -163,10 +280,19 @@ fn classify(provider: &str, url: &str) -> Navigation {
     }
 }
 
-/// The Steam capture address itself (not a look-alike that merely starts with it).
-fn is_steam_capture(url: &str) -> bool {
-    url.strip_prefix(STEAM_CAPTURE_PREFIX)
+/// A capture address itself (not a look-alike that merely starts with it).
+fn is_capture(url: &str, prefix: &str) -> bool {
+    url.strip_prefix(prefix)
         .is_some_and(|rest| rest.is_empty() || rest.starts_with('?'))
+}
+
+fn store_name(provider: &str) -> &'static str {
+    match provider {
+        "steam" => "The Steam store",
+        "battlenet" => "Battle.net",
+        "ea" => "EA",
+        _ => "The store",
+    }
 }
 
 fn title(provider: &str) -> &'static str {
@@ -176,18 +302,20 @@ fn title(provider: &str) -> &'static str {
         "xbox" => "Sign in to Xbox",
         "amazon" => "Sign in to Amazon Games",
         "steam" => "Sign in to Steam",
+        "battlenet" => "Sign in to Battle.net",
+        "ea" => "Sign in to EA",
         _ => "Sign in",
     }
 }
 
 /// Opens the login window and waits until it yields a code or is closed. Only one window per
-/// provider: asking again focuses the open one and reports an error. `steam_profile` is the
-/// persistent browser profile of the Steam window.
+/// provider: asking again focuses the open one and reports an error. `profile` is the
+/// persistent browser profile of stores signed in through their website (Steam, Battle.net, EA).
 pub async fn run(
     app: &AppHandle,
     provider: &str,
     login_url: &str,
-    steam_profile: PathBuf,
+    profile: PathBuf,
 ) -> Result<Outcome, String> {
     let label = format!("signin-{provider}");
     if let Some(existing) = app.get_webview_window(&label) {
@@ -208,7 +336,7 @@ pub async fn run(
         .title(title(provider))
         .inner_size(500.0, 700.0)
         .center()
-        .incognito(provider != "steam")
+        .incognito(!uses_web_profile(provider))
         .on_navigation(move |url| match classify(&nav_provider, url.as_str()) {
             Navigation::Allow => true,
             Navigation::Block => false,
@@ -220,12 +348,13 @@ pub async fn run(
     match provider {
         "epic" => builder = builder.initialization_script(EPIC_SCRIPT),
         "amazon" => builder = builder.user_agent(AMAZON_USER_AGENT),
-        "steam" => {
-            builder = builder
-                .data_directory(steam_profile)
-                .initialization_script(steam_script(false));
-        }
         _ => {}
+    }
+    if uses_web_profile(provider) {
+        builder = builder.data_directory(profile);
+        if let Some(script) = page_script(provider, false) {
+            builder = builder.initialization_script(script);
+        }
     }
     let window = builder.build().map_err(|e| {
         tracing::warn!(error = %e, "could not open the sign-in window");
@@ -244,7 +373,7 @@ pub async fn run(
     Ok(outcome)
 }
 
-/// The Steam store session in its persistent browser profile, driven by hidden windows.
+/// Store website sessions in their persistent browser profiles, driven by hidden windows.
 pub struct ShellWebSession {
     app: AppHandle,
     /// `<data>/webview`; each store gets a profile folder below it.
@@ -279,15 +408,18 @@ impl ShellWebSession {
             let _ = stale.destroy();
         }
         let watched = provider.to_string();
-        WebviewWindowBuilder::new(&self.app, &label, WebviewUrl::External(url))
+        let mut builder = WebviewWindowBuilder::new(&self.app, &label, WebviewUrl::External(url))
             .title(title(provider))
             .visible(false)
             .focused(false)
             .skip_taskbar(true)
-            // Hidden pages are throttled otherwise, which stalls Steam's session renewal.
+            // Hidden pages are throttled otherwise, which stalls the stores' session renewal.
             .background_throttling(BackgroundThrottlingPolicy::Disabled)
-            .data_directory(self.profile(provider))
-            .initialization_script(steam_script(true))
+            .data_directory(self.profile(provider));
+        if let Some(script) = page_script(provider, true) {
+            builder = builder.initialization_script(script);
+        }
+        builder
             .on_navigation(move |url| match classify(&watched, url.as_str()) {
                 Navigation::Allow => true,
                 Navigation::Block => false,
@@ -308,20 +440,20 @@ impl ShellWebSession {
 
 impl WebSession for ShellWebSession {
     fn refresh(&self, provider: &str) -> Result<Option<String>, String> {
-        if provider != "steam" {
+        let Some(session_url) = session_url(provider) else {
             return Err("This store has no web session.".into());
-        }
+        };
         let _busy = self.busy.lock().unwrap_or_else(|e| e.into_inner());
-        let url: Url = SESSION_URL
+        let url: Url = session_url
             .parse()
-            .map_err(|_| "The Steam store address is invalid.".to_string())?;
+            .map_err(|_| "The store address is invalid.".to_string())?;
         let (tx, rx) = mpsc::channel();
         let window = self.hidden_window(provider, url, Some(tx))?;
         let result = rx.recv_timeout(SESSION_TIMEOUT);
         let _ = window.destroy();
         match result {
             Ok(captured) => Ok(Some(captured)),
-            Err(_) => Err("The Steam store did not answer in time.".into()),
+            Err(_) => Err(format!("{} did not answer in time.", store_name(provider))),
         }
     }
 
@@ -480,10 +612,46 @@ mod tests {
     }
 
     #[test]
-    fn steam_script_reports_signed_out_only_when_hidden() {
-        assert!(steam_script(true).contains("var reportSignedOut = true;"));
-        assert!(steam_script(false).contains("var reportSignedOut = false;"));
+    fn page_scripts_report_signed_out_only_when_hidden() {
+        for provider in ["steam", "battlenet", "ea"] {
+            assert!(uses_web_profile(provider));
+            assert!(session_url(provider).is_some_and(|u| u.starts_with("https://")));
+            let hidden = page_script(provider, true).unwrap();
+            assert!(hidden.contains("var reportSignedOut = true;"), "{provider}");
+            assert!(!hidden.contains("REPORT_SIGNED_OUT"), "{provider}");
+            assert!(
+                page_script(provider, false)
+                    .unwrap()
+                    .contains("var reportSignedOut = false;")
+            );
+        }
+        assert!(page_script("gog", true).is_none() && !uses_web_profile("gog"));
+        assert!(session_url("gog").is_none());
         assert!(STEAM_SCRIPT.contains(STEAM_CAPTURE_PREFIX));
+        assert!(BATTLENET_SCRIPT.contains(BATTLENET_CAPTURE_PREFIX));
+        assert!(EA_SCRIPT.contains(EA_CAPTURE_PREFIX));
+    }
+
+    #[test]
+    fn battlenet_and_ea_captures_are_handed_over_whole() {
+        let url = "https://questkeep.invalid/battlenet-session?name=Ann%231&games=%5B%5D";
+        assert_eq!(classify("battlenet", url), Navigation::Capture(url.into()));
+        assert_eq!(classify("ea", url), Navigation::Block);
+        assert_eq!(
+            classify("battlenet", "https://account.battle.net/overview"),
+            Navigation::Allow
+        );
+        let token = "https://questkeep.invalid/ea-session?token=QVQwOjIuMDoz&expires=3599";
+        assert_eq!(classify("ea", token), Navigation::Capture(token.into()));
+        let done = "https://www.ea.com/login_check?code=QUOxOjMuMDoz&state=x";
+        assert_eq!(classify("ea", done), Navigation::Capture(done.into()));
+        for url in [
+            "https://www.ea.com/login_checkx?code=1",
+            "https://signin.ea.com/p/juno/login?execution=e1s1",
+        ] {
+            assert_eq!(classify("ea", url), Navigation::Allow, "{url}");
+        }
+        assert_eq!(classify("steam", done), Navigation::Allow);
     }
 
     #[test]

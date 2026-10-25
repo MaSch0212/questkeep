@@ -199,10 +199,9 @@ impl ProviderRegistry {
     ) -> Self {
         let mut registry = Self::new();
         registry.register(Arc::new(manual::ManualProvider));
-        registry
-            .register(Arc::new(steam::SteamProvider::detect().with_account(
-                Arc::new(steam::SteamAccount::new(tokens.clone(), web)),
-            )));
+        registry.register(Arc::new(steam::SteamProvider::detect().with_account(
+            Arc::new(steam::SteamAccount::new(tokens.clone(), web.clone())),
+        )));
         let mut epic = epic::EpicProvider::detect()
             .with_account(Arc::new(epic::EpicAccount::new(tokens.clone())));
         if let Some(dir) = cache_dir {
@@ -222,8 +221,20 @@ impl ProviderRegistry {
         // Heroic or Lutris already see them).
         #[cfg(windows)]
         {
-            registry.register(Arc::new(battlenet::BattleNetProvider::detect()));
-            registry.register(Arc::new(ea::EaProvider::detect()));
+            let web_account = |spec| {
+                Arc::new(crate::auth::WebAccount::new(
+                    spec,
+                    tokens.clone(),
+                    web.clone(),
+                ))
+            };
+            registry.register(Arc::new(
+                battlenet::BattleNetProvider::detect()
+                    .with_account(web_account(battlenet::ACCOUNT_SPEC)),
+            ));
+            registry.register(Arc::new(
+                ea::EaProvider::detect().with_account(web_account(ea::ACCOUNT_SPEC)),
+            ));
         }
         // Lutris only exists on Linux; leaving it out elsewhere keeps the provider list honest.
         #[cfg(not(windows))]

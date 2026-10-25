@@ -522,8 +522,16 @@ Short log of choices made while building. Newest at the bottom of each section.
   Prism hands the launch to its running window and exits.
 - **Battle.net reads the agent's `product.db`** (protobuf, a minimal reader in the provider) for
   installs and their "installed" flag (downloads in progress are skipped), and `aggregate.json` for
-  names, the `battlenet://` launch URI and box art. Owned games need a Battle.net web sign-in (later).
+  names, the `battlenet://` launch URI and box art.
 - **EA app games come from the Windows "Apps" list** (entries uninstalled by EA's `Cleanup.exe`)
-  and each game's `__Installerinstallerdata.xml` (content id, title, launcher path). The EA app's
-  own database is encrypted, so only installed games are listed; they start through their
-  executable and are tracked by install folder, as the EA app may relaunch them.
+  and each game's `__Installer\installerdata.xml` (content id, title, launcher path). They start
+  through their executable and are tracked by install folder, as the EA app may relaunch them.
+- **Battle.net and EA sign in through their websites, like Steam** (`auth::WebAccount`): a login
+  window with a persistent profile per store, then a hidden window whose page script reports what
+  the scan needs through a capture navigation. Battle.net: the account site's `/api/games-and-subs`
+  (Playnite's source); `titleId` is the product's four-letter code as a number, mapped to install
+  product codes (`WTCG` → `hsb`). EA: the EA app's own login needs a hardware signature
+  (`pc_sign`), so the website login is used, and `connect/auth` for the `ORIGIN_JS_SDK` client with
+  `prompt=none` hands that session a token for EA's GraphQL service (the approach Lutris uses; only
+  the public endpoints were taken over, no code). Owned EA games keep their content id, or the
+  install's id when its manifest lists that content id.

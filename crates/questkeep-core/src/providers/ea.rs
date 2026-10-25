@@ -10,16 +10,28 @@
 //!
 //! Games start through their executable, which may hand over to the EA app first, so sessions
 //! are tracked by install folder. Uninstalling runs the entry's `Cleanup.exe` command, which
-//! asks for confirmation. The EA app's own database is encrypted, so owned games that are not
-//! installed are not available.
+//! asks for confirmation.
+//!
+//! Owned games that are not installed come from an EA sign-in (see [`account`]); the EA app's
+//! own database is encrypted. They are installed through the EA app's `origin2://` protocol.
+
+mod account;
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+pub use account::{
+    ACCOUNT_SPEC, CAPTURE_PREFIX, LOGIN_DONE_PREFIX, LOGIN_URL, SESSION_URL, plausible_token,
+};
 
 use super::{LibraryProvider, ProviderError};
+use crate::auth::{AccountAuth, Http, UreqHttp, WebAccount};
 use crate::model::{ImportedGame, PlayAction, TrackingMode};
 use crate::platform::UninstallEntry;
 
 pub const EA_SOURCE: &str = "ea";
+/// A token capture this recent is reused (the scan right after signing in); tokens live an hour.
+const CAPTURE_REUSE_SECS: i64 = 120;
 
 /// What `installerdata.xml` says about a game.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -159,6 +171,8 @@ fn is_ea_entry(entry: &UninstallEntry) -> bool {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Install {
     id: String,
+    /// Every content id of the manifest; an owned game may name any of them.
+    content_ids: Vec<String>,
     name: String,
     dir: PathBuf,
     exe: Option<PathBuf>,
@@ -187,6 +201,7 @@ fn read_install(
         .map(|p| resolve_launcher(&p, &dir, registry));
     Some(Install {
         id,
+        content_ids: manifest.content_ids,
         name,
         exe,
         uninstall: entry.uninstall_string.clone(),
@@ -204,20 +219,38 @@ enum System {
 
 pub struct EaProvider {
     system: System,
+    account: Option<Arc<WebAccount>>,
+    http: Arc<dyn Http>,
 }
 
 impl EaProvider {
     pub fn detect() -> Self {
-        Self {
-            system: System::Live,
-        }
+        Self::new(System::Live)
     }
 
     /// Uses fixed "Apps" entries (tests and tools).
     pub fn with_entries(entries: Vec<UninstallEntry>) -> Self {
+        Self::new(System::Fixed(entries))
+    }
+
+    fn new(system: System) -> Self {
         Self {
-            system: System::Fixed(entries),
+            system,
+            account: None,
+            http: Arc::new(UreqHttp::new()),
         }
+    }
+
+    /// Adds the account sign-in, which lists owned games that are not installed.
+    pub fn with_account(mut self, account: Arc<WebAccount>) -> Self {
+        self.account = Some(account);
+        self
+    }
+
+    /// Sends EA's API requests through `http` (tests).
+    pub fn with_http(mut self, http: Arc<dyn Http>) -> Self {
+        self.http = http;
+        self
     }
 
     fn installs(&self) -> Vec<Install> {
@@ -296,6 +329,60 @@ impl LibraryProvider for EaProvider {
 
     fn can_uninstall(&self) -> bool {
         self.can_scan()
+    }
+
+    fn can_scan_owned(&self) -> bool {
+        self.account.is_some()
+    }
+
+    /// Owned base games; a game whose content id an install lists gets that install's id.
+    fn scan_owned(&self, _config: &serde_json::Value) -> Result<Vec<ImportedGame>, ProviderError> {
+        let Some(account) = &self.account else {
+            return Err(ProviderError::Unsupported);
+        };
+        let capture = account.capture(CAPTURE_REUSE_SECS)?;
+        let token = capture
+            .get("token")
+            .filter(|t| plausible_token(t))
+            .ok_or_else(|| ProviderError::Parse("EA did not hand out a usable sign-in.".into()))?;
+        if account.status().display_name.is_none()
+            && let Some(name) = account::fetch_display_name(self.http.as_ref(), token)
+        {
+            account.set_display_name(&name);
+        }
+        let installs = self.installs();
+        let mut games: Vec<ImportedGame> = Vec::new();
+        for offer in account::fetch_owned(self.http.as_ref(), token)? {
+            let id = offer.content_id.clone().unwrap_or(offer.offer_id);
+            let id = installs
+                .iter()
+                .find(|i| i.content_ids.contains(&id))
+                .map_or(id, |i| i.id.clone());
+            if games.iter().any(|g| g.source_game_id == id) {
+                continue;
+            }
+            let mut game = ImportedGame::installed(id, clean_name(&offer.title));
+            game.installed = false;
+            games.push(game);
+        }
+        Ok(games)
+    }
+
+    fn account(&self) -> Option<&dyn AccountAuth> {
+        self.account.as_deref().map(|a| a as &dyn AccountAuth)
+    }
+
+    /// Hands the install to the EA app (`origin2://`), which asks where to put the game.
+    fn install_action(&self, source_game_id: &str) -> Option<PlayAction> {
+        let plain = !source_game_id.is_empty()
+            && source_game_id
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_'));
+        (cfg!(windows) && plain).then(|| {
+            PlayAction::uri(format!(
+                "origin2://game/launch?offerIds={source_game_id}&autoDownload=1"
+            ))
+        })
     }
 
     /// The game's `Cleanup.exe uninstall_game` command, which asks for confirmation.
@@ -473,5 +560,54 @@ mod tests {
             Some("uninstall_game -autologging")
         );
         assert!(provider.uninstall_action("404").is_none());
+
+        // Owned games: the DAI offer names a later content id of the install.
+        let http = crate::auth::testing::FakeHttp::new(|req| {
+            let body: serde_json::Value = serde_json::from_str(&req.body).unwrap();
+            let query = body["query"].as_str().unwrap();
+            let data = if query.contains("ownedGameProducts") {
+                serde_json::json!({ "me": { "ownedGameProducts": { "next": null, "items": [
+                    { "originOfferId": "OFR.1", "product": { "baseItem": { "title": "Dragon Age™: Inquisition", "gameType": "BASE_GAME" } } },
+                    { "originOfferId": "OFR.2", "product": { "baseItem": { "title": "Unravel™", "gameType": "BASE_GAME" } } }
+                ] } } })
+            } else if query.contains("legacyOffers") {
+                serde_json::json!({ "legacyOffers": [
+                    { "id": "OFR.1", "contentId": "1023462" },
+                    { "id": "OFR.2", "contentId": "1031405" }
+                ] })
+            } else {
+                serde_json::json!({ "me": { "player": { "displayName": "Ann" } } })
+            };
+            crate::auth::testing::response(200, &serde_json::json!({ "data": data }).to_string())
+        });
+        let account = Arc::new(WebAccount::new(
+            ACCOUNT_SPEC,
+            Arc::new(crate::auth::MemoryTokenStore::new()),
+            None,
+        ));
+        account
+            .sign_in_with_code(&format!("{CAPTURE_PREFIX}?token=QVQwOjIuMDozLjA6NjA6abc"))
+            .unwrap();
+        let provider = provider
+            .with_account(account.clone())
+            .with_http(Arc::new(http));
+        let owned = provider.scan_owned(&serde_json::Value::Null).unwrap();
+        let ids: Vec<_> = owned
+            .iter()
+            .map(|g| (g.source_game_id.as_str(), g.name.as_str(), g.installed))
+            .collect();
+        assert_eq!(
+            ids,
+            [
+                ("1000659", "Dragon Age: Inquisition", false),
+                ("1031405", "Unravel", false)
+            ]
+        );
+        assert_eq!(account.status().display_name.as_deref(), Some("Ann"));
+        assert_eq!(
+            provider.install_action("1031405").unwrap().target,
+            "origin2://game/launch?offerIds=1031405&autoDownload=1"
+        );
+        assert!(provider.install_action("a&b").is_none());
     }
 }

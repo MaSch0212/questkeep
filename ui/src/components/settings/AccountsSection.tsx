@@ -106,9 +106,9 @@ export function AccountsSection() {
     <div class="form">
       <p class="muted">
         Sign in to list games you own but have not installed. Sign-in tokens are stored in your
-        system&apos;s credential store, not in the Questkeep data folder. Steam is the exception: it
-        only has its website sign-in, so Questkeep keeps that browser session in its data folder and
-        deletes it when you sign out.
+        system&apos;s credential store, not in the Questkeep data folder. Steam, Battle.net and EA
+        are the exception: they only have their website sign-in, so Questkeep keeps those browser
+        sessions in its data folder and deletes them when you sign out.
       </p>
       <Show when={accounts()} fallback={<p class="muted">Loading…</p>}>
         {(list) => (

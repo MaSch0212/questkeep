@@ -65,14 +65,15 @@ crates/questkeep-core/src/     all logic; no Tauri/UI dependency
                                ubisoft/, amazon/, battlenet, ea, prism, heroic (Linux helpers), lutris/,
                                sqlite (foreign DBs), icons/ (one SVG logo per provider)
   auth/                        store account sign-in: keyring TokenStore, AccountSession, Http, AccountStatus,
-                               WebSession (Steam store session, implemented by src-tauri/signin.rs)
+                               WebSession + WebAccount (website sign-ins: Steam, Battle.net, EA;
+                               the session is driven by src-tauri/signin.rs)
   launcher/                    launch + tracker threads (mod.rs), process matching (process.rs)
   images/                      cover/background cache (mod.rs) + cover and metadata fetchers (fetcher.rs)
   events.rs                    EventBus + CoreEvent
   platform/                    registry, Steam paths, URI opening, argument handling (cfg-gated)
   settings.rs, paths.rs, seed.rs, error.rs
 src-tauri/src/                 thin shell: commands.rs (one wrapper per command), lib.rs (setup)
-  signin.rs                    store login windows and the hidden Steam session window
+  signin.rs                    store login windows and the hidden store-session window
   tray.rs, tray_popup/          tray icon; Windows tray popup (Win32 + Direct2D: layout, render, window)
 ui/src/
   lib/api.ts                   the only module that calls invoke()
