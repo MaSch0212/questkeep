@@ -117,8 +117,11 @@ export function syncEntryText(entry: SyncEntry): string {
       return "Waiting";
     case "running":
       return "Scanning…";
-    case "done":
-      return `+${entry.summary?.added ?? 0}, ~${entry.summary?.updated ?? 0}`;
+    case "done": {
+      const added = entry.summary?.added ?? 0;
+      const updated = entry.summary?.updated ?? 0;
+      return added + updated === 0 ? "No changes" : `${added} added, ${updated} updated`;
+    }
     case "failed":
       return entry.message ?? "Failed";
   }

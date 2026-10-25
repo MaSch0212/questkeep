@@ -110,6 +110,21 @@ Short log of choices made while building. Newest at the bottom of each section.
   Windows. Building it ourselves allows a dev-only hidden mode (`QUESTKEEP_HIDDEN=1`, see
   `scripts/dev-hidden.ps1`) for testing through the DevTools port without a window or focus change,
   and showing the normal window only after setup avoids a white flash.
+- **Store glyphs from Simple Icons (CC0)**, importing only the named icons; Xbox, Amazon Games and
+  manual games use lucide icons (Simple Icons has no Xbox or Amazon Games glyph). Display names
+  come from `ProviderInfo` first.
+- **Quick actions are tabbable only on the selected tile or row**, so Tab doesn't walk thousands
+  of buttons. Enter still opens details; Ctrl+Enter / F5 stay the keyboard way to play or install.
+  Install is offered when the game has a store id (`ProviderInfo` has no `canInstall`). In the list
+  the button sits in the name column, so it never covers data.
+- **Details view**: selection is separate from "details open", so switching back to grid or list
+  doesn't pop the side panel. The page reuses `DetailsPanel` (`variant="page"`); its CSS uses two
+  classes because the general `.details` rules come later in the file (the first version was
+  squeezed to the panel width in wide windows, which only the hidden-app screenshot showed).
+- **One sync status instead of a toast per store**: the core announces `scansQueued` (a full sync's
+  stores, so it isn't "done" between two scans), `scanStarted`, `libraryScanned`, `scanFailed`. A
+  run ends 1.5 s after no store is waiting or running, so Settings rescans and sign-in scans join
+  one run; then one toast sums it up.
 
 ## Releases
 

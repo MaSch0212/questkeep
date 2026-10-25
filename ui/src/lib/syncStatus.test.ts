@@ -97,7 +97,7 @@ describe("texts", () => {
     expect(next.entries.map(syncEntryText)).toEqual([
       "Waiting",
       "Scanning…",
-      "+2, ~5",
+      "2 added, 5 updated",
       "No network",
     ]);
   });

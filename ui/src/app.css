@@ -694,10 +694,8 @@ ul {
   gap: var(--qk-space-2);
 }
 .list-row__quick {
-  position: absolute;
-  top: 50%;
-  right: var(--qk-space-4);
-  transform: translateY(-50%);
+  flex: none;
+  margin-left: auto;
   opacity: 0;
   transition: opacity var(--qk-duration-fast) var(--qk-easing);
 }
@@ -716,7 +714,7 @@ ul {
   background: var(--qk-color-accent-soft);
 }
 .list-row--missing .list-row__thumb,
-.list-row--missing .list-row__name,
+.list-row--missing .list-row__name > :not(.list-row__quick),
 .list-row--missing .list-row__cell:not(.list-row__state) {
   opacity: var(--qk-dimmed-opacity);
 }
@@ -836,8 +834,9 @@ ul {
   overflow-y: auto;
 }
 
-/* Details page (variant of the details panel used by the details view) */
-.details--page {
+/* Details page (variant of the details panel used by the details view). Two classes, so it wins
+   over `.details` and `.details--split`, which come later in this file. */
+.details.details--page {
   position: relative;
   flex: 1;
   width: auto;

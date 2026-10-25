@@ -52,6 +52,10 @@ export function GameRow(props: GameRowProps) {
             <Star class="icon icon--filled" aria-hidden="true" />
           </span>
         </Show>
+        {/* In the wide name column, so it never covers the data columns. */}
+        <div class="list-row__quick">
+          <QuickAction game={props.game} tabbable={props.selected} />
+        </div>
       </div>
       <div class="list-row__cell list-row__source" title={source()}>
         <SourceIcon source={props.game.source} />
@@ -75,9 +79,6 @@ export function GameRow(props: GameRowProps) {
       <div class="list-row__cell">{formatPlaytime(props.game.playtimeSeconds)}</div>
       <div class="list-row__cell">{formatRelativeDate(props.game.lastPlayed)}</div>
       <div class="list-row__cell list-row__year">{releaseYear(props.game.releaseDate) ?? ""}</div>
-      <div class="list-row__quick">
-        <QuickAction game={props.game} tabbable={props.selected} />
-      </div>
     </div>
   );
 }

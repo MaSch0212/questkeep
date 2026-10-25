@@ -89,7 +89,7 @@ describe("SyncIndicator", () => {
     const items = dialog.querySelectorAll("li");
     expect(items).toHaveLength(3);
     expect(items[0]).toHaveTextContent("Steam");
-    expect(items[0]).toHaveTextContent("+2, ~5");
+    expect(items[0]).toHaveTextContent("2 added, 5 updated");
     expect(items[1]).toHaveTextContent("Epic Games");
     expect(items[1]).toHaveTextContent("Scanning…");
     expect(items[2]).toHaveTextContent("Waiting");
