@@ -3,6 +3,7 @@ import { DEFAULT_SPLIT_BREAKPOINT, isSplitWidth, readSplitBreakpoint } from "./l
 import { AddGameDialog } from "./components/AddGameDialog";
 import { DuplicatesDialog } from "./components/DuplicatesDialog";
 import { DetailsPanel } from "./components/DetailsPanel";
+import { UpdateDialog } from "./components/UpdateDialog";
 import { DetailsView } from "./components/DetailsView";
 import { GameGrid } from "./components/GameGrid";
 import { GameList } from "./components/GameList";
@@ -150,6 +151,9 @@ export function App() {
       </div>
       <Show when={adding()}>
         <AddGameDialog onClose={() => setAdding(false)} />
+      </Show>
+      <Show when={store.updateOpen() && store.update()}>
+        {(update) => <UpdateDialog update={update()} onClose={() => store.setUpdateOpen(false)} />}
       </Show>
       <Show when={store.duplicatesOpen()}>
         <DuplicatesDialog onClose={() => store.setDuplicatesOpen(false)} />

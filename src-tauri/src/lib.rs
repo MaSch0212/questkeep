@@ -7,6 +7,7 @@ mod tray;
 #[cfg(windows)]
 mod tray_popup;
 mod tray_theme;
+mod updates;
 mod window;
 
 use std::sync::Arc;
@@ -273,6 +274,7 @@ pub fn run() {
                 app.manage(guard);
             }
             app.manage(window::Lifecycle::default());
+            app.manage(updates::Updates::default());
             let lifecycle = app.state::<window::Lifecycle>();
             // Hidden test runs (QUESTKEEP_HIDDEN=1) must not show anything, a tray icon included.
             if window::keep_hidden() {
@@ -293,6 +295,7 @@ pub fn run() {
             }
             autostart::sync_on_startup(app.handle(), settings.start_with_system);
             spawn_startup_tasks(state);
+            updates::check_on_startup(app.handle());
             Ok(())
         })
         .invoke_handler(main_window_only(tauri::generate_handler![
@@ -325,6 +328,8 @@ pub fn run() {
             commands::take_notices,
             commands::seed_fake_library,
             commands::check_update,
+            commands::available_update,
+            commands::take_update_request,
             commands::install_update,
             commands::account_status,
             commands::sign_in,

@@ -10,7 +10,7 @@
 //! Stores
 //! (Steam) (GOG) (Epic)             pills, wrapping
 //! ─────────────────────────────
-//! [Open Questkeep]          [Exit]
+//! [Open Questkeep] [Update to x.y]   [Exit]
 //! ```
 
 use uuid::Uuid;
@@ -80,6 +80,8 @@ pub enum Action {
     Launch(Uuid),
     OpenUri(String),
     OpenWindow,
+    /// Opens the window with its update dialog.
+    ShowUpdate,
     Exit,
 }
 
@@ -92,6 +94,8 @@ pub enum ItemKind {
     /// Store client `n` as a pill.
     Pill(usize),
     OpenButton,
+    /// Shown when an app update is available.
+    UpdateButton,
     ExitButton,
 }
 
@@ -110,6 +114,13 @@ pub struct Content {
     pub favorites: Vec<Uuid>,
     /// Store client names and the URIs that open them.
     pub stores: Vec<(String, String)>,
+    /// Version of an available app update.
+    pub update: Option<String>,
+}
+
+/// Label of the update button.
+pub fn update_label(version: &str) -> String {
+    format!("Update to {version}")
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -217,6 +228,19 @@ pub fn layout(content: &Content, scroll: f32, measure: impl Fn(&str) -> f32) -> 
         action: Action::OpenWindow,
         rect: Rect::new(PADDING, button_y, open_w, BUTTON_HEIGHT),
     });
+    if let Some(version) = &content.update {
+        let update_w = (measure(&update_label(version)) + 2.0 * BUTTON_PADDING).ceil();
+        items.push(Item {
+            kind: ItemKind::UpdateButton,
+            action: Action::ShowUpdate,
+            rect: Rect::new(
+                PADDING + open_w + PILL_GAP,
+                button_y,
+                update_w,
+                BUTTON_HEIGHT,
+            ),
+        });
+    }
     items.push(Item {
         kind: ItemKind::ExitButton,
         action: Action::Exit,
@@ -431,6 +455,7 @@ mod tests {
             stores: (0..stores)
                 .map(|i| (format!("Store {i}"), format!("store{i}://")))
                 .collect(),
+            update: None,
         }
     }
 
@@ -477,6 +502,29 @@ mod tests {
         assert!((b.x - a.right() - TILE_GAP).abs() < 0.01);
         assert_eq!(e.x, a.x, "fifth tile starts the second row");
         assert!((e.y - a.bottom() - TILE_GAP).abs() < 0.01);
+    }
+
+    #[test]
+    fn update_button_sits_between_open_and_exit() {
+        let c = Content {
+            update: Some("0.3.0".into()),
+            ..Content::default()
+        };
+        let l = layout(&c, 0.0, measure);
+        assert_eq!(
+            kinds(&l),
+            vec![
+                ItemKind::OpenButton,
+                ItemKind::UpdateButton,
+                ItemKind::ExitButton
+            ]
+        );
+        let (open, update, exit) = (l.items[0].rect, l.items[1].rect, l.items[2].rect);
+        assert_eq!(l.items[1].action, Action::ShowUpdate);
+        assert_eq!(update.y, open.y);
+        assert!(update.x >= open.right() && update.right() <= exit.x);
+        assert_eq!(navigate(&l, Some(0), Nav::Right), Some(1));
+        assert_eq!(navigate(&l, Some(1), Nav::Right), Some(2));
     }
 
     #[test]

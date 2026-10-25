@@ -33,6 +33,8 @@ pub use window::show;
 pub struct PopupData {
     pub games: TrayGames,
     pub clients: Vec<StoreClient>,
+    /// Version of an available app update.
+    pub update: Option<String>,
 }
 
 impl PopupData {
@@ -45,6 +47,7 @@ impl PopupData {
                 .iter()
                 .map(|c| (c.name.to_string(), c.uri.to_string()))
                 .collect(),
+            update: self.update.clone(),
         }
     }
 

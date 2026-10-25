@@ -1666,6 +1666,30 @@ ul {
   width: var(--qk-titlebar-icon-size);
   height: var(--qk-titlebar-icon-size);
 }
+/* Shown when a newer version is available. */
+.titlebar__update {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--qk-space-1);
+  height: var(--qk-titlebar-tool-height);
+  margin-right: var(--qk-space-1);
+  padding: 0 var(--qk-space-3);
+  background: var(--qk-color-accent-soft);
+  border: 1px solid var(--qk-color-accent);
+  border-radius: var(--qk-radius-sm);
+  color: var(--qk-color-accent);
+  font-size: var(--qk-font-size-sm);
+  font-weight: var(--qk-font-weight-bold);
+  cursor: pointer;
+}
+.titlebar__update:hover {
+  background: var(--qk-color-accent);
+  color: var(--qk-color-accent-contrast);
+}
+.titlebar__update .icon {
+  width: var(--qk-titlebar-icon-size);
+  height: var(--qk-titlebar-icon-size);
+}
 .titlebar__sync {
   position: relative;
   display: flex;

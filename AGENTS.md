@@ -79,6 +79,8 @@ crates/questkeep-core/src/     all logic; no Tauri/UI dependency
 src-tauri/src/                 thin shell: commands.rs (one wrapper per command), lib.rs (setup)
   signin.rs                    store login windows and the hidden store-session window
   tray.rs, tray_popup/          tray icon; Windows tray popup (Win32 + Direct2D: layout, render, window)
+  updates.rs                   update check after start, the found update, installing it
+                               (debug builds: QUESTKEEP_FAKE_UPDATE=<version> pretends one exists)
 ui/src/
   lib/api.ts                   the only module that calls invoke()
   lib/store.ts                 app state + core-event handling

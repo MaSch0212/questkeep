@@ -3,6 +3,7 @@ import RefreshCw from "lucide-solid/icons/refresh-cw";
 import { createSignal, Show } from "solid-js";
 import * as api from "../../lib/api";
 import { errorMessage } from "../../lib/errors";
+import { store } from "../../lib/store";
 
 type State =
   | { kind: "idle" }
@@ -13,12 +14,17 @@ type State =
   | { kind: "error"; message: string };
 
 export function UpdatesSection() {
-  const [state, setState] = createSignal<State>({ kind: "idle" });
+  // The check after start may have found one already.
+  const known = store.update();
+  const [state, setState] = createSignal<State>(
+    known ? { kind: "available", update: known, confirming: false } : { kind: "idle" },
+  );
 
   async function check() {
     setState({ kind: "checking" });
     try {
       const update = await api.checkUpdate();
+      store.setUpdate(update);
       setState(update ? { kind: "available", update, confirming: false } : { kind: "current" });
     } catch (error) {
       setState({ kind: "error", message: errorMessage(error) });

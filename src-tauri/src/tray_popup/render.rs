@@ -568,6 +568,28 @@ impl Painter<'_> {
                         self.stroke(inflate(r, 2.5), BUTTON_RADIUS + 2.5, &focus, FOCUS_WIDTH);
                     }
                 }
+                ItemKind::UpdateButton => {
+                    let Some(version) = data.update.as_deref() else {
+                        continue;
+                    };
+                    let bg = self.brush(
+                        if pressed {
+                            color::BORDER
+                        } else if hovered {
+                            color::HOVER
+                        } else {
+                            color::RAISED
+                        },
+                        1.0,
+                    )?;
+                    self.fill(r, BUTTON_RADIUS, &bg);
+                    let accent = self.brush(color::ACCENT, 1.0)?;
+                    self.stroke(inflate(r, -0.5), BUTTON_RADIUS, &accent, 1.0);
+                    self.centered_text(&layout::update_label(version), r, &accent);
+                    if focused {
+                        self.stroke(inflate(r, 2.5), BUTTON_RADIUS + 2.5, &focus, FOCUS_WIDTH);
+                    }
+                }
                 ItemKind::ExitButton => {
                     if hovered || focused {
                         let bg =
@@ -779,6 +801,7 @@ mod tests {
                 name: "Steam",
                 uri: "steam://open/main",
             }],
+            update: None,
         }
     }
 
@@ -826,6 +849,7 @@ mod tests {
                         uri: "goggalaxy://",
                     },
                 ],
+                update: Some("0.3.0".into()),
             };
             // QUESTKEEP_POPUP_IMAGES=<data dir>/images previews real covers and icons instead.
             let real = std::env::var_os("QUESTKEEP_POPUP_IMAGES")

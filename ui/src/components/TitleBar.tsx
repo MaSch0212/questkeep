@@ -8,6 +8,7 @@ import Power from "lucide-solid/icons/power";
 import RefreshCw from "lucide-solid/icons/refresh-cw";
 import Rocket from "lucide-solid/icons/rocket";
 import Settings from "lucide-solid/icons/settings";
+import Download from "lucide-solid/icons/download";
 import Square from "lucide-solid/icons/square";
 import X from "lucide-solid/icons/x";
 import { createSignal, onCleanup, onMount, Show, type JSX } from "solid-js";
@@ -250,6 +251,19 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
         <CommandBar ref={props.commandRef} />
       </div>
       <div class="titlebar__end" data-tauri-drag-region>
+        <Show when={store.update()}>
+          {(update) => (
+            <button
+              type="button"
+              class="titlebar__update"
+              aria-label={`Update to ${update().version}`}
+              title={`Questkeep ${update().version} is available`}
+              onClick={() => store.setUpdateOpen(true)}
+            >
+              <Download class="icon" aria-hidden="true" /> Update
+            </button>
+          )}
+        </Show>
         <button
           type="button"
           class="titlebar__tool"

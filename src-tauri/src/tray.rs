@@ -6,7 +6,7 @@
 //! only turns it into Tauri menu items, so it has no unit tests of its own (creating a tray icon
 //! needs a real desktop session).
 
-use std::sync::mpsc::{self, Receiver};
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
@@ -29,6 +29,7 @@ const REBUILD_INTERVAL: Duration = Duration::from_secs(2);
 
 const ID_OPEN: &str = "open";
 const ID_EXIT: &str = "exit";
+const ID_UPDATE: &str = "update";
 const GAME_PREFIX: &str = "game:";
 const URI_PREFIX: &str = "uri:";
 
@@ -37,12 +38,17 @@ const USE_POPUP: bool = cfg!(windows);
 
 /// The latest model, for the popup (which is built when opened).
 static CURRENT: Mutex<Option<MenuModel>> = Mutex::new(None);
+/// Version of an available app update, shown as an "Update" entry.
+static UPDATE: Mutex<Option<String>> = Mutex::new(None);
+/// Wakes the refresh thread (set once the tray exists).
+static TRIGGER: Mutex<Option<Sender<Trigger>>> = Mutex::new(None);
 
 /// Everything the menu shows; two equal models need no rebuild.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 struct MenuModel {
     games: TrayGames,
     clients: Vec<StoreClient>,
+    update: Option<String>,
 }
 
 /// Why the menu is rebuilt.
@@ -52,6 +58,20 @@ enum Trigger {
     Games,
     /// A store scan finished: installed store clients may have changed as well.
     Scan,
+    /// An app update was found.
+    Update,
+}
+
+/// Shows (or hides, with `None`) the "Update" entry for a newer app version.
+pub fn set_update(version: Option<String>) {
+    *UPDATE.lock().unwrap_or_else(PoisonError::into_inner) = version;
+    if let Some(tx) = TRIGGER
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .as_ref()
+    {
+        let _ = tx.send(Trigger::Update);
+    }
 }
 
 /// Creates the tray icon and starts the background thread that keeps its menu current.
@@ -84,6 +104,7 @@ pub fn create(app: &AppHandle, state: &Arc<AppState>) -> tauri::Result<()> {
     });
 
     let (tx, rx) = mpsc::channel();
+    *TRIGGER.lock().unwrap_or_else(PoisonError::into_inner) = Some(tx.clone());
     state.library.events().subscribe(move |event| {
         let trigger = match event {
             CoreEvent::GamesChanged { .. }
@@ -148,6 +169,10 @@ fn refresh_loop(app: &AppHandle, state: &AppState, rx: &Receiver<Trigger>) {
         let model = MenuModel {
             games,
             clients: clients.clone().unwrap_or_default(),
+            update: UPDATE
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .clone(),
         };
         if shown.as_ref() == Some(&model) {
             continue;
@@ -241,8 +266,11 @@ fn build_menu(app: &AppHandle, model: &MenuModel) -> tauri::Result<Menu<Wry>> {
     builder = builder
         .separator()
         .item(&favorites_submenu(app, &model.games.favorites)?)
-        .separator()
-        .text(ID_OPEN, "Open Questkeep");
+        .separator();
+    if let Some(version) = &model.update {
+        builder = builder.text(ID_UPDATE, format!("Update to {version}…"));
+    }
+    builder = builder.text(ID_OPEN, "Open Questkeep");
     if !model.clients.is_empty() {
         builder = builder.item(&clients_submenu(app, &model.clients)?);
     }
@@ -288,12 +316,14 @@ fn show_popup(app: &AppHandle, rect: &tauri::Rect) {
     let data = PopupData {
         games: model.games,
         clients: model.clients,
+        update: model.update,
     };
     let app = app.clone();
     tray_popup::show(anchor, data, move |action| match action {
         Action::Launch(id) => launch(&app, id),
         Action::OpenUri(uri) => open_client(uri),
         Action::OpenWindow => window::show_main_window(&app),
+        Action::ShowUpdate => crate::updates::show(&app),
         Action::Exit => exit(&app),
     });
 }
@@ -315,6 +345,7 @@ pub(crate) fn exit(app: &AppHandle) {
 fn on_menu_event(app: &AppHandle, id: &str) {
     match id {
         ID_OPEN => window::show_main_window_async(app),
+        ID_UPDATE => crate::updates::show(app),
         ID_EXIT => exit(app),
         other => {
             if let Some(game) = other

@@ -15,9 +15,11 @@ use questkeep_core::{AppInfo, CoreError};
 use tauri::State;
 use uuid::Uuid;
 
+use crate::updates::{UpdateInfo, Updates};
+
 use crate::AppState;
 
-type CmdResult<T> = Result<T, String>;
+pub(crate) type CmdResult<T> = Result<T, String>;
 
 /// Runs `f` with the app state on Tauri's blocking thread pool.
 async fn blocking<T, F>(state: State<'_, Arc<AppState>>, f: F) -> CmdResult<T>
@@ -443,60 +445,28 @@ pub async fn seed_fake_library(state: State<'_, Arc<AppState>>, count: usize) ->
     .await
 }
 
-/// A newer version found by [`check_update`].
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct UpdateInfo {
-    pub version: String,
-    /// Release notes (markdown) from the update manifest, if any.
-    pub notes: Option<String>,
-    /// Publication date as RFC 3339, if the manifest has one.
-    pub date: Option<String>,
-}
-
-/// Asks the update endpoint for a newer release. Always `None` in debug builds.
-async fn find_update(app: &tauri::AppHandle) -> CmdResult<Option<tauri_plugin_updater::Update>> {
-    use tauri_plugin_updater::UpdaterExt;
-    if cfg!(debug_assertions) {
-        return Ok(None);
-    }
-    let updater = app.updater().map_err(|e| {
-        tracing::warn!(error = %e, "updater is not available");
-        format!("Updates are not available: {e}")
-    })?;
-    updater.check().await.map_err(|e| {
-        tracing::warn!(error = %e, "update check failed");
-        format!("Could not check for updates: {e}")
-    })
-}
-
+/// Asks for a newer release now (Settings); the title bar and tray learn about it too.
 #[tauri::command]
 pub async fn check_update(app: tauri::AppHandle) -> CmdResult<Option<UpdateInfo>> {
-    Ok(find_update(&app).await?.map(|update| UpdateInfo {
-        version: update.version.clone(),
-        notes: update.body.clone().filter(|b| !b.trim().is_empty()),
-        date: update
-            .date
-            .and_then(|d| chrono::DateTime::from_timestamp(d.unix_timestamp(), 0))
-            .map(|d| d.to_rfc3339()),
-    }))
+    crate::updates::check(&app).await
 }
 
-/// Downloads and installs the newest release, then restarts the app. Does nothing (and returns
-/// normally) when no newer release exists.
+/// The update found by the last check, if any (the window asks when it loads).
+#[tauri::command]
+pub fn available_update(updates: State<'_, Updates>) -> Option<UpdateInfo> {
+    updates.available()
+}
+
+/// Whether the tray asked to show the update dialog while the window wasn't listening.
+#[tauri::command]
+pub fn take_update_request(updates: State<'_, Updates>) -> bool {
+    updates.take_show_request()
+}
+
+/// Downloads and installs the newest release, then restarts the app.
 #[tauri::command]
 pub async fn install_update(app: tauri::AppHandle) -> CmdResult<()> {
-    let Some(update) = find_update(&app).await? else {
-        return Ok(());
-    };
-    tracing::info!(version = %update.version, "installing update");
-    update
-        .download_and_install(|_chunk, _total| {}, || {})
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, "update installation failed");
-            format!("Could not install the update: {e}")
-        })?;
-    app.restart()
+    crate::updates::install(&app).await
 }
 
 #[tauri::command]

@@ -56,6 +56,10 @@ fn item_label(data: &PopupData, kind: ItemKind) -> String {
             .get(i)
             .map_or_else(String::new, |c| format!("Open {}", c.name)),
         ItemKind::OpenButton => layout::OPEN_LABEL.to_string(),
+        ItemKind::UpdateButton => data
+            .update
+            .as_deref()
+            .map_or_else(String::new, layout::update_label),
         ItemKind::ExitButton => format!("{} Questkeep", layout::EXIT_LABEL),
     }
 }
@@ -107,7 +111,9 @@ pub fn tree(layout: &Layout, data: &PopupData, focus: Option<usize>, scale: f32)
                 favorites.push(id);
             }
             ItemKind::Pill(_) => stores.push(id),
-            ItemKind::OpenButton | ItemKind::ExitButton => footer.push(id),
+            ItemKind::OpenButton | ItemKind::UpdateButton | ItemKind::ExitButton => {
+                footer.push(id);
+            }
         }
         nodes.push((id, node));
     }
@@ -193,6 +199,7 @@ mod tests {
                 name: "Steam",
                 uri: "steam://open/main",
             }],
+            update: None,
         }
     }
 

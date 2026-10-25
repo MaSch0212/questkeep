@@ -577,3 +577,6 @@ Short log of choices made while building. Newest at the bottom of each section.
   page itself is read-only otherwise. Rare actions (metadata, artwork, combine, folder, uninstall,
   remove) live in a "More" menu with confirm dialogs. The page and the side panel are one
   component that rearranges with container queries.
+- **Update check after start**: one check 5 s after start (not periodic), remembered in the
+  shell; the title bar and tray show an "Update" entry. The tray entry opens the window's update
+  dialog instead of installing right away, so the restart is always confirmed in one place.

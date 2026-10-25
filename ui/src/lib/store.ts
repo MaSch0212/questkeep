@@ -81,6 +81,9 @@ function createAppStore() {
   const [seenSources, setSeenSources] = createSignal<ReadonlySet<string>>(new Set());
   const [toasts, setToasts] = createSignal<Toast[]>([]);
   const [duplicatesOpen, setDuplicatesOpen] = createSignal(false);
+  /** A newer app version (checked after start); the title bar offers it. */
+  const [update, setUpdate] = createSignal<api.UpdateInfo | null>(null);
+  const [updateOpen, setUpdateOpen] = createSignal(false);
   const [coverVersions, setCoverVersions] = createStore<Record<string, number>>({});
   const [page, setPage] = createSignal<Page>("library");
   const [syncState, setSyncState] = createSignal<SyncState>(IDLE_SYNC);
@@ -534,6 +537,21 @@ function createAppStore() {
     }
   }
 
+  async function loadUpdate() {
+    setUpdate((await api.availableUpdate()) ?? null);
+  }
+
+  /** Opens the update dialog when the tray asked for it. */
+  async function showUpdateRequest() {
+    try {
+      if (!(await api.takeUpdateRequest())) return;
+      await loadUpdate();
+      if (update()) setUpdateOpen(true);
+    } catch (error) {
+      pushToast("error", errorMessage(error));
+    }
+  }
+
   /** Loads initial data and subscribes to core events. Returns a cleanup function. */
   async function init(): Promise<() => void> {
     const unlisteners: (() => void)[] = [];
@@ -545,6 +563,8 @@ function createAppStore() {
     const subscribe = Promise.all([
       listen<CoreEvent>("core-event", (e) => handleCoreEvent(e.payload)).then(keep),
       listen("app-notice", () => void showNotices()).then(keep),
+      listen<api.UpdateInfo>("update-available", (e) => setUpdate(e.payload)).then(keep),
+      listen("show-update", () => void showUpdateRequest()).then(keep),
     ]);
     const loads = Promise.allSettled([
       api.listProviders().then(setProviders),
@@ -555,12 +575,14 @@ function createAppStore() {
       loadSyncTimes(),
       loadLaunchers(),
       loadCategories(),
+      loadUpdate(),
     ]).then((results) => {
       for (const r of results)
         if (r.status === "rejected") pushToast("error", errorMessage(r.reason));
     });
     await Promise.all([subscribe.catch(() => undefined), loads]);
     void showNotices();
+    void showUpdateRequest();
     return () => {
       disposed = true;
       for (const fn of unlisteners) fn();
@@ -595,6 +617,8 @@ function createAppStore() {
       setRunning(new Set<string>());
       setProviders([]);
       setAppInfo(null);
+      setUpdate(null);
+      setUpdateOpen(false);
       setSeenSources(new Set<string>());
       setToasts([]);
     });
@@ -616,6 +640,10 @@ function createAppStore() {
     toasts,
     duplicatesOpen,
     setDuplicatesOpen,
+    update,
+    setUpdate,
+    updateOpen,
+    setUpdateOpen,
     checkDuplicates,
     viewMode,
     setViewMode,

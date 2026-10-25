@@ -117,6 +117,10 @@ export interface UpdateInfo {
 }
 /** Resolves `null` when up to date (always in dev builds). */
 export const checkUpdate = () => invoke<UpdateInfo | null>("check_update");
+/** The update found by the check after start (or the last check), if any. */
+export const availableUpdate = () => invoke<UpdateInfo | null>("available_update");
+/** Whether the tray asked to show the update dialog before the window listened. */
+export const takeUpdateRequest = () => invoke<boolean>("take_update_request");
 /** Downloads, installs and restarts the app. */
 export const installUpdate = () => invoke<void>("install_update");
 

@@ -723,6 +723,7 @@ mod tests {
                 name: "Steam",
                 uri: "steam://open/main",
             }],
+            update: None,
         };
         let anchor = ScreenRect {
             x: 100,
