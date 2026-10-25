@@ -16,6 +16,8 @@ interface GameRowProps {
   open?: boolean;
   onSelect: (id: string) => void;
   onLaunch: (id: string) => void;
+  /** Unique within the list when the same game shows in several groups; the game id by default. */
+  domKey?: string;
 }
 
 export function rowDomId(id: string): string {
@@ -30,7 +32,7 @@ export function GameRow(props: GameRowProps) {
   return (
     <div
       role="option"
-      id={rowDomId(props.game.id)}
+      id={rowDomId(props.domKey ?? props.game.id)}
       class="list-row"
       classList={{
         "list-row--selected": props.selected,

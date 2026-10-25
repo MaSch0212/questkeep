@@ -14,6 +14,8 @@ import {
   matchesFilters,
   nudgeSection,
   nudgeView,
+  NO_CATEGORY,
+  savedState,
   sectionOrder,
   viewForGame,
   withChange,
@@ -21,7 +23,14 @@ import {
 } from "./views";
 
 function view(id: string, query: Partial<GameQuery> = {}): LibraryView {
-  return { id, name: id, icon: "bookmark", query: { ...defaultQuery(), ...query }, layout: "grid" };
+  return {
+    id,
+    name: id,
+    icon: "bookmark",
+    query: { ...defaultQuery(), ...query },
+    layout: "grid",
+    group: "none",
+  };
 }
 
 function sections(): ViewSection[] {
@@ -52,10 +61,22 @@ describe("drafts", () => {
       differsFromSaved(steam, {
         query: { ...steam.query, search: "zelda", sources: ["gog", "steam"] },
         layout: "grid",
+        group: "none",
       }),
     ).toBe(false);
     expect(
-      differsFromSaved(steam, { query: { ...steam.query, descending: true }, layout: "grid" }),
+      differsFromSaved(steam, {
+        query: { ...steam.query, descending: true },
+        layout: "grid",
+        group: "none",
+      }),
+    ).toBe(true);
+    expect(differsFromSaved(steam, { ...savedState(steam), group: "category" })).toBe(true);
+    expect(
+      differsFromSaved(steam, {
+        ...savedState(steam),
+        query: { ...steam.query, categories: ["c1"] },
+      }),
     ).toBe(true);
   });
 });
@@ -85,6 +106,13 @@ describe("filters", () => {
     expect(matchesFilters(q({ installed: "no" }), makeGame({ installed: false }))).toBe(true);
     expect(matchesFilters(q({ sources: ["steam"] }), makeGame({ source: "gog" }))).toBe(false);
     expect(matchesFilters(q({ favorite: "yes" }), makeGame({ favorite: true }))).toBe(true);
+    const tagged = makeGame({ categories: ["c1"] });
+    expect(matchesFilters(q({ categories: ["c1", "c2"] }), tagged)).toBe(true);
+    expect(matchesFilters(q({ categories: ["c2"] }), tagged)).toBe(false);
+    expect(matchesFilters(q({ categories: [NO_CATEGORY] }), tagged)).toBe(false);
+    expect(matchesFilters(q({ categories: [NO_CATEGORY] }), makeGame())).toBe(true);
+    expect(activeFilterCount(q({ categories: ["c1"] }))).toBe(1);
+    expect(clearedFilters(q({ categories: ["c1"] })).categories).toEqual([]);
   });
 
   it("finds the view to show a game in", () => {

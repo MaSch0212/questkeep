@@ -23,6 +23,7 @@ const view = (id: string, query: Partial<GameQuery>): LibraryView => ({
   icon: "bookmark",
   query: { ...defaultQuery(), ...query },
   layout: "grid",
+  group: "none",
 });
 
 function testSections(): ViewSection[] {

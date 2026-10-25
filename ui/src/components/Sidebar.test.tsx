@@ -16,7 +16,14 @@ vi.mock("@tauri-apps/api/core", () => ({
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn<() => void>() }));
 
 function view(id: string, name: string, query: Partial<GameQuery> = {}): LibraryView {
-  return { id, name, icon: "star", query: { ...defaultQuery(), ...query }, layout: "grid" };
+  return {
+    id,
+    name,
+    icon: "star",
+    query: { ...defaultQuery(), ...query },
+    layout: "grid",
+    group: "none",
+  };
 }
 
 function sections(): ViewSection[] {

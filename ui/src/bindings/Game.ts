@@ -46,6 +46,10 @@ description: string | null,
  */
 releaseDate: string | null, developers: Array<string>, publishers: Array<string>, genres: Array<string>, 
 /**
+ * Ids of the game's categories, in no particular order.
+ */
+categories: Array<string>, 
+/**
  * When store metadata was last fetched; `None` means never.
  */
 metadataUpdatedAt: string | null, 

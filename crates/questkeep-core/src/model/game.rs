@@ -45,6 +45,8 @@ pub struct Game {
     pub developers: Vec<String>,
     pub publishers: Vec<String>,
     pub genres: Vec<String>,
+    /// Ids of the game's categories, in no particular order.
+    pub categories: Vec<String>,
     /// When store metadata was last fetched; `None` means never.
     pub metadata_updated_at: Option<DateTime<Utc>>,
     /// Free-form data for future fields and plugins.

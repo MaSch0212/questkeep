@@ -6,8 +6,8 @@ use std::sync::Arc;
 
 use questkeep_core::auth::AccountStatus;
 use questkeep_core::model::{
-    Game, GameQuery, GameUpdate, LibraryView, NewManualGame, NewView, ScanSummary, SectionOrder,
-    SyncTimes, ViewSection, ViewUpdate,
+    Category, Game, GameQuery, GameUpdate, LibraryView, NewManualGame, NewView, ScanSummary,
+    SectionOrder, SyncTimes, ViewSection, ViewUpdate,
 };
 use questkeep_core::providers::ProviderInfo;
 use questkeep_core::settings::Settings;
@@ -479,6 +479,42 @@ pub async fn arrange_views(
 #[tauri::command]
 pub async fn sync_times(state: State<'_, Arc<AppState>>) -> CmdResult<SyncTimes> {
     blocking(state, |s| s.library.sync_times()).await
+}
+
+#[tauri::command]
+pub async fn list_categories(state: State<'_, Arc<AppState>>) -> CmdResult<Vec<Category>> {
+    blocking(state, |s| s.library.list_categories()).await
+}
+
+#[tauri::command]
+pub async fn create_category(state: State<'_, Arc<AppState>>, name: String) -> CmdResult<Category> {
+    blocking(state, move |s| s.library.create_category(&name)).await
+}
+
+#[tauri::command]
+pub async fn rename_category(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    name: String,
+) -> CmdResult<Category> {
+    blocking(state, move |s| s.library.rename_category(&id, &name)).await
+}
+
+#[tauri::command]
+pub async fn delete_category(state: State<'_, Arc<AppState>>, id: String) -> CmdResult<()> {
+    blocking(state, move |s| s.library.delete_category(&id)).await
+}
+
+#[tauri::command]
+pub async fn set_game_categories(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    category_ids: Vec<String>,
+) -> CmdResult<Game> {
+    blocking(state, move |s| {
+        s.library.set_game_categories(parse_id(&id)?, &category_ids)
+    })
+    .await
 }
 
 #[tauri::command]

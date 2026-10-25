@@ -3,9 +3,11 @@ import { listen } from "@tauri-apps/api/event";
 import { batch, createMemo, createRoot, createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
 import type { AppInfo } from "../bindings/AppInfo";
+import type { Category } from "../bindings/Category";
 import type { CoreEvent } from "../bindings/CoreEvent";
 import type { Game } from "../bindings/Game";
 import type { GameQuery } from "../bindings/GameQuery";
+import type { GroupBy } from "../bindings/GroupBy";
 import type { ProviderInfo } from "../bindings/ProviderInfo";
 import type { SortField } from "../bindings/SortField";
 import type { SyncTimes } from "../bindings/SyncTimes";
@@ -13,6 +15,7 @@ import type { ViewLayout } from "../bindings/ViewLayout";
 import type { ViewSection } from "../bindings/ViewSection";
 import * as api from "./api";
 import { errorMessage } from "./errors";
+import { groupGames } from "./grouping";
 import { defaultDescending, defaultQuery, mergeSources } from "./query";
 import {
   allViews,
@@ -61,6 +64,9 @@ function createAppStore() {
   const [editingViews, setEditingViews] = createSignal(false);
   const [syncTimes, setSyncTimes] = createSignal<SyncTimes>({ all: null, providers: {} });
   const [launchers, setLaunchers] = createSignal<string[]>([]);
+  const [categories, setCategories] = createSignal<Category[]>([]);
+  // Collapsed groups per view id, until the app closes.
+  const [collapsed, setCollapsed] = createSignal<Readonly<Record<string, readonly string[]>>>({});
   // A game opened from the command bar that no view contains; its details show anyway.
   const [pinnedGame, setPinnedGame] = createSignal<Game | null>(null);
   const [games, setGames] = createSignal<Game[]>([]);
@@ -79,10 +85,13 @@ function createAppStore() {
   const activeView = createMemo(() => findView(sections(), activeViewId()));
   const viewState = createMemo<ViewState>(() => {
     const view = activeView();
-    return view ? effectiveState(view, drafts()) : { query: defaultQuery(), layout: "grid" };
+    return view
+      ? effectiveState(view, drafts())
+      : { query: defaultQuery(), layout: "grid", group: "none" };
   });
   const query = createMemo<GameQuery>(() => ({ ...viewState().query, search: keyword() }));
   const viewMode = createMemo<ViewMode>(() => viewState().layout);
+  const groupBy = createMemo<GroupBy>(() => viewState().group);
 
   const indexById = createMemo(() => {
     const map = new Map<string, number>();
@@ -104,6 +113,13 @@ function createAppStore() {
     return previous?.id === id ? previous : undefined;
   });
   const sources = createMemo(() => mergeSources(providers(), seenSources()));
+  const groups = createMemo(() => {
+    const names = new Map(sources().map((s) => [s.id, s.name]));
+    return groupGames(games(), groupBy(), categories(), (id) => names.get(id) ?? id);
+  });
+  const collapsedGroups = createMemo<ReadonlySet<string>>(
+    () => new Set(collapsed()[activeViewId() ?? ""] ?? []),
+  );
 
   // Scroll offset of the library, kept while another page (settings) replaces it.
   const libraryScroll: Record<ViewMode, number> = { grid: 0, list: 0, details: 0 };
@@ -243,7 +259,7 @@ function createAppStore() {
     if (!view) return;
     const state = viewState();
     const ok = await editViews(() =>
-      api.updateView(view.id, { query: state.query, layout: state.layout }),
+      api.updateView(view.id, { query: state.query, layout: state.layout, group: state.group }),
     );
     if (ok) setDrafts((current) => withoutDraft(current, view.id));
   }
@@ -261,6 +277,7 @@ function createAppStore() {
         icon: input.icon,
         query: state.query,
         layout: state.layout,
+        group: state.group,
       });
       created = view.id;
     });
@@ -304,6 +321,43 @@ function createAppStore() {
     }
   }
 
+  async function loadCategories() {
+    try {
+      setCategories((await api.listCategories()) ?? []);
+    } catch (error) {
+      pushToast("error", errorMessage(error));
+    }
+  }
+
+  /** Runs a category change in the core; the list follows through `categoriesChanged`. */
+  async function editCategories<T>(action: () => Promise<T>): Promise<T | null> {
+    try {
+      return await action();
+    } catch (error) {
+      pushToast("error", errorMessage(error));
+      return null;
+    }
+  }
+
+  /** Gives a game exactly these categories and shows the result right away. */
+  async function setGameCategories(id: string, categoryIds: string[]) {
+    const game = await editCategories(() => api.setGameCategories(id, categoryIds));
+    if (game) {
+      upsertGame(game);
+      if (pinnedGame()?.id === id) setPinnedGame(game);
+    }
+  }
+
+  function toggleGroup(key: string) {
+    const view = activeViewId();
+    if (view === null) return;
+    setCollapsed((current) => {
+      const keys = current[view] ?? [];
+      const next = keys.includes(key) ? keys.filter((k) => k !== key) : [...keys, key];
+      return { ...current, [view]: next };
+    });
+  }
+
   async function loadLaunchers() {
     try {
       setLaunchers((await api.listLaunchers()) ?? []);
@@ -342,6 +396,10 @@ function createAppStore() {
 
   function setViewMode(mode: ViewLayout) {
     changeView((state) => ({ ...state, layout: mode }));
+  }
+
+  function setGroupBy(group: GroupBy) {
+    changeView((state) => ({ ...state, group }));
   }
 
   function selectGame(id: string | null) {
@@ -408,6 +466,9 @@ function createAppStore() {
       case "gameError":
         pushToast("error", event.message);
         break;
+      case "categoriesChanged":
+        void loadCategories();
+        break;
     }
   }
 
@@ -440,6 +501,7 @@ function createAppStore() {
       loadViews().then(refresh),
       loadSyncTimes(),
       loadLaunchers(),
+      loadCategories(),
     ]).then((results) => {
       for (const r of results)
         if (r.status === "rejected") pushToast("error", errorMessage(r.reason));
@@ -465,6 +527,8 @@ function createAppStore() {
       setEditingViews(false);
       setSyncTimes({ all: null, providers: {} });
       setLaunchers([]);
+      setCategories([]);
+      setCollapsed({});
       setPinnedGame(null);
       setGames([]);
       setLoading(false);
@@ -499,6 +563,19 @@ function createAppStore() {
     toasts,
     viewMode,
     setViewMode,
+    groupBy,
+    setGroupBy,
+    groups,
+    collapsedGroups,
+    toggleGroup,
+    // categories
+    categories,
+    loadCategories,
+    setGameCategories,
+    createCategory: (name: string) => editCategories(() => api.createCategory(name)),
+    renameCategory: (id: string, name: string) =>
+      editCategories(() => api.renameCategory(id, name)),
+    deleteCategory: (id: string) => editCategories(() => api.deleteCategory(id)),
     syncState,
     syncBusy: () => isSyncBusy(syncState()),
     page,

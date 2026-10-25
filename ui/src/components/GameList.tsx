@@ -9,26 +9,32 @@ import {
   Show,
 } from "solid-js";
 import { activateGame } from "../lib/actions";
-import { isNavKey, nextIndex } from "../lib/gridNav";
+import { isNavKey } from "../lib/gridNav";
+import {
+  asGamesRow,
+  asHeaderRow,
+  layoutGroups,
+  navigateSlots,
+  scrollTopForRow,
+  slotKey,
+  visibleRowRange,
+} from "../lib/grouping";
+import { createSlotCursor } from "../lib/slotCursor";
 import { store } from "../lib/store";
-import { rowRange, rowTop, scrollTopForRow, visibleRows, type RowLayout } from "../lib/virtualRows";
 import { GameRow, rowDomId } from "./GameRow";
 import { GameRowCompact } from "./GameRowCompact";
+import { GroupHeader } from "./GroupHeader";
 import { Logo } from "./Logo";
 
 const FALLBACK_HEIGHT = 700;
 const DEFAULT_ROW_HEIGHT = 36;
 const DEFAULT_COMPACT_ROW_HEIGHT = 32;
+const DEFAULT_HEADER_HEIGHT = 32;
 const DEFAULT_PADDING = 8;
 const OVERSCAN_ROWS = 6;
 
 function readNumber(element: Element, name: string, fallback: number): number {
   return Number.parseFloat(getComputedStyle(element).getPropertyValue(name)) || fallback;
-}
-
-function activeDescendant(): string | undefined {
-  const game = store.selectedGame();
-  return game && store.selectedIndex() >= 0 ? rowDomId(game.id) : undefined;
 }
 
 function activateSelected() {
@@ -37,9 +43,10 @@ function activateSelected() {
 }
 
 /**
- * List view of the library: one fixed-height row per game, virtualized with the same row maths
- * as the cover grid (`lib/virtualRows.ts`), so 5000+ games scroll smoothly. One focusable listbox
- * with `aria-activedescendant` for keyboard navigation.
+ * List view of the library: one fixed-height row per game (and per group header when the view
+ * is grouped), virtualized with the same row maths as the cover grid (`lib/grouping.ts`), so
+ * 5000+ games scroll smoothly. One focusable listbox with `aria-activedescendant` for keyboard
+ * navigation.
  *
  * `compact` is the narrow list of the details view: no column header, smaller rows, and selecting
  * a game shows it on the page beside the list instead of opening the details panel.
@@ -52,18 +59,34 @@ export function GameList(props: { compact?: boolean }) {
   const [rowHeight, setRowHeight] = createSignal(
     props.compact ? DEFAULT_COMPACT_ROW_HEIGHT : DEFAULT_ROW_HEIGHT,
   );
+  const [headerHeight, setHeaderHeight] = createSignal(DEFAULT_HEADER_HEIGHT);
   const [padding, setPadding] = createSignal(DEFAULT_PADDING);
 
-  const layout = createMemo<RowLayout>(() => ({
-    rowHeight: rowHeight(),
-    rowCount: store.games().length,
-    paddingTop: padding(),
-  }));
-  const totalHeight = () => layout().rowCount * rowHeight() + padding() * 2;
-  // Primitive row indices: <For> keeps each row's DOM while it stays in the window.
-  const rows = createMemo(() =>
-    rowRange(visibleRows(scrollTop(), height(), layout(), OVERSCAN_ROWS)),
+  const layout = createMemo(() =>
+    layoutGroups(store.groups(), {
+      columns: 1,
+      rowHeight: rowHeight(),
+      headerHeight: headerHeight(),
+      padding: padding(),
+      headers: store.groupBy() !== "none",
+      collapsed: store.collapsedGroups(),
+    }),
   );
+  const { cursor, moveTo } = createSlotCursor(layout);
+  // Primitive row indices: <For> keeps each row's DOM while it stays in the window.
+  const rows = createMemo(() => {
+    const { start, end } = visibleRowRange(layout(), scrollTop(), height(), OVERSCAN_ROWS);
+    return Array.from({ length: end - start }, (_, i) => start + i);
+  });
+  const activeDescendant = () => {
+    const slot = layout().slots[cursor()];
+    return slot ? rowDomId(slotKey(slot)) : undefined;
+  };
+
+  function scrollToCursor(from: number): number {
+    const slot = layout().slots[cursor()];
+    return slot ? scrollTopForRow(layout(), slot.row, from, height(), padding()) : from;
+  }
 
   onMount(() => {
     const element = scroller;
@@ -73,6 +96,7 @@ export function GameList(props: { compact?: boolean }) {
         ? readNumber(element, "--qk-compact-row-height", DEFAULT_COMPACT_ROW_HEIGHT)
         : readNumber(element, "--qk-list-row-height", DEFAULT_ROW_HEIGHT),
     );
+    setHeaderHeight(readNumber(element, "--qk-list-group-height", DEFAULT_HEADER_HEIGHT));
     setPadding(readNumber(element, "--qk-list-padding", DEFAULT_PADDING));
     const observer = new ResizeObserver((entries) => {
       const rect = entries[0]?.contentRect;
@@ -90,11 +114,7 @@ export function GameList(props: { compact?: boolean }) {
     element.addEventListener("scroll", onScroll, { passive: true });
     // Coming from the grid view or another page: restore the scroll position, then bring the
     // selected game into view.
-    const saved = store.libraryScroll(mode());
-    const target =
-      store.selectedIndex() >= 0
-        ? scrollTopForRow(store.selectedIndex(), saved, height(), layout())
-        : saved;
+    const target = scrollToCursor(store.libraryScroll(mode()));
     if (target > 0) {
       element.scrollTop = target;
       setScrollTop(target);
@@ -110,10 +130,10 @@ export function GameList(props: { compact?: boolean }) {
   // Keep the selected row in view (keyboard navigation, selection after search).
   createEffect(
     on(
-      () => store.selectedIndex(),
-      (index) => {
-        if (index < 0 || !scroller) return;
-        const target = scrollTopForRow(index, scroller.scrollTop, height(), layout());
+      () => [cursor(), layout()] as const,
+      () => {
+        if (!scroller) return;
+        const target = scrollToCursor(scroller.scrollTop);
         if (target !== scroller.scrollTop) {
           scroller.scrollTop = target;
           setScrollTop(target);
@@ -140,10 +160,8 @@ export function GameList(props: { compact?: boolean }) {
   function onKeyDown(event: KeyboardEvent) {
     if (isNavKey(event.key) && !event.altKey && !event.ctrlKey && !event.metaKey) {
       event.preventDefault();
-      const games = store.games();
       const pageRows = Math.max(1, Math.floor(height() / rowHeight()));
-      const game = games[nextIndex(store.selectedIndex(), event.key, 1, games.length, pageRows)];
-      if (game) store.selectGame(game.id);
+      moveTo(navigateSlots(layout(), cursor(), event.key, pageRows), store.selectGame);
       return;
     }
     if (event.key === "Enter") {
@@ -156,9 +174,8 @@ export function GameList(props: { compact?: boolean }) {
     }
   }
 
-  function onSelect(id: string) {
-    if (props.compact) store.selectGame(id);
-    else store.selectAndOpen(id);
+  function onSelect(slot: number) {
+    moveTo(slot, props.compact ? store.selectGame : store.selectAndOpen);
     scroller?.focus({ preventScroll: true });
   }
 
@@ -184,40 +201,66 @@ export function GameList(props: { compact?: boolean }) {
         aria-activedescendant={activeDescendant()}
         onKeyDown={onKeyDown}
       >
-        <div class="list__canvas" style={{ height: `${totalHeight()}px` }}>
+        <div class="list__canvas" style={{ height: `${layout().height}px` }}>
           <For each={rows()}>
-            {(index) => (
-              <Show when={store.games()[index]}>
-                {(game) => (
-                  <div
-                    class="list__slot"
-                    style={{
-                      transform: `translateY(${rowTop(index, layout())}px)`,
-                      height: `${rowHeight()}px`,
-                    }}
-                  >
-                    <Show
-                      when={!props.compact}
-                      fallback={
-                        <GameRowCompact
-                          game={game()}
-                          selected={game().id === store.selectedId()}
-                          onSelect={onSelect}
-                        />
-                      }
+            {(index) => {
+              const row = () => layout().rows[index];
+              return (
+                <Show when={row()}>
+                  {(current) => (
+                    <div
+                      class="list__slot"
+                      style={{
+                        transform: `translateY(${current().top}px)`,
+                        height: `${current().height}px`,
+                      }}
                     >
-                      <GameRow
-                        game={game()}
-                        selected={game().id === store.selectedId()}
-                        open={store.detailsOpen() && game().id === store.selectedId()}
-                        onSelect={onSelect}
-                        onLaunch={(id) => void activateGame(id)}
-                      />
-                    </Show>
-                  </div>
-                )}
-              </Show>
-            )}
+                      <Show when={asHeaderRow(current())}>
+                        {(header) => (
+                          <div class="list__group" role="presentation">
+                            <GroupHeader
+                              group={header().group}
+                              collapsed={header().collapsed}
+                              onToggle={() => store.toggleGroup(header().group.key)}
+                            />
+                          </div>
+                        )}
+                      </Show>
+                      <Show when={asGamesRow(current())}>
+                        {(games) => (
+                          <Show when={layout().slots[games().first]}>
+                            {(slot) => (
+                              <Show
+                                when={!props.compact}
+                                fallback={
+                                  <GameRowCompact
+                                    game={slot().game}
+                                    domKey={slotKey(slot())}
+                                    selected={slot().game.id === store.selectedId()}
+                                    onSelect={() => onSelect(games().first)}
+                                  />
+                                }
+                              >
+                                <GameRow
+                                  game={slot().game}
+                                  domKey={slotKey(slot())}
+                                  selected={slot().game.id === store.selectedId()}
+                                  open={
+                                    store.detailsOpen() && slot().game.id === store.selectedId()
+                                  }
+                                  onSelect={() => onSelect(games().first)}
+                                  onLaunch={(id) => void activateGame(id)}
+                                />
+                              </Show>
+                            )}
+                          </Show>
+                        )}
+                      </Show>
+                    </div>
+                  )}
+                </Show>
+              );
+            }}
           </For>
         </div>
         <Show when={store.games().length === 0 && !store.loading()}>

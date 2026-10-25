@@ -4,4 +4,4 @@ import type { ScanSummary } from "./ScanSummary";
 /**
  * Something that happened in the core.
  */
-export type CoreEvent = { "type": "gamesChanged", ids: Array<string>, } | { "type": "gameRemoved", id: string, } | { "type": "scansQueued", providers: Array<string>, } | { "type": "scanStarted", provider: string, } | { "type": "libraryScanned", provider: string, summary: ScanSummary, } | { "type": "scanFailed", provider: string, message: string, } | { "type": "gameStarted", id: string, } | { "type": "gameStopped", id: string, sessionSeconds: number, } | { "type": "gameError", id: string, message: string, };
+export type CoreEvent = { "type": "gamesChanged", ids: Array<string>, } | { "type": "gameRemoved", id: string, } | { "type": "categoriesChanged" } | { "type": "scansQueued", providers: Array<string>, } | { "type": "scanStarted", provider: string, } | { "type": "libraryScanned", provider: string, summary: ScanSummary, } | { "type": "scanFailed", provider: string, message: string, } | { "type": "gameStarted", id: string, } | { "type": "gameStopped", id: string, sessionSeconds: number, } | { "type": "gameError", id: string, message: string, };

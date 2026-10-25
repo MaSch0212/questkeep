@@ -98,6 +98,35 @@ pub fn read_playtime(path: &Path) -> Result<HashMap<String, Playtime>, ProviderE
     Ok(out)
 }
 
+fn read_tag_rows(conn: &Connection) -> rusqlite::Result<Vec<(String, String)>> {
+    let mut stmt = conn.prepare(
+        "SELECT releaseKey, tag FROM UserReleaseTags \
+         WHERE releaseKey LIKE 'gog\\_%' ESCAPE '\\' ORDER BY rowid",
+    )?;
+    stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
+        .collect()
+}
+
+/// The user's Galaxy tags (`UserReleaseTags(userId, releaseKey, tag)`) per GOG product id: trimmed,
+/// non-empty, one entry per name. Tags of several Galaxy users on one PC are merged. Checked on
+/// the maintainer's PC on 2026-10-25 (13 tags such as "20 Casual" and "VR Games").
+pub fn read_tags(path: &Path) -> Result<HashMap<String, Vec<String>>, ProviderError> {
+    let rows = read_foreign(path, "GOG Galaxy database", read_tag_rows)?;
+    let mut out: HashMap<String, Vec<String>> = HashMap::new();
+    for (key, tag) in rows {
+        let tag = tag.trim();
+        let Some(id) = gog_id(&key) else { continue };
+        if tag.is_empty() {
+            continue;
+        }
+        let tags = out.entry(id.to_string()).or_default();
+        if !tags.iter().any(|t| t == tag) {
+            tags.push(tag.to_string());
+        }
+    }
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -141,6 +170,36 @@ mod tests {
         assert!(!times.contains_key("252950") && !times.contains_key("x"));
         assert!(!times.contains_key("1207658930"), "unreadable date only");
         assert!(read_playtime(&tmp.path().join("missing.db")).is_err());
+    }
+
+    #[test]
+    fn reads_gog_tags_only() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("galaxy-2.0.db");
+        let conn = Connection::open(&path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE UserReleaseTags(userId INT64, releaseKey TEXT, tag TEXT);
+             INSERT INTO UserReleaseTags VALUES
+               (1, 'gog_1207658924', '20 Casual'),
+               (2, 'gog_1207658924', '20 Casual'),
+               (1, 'gog_1207658924', ' VR Games '),
+               (1, 'steam_252950', 'Steam tag'),
+               (1, 'gog_x', 'Bad id'),
+               (1, 'gog_1423049311', '  ');",
+        )
+        .unwrap();
+        drop(conn);
+        let tags = read_tags(&path).unwrap();
+        assert_eq!(tags["1207658924"], vec!["20 Casual", "VR Games"]);
+        assert_eq!(tags.len(), 1);
+        assert!(read_tags(&tmp.path().join("missing.db")).is_err());
+        // A database without the table (older Galaxy) is an error, not an empty set.
+        let old = tmp.path().join("old.db");
+        Connection::open(&old)
+            .unwrap()
+            .execute_batch("CREATE TABLE GameTimes(x);")
+            .unwrap();
+        assert!(read_tags(&old).is_err());
     }
 
     /// Read-only look at this machine: `cargo test -p questkeep-core galaxy_db -- --ignored --nocapture`.

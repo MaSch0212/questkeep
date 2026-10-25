@@ -38,6 +38,8 @@ Also: GOG playtime from GOG Galaxy's local database; IGDB fills missing genres (
 - **Launchers**: verify "Open launcher" on real installs for EA (registry command), Ubisoft
   (InstallDir), Battle.net and the Xbox app.
 - **More view filters**: genres, tags, platforms, release year, playtime ranges; saved per view.
+- **Categories follow-ups**: Heroic categories; assign categories to several games at once; more
+  group-by fields (genre, release year); check `sharedconfig.vdf` tags on an older Steam install.
 - **Command bar commands**: run app actions (sync a store, open settings, switch views) from
   Ctrl+K, not only games.
 

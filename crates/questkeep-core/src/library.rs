@@ -16,12 +16,12 @@ use crate::images::{
     CoverJob, IGDB_CHECKED_KEY, Igdb, ImageCache, ImageKind, MetadataJob, SteamGridDb,
 };
 use crate::model::{
-    ActionKind, Game, GameQuery, GameUpdate, ImportedGame, LibraryView, MANUAL_SOURCE,
+    ActionKind, Category, Game, GameQuery, GameUpdate, ImportedGame, LibraryView, MANUAL_SOURCE,
     NewManualGame, NewView, PlayAction, ScanSummary, SectionOrder, SyncTimes, TriState,
     ViewSection, ViewUpdate, display_name_from_path,
 };
 use crate::paths::DataPaths;
-use crate::providers::{ProviderError, ProviderInfo, ProviderRegistry};
+use crate::providers::{LibraryProvider, ProviderError, ProviderInfo, ProviderRegistry};
 use crate::seed::is_fake_source;
 use crate::settings::{Settings, SettingsStore};
 use crate::tray::{self, TrayGames};
@@ -234,6 +234,38 @@ impl Library {
     /// When each store, and the last "sync all", finished syncing.
     pub fn sync_times(&self) -> Result<SyncTimes> {
         self.db.sync_times()
+    }
+
+    pub fn list_categories(&self) -> Result<Vec<Category>> {
+        self.db.list_categories()
+    }
+
+    /// Creates a category (or returns the one with that name already).
+    pub fn create_category(&self, name: &str) -> Result<Category> {
+        let category = self.db.create_category(name)?;
+        self.events.publish(CoreEvent::CategoriesChanged);
+        Ok(category)
+    }
+
+    pub fn rename_category(&self, id: &str, name: &str) -> Result<Category> {
+        let category = self.db.rename_category(id, name)?;
+        self.events.publish(CoreEvent::CategoriesChanged);
+        Ok(category)
+    }
+
+    pub fn delete_category(&self, id: &str) -> Result<()> {
+        self.db.delete_category(id)?;
+        self.events.publish(CoreEvent::CategoriesChanged);
+        Ok(())
+    }
+
+    /// Gives a game exactly these categories.
+    pub fn set_game_categories(&self, id: Uuid, category_ids: &[String]) -> Result<Game> {
+        self.db.set_game_categories(id, category_ids)?;
+        self.events.publish(CoreEvent::CategoriesChanged);
+        self.events
+            .publish(CoreEvent::GamesChanged { ids: vec![id] });
+        self.get_game(id)
     }
 
     /// Ids of the providers whose store launcher is installed on this PC, in registry order.
@@ -482,7 +514,8 @@ impl Library {
         };
         let games = merge_owned(installed, owned.unwrap_or_default());
         let now = Utc::now();
-        let summary = self.db.upsert_imported(provider.id(), &games, now)?;
+        let mut summary = self.db.upsert_imported(provider.id(), &games, now)?;
+        self.import_categories(provider.as_ref(), config, &mut summary);
         if let Err(err) = self.db.record_sync(Some(provider_id), now) {
             tracing::warn!(provider = provider_id, %err, "could not record the sync time");
         }
@@ -504,6 +537,38 @@ impl Library {
             summary: summary.clone(),
         });
         Ok(summary)
+    }
+
+    /// Applies the store's own categories after a scan. Failures only cost the categories.
+    fn import_categories(
+        &self,
+        provider: &dyn LibraryProvider,
+        config: &serde_json::Value,
+        summary: &mut ScanSummary,
+    ) {
+        let by_game = match provider.scan_categories(config) {
+            Ok(Some(by_game)) => by_game,
+            Ok(None) => return,
+            Err(err) => {
+                tracing::warn!(provider = provider.id(), %err, "reading store categories failed");
+                return;
+            }
+        };
+        match self.db.sync_imported_categories(provider.id(), &by_game) {
+            Ok(changed) => {
+                if !changed.is_empty() {
+                    self.events.publish(CoreEvent::CategoriesChanged);
+                }
+                for id in changed {
+                    if !summary.changed_ids.contains(&id) {
+                        summary.changed_ids.push(id);
+                    }
+                }
+            }
+            Err(err) => {
+                tracing::warn!(provider = provider.id(), %err, "importing categories failed")
+            }
+        }
     }
 
     /// Scans every provider that supports scanning; failures are logged, not fatal.
@@ -828,10 +893,10 @@ fn merge_owned(mut installed: Vec<ImportedGame>, owned: Vec<ImportedGame>) -> Ve
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::sync::Mutex;
 
     use super::*;
-    use crate::providers::LibraryProvider;
 
     struct FakeStore(Vec<ImportedGame>);
     impl LibraryProvider for FakeStore {
@@ -951,6 +1016,87 @@ mod tests {
             lib.scan("nope"),
             Err(CoreError::UnknownProvider(_))
         ));
+    }
+
+    struct TaggingStore(std::sync::Mutex<Option<HashMap<String, Vec<String>>>>);
+    impl LibraryProvider for TaggingStore {
+        fn id(&self) -> &str {
+            "tags"
+        }
+        fn name(&self) -> &str {
+            "Tags"
+        }
+        fn icon_svg(&self) -> &'static str {
+            "<svg/>"
+        }
+        fn scan_installed(&self) -> Result<Vec<ImportedGame>, ProviderError> {
+            Ok(vec![
+                ImportedGame::installed("1", "One"),
+                ImportedGame::installed("2", "Two"),
+            ])
+        }
+        fn scan_categories(
+            &self,
+            _: &serde_json::Value,
+        ) -> Result<Option<HashMap<String, Vec<String>>>, ProviderError> {
+            Ok(self.0.lock().unwrap().clone())
+        }
+    }
+
+    #[test]
+    fn scans_import_store_categories_and_keep_them_when_unreadable() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Arc::new(TaggingStore(std::sync::Mutex::new(Some(HashMap::from([
+            (
+                "1".to_string(),
+                vec!["RPG".to_string(), "Co-op".to_string()],
+            ),
+            ("2".to_string(), vec!["RPG".to_string()]),
+        ])))));
+        let mut providers = ProviderRegistry::new();
+        providers.register(store.clone());
+        let (lib, seen) = library(tmp.path(), providers);
+        lib.scan("tags").unwrap();
+        let counts = |lib: &Library| {
+            lib.list_categories()
+                .unwrap()
+                .into_iter()
+                .map(|c| (c.name, c.game_count))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(counts(&lib), vec![("Co-op".into(), 1), ("RPG".into(), 2)]);
+        assert!(
+            seen.lock()
+                .unwrap()
+                .iter()
+                .any(|e| matches!(e, CoreEvent::CategoriesChanged))
+        );
+
+        // Unreadable this time: the imported categories stay.
+        *store.0.lock().unwrap() = None;
+        lib.scan("tags").unwrap();
+        assert_eq!(counts(&lib), vec![("Co-op".into(), 1), ("RPG".into(), 2)]);
+
+        // A user category survives the store dropping everything.
+        let one = lib
+            .list_games(&GameQuery::default())
+            .unwrap()
+            .into_iter()
+            .find(|g| g.name == "One")
+            .unwrap();
+        let mine = lib.create_category("Backlog").unwrap();
+        let mut ids = one.categories.clone();
+        ids.push(mine.id.clone());
+        assert_eq!(
+            lib.set_game_categories(one.id, &ids)
+                .unwrap()
+                .categories
+                .len(),
+            3
+        );
+        *store.0.lock().unwrap() = Some(HashMap::new());
+        lib.scan("tags").unwrap();
+        assert_eq!(counts(&lib), vec![("Backlog".into(), 1)]);
     }
 
     #[test]

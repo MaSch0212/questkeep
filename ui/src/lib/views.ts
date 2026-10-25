@@ -1,5 +1,6 @@
 import type { Game } from "../bindings/Game";
 import type { GameQuery } from "../bindings/GameQuery";
+import type { GroupBy } from "../bindings/GroupBy";
 import type { LibraryView } from "../bindings/LibraryView";
 import type { SectionOrder } from "../bindings/SectionOrder";
 import type { ViewLayout } from "../bindings/ViewLayout";
@@ -9,19 +10,27 @@ import type { ViewSection } from "../bindings/ViewSection";
 export interface ViewState {
   query: GameQuery;
   layout: ViewLayout;
+  group: GroupBy;
 }
+
+/** `GameQuery.categories` entry for games without a category (the core's `NO_CATEGORY`). */
+export const NO_CATEGORY = ":none";
 
 /** Unsaved changes per view id, kept until the app closes. */
 export type Drafts = Readonly<Record<string, ViewState>>;
 
 /** The saved state of a view, without the keyword (which a saved query never has). */
 export function savedState(view: LibraryView): ViewState {
-  return { query: { ...view.query, search: null }, layout: view.layout };
+  return { query: { ...view.query, search: null }, layout: view.layout, group: view.group };
 }
 
 /** The draft of a view if it has one, else its saved state. */
 export function effectiveState(view: LibraryView, drafts: Drafts): ViewState {
   return drafts[view.id] ?? savedState(view);
+}
+
+function sameSet(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((s) => b.includes(s));
 }
 
 function sameQuery(a: GameQuery, b: GameQuery): boolean {
@@ -32,14 +41,18 @@ function sameQuery(a: GameQuery, b: GameQuery): boolean {
     a.installed === b.installed &&
     a.hidden === b.hidden &&
     a.played === b.played &&
-    a.sources.length === b.sources.length &&
-    a.sources.every((s) => b.sources.includes(s))
+    sameSet(a.sources, b.sources) &&
+    sameSet(a.categories, b.categories)
   );
 }
 
 /** Whether `state` differs from what the view has saved (the keyword never counts). */
 export function differsFromSaved(view: LibraryView, state: ViewState): boolean {
-  return state.layout !== view.layout || !sameQuery(state.query, view.query);
+  return (
+    state.layout !== view.layout ||
+    state.group !== view.group ||
+    !sameQuery(state.query, view.query)
+  );
 }
 
 /**
@@ -64,6 +77,7 @@ export function withoutDraft(drafts: Drafts, id: string): Drafts {
 export function activeFilterCount(query: GameQuery): number {
   return (
     (query.sources.length > 0 ? 1 : 0) +
+    (query.categories.length > 0 ? 1 : 0) +
     (query.favorite !== "any" ? 1 : 0) +
     (query.installed !== "any" ? 1 : 0) +
     (query.played !== "any" ? 1 : 0) +
@@ -76,6 +90,7 @@ export function clearedFilters(query: GameQuery): GameQuery {
   return {
     ...query,
     sources: [],
+    categories: [],
     favorite: "any",
     installed: "any",
     played: "any",
@@ -95,6 +110,13 @@ export function matchesFilters(query: GameQuery, game: Game): boolean {
   if (query.hidden === "visible" && game.hidden) return false;
   if (query.hidden === "hidden" && !game.hidden) return false;
   if (query.played !== "any" && hasPlayed(game) !== (query.played === "played")) return false;
+  if (
+    query.categories.length > 0 &&
+    !query.categories.some((id) =>
+      id === NO_CATEGORY ? game.categories.length === 0 : game.categories.includes(id),
+    )
+  )
+    return false;
   return true;
 }
 

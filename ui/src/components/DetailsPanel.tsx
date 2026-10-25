@@ -29,6 +29,7 @@ import {
 } from "../lib/actions";
 import { formatDate, formatPlaytime, formatRelativeDate, formatReleaseDate } from "../lib/format";
 import { store } from "../lib/store";
+import { CategoryEditor } from "./CategoryEditor";
 import { Cover } from "./Cover";
 import { LaunchOptionsForm } from "./LaunchOptionsForm";
 import { SourceIcon, sourceName } from "./SourceIcon";
@@ -362,6 +363,8 @@ export function DetailsPanel(props: DetailsPanelProps) {
             </Show>
           </button>
         </div>
+
+        <CategoryEditor game={props.game} />
 
         <div class="details__row">
           <button

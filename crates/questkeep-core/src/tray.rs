@@ -240,6 +240,7 @@ mod tests {
             developers: vec![],
             publishers: vec![],
             genres: vec![],
+            categories: vec![],
             metadata_updated_at: None,
             extra: serde_json::Value::Null,
         };

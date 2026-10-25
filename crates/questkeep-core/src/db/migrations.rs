@@ -87,6 +87,26 @@ const MIGRATIONS: &[&str] = &[
         finished_at TEXT NOT NULL
     );
     "#,
+    // 4: categories (n:m with games) and grouping in views. `source` is the store whose import
+    // created a category; `imported_from` is the store that set a link (NULL: the user did), so a
+    // rescan only replaces its own links.
+    r#"
+    CREATE TABLE categories (
+        id     TEXT PRIMARY KEY NOT NULL,
+        name   TEXT NOT NULL,
+        source TEXT
+    );
+    CREATE UNIQUE INDEX categories_name ON categories (name COLLATE NOCASE);
+    CREATE TABLE game_categories (
+        game_id       TEXT NOT NULL REFERENCES games (id) ON DELETE CASCADE,
+        category_id   TEXT NOT NULL REFERENCES categories (id) ON DELETE CASCADE,
+        imported_from TEXT,
+        PRIMARY KEY (game_id, category_id)
+    );
+    CREATE INDEX game_categories_category ON game_categories (category_id);
+
+    ALTER TABLE views ADD COLUMN group_by TEXT NOT NULL DEFAULT 'none';
+    "#,
 ];
 
 /// Latest schema version this build knows.

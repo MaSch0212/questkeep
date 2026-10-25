@@ -9,6 +9,7 @@
 //! `scan_owned` and `owned_for_service`.
 //! Covers come from Lutris' local `coverart`/`banners` caches, never from the network.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
@@ -338,6 +339,46 @@ fn read_service_games(conn: &Connection) -> rusqlite::Result<Vec<ServiceGame>> {
     Ok(out)
 }
 
+/// Lutris' own categories, which are not the user's.
+const INTERNAL_CATEGORIES: [&str; 2] = ["favorite", ".hidden"];
+
+/// Category names per game slug (`categories(id, name)`, `games_categories(game_id,
+/// category_id)`); databases without the tables (old Lutris) give an empty map. Games of the
+/// `steam` runner are left out because the Steam provider owns them.
+fn read_categories(conn: &Connection) -> rusqlite::Result<Vec<(String, String)>> {
+    let tables: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' \
+         AND name IN ('categories', 'games_categories')",
+        [],
+        |r| r.get(0),
+    )?;
+    if tables < 2 {
+        return Ok(Vec::new());
+    }
+    let mut stmt = conn.prepare(
+        "SELECT g.slug, g.runner, c.name FROM games_categories gc \
+         JOIN games g ON g.id = gc.game_id JOIN categories c ON c.id = gc.category_id \
+         ORDER BY gc.rowid",
+    )?;
+    let rows = stmt.query_map([], |r| {
+        Ok((
+            r.get::<_, Value>(0)?,
+            r.get::<_, Value>(1)?,
+            r.get::<_, Value>(2)?,
+        ))
+    })?;
+    let mut out = Vec::new();
+    for (slug, runner, name) in rows.flatten() {
+        if text(runner).is_some_and(|r| r.eq_ignore_ascii_case("steam")) {
+            continue;
+        }
+        if let (Some(slug), Some(name)) = (text(slug), text(name)) {
+            out.push((slug, name));
+        }
+    }
+    Ok(out)
+}
+
 /// Runs `read` on `pga.db`; falls back to a temporary copy when the original can't be read (for
 /// example because Lutris holds a lock).
 fn read_db<T>(
@@ -441,6 +482,41 @@ impl LibraryProvider for LutrisProvider {
     fn background_candidates(&self, source_game_id: &str) -> Vec<ImageCandidate> {
         self.image_candidates("banners", source_game_id)
     }
+
+    /// Lutris categories per game slug, without Lutris' internal `favorite` and `.hidden`.
+    /// `None` when no database can be read.
+    fn scan_categories(
+        &self,
+        _config: &serde_json::Value,
+    ) -> Result<Option<HashMap<String, Vec<String>>>, ProviderError> {
+        if !self.enabled {
+            return Ok(None);
+        }
+        let mut out: Option<HashMap<String, Vec<String>>> = None;
+        for db in self.db_files() {
+            let rows = match read_db(&db, read_categories) {
+                Ok(rows) => rows,
+                Err(err) => {
+                    tracing::warn!(%err, "could not read Lutris categories");
+                    continue;
+                }
+            };
+            let map = out.get_or_insert_with(HashMap::new);
+            for (slug, name) in rows {
+                if INTERNAL_CATEGORIES
+                    .iter()
+                    .any(|c| name.eq_ignore_ascii_case(c))
+                {
+                    continue;
+                }
+                let names = map.entry(slug).or_default();
+                if !names.contains(&name) {
+                    names.push(name);
+                }
+            }
+        }
+        Ok(out)
+    }
 }
 
 #[cfg(test)]
@@ -497,6 +573,36 @@ mod tests {
             ],
         )
         .unwrap();
+    }
+
+    #[test]
+    fn categories_skip_internal_ones_and_need_a_database() {
+        let env = Env::new();
+        let none = serde_json::Value::Null;
+        assert_eq!(env.provider().scan_categories(&none).unwrap(), None);
+        let conn = env.db();
+        insert(&conn, "doom", "Doom", "linux", None, 1);
+        insert(&conn, "halo", "Halo", "wine", None, 0);
+        insert(&conn, "hl", "Half-Life", "steam", None, 1);
+        // Without the category tables (old Lutris) the set is empty, not missing.
+        assert_eq!(
+            env.provider().scan_categories(&none).unwrap(),
+            Some(HashMap::new())
+        );
+        conn.execute_batch(
+            "CREATE TABLE categories (id INTEGER PRIMARY KEY, name TEXT);
+             CREATE TABLE games_categories (game_id INTEGER, category_id INTEGER);
+             INSERT INTO categories VALUES (1, 'favorite'), (2, '.hidden'), (3, 'Shooters'), (4, 'Retro');
+             INSERT INTO games_categories VALUES (1, 1), (1, 3), (1, 4), (2, 2), (2, 3), (3, 3);",
+        )
+        .unwrap();
+        drop(conn);
+        let map = env.provider().scan_categories(&none).unwrap().unwrap();
+        assert_eq!(map["doom"], vec!["Shooters", "Retro"]);
+        assert_eq!(map["halo"], vec!["Shooters"]);
+        assert_eq!(map.len(), 2, "steam runner games are left to Steam");
+        let disabled = LutrisProvider::default();
+        assert_eq!(disabled.scan_categories(&none).unwrap(), None);
     }
 
     #[test]

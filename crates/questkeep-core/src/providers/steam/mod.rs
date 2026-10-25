@@ -5,12 +5,14 @@
 // Logic derived from Playnite (MIT), see THIRD_PARTY_NOTICES.md
 
 mod account;
+mod categories;
 mod icon;
 mod local;
 mod scan;
 pub mod vdf;
 mod web;
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -207,6 +209,17 @@ impl LibraryProvider for SteamProvider {
             .map(ImageCandidate::Url),
         );
         candidates
+    }
+
+    /// The user's Steam collections (or, for old Steam, tags) of the first root that has any.
+    fn scan_categories(
+        &self,
+        _config: &serde_json::Value,
+    ) -> Result<Option<HashMap<String, Vec<String>>>, ProviderError> {
+        Ok(self
+            .roots
+            .iter()
+            .find_map(|root| categories::read_root(root)))
     }
 }
 

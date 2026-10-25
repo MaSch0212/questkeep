@@ -25,6 +25,8 @@ pub enum CoreEvent {
     GameRemoved {
         id: Uuid,
     },
+    /// Categories were created, renamed, deleted or imported.
+    CategoriesChanged,
     /// A full sync is about to scan these providers, one after another.
     ScansQueued {
         providers: Vec<String>,

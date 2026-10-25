@@ -9,7 +9,8 @@ use uuid::Uuid;
 use super::Database;
 use crate::error::{CoreError, Result};
 use crate::model::{
-    GameQuery, LibraryView, NewView, SectionOrder, SyncTimes, ViewLayout, ViewSection, ViewUpdate,
+    GameQuery, GroupBy, LibraryView, NewView, SectionOrder, SyncTimes, ViewLayout, ViewSection,
+    ViewUpdate,
 };
 
 /// Key of the "sync all" entry in `sync_times`; provider ids never contain a colon.
@@ -28,6 +29,22 @@ fn parse_layout(text: &str) -> ViewLayout {
         "list" => ViewLayout::List,
         "details" => ViewLayout::Details,
         _ => ViewLayout::Grid,
+    }
+}
+
+fn group_text(group: GroupBy) -> &'static str {
+    match group {
+        GroupBy::None => "none",
+        GroupBy::Category => "category",
+        GroupBy::Source => "source",
+    }
+}
+
+fn parse_group(text: &str) -> GroupBy {
+    match text {
+        "category" => GroupBy::Category,
+        "source" => GroupBy::Source,
+        _ => GroupBy::None,
     }
 }
 
@@ -53,11 +70,12 @@ fn not_found(what: &str) -> CoreError {
     CoreError::Invalid(format!("That {what} no longer exists."))
 }
 
-const VIEW_COLUMNS: &str = "id, name, icon, query, layout";
+const VIEW_COLUMNS: &str = "id, name, icon, query, layout, group_by";
 
 fn row_to_view(row: &Row<'_>) -> rusqlite::Result<LibraryView> {
     let query: String = row.get(3)?;
     let layout: String = row.get(4)?;
+    let group: String = row.get(5)?;
     Ok(LibraryView {
         id: row.get(0)?,
         name: row.get(1)?,
@@ -68,6 +86,7 @@ fn row_to_view(row: &Row<'_>) -> rusqlite::Result<LibraryView> {
             GameQuery::default()
         }),
         layout: parse_layout(&layout),
+        group: parse_group(&group),
     })
 }
 
@@ -127,17 +146,18 @@ impl Database {
                 return Err(not_found("section"));
             }
             tx.execute(
-                "INSERT INTO views (id, section_id, position, name, icon, query, layout)
+                "INSERT INTO views (id, section_id, position, name, icon, query, layout, group_by)
                  VALUES (?1, ?2,
                      (SELECT COALESCE(MAX(position) + 1, 0) FROM views WHERE section_id = ?2),
-                     ?3, ?4, ?5, ?6)",
+                     ?3, ?4, ?5, ?6, ?7)",
                 params![
                     id,
                     view.section_id,
                     name,
                     view.icon,
                     query_json(&view.query)?,
-                    layout_text(view.layout)
+                    layout_text(view.layout),
+                    group_text(view.group)
                 ],
             )?;
             tx.commit()?;
@@ -154,9 +174,18 @@ impl Database {
         let icon = update.icon.clone().unwrap_or(current.icon);
         let query = update.query.as_ref().unwrap_or(&current.query);
         let layout = update.layout.unwrap_or(current.layout);
+        let group = update.group.unwrap_or(current.group);
         self.conn().execute(
-            "UPDATE views SET name = ?2, icon = ?3, query = ?4, layout = ?5 WHERE id = ?1",
-            params![id, name, icon, query_json(query)?, layout_text(layout)],
+            "UPDATE views SET name = ?2, icon = ?3, query = ?4, layout = ?5, group_by = ?6 \
+             WHERE id = ?1",
+            params![
+                id,
+                name,
+                icon,
+                query_json(query)?,
+                layout_text(layout),
+                group_text(group)
+            ],
         )?;
         self.get_view(id)
     }
@@ -180,8 +209,9 @@ impl Database {
                 params![section, position],
             )?;
             tx.execute(
-                "INSERT INTO views (id, section_id, position, name, icon, query, layout)
-                 SELECT ?2, section_id, position + 1, name || ' (copy)', icon, query, layout
+                "INSERT INTO views (id, section_id, position, name, icon, query, layout, group_by)
+                 SELECT ?2, section_id, position + 1, name || ' (copy)', icon, query, layout,
+                     group_by
                  FROM views WHERE id = ?1",
                 params![id, copy],
             )?;
@@ -348,6 +378,7 @@ mod tests {
             icon: "bookmark".into(),
             query: GameQuery::default(),
             layout: ViewLayout::List,
+            group: GroupBy::Category,
         }
     }
 
@@ -404,6 +435,23 @@ mod tests {
         assert_eq!(updated.icon, "star");
         assert_eq!(updated.name, "Backlog");
         assert_eq!(updated.layout, ViewLayout::List);
+        assert_eq!(updated.group, GroupBy::Category);
+
+        let ungrouped = db
+            .update_view(
+                &created.id,
+                &ViewUpdate {
+                    group: Some(GroupBy::Source),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        assert_eq!(ungrouped.group, GroupBy::Source);
+        assert_eq!(
+            db.duplicate_view(&created.id).unwrap().group,
+            GroupBy::Source
+        );
+        assert_eq!(db.get_view("all").unwrap().group, GroupBy::None);
     }
 
     #[test]

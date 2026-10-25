@@ -83,7 +83,16 @@ function mockViews(layout: ViewLayout = "grid") {
     {
       id: "library",
       name: "Library",
-      views: [{ id: "all", name: "All games", icon: "library", query: defaultQuery(), layout }],
+      views: [
+        {
+          id: "all",
+          name: "All games",
+          icon: "library",
+          query: defaultQuery(),
+          layout,
+          group: "none",
+        },
+      ],
     },
   ]);
 }

@@ -1,11 +1,11 @@
-import { For, onMount, type JSX } from "solid-js";
+import { For, onMount, Show, type JSX } from "solid-js";
 import type { GameQuery } from "../bindings/GameQuery";
 import type { HiddenFilter } from "../bindings/HiddenFilter";
 import type { PlayedFilter } from "../bindings/PlayedFilter";
 import type { TriState } from "../bindings/TriState";
 import { toggleSource } from "../lib/query";
 import { store } from "../lib/store";
-import { clearedFilters } from "../lib/views";
+import { clearedFilters, NO_CATEGORY } from "../lib/views";
 import { Popover, type PopoverAnchor } from "./Popover";
 import { SourceIcon } from "./SourceIcon";
 
@@ -94,6 +94,34 @@ export function FilterPanel(props: {
             }}
           </For>
         </div>
+        <span class="filters__label" id="filter-categories">
+          Category
+        </span>
+        <Show
+          when={store.categories().length > 0}
+          fallback={<p class="filters__hint">No categories yet. Add them on a game's page.</p>}
+        >
+          <div class="filters__stores" role="group" aria-labelledby="filter-categories">
+            <For each={[...store.categories(), { id: NO_CATEGORY, name: "No category" }]}>
+              {(category) => {
+                const on = () => query().categories.includes(category.id);
+                return (
+                  <button
+                    type="button"
+                    class="chip"
+                    classList={{ "chip--on": on(), "chip--none": category.id === NO_CATEGORY }}
+                    aria-pressed={on()}
+                    onClick={() =>
+                      set({ categories: toggleSource(query().categories, category.id) })
+                    }
+                  >
+                    {category.name}
+                  </button>
+                );
+              }}
+            </For>
+          </div>
+        </Show>
         <Choice
           label="Installed"
           value={query().installed}

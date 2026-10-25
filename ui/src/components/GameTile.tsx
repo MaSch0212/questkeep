@@ -15,6 +15,8 @@ interface GameTileProps {
   open?: boolean;
   onSelect: (id: string) => void;
   onLaunch: (id: string) => void;
+  /** Unique within the grid when the same game shows in several groups; the game id by default. */
+  domKey?: string;
 }
 
 export function tileDomId(id: string): string {
@@ -27,7 +29,7 @@ export function GameTile(props: GameTileProps) {
   return (
     <div
       role="gridcell"
-      id={tileDomId(props.game.id)}
+      id={tileDomId(props.domKey ?? props.game.id)}
       class="tile"
       classList={{
         "tile--selected": props.selected,

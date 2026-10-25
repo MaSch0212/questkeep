@@ -9,13 +9,16 @@ use uuid::Uuid;
 use super::Database;
 use crate::error::{CoreError, Result};
 use crate::model::{
-    Game, GameMetadata, GameQuery, GameUpdate, HiddenFilter, ImportedGame, PlayAction,
+    Game, GameMetadata, GameQuery, GameUpdate, HiddenFilter, ImportedGame, NO_CATEGORY, PlayAction,
     PlayedFilter, ScanSummary, SortField, TriState, sorting_name,
 };
 
 const COLUMNS: &str = "id, name, sorting_name, source, source_game_id, installed, install_dir, \
     play_action, playtime_seconds, play_count, last_played, date_added, favorite, hidden, \
-    cover_path, icon_path, background_path, description, release_date, developers, publishers,     genres, metadata_updated_at, extra";
+    cover_path, icon_path, background_path, description, release_date, developers, publishers, \
+    genres, metadata_updated_at, extra, \
+    (SELECT group_concat(category_id, char(31)) FROM game_categories WHERE game_id = games.id) \
+    AS category_ids";
 
 /// `extra` key set when the user renamed a store game, so re-scans keep their name.
 const USER_RENAMED: &str = "userRenamed";
@@ -83,6 +86,26 @@ fn query_filter(query: &GameQuery) -> (String, Vec<Box<dyn ToSql>>) {
         PlayedFilter::Played => clauses.push("(playtime_seconds > 0 OR play_count > 0)".into()),
         PlayedFilter::Never => clauses.push("playtime_seconds = 0 AND play_count = 0".into()),
     }
+    if !query.categories.is_empty() {
+        let linked = "SELECT 1 FROM game_categories gc WHERE gc.game_id = games.id";
+        let mut any = Vec::new();
+        let mut placeholders = Vec::new();
+        for id in &query.categories {
+            if id == NO_CATEGORY {
+                any.push(format!("NOT EXISTS ({linked})"));
+            } else {
+                args.push(Box::new(id.clone()));
+                placeholders.push(format!("?{}", args.len()));
+            }
+        }
+        if !placeholders.is_empty() {
+            any.push(format!(
+                "EXISTS ({linked} AND gc.category_id IN ({}))",
+                placeholders.join(", ")
+            ));
+        }
+        clauses.push(format!("({})", any.join(" OR ")));
+    }
 
     let where_sql = if clauses.is_empty() {
         String::new()
@@ -123,6 +146,10 @@ fn row_to_game(row: &Row<'_>) -> rusqlite::Result<Game> {
         developers: string_list(row.get("developers")?),
         publishers: string_list(row.get("publishers")?),
         genres: string_list(row.get("genres")?),
+        categories: row
+            .get::<_, Option<String>>("category_ids")?
+            .map(|ids| ids.split('\u{1f}').map(str::to_string).collect())
+            .unwrap_or_default(),
         metadata_updated_at: row.get("metadata_updated_at")?,
         extra: serde_json::from_str(&extra).unwrap_or_else(|_| serde_json::json!({})),
     })

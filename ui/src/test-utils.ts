@@ -31,6 +31,7 @@ export function makeGame(overrides: Partial<Game> = {}): Game {
     developers: [],
     publishers: [],
     genres: [],
+    categories: [],
     metadataUpdatedAt: null,
     extra: {},
     ...overrides,

@@ -548,3 +548,14 @@ Short log of choices made while building. Newest at the bottom of each section.
   Settings) and a command bar that finds any game regardless of the open view. Last sync times are
   stored (`sync_times`) so the sync popup can show them after a restart. Stores open their own
   launcher through `LibraryProvider::launcher`.
+- **Categories are n:m** (`categories`, `game_categories`, migration 4). Each link records the
+  store that imported it (`imported_from`), so a store's sync replaces only its own links and never
+  touches the user's; a user removing an imported link sees it return on the next sync. Steam
+  collections (cloud-storage JSON, `sharedconfig.vdf` tags as fallback), GOG Galaxy tags and Lutris
+  categories are imported (`LibraryProvider::scan_categories`; `None` keeps the old links).
+  Renaming a category makes it the user's (no source, user links); a store still using the old name
+  creates it again. Categories a store created disappear with its last link.
+- **Grouping is part of a view** (None, Category, Store), saved with it and kept in drafts. A game
+  with several categories shows once per group; the keyboard cursor walks slots (game + group), not
+  games. Collapsed groups are remembered per view until the app closes. The filter value `:none`
+  means "No category".

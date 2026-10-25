@@ -17,7 +17,7 @@ pub mod steam;
 pub mod ubisoft;
 pub mod xbox;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -93,6 +93,18 @@ pub trait LibraryProvider: Send + Sync {
     /// uninstalled from Questkeep.
     fn uninstall_action(&self, _source_game_id: &str) -> Option<PlayAction> {
         None
+    }
+    /// The user's own grouping of games in the store (Steam collections, GOG Galaxy tags, Lutris
+    /// categories): store game id -> category names. Called after every scan with the same
+    /// `config` as [`scan_owned`](Self::scan_owned). `Ok(None)` (the default) means the store has
+    /// nothing like categories, or they couldn't be read this time; the library then leaves the
+    /// imported categories alone. `Ok(Some(map))` replaces this store's imported categories: games
+    /// missing from the map lose them. Categories the user assigned in Questkeep are never touched.
+    fn scan_categories(
+        &self,
+        _config: &serde_json::Value,
+    ) -> Result<Option<HashMap<String, Vec<String>>>, ProviderError> {
+        Ok(None)
     }
     /// Store metadata (description, genres, ...). Called from a background thread with at most
     /// one request in flight per provider; `Ok(None)` means the store has no data for this game.

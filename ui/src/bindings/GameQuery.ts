@@ -15,4 +15,9 @@ search: string | null, sort: SortField, descending: boolean,
 /**
  * Provider ids to include; empty means all.
  */
-sources: Array<string>, favorite: TriState, hidden: HiddenFilter, installed: TriState, played: PlayedFilter, };
+sources: Array<string>, favorite: TriState, hidden: HiddenFilter, installed: TriState, played: PlayedFilter, 
+/**
+ * Category ids; a game matches when it has any of them ([`NO_CATEGORY`](super::NO_CATEGORY)
+ * matches games without one). Empty means all.
+ */
+categories: Array<string>, };

@@ -11,6 +11,8 @@ interface GameRowCompactProps {
   /** This game is the one the page on the right shows. */
   selected: boolean;
   onSelect: (id: string) => void;
+  /** Unique within the list when the same game shows in several groups; the game id by default. */
+  domKey?: string;
 }
 
 /** One row of the narrow list in the details view: store icon, small cover, name. */
@@ -19,7 +21,7 @@ export function GameRowCompact(props: GameRowCompactProps) {
   return (
     <div
       role="option"
-      id={rowDomId(props.game.id)}
+      id={rowDomId(props.domKey ?? props.game.id)}
       class="compact-row"
       classList={{
         "compact-row--selected": props.selected,

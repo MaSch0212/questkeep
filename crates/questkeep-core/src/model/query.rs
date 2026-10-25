@@ -75,4 +75,7 @@ pub struct GameQuery {
     pub hidden: HiddenFilter,
     pub installed: TriState,
     pub played: PlayedFilter,
+    /// Category ids; a game matches when it has any of them ([`NO_CATEGORY`](super::NO_CATEGORY)
+    /// matches games without one). Empty means all.
+    pub categories: Vec<String>,
 }

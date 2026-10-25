@@ -8,6 +8,7 @@ export function defaultQuery(): GameQuery {
     sort: "name",
     descending: false,
     sources: [],
+    categories: [],
     favorite: "any",
     hidden: "visible",
     installed: "any",

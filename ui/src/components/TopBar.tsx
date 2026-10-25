@@ -2,11 +2,13 @@ import ArrowDownWideNarrow from "lucide-solid/icons/arrow-down-wide-narrow";
 import ArrowUpNarrowWide from "lucide-solid/icons/arrow-up-narrow-wide";
 import BookmarkPlus from "lucide-solid/icons/bookmark-plus";
 import Funnel from "lucide-solid/icons/funnel";
+import Group from "lucide-solid/icons/group";
 import LayoutGrid from "lucide-solid/icons/layout-grid";
 import List from "lucide-solid/icons/list";
 import PanelLeft from "lucide-solid/icons/panel-left";
 import Undo2 from "lucide-solid/icons/undo-2";
 import { createSignal, For, Show } from "solid-js";
+import type { GroupBy } from "../bindings/GroupBy";
 import type { SortField } from "../bindings/SortField";
 import { store } from "../lib/store";
 import { activeFilterCount } from "../lib/views";
@@ -30,12 +32,22 @@ const LAYOUTS: { id: ViewMode; label: string; icon: typeof List }[] = [
   { id: "details", label: "Details view", icon: PanelLeft },
 ];
 
-type Open = "filters" | "sort" | "save" | null;
+const GROUPS: { id: GroupBy; label: string }[] = [
+  { id: "none", label: "Don't group" },
+  { id: "category", label: "Category" },
+  { id: "source", label: "Store" },
+];
+
+type Open = "filters" | "sort" | "group" | "save" | null;
 
 const filters = () => activeFilterCount(store.query());
 const sortName = () => SORTS.find((s) => s.id === store.query().sort)?.label ?? "";
 const sortLabel = () =>
   `Sort: ${sortName()}, ${store.query().descending ? "descending" : "ascending"}`;
+const groupLabel = () => {
+  const group = GROUPS.find((g) => g.id === store.groupBy());
+  return store.groupBy() === "none" ? "Group by" : `Grouped by ${group?.label.toLowerCase()}`;
+};
 const viewName = () => store.activeView()?.name ?? "view";
 const changed = () => {
   const view = store.activeView();
@@ -113,6 +125,22 @@ export function TopBar(props: { keywordRef?: (handle: KeywordFilterHandle) => vo
           <ArrowDownWideNarrow class="icon" aria-hidden="true" />
         </Show>
       </button>
+      <button
+        ref={(el) => (buttons.group = el)}
+        type="button"
+        class="tool-btn"
+        classList={{
+          "tool-btn--open": open() === "group",
+          "tool-btn--on": store.groupBy() !== "none",
+        }}
+        aria-label={groupLabel()}
+        title={groupLabel()}
+        aria-haspopup="menu"
+        aria-expanded={open() === "group"}
+        onClick={() => toggle("group", "start")}
+      >
+        <Group class="icon" aria-hidden="true" />
+      </button>
       <Show when={changed()}>
         <div class="view-actions" role="group" aria-label={`Unsaved changes to ${viewName()}`}>
           <span class="view-actions__label">
@@ -168,6 +196,24 @@ export function TopBar(props: { keywordRef?: (handle: KeywordFilterHandle) => vo
       </div>
       <Show when={open() === "filters" && anchor()}>
         {(at) => <FilterPanel anchor={at()} onClose={close} inside={() => [buttons.filters]} />}
+      </Show>
+      <Show when={open() === "group" && anchor()}>
+        {(at) => (
+          <Menu
+            anchor={at()}
+            label="Group by"
+            inside={() => [buttons.group]}
+            onClose={close}
+            entries={[
+              { kind: "heading", label: "Group by" },
+              ...GROUPS.map((group) => ({
+                label: group.label,
+                checked: store.groupBy() === group.id,
+                onSelect: () => store.setGroupBy(group.id),
+              })),
+            ]}
+          />
+        )}
       </Show>
       <Show when={open() === "sort" && anchor()}>
         {(at) => (

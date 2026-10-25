@@ -9,10 +9,21 @@ import {
   Show,
 } from "solid-js";
 import { activateGame } from "../lib/actions";
-import { isNavKey, nextIndex } from "../lib/gridNav";
+import { isNavKey } from "../lib/gridNav";
+import {
+  asGamesRow,
+  asHeaderRow,
+  layoutGroups,
+  navigateSlots,
+  rowSlots,
+  scrollTopForRow,
+  slotKey,
+  visibleRowRange,
+} from "../lib/grouping";
+import { createSlotCursor } from "../lib/slotCursor";
 import { store } from "../lib/store";
-import { rowRange, rowTop, scrollTopForRow, visibleRows, type RowLayout } from "../lib/virtualRows";
 import { GameTile, tileDomId } from "./GameTile";
+import { GroupHeader } from "./GroupHeader";
 import { Logo } from "./Logo";
 
 const FALLBACK_WIDTH = 1000;
@@ -25,6 +36,7 @@ interface Metrics {
   padding: number;
   titleHeight: number;
   ratioHeight: number;
+  headerHeight: number;
 }
 
 const DEFAULT_METRICS: Metrics = {
@@ -33,6 +45,7 @@ const DEFAULT_METRICS: Metrics = {
   padding: 20,
   titleHeight: 36,
   ratioHeight: 1.5,
+  headerHeight: 40,
 };
 
 function readMetrics(element: Element): Metrics {
@@ -45,12 +58,8 @@ function readMetrics(element: Element): Metrics {
     padding: read("--qk-grid-padding", DEFAULT_METRICS.padding),
     titleHeight: read("--qk-tile-title-height", DEFAULT_METRICS.titleHeight),
     ratioHeight: read("--qk-tile-ratio-height", DEFAULT_METRICS.ratioHeight),
+    headerHeight: read("--qk-group-header-height", DEFAULT_METRICS.headerHeight),
   };
-}
-
-function activeDescendant(): string | undefined {
-  const game = store.selectedGame();
-  return game && store.selectedIndex() >= 0 ? tileDomId(game.id) : undefined;
 }
 
 function activateSelected() {
@@ -59,8 +68,9 @@ function activateSelected() {
 }
 
 /**
- * Cover grid virtualized by rows. Rows have a fixed height derived from the container width, so
- * the visible window is plain arithmetic (see `lib/virtualRows.ts`). One focusable region with
+ * Cover grid virtualized by rows. Rows have a fixed height derived from the container width
+ * (group headers their own), so the visible window is plain arithmetic (see `lib/grouping.ts`).
+ * In a grouped view a game shows once per group it belongs to. One focusable region with
  * `aria-activedescendant` for keyboard navigation.
  */
 export function GameGrid() {
@@ -82,16 +92,26 @@ export function GameGrid() {
     const tileWidth = (usable - m.gap * (columns() - 1)) / columns();
     return Math.round(tileWidth * m.ratioHeight + m.titleHeight + m.gap);
   });
-  const layout = createMemo<RowLayout>(() => ({
-    rowHeight: rowHeight(),
-    rowCount: Math.ceil(store.games().length / columns()),
-    paddingTop: metrics().padding,
-  }));
-  const totalHeight = () => layout().rowCount * layout().rowHeight + metrics().padding * 2;
-  // Primitive row indices: <For> keeps each row's DOM while it stays in the window.
-  const rows = createMemo(() =>
-    rowRange(visibleRows(scrollTop(), height(), layout(), OVERSCAN_ROWS)),
+  const layout = createMemo(() =>
+    layoutGroups(store.groups(), {
+      columns: columns(),
+      rowHeight: rowHeight(),
+      headerHeight: metrics().headerHeight,
+      padding: metrics().padding,
+      headers: store.groupBy() !== "none",
+      collapsed: store.collapsedGroups(),
+    }),
   );
+  const { cursor, moveTo } = createSlotCursor(layout);
+  // Primitive row indices: <For> keeps each row's DOM while it stays in the window.
+  const rows = createMemo(() => {
+    const { start, end } = visibleRowRange(layout(), scrollTop(), height(), OVERSCAN_ROWS);
+    return Array.from({ length: end - start }, (_, i) => start + i);
+  });
+  const activeDescendant = () => {
+    const slot = layout().slots[cursor()];
+    return slot ? tileDomId(slotKey(slot)) : undefined;
+  };
 
   onMount(() => {
     const element = scroller;
@@ -128,14 +148,16 @@ export function GameGrid() {
   // Keep the selected tile in view (keyboard navigation, selection after search).
   createEffect(
     on(
-      () => [store.selectedIndex(), columns(), rowHeight()] as const,
-      ([index, cols]) => {
-        if (index < 0 || !scroller) return;
+      () => [cursor(), layout()] as const,
+      ([slotIndex, current]) => {
+        const slot = current.slots[slotIndex];
+        if (!slot || !scroller) return;
         const target = scrollTopForRow(
-          Math.floor(index / cols),
+          current,
+          slot.row,
           scroller.scrollTop,
           height(),
-          layout(),
+          metrics().padding,
         );
         if (target !== scroller.scrollTop) {
           scroller.scrollTop = target;
@@ -160,19 +182,11 @@ export function GameGrid() {
     ),
   );
 
-  const rowGames = (row: number) => {
-    const cols = columns();
-    return store.games().slice(row * cols, (row + 1) * cols);
-  };
-
   function onKeyDown(event: KeyboardEvent) {
     if (isNavKey(event.key) && !event.altKey && !event.ctrlKey && !event.metaKey) {
       event.preventDefault();
-      const games = store.games();
       const pageRows = Math.max(1, Math.floor(height() / rowHeight()));
-      const next = nextIndex(store.selectedIndex(), event.key, columns(), games.length, pageRows);
-      const game = games[next];
-      if (game) store.selectGame(game.id);
+      moveTo(navigateSlots(layout(), cursor(), event.key, pageRows), store.selectGame);
       return;
     }
     if (event.key === "Enter") {
@@ -185,8 +199,8 @@ export function GameGrid() {
     }
   }
 
-  function onSelect(id: string) {
-    store.selectAndOpen(id);
+  function onSelect(slot: number) {
+    moveTo(slot, store.selectAndOpen);
     scroller?.focus({ preventScroll: true });
   }
 
@@ -197,37 +211,67 @@ export function GameGrid() {
       role="grid"
       tabindex="0"
       aria-label="Games"
-      aria-rowcount={layout().rowCount}
+      aria-rowcount={layout().rows.length}
       aria-colcount={columns()}
       aria-activedescendant={activeDescendant()}
       onKeyDown={onKeyDown}
     >
-      <div class="grid__canvas" style={{ height: `${totalHeight()}px` }}>
+      <div class="grid__canvas" style={{ height: `${layout().height}px` }}>
         <For each={rows()}>
-          {(row) => (
-            <div
-              role="row"
-              class="grid__row"
-              aria-rowindex={row + 1}
-              style={{
-                transform: `translateY(${rowTop(row, layout())}px)`,
-                height: `${rowHeight()}px`,
-                "--qk-columns": columns(),
-              }}
-            >
-              <For each={rowGames(row)}>
-                {(game) => (
-                  <GameTile
-                    game={game}
-                    selected={game.id === store.selectedId()}
-                    open={store.detailsOpen() && game.id === store.selectedId()}
-                    onSelect={onSelect}
-                    onLaunch={(id) => void activateGame(id)}
-                  />
+          {(index) => {
+            const row = () => layout().rows[index];
+            return (
+              <Show when={row()}>
+                {(current) => (
+                  <div
+                    role="row"
+                    class="grid__row"
+                    classList={{ "grid__row--header": current().kind === "header" }}
+                    aria-rowindex={index + 1}
+                    style={{
+                      transform: `translateY(${current().top}px)`,
+                      height: `${current().height}px`,
+                      "--qk-columns": columns(),
+                    }}
+                  >
+                    <Show when={asHeaderRow(current())}>
+                      {(header) => (
+                        <div role="rowheader" class="grid__group">
+                          <GroupHeader
+                            group={header().group}
+                            collapsed={header().collapsed}
+                            onToggle={() => store.toggleGroup(header().group.key)}
+                          />
+                        </div>
+                      )}
+                    </Show>
+                    <Show when={asGamesRow(current())}>
+                      {(games) => (
+                        <For each={rowSlots(games())}>
+                          {(slotIndex) => (
+                            <Show when={layout().slots[slotIndex]}>
+                              {(slot) => (
+                                <GameTile
+                                  game={slot().game}
+                                  domKey={slotKey(slot())}
+                                  selected={slot().game.id === store.selectedId()}
+                                  open={
+                                    store.detailsOpen() && slot().game.id === store.selectedId()
+                                  }
+                                  onSelect={() => onSelect(slotIndex)}
+                                  onLaunch={(id) => void activateGame(id)}
+                                />
+                              )}
+                            </Show>
+                          )}
+                        </For>
+                      )}
+                    </Show>
+                  </div>
                 )}
-              </For>
-            </div>
-          )}
+              </Show>
+            );
+          }}
         </For>
       </div>
       <Show when={store.games().length === 0 && !store.loading()}>

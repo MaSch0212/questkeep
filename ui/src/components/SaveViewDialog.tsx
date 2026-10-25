@@ -1,6 +1,6 @@
 import { createSignal, For, Show } from "solid-js";
 import { store } from "../lib/store";
-import { activeFilterCount } from "../lib/views";
+import { activeFilterCount, NO_CATEGORY } from "../lib/views";
 import { IconPicker } from "./IconPicker";
 import { Modal } from "./Modal";
 import type { PopoverAnchor } from "./Popover";
@@ -15,12 +15,21 @@ const SORT_NAMES: Record<string, string> = {
 };
 
 const LAYOUT_NAMES: Record<string, string> = { grid: "Grid", list: "List", details: "Details" };
+const GROUP_NAMES: Record<string, string> = { category: "category", source: "store" };
+
+function categoryName(id: string): string {
+  if (id === NO_CATEGORY) return "No category";
+  return store.categories().find((c) => c.id === id)?.name ?? "Deleted category";
+}
 
 /** "Store: Steam, GOG · Installed · Never played", or "None". */
 function filterSummary(): string {
   const q = store.query();
   const parts: string[] = [];
   if (q.sources.length > 0) parts.push(`Store: ${q.sources.map(sourceName).join(", ")}`);
+  if (q.categories.length > 0) {
+    parts.push(`Category: ${q.categories.map(categoryName).join(", ")}`);
+  }
   if (q.installed !== "any") parts.push(q.installed === "yes" ? "Installed" : "Not installed");
   if (q.favorite !== "any") parts.push(q.favorite === "yes" ? "Favorites" : "Not favorites");
   if (q.played !== "any") parts.push(q.played === "played" ? "Played" : "Never played");
@@ -109,7 +118,10 @@ export function SaveViewDialog(props: { onClose: () => void }) {
             {store.query().descending ? "descending" : "ascending"}
           </dd>
           <dt>Layout</dt>
-          <dd>{LAYOUT_NAMES[store.viewMode()]}</dd>
+          <dd>
+            {LAYOUT_NAMES[store.viewMode()]}
+            {store.groupBy() === "none" ? "" : `, grouped by ${GROUP_NAMES[store.groupBy()]}`}
+          </dd>
         </dl>
         <div class="form__actions">
           <button type="button" class="btn" onClick={props.onClose}>

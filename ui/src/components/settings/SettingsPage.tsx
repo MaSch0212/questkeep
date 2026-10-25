@@ -4,6 +4,7 @@ import { store } from "../../lib/store";
 import { AboutSection } from "./AboutSection";
 import { AccountsSection } from "./AccountsSection";
 import { ArtworkSection } from "./ArtworkSection";
+import { CategoriesSection } from "./CategoriesSection";
 import { DeveloperSection } from "./DeveloperSection";
 import { GeneralSection } from "./GeneralSection";
 import { MetadataSection } from "./MetadataSection";
@@ -22,6 +23,7 @@ interface SectionDef {
 const SECTIONS: SectionDef[] = [
   { id: "general", title: "General", component: GeneralSection },
   { id: "stores", title: "Stores and accounts", component: AccountsSection },
+  { id: "categories", title: "Categories", component: CategoriesSection },
   { id: "artwork", title: "Artwork", component: ArtworkSection },
   { id: "metadata", title: "Metadata", component: MetadataSection },
   {

@@ -14,6 +14,18 @@ pub enum ViewLayout {
     Details,
 }
 
+/// How a view splits its games into groups. A game with several categories appears in each of
+/// their groups.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum GroupBy {
+    #[default]
+    None,
+    Category,
+    Source,
+}
+
 /// A saved view of the library: filters, sort order and layout under a name.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -26,6 +38,7 @@ pub struct LibraryView {
     /// Filters and sort order. `search` is always `None`: the keyword filter is never saved.
     pub query: GameQuery,
     pub layout: ViewLayout,
+    pub group: GroupBy,
 }
 
 /// A named group of views in the sidebar, in display order.
@@ -48,6 +61,8 @@ pub struct NewView {
     pub icon: String,
     pub query: GameQuery,
     pub layout: ViewLayout,
+    #[serde(default)]
+    pub group: GroupBy,
 }
 
 /// Fields of a view to change; `None` keeps the current value.
@@ -63,6 +78,8 @@ pub struct ViewUpdate {
     pub query: Option<GameQuery>,
     #[ts(optional)]
     pub layout: Option<ViewLayout>,
+    #[ts(optional)]
+    pub group: Option<GroupBy>,
 }
 
 /// The order of one section and its views, as the sidebar shows them after a drag.

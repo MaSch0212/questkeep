@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { AccountStatus } from "../bindings/AccountStatus";
 import type { AppInfo } from "../bindings/AppInfo";
+import type { Category } from "../bindings/Category";
 import type { Game } from "../bindings/Game";
 import type { GameQuery } from "../bindings/GameQuery";
 import type { GameUpdate } from "../bindings/GameUpdate";
@@ -34,6 +35,15 @@ export const renameViewSection = (id: string, name: string) =>
 export const deleteViewSection = (id: string) => invoke<void>("delete_view_section", { id });
 export const arrangeViews = (order: SectionOrder[]) => invoke<void>("arrange_views", { order });
 export const syncTimes = () => invoke<SyncTimes>("sync_times");
+export const listCategories = () => invoke<Category[]>("list_categories");
+/** Creates a category, or returns the existing one with that name. */
+export const createCategory = (name: string) => invoke<Category>("create_category", { name });
+export const renameCategory = (id: string, name: string) =>
+  invoke<Category>("rename_category", { id, name });
+export const deleteCategory = (id: string) => invoke<void>("delete_category", { id });
+/** Gives a game exactly these categories; returns the updated game. */
+export const setGameCategories = (id: string, categoryIds: string[]) =>
+  invoke<Game>("set_game_categories", { id, categoryIds });
 /** Ids of the providers whose store launcher is installed. */
 export const listLaunchers = () => invoke<string[]>("list_launchers");
 export const openLauncher = (providerId: string) => invoke<void>("open_launcher", { providerId });

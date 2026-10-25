@@ -242,6 +242,24 @@ impl LibraryProvider for GogProvider {
         self.account.is_some() || matches!(self.installs, Installs::Heroic(_))
     }
 
+    /// Galaxy's user tags, keyed by GOG product id. `None` without Galaxy or when its database
+    /// can't be read.
+    fn scan_categories(
+        &self,
+        _config: &serde_json::Value,
+    ) -> Result<Option<HashMap<String, Vec<String>>>, ProviderError> {
+        let Some(path) = &self.galaxy_db else {
+            return Ok(None);
+        };
+        match galaxy_db::read_tags(path) {
+            Ok(tags) => Ok(Some(tags)),
+            Err(err) => {
+                tracing::warn!(%err, "could not read GOG Galaxy tags");
+                Ok(None)
+            }
+        }
+    }
+
     /// The account's library; on Linux also the libraries Heroic and Lutris cached, which need
     /// no sign-in here.
     fn scan_owned(&self, _config: &serde_json::Value) -> Result<Vec<ImportedGame>, ProviderError> {
@@ -493,6 +511,36 @@ mod tests {
             .unwrap();
         let names: Vec<_> = games.iter().map(|g| g.name.as_str()).collect();
         assert_eq!(names, ["Alpha", "zebra"]);
+    }
+
+    #[test]
+    fn categories_are_galaxy_tags_and_none_without_a_readable_db() {
+        let tmp = tempfile::tempdir().unwrap();
+        let none = GogProvider::with_records(Vec::new(), None);
+        assert_eq!(
+            none.scan_categories(&serde_json::Value::Null).unwrap(),
+            None
+        );
+        let missing = GogProvider::with_records(Vec::new(), None)
+            .with_galaxy_db(tmp.path().join("missing.db"));
+        assert_eq!(
+            missing.scan_categories(&serde_json::Value::Null).unwrap(),
+            None
+        );
+        let db = tmp.path().join("galaxy-2.0.db");
+        rusqlite::Connection::open(&db)
+            .unwrap()
+            .execute_batch(
+                "CREATE TABLE UserReleaseTags(userId INT64, releaseKey TEXT, tag TEXT);
+                 INSERT INTO UserReleaseTags VALUES (1, 'gog_5', 'Favorites');",
+            )
+            .unwrap();
+        let provider = GogProvider::with_records(Vec::new(), None).with_galaxy_db(&db);
+        let map = provider
+            .scan_categories(&serde_json::Value::Null)
+            .unwrap()
+            .unwrap();
+        assert_eq!(map["5"], vec!["Favorites"]);
     }
 
     #[test]

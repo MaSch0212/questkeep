@@ -174,6 +174,10 @@
   --qk-game-icon-size: 22px;
   --qk-game-icon-radius: 5px;
   --qk-dragged-opacity: 0.4;
+  --qk-group-header-height: 40px;
+  --qk-list-group-height: 32px;
+  --qk-category-picker-width: 280px;
+  --qk-category-picker-max-height: 240px;
   --qk-spin-duration: 1s;
   --qk-running-dot-size: 8px;
 }
