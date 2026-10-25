@@ -178,7 +178,10 @@ export function AccountsSection(props: { model: SettingsModel }) {
                     the chevron button is the keyboard path. */}
                 <div
                   class="account__head"
-                  classList={{ "account__head--toggle": expandable(entry) }}
+                  classList={{
+                    "account__head--toggle": expandable(entry),
+                    "account__head--open": expandable(entry) && row(entry.id).open,
+                  }}
                   onClick={(event) => {
                     const target = event.target as Element;
                     if (!expandable(entry) || target.closest("button, a, input, label")) return;
@@ -270,54 +273,6 @@ export function AccountsSection(props: { model: SettingsModel }) {
                     <Show when={entry.account}>
                       {(account) => (
                         <>
-                          <Show when={account().signedIn}>
-                            <div class="details__row">
-                              <Show
-                                when={row(account().provider).confirmingSignOut}
-                                fallback={
-                                  <button
-                                    type="button"
-                                    class="btn"
-                                    aria-label={`Sign out of ${account().name}`}
-                                    onClick={() =>
-                                      patch(account().provider, { confirmingSignOut: true })
-                                    }
-                                  >
-                                    <LogOut class="icon" aria-hidden="true" /> Sign out
-                                  </button>
-                                }
-                              >
-                                <button
-                                  type="button"
-                                  class="btn btn--danger-solid"
-                                  onClick={() => void signOut(account())}
-                                >
-                                  Confirm sign out
-                                </button>
-                                <button
-                                  type="button"
-                                  class="btn"
-                                  onClick={() =>
-                                    patch(account().provider, { confirmingSignOut: false })
-                                  }
-                                >
-                                  Cancel
-                                </button>
-                              </Show>
-                            </div>
-                          </Show>
-                          <Show when={state(account()).connection === "apiKey"}>
-                            <div class="details__row">
-                              <button
-                                type="button"
-                                class="btn"
-                                disabled={props.model.savingSteam()}
-                                onClick={() => void props.model.removeSteamKey()}
-                              >
-                                Remove key
-                              </button>
-                            </div>
-                          </Show>
                           <Show when={account().provider === "steam"}>
                             <Show when={state(account()).connection === "apiKey"}>
                               <p class="field__hint">Remove the key to sign in to Steam instead.</p>
@@ -446,6 +401,61 @@ export function AccountsSection(props: { model: SettingsModel }) {
                       )}
                     </Show>
                     <StoreOptions providerId={entry.id} model={props.model} />
+                    {/* Ending the account comes last, away from the head. */}
+                    <Show when={entry.account}>
+                      {(account) => (
+                        <>
+                          <Show when={account().signedIn}>
+                            <div class="account__actions">
+                              <Show
+                                when={row(account().provider).confirmingSignOut}
+                                fallback={
+                                  <button
+                                    type="button"
+                                    class="btn btn--danger"
+                                    aria-label={`Sign out of ${account().name}`}
+                                    onClick={() =>
+                                      patch(account().provider, { confirmingSignOut: true })
+                                    }
+                                  >
+                                    <LogOut class="icon" aria-hidden="true" /> Sign out
+                                  </button>
+                                }
+                              >
+                                <button
+                                  type="button"
+                                  class="btn"
+                                  onClick={() =>
+                                    patch(account().provider, { confirmingSignOut: false })
+                                  }
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  class="btn btn--danger-solid"
+                                  onClick={() => void signOut(account())}
+                                >
+                                  Confirm sign out
+                                </button>
+                              </Show>
+                            </div>
+                          </Show>
+                          <Show when={state(account()).connection === "apiKey"}>
+                            <div class="account__actions">
+                              <button
+                                type="button"
+                                class="btn btn--danger"
+                                disabled={props.model.savingSteam()}
+                                onClick={() => void props.model.removeSteamKey()}
+                              >
+                                Remove key
+                              </button>
+                            </div>
+                          </Show>
+                        </>
+                      )}
+                    </Show>
                   </div>
                 </Show>
               </div>

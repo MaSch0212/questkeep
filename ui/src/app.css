@@ -1434,6 +1434,18 @@ ul {
 .account__head--toggle .icon-btn:hover:not(:disabled) {
   background: var(--qk-color-surface-active);
 }
+/* An open row's head reads as a header: its hover ends at a divider above the settings. */
+.account__head--open {
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--qk-color-border);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.account__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--qk-space-2);
+}
 .account__toggle {
   flex: none;
   width: var(--qk-icon-btn-small-size);
@@ -1448,6 +1460,9 @@ ul {
   display: flex;
   flex-direction: column;
   gap: var(--qk-space-1);
+}
+/* The open head already draws a divider above the first block. */
+.account__options:not(:first-child) {
   padding-top: var(--qk-space-2);
   border-top: 1px solid var(--qk-color-border);
 }
