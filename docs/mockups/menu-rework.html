@@ -1,0 +1,942 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Questkeep menu rework</title>
+<style>
+:root {
+  --bg: #111317; --surface: #171a20; --raised: #1e222a; --hover: #262b35; --active: #343a47;
+  --border: #2a2f3a; --text: #e6e8ec; --muted: #9aa1ae; --faint: #6c7381;
+  --accent: #7c9cff; --accent-soft: #232c4a; --accent-contrast: #0e1220;
+  --danger: #ff7a85; --star: #ffd166; --warn: #ffb86b; --warn-soft: #2a2219; --warn-border: #5a4128; --warn-hover: #3a2d1f;
+  --r-sm: 4px; --r-md: 8px; --r-lg: 12px;
+  font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif; font-size: 14px; color: var(--text);
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: #05060a; padding: 16px; }
+.note { max-width: 1280px; margin: 0 auto 12px; color: var(--muted); font-size: 13px; line-height: 1.5; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.note b { color: var(--text); }
+.app { max-width: 1280px; height: 760px; margin: 0 auto; background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-md); display: grid; grid-template-rows: 40px 1fr; overflow: hidden; position: relative; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+input { font: inherit; }
+svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+/* Title bar */
+.tb { display: flex; align-items: center; gap: 2px; padding-left: 12px; border-bottom: 1px solid var(--border); background: var(--surface); }
+.brand { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; margin: 0 8px 0 -6px; height: 30px; padding: 0 6px; border-radius: var(--r-sm); }
+.brand:hover, .brand.open { background: var(--hover); }
+.brand .chev { width: 12px; height: 12px; opacity: 0; margin-left: -4px; color: var(--muted); }
+.brand:hover .chev, .brand.open .chev { opacity: 1; }
+.mi.sub { position: relative; cursor: default; }
+.mi .arrow { margin-left: auto; color: var(--faint); }
+.subpop { display: none; position: absolute; left: 100%; top: -7px; margin-left: 4px; background: var(--raised); border: 1px solid var(--border); border-radius: var(--r-md); box-shadow: 0 12px 32px #000a; padding: 6px; min-width: 230px; }
+.mi.sub:hover > .subpop { display: block; }
+.mi.sub:hover { background: var(--hover); }
+.subpop::before { content: ""; position: absolute; left: -8px; top: 0; bottom: 0; width: 8px; }
+.logo { width: 18px; height: 18px; border-radius: 5px; background: var(--accent); }
+.drag-region { flex: 1; align-self: stretch; }
+/* Command bar, centered in the title bar */
+.cmd { position: absolute; left: 50%; top: 5px; transform: translateX(-50%); width: min(420px, 36%); z-index: 15; }
+.cmd-box { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px 0 10px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--bg); color: var(--faint); }
+.cmd-box:hover { border-color: var(--active); }
+.cmd.open .cmd-box { border-color: var(--accent); background: var(--surface); border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.cmd input { flex: 1; min-width: 0; border: 0; background: none; color: var(--text); font-size: 13px; outline: none; }
+.cmd input::placeholder { color: var(--faint); }
+kbd { font: inherit; font-size: 10px; color: var(--faint); border: 1px solid var(--border); border-radius: 3px; padding: 1px 5px; white-space: nowrap; }
+.cmd-results { display: none; position: absolute; top: 30px; left: 50%; transform: translateX(-50%); width: max(100%, 500px); background: var(--raised); border: 1px solid var(--accent); border-radius: var(--r-md); box-shadow: 0 16px 40px #000c; padding: 4px; }
+.cmd.open .cmd-results { display: block; }
+.cmd-results h4 { margin: 6px 8px 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--faint); font-weight: 600; }
+.cres { display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 6px 0 8px; border-radius: var(--r-sm); font-size: 13px; cursor: pointer; }
+.cres.sel { background: var(--accent-soft); }
+.cres .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cres .nm mark { background: none; color: var(--accent); font-weight: 600; }
+.cres .meta { color: var(--faint); font-size: 11px; display: flex; align-items: center; gap: 5px; }
+.cres .meta .ico { width: 13px; height: 13px; font-size: 7px; border-radius: 3px; }
+.cres .act { display: flex; align-items: center; gap: 5px; height: 26px; padding: 0 9px; border-radius: var(--r-sm); font-size: 12px; font-weight: 600; background: var(--hover); color: var(--text); }
+.cres .act.play { background: #2f6d4f; }
+.cres .act:hover { filter: brightness(1.2); }
+.cres .act svg { width: 12px; height: 12px; }
+.cmd-foot span { white-space: nowrap; }
+.cres .meta { white-space: nowrap; }
+.cmd-foot { display: flex; gap: 14px; padding: 8px 8px 4px; margin-top: 4px; border-top: 1px solid var(--border); font-size: 11px; color: var(--faint); }
+.cmd-empty { padding: 14px 10px; color: var(--muted); font-size: 13px; }
+.toast { position: absolute; right: 16px; bottom: 16px; background: var(--raised); border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px 14px; font-size: 13px; box-shadow: 0 8px 24px #0008; z-index: 40; display: none; }
+.toast.show { display: block; }
+/* Icon buttons in the library toolbar */
+.ibtn { position: relative; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--raised); color: var(--muted); flex: none; }
+.ibtn:hover, .ibtn.open { background: var(--hover); color: var(--text); }
+/* With active filters the button widens to show the count beside the icon */
+.ibtn.has-badge { width: auto; gap: 6px; padding: 0 8px 0 7px; }
+.ibtn .badge { min-width: 18px; height: 18px; font-size: 11px; padding: 0 5px; }
+.mi .check { width: 14px; color: var(--accent); flex: none; text-align: center; }
+.tbtn { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: var(--r-sm); color: var(--muted); font-size: 13px; position: relative; }
+.tbtn:hover, .tbtn.open { background: var(--hover); color: var(--text); }
+.tbtn .chev { width: 12px; height: 12px; opacity: .7; }
+.tbtn.icon, .icons-only .tbtn { width: 34px; padding: 0; justify-content: center; gap: 0; }
+.icons-only .tbtn .lbl { display: none; }
+.icons-only .tbtn .chev { display: none; }
+.tbtn .run { position: absolute; bottom: 4px; right: 5px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); display: none; }
+.icons-only .tbtn.syncing .run { display: block; }
+.sep { width: 1px; height: 18px; background: var(--border); margin: 0 6px; }
+.win { width: 46px; height: 40px; display: flex; align-items: center; justify-content: center; color: var(--muted); }
+.win:hover { background: var(--hover); }
+.win.close:hover { background: #c42b1c; color: #fff; }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Popovers */
+.pop { position: absolute; background: var(--raised); border: 1px solid var(--border); border-radius: var(--r-md); box-shadow: 0 12px 32px #000a; padding: 6px; min-width: 240px; z-index: 10; display: none; }
+.pop.show { display: block; }
+.pop h4 { margin: 4px 8px 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--faint); font-weight: 600; }
+.mi { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 8px; border-radius: var(--r-sm); text-align: left; font-size: 13px; }
+.mi:hover { background: var(--hover); }
+.mi small { color: var(--faint); margin-left: auto; font-size: 11px; }
+.mi.danger { color: var(--danger); }
+.pop hr { border: 0; border-top: 1px solid var(--border); margin: 6px 0; }
+.ico { width: 18px; height: 18px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: #fff; flex: none; }
+.sync-row { display: flex; align-items: center; gap: 10px; padding: 5px 4px 5px 8px; border-radius: var(--r-sm); font-size: 13px; }
+.sync-row:hover { background: var(--hover); }
+.sync-row .st { color: var(--faint); font-size: 11px; margin-left: auto; }
+.ib { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: var(--r-sm); color: var(--muted); flex: none; }
+.ib:hover { background: var(--active); color: var(--text); }
+.btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--raised); font-size: 13px; white-space: nowrap; }
+.btn:hover { background: var(--hover); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-contrast); font-weight: 600; }
+.btn.ghost { border-color: transparent; background: none; color: var(--muted); }
+.btn.ghost:hover { color: var(--text); background: var(--hover); }
+.btn.small { height: 26px; padding: 0 8px; font-size: 12px; }
+
+/* Body */
+.body { display: grid; grid-template-columns: 232px 1fr; min-height: 0; }
+.side { background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
+.side-scroll { flex: 1; overflow: auto; padding: 4px 8px 10px; }
+.side-head { display: flex; align-items: center; justify-content: flex-end; padding: 6px 8px 0; height: 34px; }
+.side-head .ib { width: 26px; height: 26px; color: var(--faint); }
+.side-head .ib:hover { color: var(--text); }
+.sec { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 8px; margin-top: 6px; color: var(--faint); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; font-weight: 600; border-radius: var(--r-sm); }
+.nav { display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 8px; border-radius: var(--r-sm); color: var(--muted); font-size: 13px; width: 100%; text-align: left; }
+.nav:hover { background: var(--hover); color: var(--text); }
+.nav.on { background: var(--accent-soft); color: var(--text); }
+.nav .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav .n { color: var(--faint); font-size: 11px; }
+.nav svg { color: var(--faint); }
+.nav.on svg { color: var(--accent); }
+.nav .mod { width: 6px; height: 6px; border-radius: 50%; background: var(--warn); flex: none; }
+
+/* Edit mode */
+.editing .side { background: var(--raised); }
+.edit-banner { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 12px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--muted); }
+.edit-banner .grow { flex: 1; }
+.erow { display: flex; align-items: center; gap: 4px; height: 32px; padding: 0 2px; border-radius: var(--r-sm); }
+.erow.sec-row { margin-top: 8px; }
+.erow:hover { background: var(--hover); }
+.erow .handle { width: 18px; height: 26px; display: flex; align-items: center; justify-content: center; color: var(--faint); cursor: grab; flex: none; }
+.erow input { flex: 1; min-width: 0; height: 26px; border: 1px solid transparent; border-radius: var(--r-sm); background: none; color: var(--text); padding: 0 6px; font-size: 13px; }
+.erow.sec-row input { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; font-weight: 600; color: var(--muted); }
+.erow input:hover { border-color: var(--border); }
+.erow input:focus { outline: none; border-color: var(--accent); background: var(--surface); }
+.erow .ib { width: 26px; height: 26px; }
+.erow .ib.del:hover { color: var(--danger); }
+.erow .iconbtn { color: var(--muted); }
+.erow.dragging { opacity: .4; }
+.drop-line { height: 2px; background: var(--accent); border-radius: 1px; margin: 0 4px; }
+.empty-sec { font-size: 12px; color: var(--faint); padding: 4px 30px 6px; font-style: italic; }
+.newsec { margin-top: 10px; width: 100%; color: var(--muted); font-size: 12px; height: 32px; padding: 0 8px; display: flex; gap: 8px; align-items: center; border: 1px dashed var(--border); border-radius: var(--r-sm); }
+.newsec:hover { color: var(--text); background: var(--hover); }
+
+.main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.bar { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--border); }
+/* Keyword filter for the current view: an icon until used */
+.fsearch { display: flex; align-items: center; height: 32px; width: 32px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--raised); overflow: hidden; transition: width .15s ease; flex: none; }
+.fsearch:hover { background: var(--hover); }
+.fs-icon { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; color: var(--muted); flex: none; }
+.fsearch input { width: 0; flex: 1; min-width: 0; border: 0; background: none; color: var(--text); font-size: 13px; outline: none; padding: 0; }
+.fsearch input::placeholder { color: var(--faint); }
+.fs-clear { display: none; width: 26px; height: 26px; margin-right: 2px; align-items: center; justify-content: center; border-radius: var(--r-sm); color: var(--muted); flex: none; }
+.fs-clear:hover { background: var(--active); color: var(--text); }
+.fs-clear svg { width: 13px; height: 13px; }
+.fsearch.expanded { width: 220px; background: var(--surface); border-color: var(--accent); }
+.fsearch.expanded .fs-icon { color: var(--accent); }
+.fsearch.expanded .fs-clear { display: flex; }
+.fsearch.active { background: var(--accent-soft); border-color: var(--accent); }
+.count b { color: var(--accent); font-weight: 600; }
+.grow { flex: 1; }
+.count { color: var(--faint); font-size: 12px; white-space: nowrap; }
+.seg { display: flex; border: 1px solid var(--border); border-radius: var(--r-sm); overflow: hidden; }
+.seg button { width: 32px; height: 30px; display: flex; align-items: center; justify-content: center; color: var(--muted); }
+.seg button.on { background: var(--accent-soft); color: var(--accent); }
+.seg button:hover:not(.on) { background: var(--hover); }
+.badge { min-width: 18px; height: 18px; border-radius: 9px; background: var(--accent); color: var(--accent-contrast); font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; padding: 0 5px; }
+.sel { height: 32px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface); color: var(--text); padding: 0 8px; font: inherit; font-size: 13px; }
+/* View actions: one bordered group, set apart from the filter and sort controls */
+.changed { display: none; flex: none; align-items: center; margin-left: 16px; height: 32px; border: 1px solid var(--warn-border); border-radius: var(--r-sm); background: var(--warn-soft); overflow: hidden; }
+.changed.show { display: flex; }
+.changed-label { display: flex; align-items: center; gap: 7px; padding: 0 10px; font-size: 12px; color: var(--warn); white-space: nowrap; }
+.changed .dotl { width: 7px; height: 7px; border-radius: 50%; background: var(--warn); }
+.changed .ibtn { height: 30px; border: 0; border-left: 1px solid var(--warn-border); border-radius: 0; background: none; }
+.changed .ibtn:hover, .changed .ibtn.open { background: var(--warn-hover); color: var(--text); }
+.split { display: flex; }
+.split .btn:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.split .btn:last-child { border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: 0; padding: 0 6px; }
+
+.content { flex: 1; overflow: auto; position: relative; }
+.list { padding: 6px 8px; }
+.row { display: grid; grid-template-columns: 22px 1fr 120px 90px 110px 24px; align-items: center; gap: 12px; height: 36px; padding: 0 10px; border-radius: var(--r-sm); font-size: 13px; }
+.row:hover { background: var(--hover); }
+.row .src { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
+.row .src .ico { width: 14px; height: 14px; font-size: 8px; border-radius: 3px; }
+.row .m { color: var(--muted); font-size: 12px; }
+.row .star { color: var(--star); }
+.row.dim .nm { color: var(--faint); }
+.gico { width: 22px; height: 22px; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: #fff; }
+.thead { display: grid; grid-template-columns: 22px 1fr 120px 90px 110px 24px; gap: 12px; padding: 6px 18px; font-size: 11px; color: var(--faint); text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 14px; padding: 16px; }
+.tile { aspect-ratio: 2/3; border-radius: var(--r-md); display: flex; align-items: flex-end; padding: 8px; font-size: 12px; font-weight: 600; color: #fff; }
+
+/* Filter panel */
+.fpanel { position: absolute; width: 430px; background: var(--raised); border: 1px solid var(--border); border-radius: var(--r-md); box-shadow: 0 12px 32px #000a; padding: 14px; z-index: 9; display: none; }
+.fpanel.show { display: block; }
+.fpanel h3 { margin: 0 0 10px; font-size: 13px; }
+.fgroup { display: grid; grid-template-columns: 110px 1fr; gap: 8px 12px; align-items: center; font-size: 13px; }
+.fgroup .lbl { color: var(--muted); }
+.tog { display: flex; border: 1px solid var(--border); border-radius: var(--r-sm); overflow: hidden; width: max-content; }
+.tog button { padding: 4px 10px; font-size: 12px; color: var(--muted); }
+.tog button.on { background: var(--accent-soft); color: var(--text); }
+.srcpick { display: flex; flex-wrap: wrap; gap: 4px; }
+.srcpick button { display: flex; align-items: center; gap: 5px; padding: 3px 8px 3px 4px; border: 1px solid var(--border); border-radius: 12px; font-size: 12px; color: var(--muted); }
+.srcpick button.on { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+.srcpick .ico { width: 14px; height: 14px; font-size: 8px; border-radius: 7px; }
+.fpanel .foot { display: flex; justify-content: space-between; margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border); }
+.later { color: var(--faint); font-size: 11px; font-style: italic; }
+
+/* Dialog + icon picker */
+.modal { position: absolute; inset: 0; background: #05060acc; display: none; align-items: center; justify-content: center; z-index: 20; }
+.modal.show { display: flex; }
+.dlg { width: 420px; background: var(--raised); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 18px; box-shadow: 0 24px 64px #000a; }
+.dlg h3 { margin: 0 0 4px; font-size: 16px; }
+.dlg p { margin: 0 0 14px; color: var(--muted); font-size: 12px; }
+.field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; font-size: 12px; color: var(--muted); }
+.field input, .field select { height: 32px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface); color: var(--text); padding: 0 10px; font-size: 13px; }
+.namerow { display: flex; gap: 8px; }
+.namerow input { flex: 1; }
+.icon-pick-btn { width: 32px; height: 32px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface); display: flex; align-items: center; justify-content: center; color: var(--accent); flex: none; }
+.icon-pick-btn:hover { background: var(--hover); }
+.icons { display: grid; grid-template-columns: repeat(8, 30px); gap: 4px; }
+.icons button { width: 30px; height: 30px; border-radius: var(--r-sm); display: flex; align-items: center; justify-content: center; color: var(--muted); }
+.icons button:hover { background: var(--hover); color: var(--text); }
+.icons button.on { background: var(--accent-soft); color: var(--accent); outline: 1px solid var(--accent); }
+.summary { font-size: 12px; color: var(--muted); background: var(--surface); border-radius: var(--r-sm); padding: 8px 10px; margin-bottom: 14px; line-height: 1.6; }
+.dlg .acts { display: flex; justify-content: flex-end; gap: 8px; }
+
+.switch { display: inline-flex; border: 1px solid var(--border); border-radius: var(--r-sm); overflow: hidden; }
+.switch button { padding: 4px 10px; font-size: 12px; color: var(--muted); }
+.switch button.on { background: var(--accent-soft); color: var(--text); }
+.legend { max-width: 1280px; margin: 12px auto 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 8px 20px; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+.legend b { color: var(--text); }
+</style>
+</head>
+<body>
+<div class="note">
+  <span><b>Mockup: library menu rework (round 2).</b> Everything is clickable; data is made up.</span>
+</div>
+
+<div class="app" id="app">
+  <header class="tb icons-only" id="tb">
+    <button class="brand" data-pop="app" id="brandBtn" title="Questkeep menu"><span class="logo"></span>Questkeep<svg class="chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
+    <button class="tbtn" data-pop="add" title="Add game"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span class="lbl">Add game</span><svg class="chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
+    <button class="tbtn" data-pop="launch" title="Open launcher"><svg viewBox="0 0 24 24"><path d="M4.5 16.5c-1.5 1.3-2 5-2 5s3.7-.5 5-2c.7-.8.7-2.1-.1-2.9a2.2 2.2 0 0 0-2.9-.1zM12 15l-3-3a22 22 0 0 1 2-4A13 13 0 0 1 22 2c0 2.7-.8 7.5-6 11a22 22 0 0 1-4 2zM9 12H4s.6-3 2-4c1.6-1.1 5 0 5 0M12 15v5s3-.6 4-2c1.1-1.6 0-5 0-5"/></svg><span class="lbl">Open launcher</span><svg class="chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
+    <button class="tbtn" data-pop="sync" title="Sync" id="syncBtn"><svg id="syncIcon" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 0-15-6.7L3 8M3 3v5h5M3 12a9 9 0 0 0 15 6.7l3-2.7M21 21v-5h-5"/></svg><span class="lbl" id="syncLbl">Sync</span><svg class="chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg><span class="run"></span></button>
+    <div class="drag-region" title="(window drag area)"></div>
+    <div class="cmd" id="cmd">
+      <div class="cmd-box" id="cmdBox">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="cmdInput" placeholder="Find a game…" autocomplete="off" spellcheck="false" />
+        <kbd>Ctrl K</kbd>
+      </div>
+      <div class="cmd-results" id="cmdResults"></div>
+    </div>
+    <button class="tbtn icon" title="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+    <span class="sep"></span>
+    <button class="win"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
+    <button class="win"><svg viewBox="0 0 24 24" style="width:13px;height:13px"><rect x="4" y="4" width="16" height="16"/></svg></button>
+    <button class="win close"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+  </header>
+
+  <div class="pop" id="pop-add">
+    <button class="mi"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add a game manually…</button>
+    <button class="mi"><svg viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/></svg>Add from an executable…</button>
+    <hr />
+    <button class="mi"><span class="ico" style="background:#4a8c3f">PL</span>New Minecraft instance<small>Prism Launcher</small></button>
+  </div>
+  <div class="pop" id="pop-launch"><h4>Open launcher</h4><div id="launchers"></div></div>
+  <div class="pop" id="pop-sync" style="width:300px">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 4px 8px 8px">
+      <span style="font-size:12px;color:var(--muted)">Last full sync 12 minutes ago</span>
+      <button class="btn primary small" id="syncAll">Sync all</button>
+    </div>
+    <hr style="margin-top:0" />
+    <div id="syncRows"></div>
+  </div>
+  <div class="pop" id="pop-save" style="min-width:230px">
+    <button class="mi" id="updateView">Update “<span id="curName"></span>”</button>
+    <button class="mi" id="saveAsNew">Save as new view…</button>
+  </div>
+  <div class="pop" id="pop-sort" style="min-width:190px"></div>
+  <div class="pop" id="pop-ctx" style="min-width:200px"></div>
+  <div class="toast" id="toast"></div>
+  <div class="pop" id="pop-app" style="min-width:230px"></div>
+  <div class="pop" id="pop-icons"><div class="icons" id="iconGrid"></div></div>
+
+  <div class="body">
+    <nav class="side" id="side"></nav>
+    <main class="main">
+      <div class="bar">
+        <div class="fsearch" id="fsearch">
+          <button class="fs-icon" id="fsBtn" title="Filter this view (Ctrl+F)"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></button>
+          <input id="fsInput" placeholder="Filter this view…" autocomplete="off" spellcheck="false" aria-label="Filter this view by name" />
+          <button class="fs-clear" id="fsClear" title="Clear (Esc)"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        </div>
+        <button class="ibtn" id="filterBtn" title="Filters"><svg viewBox="0 0 24 24"><path d="M3 5h18l-7 9v5l-4 2v-7z"/></svg><span class="badge" id="fcount">0</span></button>
+        <button class="ibtn" id="sortBtn" title="Sort"><svg viewBox="0 0 24 24" id="sortIcon"></svg></button>
+        <div class="changed" id="changed">
+          <span class="changed-label"><span class="dotl"></span>Unsaved</span>
+          <button class="ibtn" id="reset" title="Reset to the saved view"><svg viewBox="0 0 24 24"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></svg></button>
+          <button class="ibtn" id="saveBtn" title="Save view"><svg viewBox="0 0 24 24"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h7"/><path d="M19 3v6M16 6h6"/></svg></button>
+        </div>
+        <div class="grow"></div>
+        <span class="count" id="count"></span>
+        <div class="seg" id="modeSeg">
+          <button data-mode="grid" title="Grid"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></button>
+          <button data-mode="list" title="List"><svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></button>
+          <button data-mode="details" title="Details"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg></button>
+        </div>
+      </div>
+      <div class="content" id="content"></div>
+    </main>
+  </div>
+
+  <div class="fpanel" id="fpanel"></div>
+
+  <div class="modal" id="modal">
+    <div class="dlg">
+      <h3>Save as new view</h3>
+      <p>Saves the filters, sort order and layout. The search box is not saved.</p>
+      <label class="field">Icon and name
+        <span class="namerow"><button class="icon-pick-btn" id="dlgIcon" type="button" title="Choose icon"></button><input id="vname" value="Unplayed on GOG" /></span>
+      </label>
+      <label class="field">Section<select id="vsec"></select></label>
+      <div class="summary" id="vsum"></div>
+      <div class="acts"><button class="btn ghost" id="cancelSave">Cancel</button><button class="btn primary" id="doSave">Save view</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="legend">
+  <div><b>Title bar.</b> Add game, Open launcher and Sync sit on the left next to the name; Settings stays on the right by the window buttons. All are icons with tooltips; Sync spins and shows a dot while running.</div>
+  <div><b>Command bar</b> (Ctrl+K) in the middle of the title bar finds any game, whatever view is open. Arrows select, Enter opens the game's page, Ctrl+Enter or the button plays or installs it. Empty, it lists recently played games.</div>
+  <div><b>Filter this view</b> is a magnifier icon. Click it, press Ctrl+F or just start typing over the games and it opens into a field; while it narrows the list it stays open and tinted, and the count reads “3 of 14 games”. Esc, × or switching views clears and collapses it. It is never saved with a view.</div>
+  <div><b>Toolbar icons.</b> Filters (badge = active filters) and one Sort menu for direction and field, like Playnite. Once a view differs from what was saved, an orange dot, Reset and Save appear; Save offers “Update view” and “Save as new view…”.</div>
+  <div><b>Questkeep menu.</b> Clicking the name or logo opens one menu with everything: Edit views, Add game, Open launcher, Sync, Settings and Exit.</div>
+  <div><b>Right-click the sidebar</b> for Edit views; right-click a view for Rename, Change icon, Duplicate and Delete.</div>
+  <div><b>Edit views</b> switches the sidebar to edit mode: drag handles, rename in place, change icons, delete, and New section. Views can be dragged within and between sections, and sections can be reordered.</div>
+  <div><b>List and details rows</b> show the game icon instead of the cover and are 36px tall (now 56px).</div>
+</div>
+
+<script>
+const SRC = {
+  steam: ["Steam", "#1b2838"], epic: ["Epic Games", "#2a2a2a"], gog: ["GOG", "#7c3aed"], ea: ["EA app", "#e2483d"],
+  battlenet: ["Battle.net", "#148eff"], ubisoft: ["Ubisoft Connect", "#0070ff"], xbox: ["Xbox", "#107c10"],
+  amazon: ["Amazon Games", "#ff9900"], prism: ["Prism Launcher", "#4a8c3f"], manual: ["Manual", "#555c6b"],
+};
+const SYNCABLE = ["amazon", "battlenet", "ea", "epic", "gog", "prism", "steam", "ubisoft", "xbox"];
+const LAUNCHERS = { steam: "Steam", epic: "Epic Games Launcher", gog: "GOG Galaxy", ea: "EA app", battlenet: "Battle.net", ubisoft: "Ubisoft Connect", xbox: "Xbox", amazon: "Amazon Games", prism: "Prism Launcher" };
+const H = (h) => `hsl(${h} 45% 38%)`;
+const GAMES = [
+  ["Baldur's Gate 3", "steam", 1, 1, 0, 212, "2 days ago", 20],
+  ["Cyberpunk 2077", "gog", 1, 0, 0, 96, "3 weeks ago", 330],
+  ["Diablo IV", "battlenet", 0, 0, 0, 41, "4 months ago", 0],
+  ["Elden Ring", "steam", 1, 1, 0, 140, "yesterday", 40],
+  ["Fortnite", "epic", 0, 0, 1, 3, "2 years ago", 200],
+  ["Hades II", "steam", 1, 1, 0, 33, "today", 280],
+  ["Halo Infinite", "xbox", 0, 0, 0, 0, "never", 210],
+  ["Hollow Knight", "steam", 0, 0, 0, 0, "never", 250],
+  ["Mass Effect Legendary Edition", "ea", 1, 0, 0, 58, "6 months ago", 190],
+  ["Minecraft: Create Above & Beyond", "prism", 1, 0, 0, 77, "last week", 110],
+  ["Overwatch 2", "battlenet", 1, 0, 1, 12, "1 year ago", 30],
+  ["Rocket League", "epic", 0, 0, 1, 7, "2 years ago", 15],
+  ["Stardew Valley", "gog", 1, 1, 0, 120, "last month", 90],
+  ["The Witcher 3", "gog", 0, 0, 0, 0, "never", 0],
+  ["Assassin's Creed Mirage", "ubisoft", 0, 0, 0, 0, "never", 350],
+  ["Fallout 76", "amazon", 0, 0, 0, 2, "3 years ago", 120],
+  ["Factorio", "manual", 1, 1, 0, 310, "4 days ago", 30],
+].map(([name, source, installed, favorite, hidden, hours, last, hue], i) => ({ name, source, installed: !!installed, favorite: !!favorite, hidden: !!hidden, hours, last, hue, i }));
+
+const ICONS = {
+  lib: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/>',
+  star: '<path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/>',
+  heart: '<path d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4 3 5.5l7 7z"/>',
+  hdd: '<path d="M22 12H2M5.5 5h13L22 12v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6zM6 16h.01"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  list: '<path d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
+  box: '<path d="M21 16V8l-9-5-9 5v8l9 5zM3.3 7 12 12l8.7-5M12 22V12"/>',
+  eye: '<path d="M17.9 17.9A10 10 0 0 1 12 20c-7 0-10-8-10-8a18 18 0 0 1 5.1-5.9M9.9 4.2A9 9 0 0 1 12 4c7 0 10 8 10 8a18 18 0 0 1-2.2 3.2M1 1l22 22"/>',
+  bookmark: '<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>',
+  gamepad: '<path d="M6 12h4M8 10v4M15 13h.01M18 11h.01"/><rect x="2" y="6" width="20" height="12" rx="4"/>',
+  trophy: '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M10 14.7V17c0 .6-.5 1-1 1.2C7.8 18.8 7 20.2 7 22M14 14.7V17c0 .6.5 1 1 1.2 1.2.6 2 2 2 3.8M18 2H6v7a6 6 0 0 0 12 0z"/>',
+  flame: '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.4-.5-2-1-3-1.1-2.1-.2-4 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.2.4-2.3 1-3.3.4 1.6 1.4 2.8 2.5 2.8z"/>',
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/><circle cx="9" cy="7" r="4"/>',
+  sword: '<path d="M14.5 17.5 3 6V3h3l11.5 11.5M13 19l6-6M16 16l4 4M19 21l2-2"/>',
+  puzzle: '<path d="M19.4 14.7a1.7 1.7 0 0 0 1.1-1.6c0-1-.8-1.7-1.7-1.7-.6 0-1.1.3-1.4.8H17V9a2 2 0 0 0-2-2h-2.6v-.4c.5-.3.8-.8.8-1.4 0-1-.8-1.7-1.7-1.7S9.8 4.3 9.8 5.2c0 .6.3 1.1.8 1.4V7H8a2 2 0 0 0-2 2v2.6h.4c.3-.5.8-.8 1.4-.8 1 0 1.7.8 1.7 1.7s-.8 1.7-1.7 1.7c-.6 0-1.1-.3-1.4-.8H6V17a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2v-2.3h.4c.3.5.8.8 1.4.8z"/>',
+  rocket: '<path d="M4.5 16.5c-1.5 1.3-2 5-2 5s3.7-.5 5-2c.7-.8.7-2.1-.1-2.9a2.2 2.2 0 0 0-2.9-.1zM12 15l-3-3a22 22 0 0 1 2-4A13 13 0 0 1 22 2c0 2.7-.8 7.5-6 11a22 22 0 0 1-4 2z"/>',
+  music: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+  ghost: '<path d="M9 10h.01M15 10h.01M12 2a8 8 0 0 0-8 8v12l3-3 2.5 2.5L12 19l2.5 2.5L17 19l3 3V10a8 8 0 0 0-8-8z"/>',
+  map: '<path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15"/>',
+  car: '<path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9L18 10l-2.7-3.4A2 2 0 0 0 13.8 6H8.2a2 2 0 0 0-1.6.8L4 10l-1.6.4C1.6 10.7 1 11.4 1 12.3V16c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/>',
+  crown: '<path d="m2 4 3 12h14l3-12-6 7-4-7-4 7zM5 20h14"/>',
+  archive: '<rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8M10 12h4"/>',
+  baby: '<circle cx="12" cy="12" r="10"/><path d="M9 12h.01M15 12h.01M10 16c.5.3 1.2.5 2 .5s1.5-.2 2-.5"/>',
+};
+const ICON_KEYS = Object.keys(ICONS);
+
+const base = () => ({ sources: [], installed: "any", favorite: "any", hidden: "exclude", played: "any", sort: "name", desc: false, mode: "grid" });
+let sections = [
+  { id: "lib", name: "Library", views: [
+    { id: "all", name: "All games", icon: "lib", f: base() },
+    { id: "fav", name: "Favorites", icon: "star", f: { ...base(), favorite: "yes" } },
+    { id: "inst", name: "Installed", icon: "hdd", f: { ...base(), installed: "yes", mode: "list" } },
+    { id: "recent", name: "Recently played", icon: "clock", f: { ...base(), played: "yes", sort: "lastPlayed", desc: true, mode: "list" } },
+  ] },
+  { id: "mine", name: "My views", views: [
+    { id: "backlog", name: "Backlog", icon: "list", f: { ...base(), played: "no", mode: "details" } },
+    { id: "mc", name: "Minecraft packs", icon: "box", f: { ...base(), sources: ["prism"], mode: "list" } },
+  ] },
+  { id: "other", name: "Other", views: [
+    { id: "hidden", name: "Hidden", icon: "eye", f: { ...base(), hidden: "only", mode: "list" } },
+  ] },
+];
+let current = "all";
+let f = structuredClone(sections[0].views[0].f);
+let editing = false;
+const allViews = () => sections.flatMap((s) => s.views);
+const view = () => allViews().find((v) => v.id === current);
+const changed = () => JSON.stringify(f) !== JSON.stringify(view().f);
+const svg = (k, extra = "") => `<svg viewBox="0 0 24 24" ${extra}>${ICONS[k] ?? k}</svg>`;
+const srcIcon = (id) => `<span class="ico" style="background:${SRC[id][1]}">${SRC[id][0].slice(0, 2)}</span>`;
+const esc = (s) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+
+function matches(g, q) {
+  if (q.sources.length && !q.sources.includes(g.source)) return false;
+  if (q.installed !== "any" && g.installed !== (q.installed === "yes")) return false;
+  if (q.favorite !== "any" && g.favorite !== (q.favorite === "yes")) return false;
+  if (q.hidden === "exclude" && g.hidden) return false;
+  if (q.hidden === "only" && !g.hidden) return false;
+  if (q.played !== "any" && (g.hours > 0) !== (q.played === "yes")) return false;
+  return true;
+}
+function games(q) {
+  const list = GAMES.filter((g) => matches(g, q));
+  const key = { name: (g) => g.name, playtime: (g) => g.hours, lastPlayed: (g) => -g.i, dateAdded: (g) => g.i }[q.sort];
+  list.sort((a, b) => (key(a) > key(b) ? 1 : -1) * (q.desc ? -1 : 1));
+  return list;
+}
+let keyword = "";
+const shown = () => games(f).filter((g) => g.name.toLowerCase().includes(keyword));
+const filterCount = (q) => (q.sources.length ? 1 : 0) + ["installed", "favorite", "played"].filter((k) => q[k] !== "any").length + (q.hidden !== "exclude" ? 1 : 0);
+
+/* ---------- Popovers ---------- */
+function openPop(id, anchor, align = "left") {
+  const p = document.getElementById(id);
+  const was = p.classList.contains("show") && p.dataset.anchor === anchor.id;
+  closeAll();
+  if (was) return;
+  const app = document.getElementById("app").getBoundingClientRect();
+  const r = anchor.getBoundingClientRect();
+  p.classList.add("show");
+  p.dataset.anchor = anchor.id;
+  p.style.top = r.bottom - app.top + 4 + "px";
+  p.style.left = align === "left" ? r.left - app.left + "px" : r.right - app.left - p.offsetWidth + "px";
+  anchor.classList.add("open");
+}
+function closeAll() {
+  document.querySelectorAll(".pop.show").forEach((p) => p.classList.remove("show"));
+  document.querySelectorAll(".open").forEach((b) => b.classList.remove("open"));
+}
+
+/* ---------- Sidebar ---------- */
+let drag = null; // { kind: "view"|"section", id }
+let drop = null; // { kind, sec, index }
+
+function renderSide() {
+  const side = document.getElementById("side");
+  document.getElementById("app").classList.toggle("editing", editing);
+  if (!editing) {
+    side.innerHTML = `
+      <div class="side-scroll">${sections.map((s) => `
+        <div class="sec">${esc(s.name)}</div>
+        ${s.views.map((v) => `
+          <button class="nav ${v.id === current ? "on" : ""}" data-view="${v.id}">
+            ${svg(v.icon)}<span class="name">${esc(v.name)}</span>
+            ${v.id === current && changed() ? '<span class="mod" title="Changed since saved"></span>' : ""}
+            <span class="n">${games(v.f).length}</span>
+          </button>`).join("")}`).join("")}
+      </div>`;
+    // Switching views clears the keyword filter; it belongs to the list you were looking at.
+    side.querySelectorAll("[data-view]").forEach((b) => b.onclick = () => { current = b.dataset.view; f = structuredClone(view().f); clearFs(); render(); });
+    return;
+  }
+  const line = (kind, sec, index) => drop && drop.kind === kind && drop.sec === sec && drop.index === index ? '<div class="drop-line"></div>' : "";
+  side.innerHTML = `
+    <div class="edit-banner">Editing views<span class="grow"></span><button class="btn primary small" id="doneBtn">Done</button></div>
+    <div class="side-scroll" id="editList">
+      ${sections.map((s, si) => `
+        ${line("section", null, si)}
+        <div class="erow sec-row ${drag?.id === s.id ? "dragging" : ""}" draggable="true" data-sec="${s.id}" data-si="${si}">
+          <span class="handle" title="Drag to reorder">${svg('<circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/>')}</span>
+          <input value="${esc(s.name)}" data-rename-sec="${s.id}" aria-label="Section name" />
+          <button class="ib del" data-del-sec="${s.id}" title="Delete section">${svg('<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>')}</button>
+        </div>
+        ${s.views.map((v, vi) => `
+          ${line("view", s.id, vi)}
+          <div class="erow ${drag?.id === v.id ? "dragging" : ""}" draggable="true" data-v="${v.id}" data-sec-of="${s.id}" data-vi="${vi}">
+            <span class="handle" title="Drag to move">${svg('<circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/>')}</span>
+            <button class="ib iconbtn" data-icon-for="${v.id}" id="ic-${v.id}" title="Change icon">${svg(v.icon)}</button>
+            <input value="${esc(v.name)}" data-rename="${v.id}" aria-label="View name" />
+            <button class="ib del" data-del="${v.id}" title="Delete view">${svg('<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>')}</button>
+          </div>`).join("")}
+        ${line("view", s.id, s.views.length)}
+        ${s.views.length === 0 ? `<div class="empty-sec" data-empty="${s.id}">Drag views here</div>` : ""}`).join("")}
+      ${line("section", null, sections.length)}
+      <button class="newsec" id="newSec">${svg('<path d="M12 5v14M5 12h14"/>')}New section</button>
+    </div>`;
+  side.querySelector("#doneBtn").onclick = () => { editing = false; render(); };
+  side.querySelector("#newSec").onclick = () => {
+    const id = "s" + Date.now();
+    sections.push({ id, name: "New section", views: [] });
+    renderSide();
+    const input = side.querySelector(`[data-rename-sec="${id}"]`);
+    input.focus(); input.select();
+  };
+  side.querySelectorAll("[data-rename-sec]").forEach((i) => i.oninput = () => { sections.find((s) => s.id === i.dataset.renameSec).name = i.value; });
+  side.querySelectorAll("[data-rename]").forEach((i) => i.oninput = () => { allViews().find((v) => v.id === i.dataset.rename).name = i.value; });
+  side.querySelectorAll("[data-del-sec]").forEach((b) => b.onclick = () => {
+    const s = sections.find((x) => x.id === b.dataset.delSec);
+    if (s.views.length && !confirm(`Delete “${s.name}” and its ${s.views.length} views?`)) return;
+    if (s.views.some((v) => v.id === current)) { current = "all"; }
+    sections = sections.filter((x) => x !== s);
+    ensureCurrent(); render();
+  });
+  side.querySelectorAll("[data-del]").forEach((b) => b.onclick = () => {
+    sections.forEach((s) => s.views = s.views.filter((v) => v.id !== b.dataset.del));
+    ensureCurrent(); render();
+  });
+  side.querySelectorAll("[data-icon-for]").forEach((b) => b.onclick = (e) => {
+    e.stopPropagation();
+    pickIcon(b, allViews().find((v) => v.id === b.dataset.iconFor).icon, (k) => { allViews().find((v) => v.id === b.dataset.iconFor).icon = k; renderSide(); });
+  });
+
+  // Drag and drop: views within and between sections, sections among sections.
+  side.querySelectorAll("[draggable]").forEach((el) => {
+    el.addEventListener("dragstart", (e) => {
+      if (e.target.closest("input")) { e.preventDefault(); return; }
+      drag = el.dataset.v ? { kind: "view", id: el.dataset.v } : { kind: "section", id: el.dataset.sec };
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", drag.id);
+      requestAnimationFrame(() => el.classList.add("dragging"));
+    });
+    el.addEventListener("dragend", () => { drag = null; drop = null; renderSide(); });
+  });
+  const list = side.querySelector("#editList");
+  list.addEventListener("dragover", (e) => {
+    if (!drag) return;
+    e.preventDefault();
+    const next = dropTarget(e);
+    if (JSON.stringify(next) !== JSON.stringify(drop)) { drop = next; renderSide(); }
+  });
+  list.addEventListener("drop", (e) => {
+    e.preventDefault();
+    if (drag && drop) applyDrop();
+    drag = null; drop = null; renderSide();
+  });
+}
+
+function dropTarget(e) {
+  const rows = [...document.querySelectorAll("#editList .erow, #editList .empty-sec")];
+  if (drag.kind === "section") {
+    const secs = rows.filter((r) => r.dataset.sec);
+    let index = sections.length;
+    for (const r of secs) {
+      const box = r.getBoundingClientRect();
+      if (e.clientY < box.top + box.height / 2) { index = +r.dataset.si; break; }
+    }
+    return { kind: "section", sec: null, index };
+  }
+  let target = null;
+  for (const r of rows) {
+    const box = r.getBoundingClientRect();
+    if (e.clientY < box.top + box.height / 2) { target = r; break; }
+  }
+  if (!target) { const s = sections.at(-1); return s ? { kind: "view", sec: s.id, index: s.views.length } : null; }
+  if (target.dataset.v) return { kind: "view", sec: target.dataset.secOf, index: +target.dataset.vi };
+  if (target.dataset.empty) return { kind: "view", sec: target.dataset.empty, index: 0 };
+  // Above a section heading: end of the previous section.
+  const si = +target.dataset.si;
+  if (si === 0) return { kind: "view", sec: sections[0].id, index: 0 };
+  const prev = sections[si - 1];
+  return { kind: "view", sec: prev.id, index: prev.views.length };
+}
+
+function applyDrop() {
+  if (drag.kind === "section") {
+    const from = sections.findIndex((s) => s.id === drag.id);
+    const [s] = sections.splice(from, 1);
+    sections.splice(drop.index > from ? drop.index - 1 : drop.index, 0, s);
+    return;
+  }
+  const fromSec = sections.find((s) => s.views.some((v) => v.id === drag.id));
+  const fromIndex = fromSec.views.findIndex((v) => v.id === drag.id);
+  const [v] = fromSec.views.splice(fromIndex, 1);
+  const to = sections.find((s) => s.id === drop.sec);
+  let index = drop.index;
+  if (to === fromSec && index > fromIndex) index--;
+  to.views.splice(index, 0, v);
+}
+
+function ensureCurrent() {
+  if (!view()) {
+    const first = allViews()[0];
+    if (!first) sections = [{ id: "lib", name: "Library", views: [{ id: "all", name: "All games", icon: "lib", f: base() }] }];
+    current = allViews()[0].id;
+    f = structuredClone(view().f);
+  }
+}
+
+/* ---------- Icon picker ---------- */
+let onPick = null;
+function pickIcon(anchor, selected, cb) {
+  onPick = cb;
+  document.getElementById("iconGrid").innerHTML = ICON_KEYS.map((k) => `<button data-pick="${k}" class="${k === selected ? "on" : ""}" title="${k}">${svg(k)}</button>`).join("");
+  document.querySelectorAll("[data-pick]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); closeAll(); onPick(b.dataset.pick); });
+  openPop("pop-icons", anchor);
+  const p = document.getElementById("pop-icons");
+  p.style.zIndex = 30;
+}
+
+/* ---------- Toolbar + content ---------- */
+function renderBar() {
+  const n = filterCount(f);
+  const badge = document.getElementById("fcount");
+  badge.textContent = n;
+  badge.style.display = n ? "" : "none";
+  document.getElementById("filterBtn").classList.toggle("has-badge", n > 0);
+  // The sort icon shows the direction; the tooltip names the field.
+  document.getElementById("sortIcon").innerHTML = f.desc
+    ? '<path d="m3 16 4 4 4-4M7 20V4M11 4h10M11 8h7M11 12h4"/>'
+    : '<path d="m3 8 4-4 4 4M7 4v16M11 12h4M11 16h7M11 20h10"/>';
+  document.getElementById("sortBtn").title = `Sort: ${SORTS[f.sort]}, ${f.desc ? "descending" : "ascending"}`;
+  document.querySelectorAll("#modeSeg button").forEach((b) => b.classList.toggle("on", b.dataset.mode === f.mode));
+  const total = games(f).length;
+  document.getElementById("count").innerHTML = keyword ? `<b>${shown().length}</b> of ${total} games` : `${total} games`;
+  document.getElementById("changed").classList.toggle("show", changed());
+  document.getElementById("curName").textContent = view().name;
+}
+
+const SORTS = { name: "Name", lastPlayed: "Last played", playtime: "Playtime", dateAdded: "Date added" };
+function openSort(anchor) {
+  const p = document.getElementById("pop-sort");
+  const item = (attr, value, label, on) => `<button class="mi" ${attr}="${value}"><span class="check">${on ? "✓" : ""}</span>${label}</button>`;
+  p.innerHTML =
+    item("data-dir", "asc", "Ascending", !f.desc) + item("data-dir", "desc", "Descending", f.desc) + "<hr />" +
+    Object.entries(SORTS).map(([k, label]) => item("data-sort", k, label, f.sort === k)).join("");
+  p.querySelectorAll("[data-dir]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); f.desc = b.dataset.dir === "desc"; render(); openSort(anchor); });
+  p.querySelectorAll("[data-sort]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); f.sort = b.dataset.sort; render(); openSort(anchor); });
+  if (!p.classList.contains("show")) openPop("pop-sort", anchor);
+}
+
+function renderContent() {
+  const list = shown();
+  const c = document.getElementById("content");
+  const initials = (g) => g.name.replace(/[^A-Z0-9]/g, "").slice(0, 2);
+  if (!list.length) { c.innerHTML = `<p style="padding:24px;color:var(--muted)">No games match these filters.</p>`; return; }
+  if (f.mode === "grid") {
+    c.innerHTML = `<div class="grid">${list.map((g) => `<div class="tile" style="background:linear-gradient(160deg, ${H(g.hue)}, hsl(${g.hue + 40} 38% 16%))">${g.name}</div>`).join("")}</div>`;
+    return;
+  }
+  if (f.mode === "list") {
+    c.innerHTML = `<div class="thead"><span></span><span>Name</span><span>Store</span><span>Playtime</span><span>Last played</span><span></span></div>
+      <div class="list">${list.map((g) => `
+        <div class="row ${g.installed ? "" : "dim"}">
+          <span class="gico" style="background:${H(g.hue)}">${initials(g)}</span>
+          <span class="nm">${g.name}</span>
+          <span class="src">${srcIcon(g.source)}${SRC[g.source][0]}</span>
+          <span class="m">${g.hours ? g.hours + " h" : "—"}</span>
+          <span class="m">${g.last}</span>
+          <span class="star">${g.favorite ? "★" : ""}</span>
+        </div>`).join("")}</div>`;
+    return;
+  }
+  const g = list[0];
+  c.innerHTML = `<div style="display:grid;grid-template-columns:320px 1fr;height:100%">
+    <div style="border-right:1px solid var(--border);overflow:auto"><div class="list">${list.map((x, i) => `
+      <div class="row" style="grid-template-columns:22px 1fr;${i === 0 ? "background:var(--accent-soft)" : ""}">
+        <span class="gico" style="background:${H(x.hue)}">${initials(x)}</span><span>${x.name}</span></div>`).join("")}</div></div>
+    <div style="padding:20px;color:var(--muted)"><div style="height:160px;border-radius:12px;background:linear-gradient(120deg, ${H(g.hue)}, hsl(${g.hue + 40} 38% 16%));margin-bottom:14px"></div>
+      <h2 style="margin:0 0 6px;color:var(--text)">${g.name}</h2>Details panel, unchanged.</div></div>`;
+}
+
+function togglePanel(force) {
+  const p = document.getElementById("fpanel");
+  const show = force ?? !p.classList.contains("show");
+  p.classList.toggle("show", show);
+  if (!show) return;
+  const app = document.getElementById("app").getBoundingClientRect();
+  const r = document.getElementById("filterBtn").getBoundingClientRect();
+  p.style.top = r.bottom - app.top + 4 + "px";
+  p.style.left = r.left - app.left + "px";
+  const tog = (k, opts) => `<div class="tog">${opts.map(([v, t]) => `<button data-k="${k}" data-v="${v}" class="${f[k] === v ? "on" : ""}">${t}</button>`).join("")}</div>`;
+  p.innerHTML = `<h3>Filters</h3>
+    <div class="fgroup">
+      <span class="lbl">Store</span>
+      <div class="srcpick">${Object.keys(SRC).map((s) => `<button data-src="${s}" class="${f.sources.includes(s) ? "on" : ""}">${srcIcon(s)}${SRC[s][0]}</button>`).join("")}</div>
+      <span class="lbl">Installed</span>${tog("installed", [["any", "Any"], ["yes", "Yes"], ["no", "No"]])}
+      <span class="lbl">Favorite</span>${tog("favorite", [["any", "Any"], ["yes", "Yes"], ["no", "No"]])}
+      <span class="lbl">Played</span>${tog("played", [["any", "Any"], ["yes", "Played"], ["no", "Never"]])}
+      <span class="lbl">Hidden games</span>${tog("hidden", [["exclude", "Leave out"], ["all", "Include"], ["only", "Only"]])}
+      <span class="lbl">Genre, developer, year, playtime…</span><span class="later">possible later additions</span>
+    </div>
+    <div class="foot"><button class="btn ghost small" id="clearAll">Clear filters</button><button class="btn small" id="closeP">Done</button></div>`;
+  p.querySelectorAll("[data-k]").forEach((b) => b.onclick = () => { f[b.dataset.k] = b.dataset.v; render(); togglePanel(true); });
+  p.querySelectorAll("[data-src]").forEach((b) => b.onclick = () => {
+    const s = b.dataset.src; f.sources = f.sources.includes(s) ? f.sources.filter((x) => x !== s) : [...f.sources, s]; render(); togglePanel(true);
+  });
+  p.querySelector("#clearAll").onclick = () => { f = { ...base(), sort: f.sort, desc: f.desc, mode: f.mode }; render(); togglePanel(true); };
+  p.querySelector("#closeP").onclick = () => togglePanel(false);
+}
+
+/* ---------- Save as new view ---------- */
+let newIcon = "bookmark";
+function openSave() {
+  closeAll();
+  togglePanel(false);
+  newIcon = "bookmark";
+  document.getElementById("dlgIcon").innerHTML = svg(newIcon);
+  document.getElementById("vsec").innerHTML = sections.map((s) => `<option value="${s.id}" ${s.id === "mine" ? "selected" : ""}>${esc(s.name)}</option>`).join("");
+  const parts = [];
+  if (f.sources.length) parts.push("Store: " + f.sources.map((s) => SRC[s][0]).join(", "));
+  const L = { installed: { yes: "Installed", no: "Not installed" }, favorite: { yes: "Favorites", no: "Not favorites" }, played: { yes: "Played", no: "Never played" } };
+  for (const k of Object.keys(L)) if (f[k] !== "any") parts.push(L[k][f[k]]);
+  if (f.hidden !== "exclude") parts.push(f.hidden === "only" ? "Only hidden" : "Including hidden");
+  document.getElementById("vsum").innerHTML = `<b>Filters:</b> ${parts.join(" · ") || "none"}<br><b>Sort:</b> ${SORTS[f.sort]}, ${f.desc ? "descending" : "ascending"}<br><b>Layout:</b> ${f.mode}`;
+  document.getElementById("modal").classList.add("show");
+  document.getElementById("vname").select();
+}
+document.getElementById("dlgIcon").onclick = (e) => {
+  e.stopPropagation(); e.preventDefault();
+  pickIcon(e.currentTarget, newIcon, (k) => { newIcon = k; document.getElementById("dlgIcon").innerHTML = svg(k); });
+};
+document.getElementById("cancelSave").onclick = () => document.getElementById("modal").classList.remove("show");
+document.getElementById("doSave").onclick = () => {
+  const sec = sections.find((s) => s.id === document.getElementById("vsec").value) ?? sections[0];
+  const id = "v" + Date.now();
+  sec.views.push({ id, name: document.getElementById("vname").value || "New view", icon: newIcon, f: structuredClone(f) });
+  current = id;
+  document.getElementById("modal").classList.remove("show");
+  render();
+};
+document.getElementById("saveBtn").onclick = (e) => { e.stopPropagation(); openPop("pop-save", e.currentTarget); };
+document.getElementById("updateView").onclick = () => { closeAll(); view().f = structuredClone(f); render(); };
+document.getElementById("saveAsNew").onclick = openSave;
+document.getElementById("reset").onclick = () => { f = structuredClone(view().f); render(); };
+
+/* ---------- Title bar ---------- */
+let syncing = new Set();
+const ago = { amazon: "2 h ago", battlenet: "12 min ago", ea: "12 min ago", epic: "12 min ago", gog: "12 min ago", prism: "12 min ago", steam: "12 min ago", ubisoft: "12 min ago", xbox: "failed: sign-in expired" };
+function renderSync() {
+  document.getElementById("syncRows").innerHTML = SYNCABLE.map((s) => `
+    <div class="sync-row">${srcIcon(s)}<span>${SRC[s][0]}</span>
+      <span class="st" style="${ago[s].startsWith("failed") ? "color:var(--danger)" : ""}">${syncing.has(s) ? "Syncing…" : ago[s]}</span>
+      <button class="ib" data-sync="${s}" title="Sync ${SRC[s][0]}"><svg viewBox="0 0 24 24" class="${syncing.has(s) ? "spin" : ""}"><path d="M21 12a9 9 0 0 0-15-6.7L3 8M3 3v5h5M3 12a9 9 0 0 0 15 6.7l3-2.7M21 21v-5h-5"/></svg></button>
+    </div>`).join("");
+  document.getElementById("syncIcon").classList.toggle("spin", syncing.size > 0);
+  document.getElementById("syncBtn").classList.toggle("syncing", syncing.size > 0);
+  document.getElementById("syncLbl").textContent = syncing.size ? `Syncing ${syncing.size}…` : "Sync";
+  document.querySelectorAll("[data-sync]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); startSync([b.dataset.sync]); });
+}
+function startSync(ids) {
+  ids.forEach((s) => syncing.add(s)); renderSync();
+  ids.forEach((s, i) => setTimeout(() => { syncing.delete(s); ago[s] = "just now"; renderSync(); }, 1200 + i * 300));
+}
+document.getElementById("syncAll").onclick = (e) => { e.stopPropagation(); startSync(SYNCABLE); };
+document.getElementById("launchers").innerHTML = Object.entries(LAUNCHERS).map(([s, name]) => `<button class="mi">${srcIcon(s)}${name}</button>`).join("");
+document.querySelectorAll("[data-pop]").forEach((b, i) => {
+  b.id ||= "tb-" + i;
+  b.addEventListener("click", (e) => { e.stopPropagation(); openPop("pop-" + b.dataset.pop, b); });
+});
+
+/* ---------- App menu (click the Questkeep name) ---------- */
+const I = {
+  edit: '<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  rocket: ICONS.rocket,
+  sync: '<path d="M21 12a9 9 0 0 0-15-6.7L3 8M3 3v5h5M3 12a9 9 0 0 0 15 6.7l3-2.7M21 21v-5h-5"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1"/>',
+  exit: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
+};
+document.getElementById("pop-app").innerHTML = `
+  <button class="mi" id="appEdit">${svg(I.edit)}Edit views</button>
+  <hr />
+  <div class="mi sub">${svg(I.plus)}Add game<span class="arrow">›</span><div class="subpop">${document.getElementById("pop-add").innerHTML}</div></div>
+  <div class="mi sub">${svg(I.rocket)}Open launcher<span class="arrow">›</span><div class="subpop">${document.getElementById("launchers").innerHTML}</div></div>
+  <div class="mi sub">${svg(I.sync)}Sync<span class="arrow">›</span><div class="subpop">
+    <button class="mi" data-app-sync="all">${svg(I.sync)}Sync all</button><hr />
+    ${SYNCABLE.map((s) => `<button class="mi" data-app-sync="${s}">${srcIcon(s)}${SRC[s][0]}</button>`).join("")}</div></div>
+  <hr />
+  <button class="mi">${svg(I.gear)}Settings</button>
+  <button class="mi">${svg(I.exit)}Exit Questkeep</button>`;
+document.getElementById("appEdit").onclick = () => { closeAll(); editing = true; renderSide(); };
+document.querySelectorAll("[data-app-sync]").forEach((b) => b.onclick = () => { closeAll(); startSync(b.dataset.appSync === "all" ? SYNCABLE : [b.dataset.appSync]); });
+
+/* ---------- Sidebar right-click menu ---------- */
+document.getElementById("side").addEventListener("contextmenu", (e) => {
+  if (editing) return;
+  e.preventDefault();
+  const item = e.target.closest("[data-view]");
+  const v = item && allViews().find((x) => x.id === item.dataset.view);
+  const p = document.getElementById("pop-ctx");
+  p.innerHTML = (v ? `
+    <button class="mi" data-ctx="rename">Rename “${esc(v.name)}”</button>
+    <button class="mi" data-ctx="icon">Change icon</button>
+    <button class="mi" data-ctx="dup">Duplicate</button>
+    <button class="mi danger" data-ctx="del">Delete view</button><hr />` : "") +
+    `<button class="mi" data-ctx="edit">${svg(I.edit)}Edit views</button>`;
+  closeAll();
+  const app = document.getElementById("app").getBoundingClientRect();
+  p.style.left = e.clientX - app.left + "px";
+  p.style.top = e.clientY - app.top + "px";
+  p.classList.add("show");
+  const act = {
+    edit: () => { editing = true; renderSide(); },
+    rename: () => {
+      editing = true; renderSide();
+      const input = document.querySelector(`[data-rename="${v.id}"]`); input.focus(); input.select();
+    },
+    icon: () => pickIcon(item, v.icon, (k) => { v.icon = k; renderSide(); }),
+    dup: () => {
+      const sec = sections.find((s) => s.views.includes(v));
+      sec.views.splice(sec.views.indexOf(v) + 1, 0, { ...structuredClone(v), id: "v" + Date.now(), name: v.name + " (copy)" });
+      renderSide();
+    },
+    del: () => { sections.forEach((s) => s.views = s.views.filter((x) => x !== v)); ensureCurrent(); render(); },
+  };
+  p.querySelectorAll("[data-ctx]").forEach((b) => b.onclick = (ev) => { ev.stopPropagation(); closeAll(); act[b.dataset.ctx](); });
+});
+
+document.addEventListener("click", (e) => {
+  if (!e.target.isConnected) return; // the clicked element was re-rendered
+  if (!e.target.closest(".pop")) closeAll();
+  if (!e.target.closest("#fpanel") && !e.target.closest("#filterBtn")) togglePanel(false);
+});
+document.getElementById("filterBtn").onclick = (e) => { e.stopPropagation(); togglePanel(); };
+document.getElementById("sortBtn").onclick = (e) => { e.stopPropagation(); openSort(e.currentTarget); };
+
+/* ---------- Filter this view (keyword, never saved with the view) ---------- */
+const fsearch = document.getElementById("fsearch");
+const fsInput = document.getElementById("fsInput");
+function setKeyword(value) {
+  keyword = value.trim().toLowerCase();
+  fsearch.classList.toggle("active", keyword !== "");
+  renderBar(); renderContent();
+}
+function openFs() { fsearch.classList.add("expanded"); fsInput.focus(); }
+function clearFs() { fsInput.value = ""; setKeyword(""); fsearch.classList.remove("expanded"); fsInput.blur(); }
+document.getElementById("fsBtn").onmousedown = (e) => e.preventDefault(); // keep focus where it is
+document.getElementById("fsBtn").onclick = () => (fsearch.classList.contains("expanded") && !fsInput.value ? clearFs() : openFs());
+document.getElementById("fsClear").onclick = clearFs;
+fsInput.addEventListener("input", () => setKeyword(fsInput.value));
+fsInput.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.preventDefault(); clearFs(); } });
+// Collapses only when empty, so a narrowed list never goes unnoticed.
+fsInput.addEventListener("blur", () => { if (!fsInput.value) fsearch.classList.remove("expanded"); });
+document.addEventListener("keydown", (e) => {
+  const typing = e.target.closest?.("input, select, textarea");
+  if (e.ctrlKey && e.key.toLowerCase() === "f") { e.preventDefault(); openFs(); return; }
+  // Type-to-filter: a printable key while the library has focus starts the filter.
+  if (!typing && !e.ctrlKey && !e.altKey && !e.metaKey && e.key.length === 1 && e.key !== " " && !editing) {
+    e.preventDefault();
+    openFs();
+    fsInput.value += e.key;
+    setKeyword(fsInput.value);
+  }
+});
+
+/* ---------- Command bar ---------- */
+let cmdSel = 0;
+let cmdList = [];
+const cmd = document.getElementById("cmd");
+const cmdInput = document.getElementById("cmdInput");
+const PLAY = '<path d="M6 3l14 9-14 9z" fill="currentColor"/>';
+const DOWNLOAD = '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>';
+function toast(text) {
+  const t = document.getElementById("toast");
+  t.textContent = text;
+  t.classList.add("show");
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => t.classList.remove("show"), 2200);
+}
+function renderCmd() {
+  const q = cmdInput.value.trim().toLowerCase();
+  const recent = [...GAMES].filter((g) => g.hours).sort((a, b) => b.i - a.i);
+  // Every game is searchable, whatever view is open; hidden games come last.
+  cmdList = q
+    ? GAMES.filter((g) => g.name.toLowerCase().includes(q)).sort((a, b) => a.hidden - b.hidden || a.name.toLowerCase().indexOf(q) - b.name.toLowerCase().indexOf(q))
+    : recent.slice(0, 5);
+  cmdSel = Math.min(cmdSel, Math.max(cmdList.length - 1, 0));
+  const mark = (name) => {
+    if (!q) return esc(name);
+    const i = name.toLowerCase().indexOf(q);
+    return esc(name.slice(0, i)) + "<mark>" + esc(name.slice(i, i + q.length)) + "</mark>" + esc(name.slice(i + q.length));
+  };
+  const initials = (g) => g.name.replace(/[^A-Z0-9]/g, "").slice(0, 2);
+  document.getElementById("cmdResults").innerHTML =
+    (q ? "" : "<h4>Recently played</h4>") +
+    (cmdList.length ? cmdList.slice(0, 7).map((g, i) => `
+      <div class="cres ${i === cmdSel ? "sel" : ""}" data-ci="${i}">
+        <span class="gico" style="background:${H(g.hue)}">${initials(g)}</span>
+        <span class="nm">${mark(g.name)}</span>
+        <span class="meta">${srcIcon(g.source)}${g.hidden ? "Hidden · " : ""}${g.installed ? "Installed" : "Not installed"}</span>
+        <span class="act ${g.installed ? "play" : ""}" data-act="${i}" title="${g.installed ? "Play" : "Install"} (Ctrl+Enter)">${svg(g.installed ? PLAY : DOWNLOAD)}${g.installed ? "Play" : "Install"}</span>
+      </div>`).join("") : `<div class="cmd-empty">No game matches “${esc(cmdInput.value)}”.</div>`) +
+    `<div class="cmd-foot"><span><kbd>↑</kbd> <kbd>↓</kbd> select</span><span><kbd>Enter</kbd> open page</span><span><kbd>Ctrl Enter</kbd> play or install</span><span><kbd>Esc</kbd> close</span></div>`;
+  document.querySelectorAll("[data-ci]").forEach((r) => {
+    r.onmousemove = () => { if (cmdSel !== +r.dataset.ci) { cmdSel = +r.dataset.ci; renderCmd(); } };
+    r.onmousedown = (e) => { e.preventDefault(); runCmd(+r.dataset.ci, !!e.target.closest("[data-act]")); };
+  });
+}
+function runCmd(i, act) {
+  const g = cmdList[i];
+  if (!g) return;
+  closeCmd();
+  toast(act ? (g.installed ? `Starting ${g.name}…` : `Installing ${g.name} through ${SRC[g.source][0]}…`) : `Opened the page of ${g.name}`);
+}
+function openCmd() { closeAll(); cmd.classList.add("open"); cmdSel = 0; renderCmd(); }
+function closeCmd() { cmd.classList.remove("open"); cmdInput.value = ""; cmdInput.blur(); }
+cmdInput.addEventListener("focus", openCmd);
+cmdInput.addEventListener("input", () => { cmd.classList.add("open"); cmdSel = 0; renderCmd(); });
+document.addEventListener("mousedown", (e) => { if (!e.target.closest("#cmd")) cmd.classList.remove("open"); });
+cmdInput.addEventListener("keydown", (e) => {
+  const n = Math.min(cmdList.length, 7);
+  if (e.key === "ArrowDown") { e.preventDefault(); cmdSel = (cmdSel + 1) % n; renderCmd(); }
+  else if (e.key === "ArrowUp") { e.preventDefault(); cmdSel = (cmdSel - 1 + n) % n; renderCmd(); }
+  else if (e.key === "Enter") { e.preventDefault(); runCmd(cmdSel, e.ctrlKey); }
+  else if (e.key === "Escape") { e.preventDefault(); closeCmd(); }
+});
+document.addEventListener("keydown", (e) => {
+  if (e.ctrlKey && e.key.toLowerCase() === "k") { e.preventDefault(); cmdInput.focus(); }
+});
+document.querySelectorAll("#modeSeg button").forEach((b) => b.onclick = () => { f.mode = b.dataset.mode; render(); });
+
+function render() { renderSide(); renderBar(); renderContent(); }
+render();
+renderSync();
+</script>
+</body>
+</html>
