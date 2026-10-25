@@ -243,7 +243,7 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
       <div class="titlebar__center" data-tauri-drag-region>
         <CommandBar ref={props.commandRef} />
       </div>
-      <div class="titlebar__end">
+      <div class="titlebar__end" data-tauri-drag-region>
         <button
           type="button"
           class="titlebar__tool"
