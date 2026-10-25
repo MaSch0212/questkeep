@@ -62,7 +62,8 @@ crates/questkeep-core/src/     all logic; no Tauri/UI dependency
   model/                       Game, PlayAction, queries, sorting names (ts-rs exported)
   db/                          SQLite: migrations.rs (append-only), games.rs, sessions.rs
   providers/                   LibraryProvider trait + registry; manual, steam/, epic/, gog/, xbox/,
-                               ubisoft/, amazon/, heroic (Linux helpers), lutris/, sqlite (foreign DBs)
+                               ubisoft/, amazon/, battlenet, ea, prism, heroic (Linux helpers), lutris/,
+                               sqlite (foreign DBs), icons/ (one SVG logo per provider)
   auth/                        store account sign-in: keyring TokenStore, AccountSession, Http, AccountStatus,
                                WebSession (Steam store session, implemented by src-tauri/signin.rs)
   launcher/                    launch + tracker threads (mod.rs), process matching (process.rs)

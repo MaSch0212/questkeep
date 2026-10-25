@@ -634,6 +634,65 @@ impl Library {
             .map_err(|err| CoreError::Launch(format!("Could not start the uninstall: {err}")))
     }
 
+    /// Starts one of a provider's extra ways to add games (e.g. Prism Launcher's "new instance"
+    /// dialog) and returns the ids its installed scan sees now, for [`Self::wait_for_new_games`].
+    pub fn run_add_game_option(
+        &self,
+        provider_id: &str,
+        option_id: &str,
+    ) -> Result<std::collections::HashSet<String>> {
+        let provider = self
+            .providers
+            .get(provider_id)
+            .ok_or_else(|| CoreError::UnknownProvider(provider_id.to_string()))?;
+        let before = self.installed_ids(provider_id);
+        provider
+            .run_add_game_option(option_id)
+            .map_err(|err| match err {
+                ProviderError::Unsupported => {
+                    CoreError::Invalid(format!("{} cannot add games that way.", provider.name()))
+                }
+                other => CoreError::Launch(format!("Could not open {}: {other}", provider.name())),
+            })?;
+        Ok(before)
+    }
+
+    /// Source ids the provider's installed scan reports right now (empty when it fails).
+    fn installed_ids(&self, provider_id: &str) -> std::collections::HashSet<String> {
+        self.providers
+            .get(provider_id)
+            .and_then(|p| p.scan_installed().ok())
+            .map(|games| games.into_iter().map(|g| g.source_game_id).collect())
+            .unwrap_or_default()
+    }
+
+    /// Checks the provider every `interval` until a game that is not in `before` shows up (then
+    /// scans it into the library and returns true) or `timeout` passes. Blocks; run it on a
+    /// worker thread after [`Self::run_add_game_option`].
+    pub fn wait_for_new_games(
+        &self,
+        provider_id: &str,
+        before: &std::collections::HashSet<String>,
+        interval: std::time::Duration,
+        timeout: std::time::Duration,
+    ) -> bool {
+        let deadline = std::time::Instant::now() + timeout;
+        while std::time::Instant::now() < deadline {
+            std::thread::sleep(interval);
+            if self
+                .installed_ids(provider_id)
+                .iter()
+                .any(|id| !before.contains(id))
+            {
+                if let Err(err) = self.scan(provider_id) {
+                    tracing::warn!(provider = provider_id, %err, "scan after adding a game failed");
+                }
+                return true;
+            }
+        }
+        false
+    }
+
     /// Dev tool: inserts `count` fake games to test performance.
     pub fn seed_fake_library(&self, count: usize) -> Result<usize> {
         let records = crate::seed::fake_games(count);
@@ -650,6 +709,9 @@ fn run_store_action(action: &PlayAction) -> std::io::Result<()> {
         ActionKind::Uri => crate::platform::open_uri(&action.target),
         ActionKind::File => {
             let mut command = std::process::Command::new(&action.target);
+            if let Some(args) = action.args.as_deref().filter(|a| !a.trim().is_empty()) {
+                crate::platform::add_raw_args(&mut command, args);
+            }
             if let Some(dir) = &action.working_dir {
                 command.current_dir(dir);
             }
@@ -832,6 +894,72 @@ mod tests {
             })
             .collect();
         assert_eq!(kinds, [r#"queued ["fake"]"#, "started fake", "failed fake"]);
+    }
+
+    /// Launcher whose "new instance" dialog adds a game once it was opened.
+    struct DialogStore(Mutex<Vec<ImportedGame>>);
+    impl LibraryProvider for DialogStore {
+        fn id(&self) -> &str {
+            "dialog"
+        }
+        fn name(&self) -> &str {
+            "Dialog"
+        }
+        fn icon_svg(&self) -> &'static str {
+            "<svg/>"
+        }
+        fn scan_installed(&self) -> Result<Vec<ImportedGame>, ProviderError> {
+            Ok(self.0.lock().unwrap().clone())
+        }
+        fn run_add_game_option(&self, option_id: &str) -> Result<(), ProviderError> {
+            if option_id != "new" {
+                return Err(ProviderError::Unsupported);
+            }
+            self.0
+                .lock()
+                .unwrap()
+                .push(ImportedGame::installed("2", "New Instance"));
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn add_game_option_imports_the_game_added_in_the_launcher() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut providers = ProviderRegistry::new();
+        providers.register(Arc::new(DialogStore(Mutex::new(vec![
+            ImportedGame::installed("1", "Old Instance"),
+        ]))));
+        let (lib, _) = library(tmp.path(), providers);
+        assert!(matches!(
+            lib.run_add_game_option("dialog", "other"),
+            Err(CoreError::Invalid(_))
+        ));
+        assert!(matches!(
+            lib.run_add_game_option("nope", "new"),
+            Err(CoreError::UnknownProvider(_))
+        ));
+        let short = std::time::Duration::from_millis(1);
+        // Nothing new yet: gives up after the timeout.
+        let before = lib.installed_ids("dialog");
+        assert!(!lib.wait_for_new_games("dialog", &before, short, short * 5));
+
+        let before = lib.run_add_game_option("dialog", "new").unwrap();
+        assert_eq!(before.len(), 1);
+        assert!(lib.wait_for_new_games(
+            "dialog",
+            &before,
+            short,
+            std::time::Duration::from_secs(5)
+        ));
+        let names: Vec<_> = lib
+            .list_games(&GameQuery::default())
+            .unwrap()
+            .into_iter()
+            .map(|g| g.name)
+            .collect();
+        assert_eq!(names.len(), 2);
+        assert!(names.contains(&"New Instance".to_string()));
     }
 
     /// Store whose client is missing but whose account lists owned games when configured.

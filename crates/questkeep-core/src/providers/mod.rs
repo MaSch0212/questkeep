@@ -2,6 +2,8 @@
 //! registering it; UI and database code stay untouched.
 
 pub mod amazon;
+pub mod battlenet;
+pub mod ea;
 pub mod epic;
 pub mod gog;
 pub mod heroic;
@@ -9,6 +11,7 @@ pub mod heroic_sideload;
 mod icons;
 pub mod lutris;
 pub mod manual;
+pub mod prism;
 mod sqlite;
 pub mod steam;
 pub mod ubisoft;
@@ -127,6 +130,28 @@ pub trait LibraryProvider: Send + Sync {
     fn icon_candidates(&self, _source_game_id: &str) -> Vec<ImageCandidate> {
         Vec::new()
     }
+    /// Extra ways to add games that this provider offers next to "Add game", e.g. the launcher's
+    /// own "new instance" dialog. Empty by default.
+    fn add_game_options(&self) -> Vec<AddGameOption> {
+        Vec::new()
+    }
+    /// Starts one of [`add_game_options`](Self::add_game_options) (opens the launcher's dialog)
+    /// and returns without waiting for the user. The library watches the installed scan for the
+    /// game the user adds there.
+    fn run_add_game_option(&self, _option_id: &str) -> Result<(), ProviderError> {
+        Err(ProviderError::Unsupported)
+    }
+}
+
+/// An extra way to add games, shown in the menu of the "Add game" button.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AddGameOption {
+    /// Stable within the provider.
+    pub id: String,
+    /// Menu text, e.g. `New Minecraft instance`.
+    pub label: String,
 }
 
 /// A possible source for a game image.
@@ -148,6 +173,8 @@ pub struct ProviderInfo {
     pub can_scan: bool,
     pub can_scan_owned: bool,
     pub can_uninstall: bool,
+    /// Extra ways to add games (see [`LibraryProvider::add_game_options`]).
+    pub add_game_options: Vec<AddGameOption>,
 }
 
 /// Providers looked up by id.
@@ -190,6 +217,14 @@ impl ProviderRegistry {
             gog::GogProvider::detect().with_account(Arc::new(gog::GogAccount::new(tokens.clone()))),
         ));
         registry.register(Arc::new(ubisoft::UbisoftProvider::detect()));
+        registry.register(Arc::new(prism::PrismProvider::detect()));
+        // Battle.net and the EA app only exist on Windows (elsewhere they run under Wine, where
+        // Heroic or Lutris already see them).
+        #[cfg(windows)]
+        {
+            registry.register(Arc::new(battlenet::BattleNetProvider::detect()));
+            registry.register(Arc::new(ea::EaProvider::detect()));
+        }
         // Lutris only exists on Linux; leaving it out elsewhere keeps the provider list honest.
         #[cfg(not(windows))]
         registry.register(Arc::new(lutris::LutrisProvider::detect()));
@@ -231,6 +266,7 @@ impl ProviderRegistry {
                 can_scan: p.can_scan(),
                 can_scan_owned: p.can_scan_owned(),
                 can_uninstall: p.can_uninstall(),
+                add_game_options: p.add_game_options(),
             })
             .collect()
     }
@@ -330,7 +366,8 @@ mod tests {
                 icon: "<svg/>".into(),
                 can_scan: true,
                 can_scan_owned: false,
-                can_uninstall: false
+                can_uninstall: false,
+                add_game_options: Vec::new(),
             }]
         );
         assert!(matches!(

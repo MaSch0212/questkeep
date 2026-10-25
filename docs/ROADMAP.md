@@ -29,6 +29,10 @@ Also: GOG playtime from GOG Galaxy's local database; IGDB fills missing genres (
 - **Ubisoft and Amazon follow-ups**: try launch/install/uninstall live; tray entries for both
   launchers. Verify the Amazon and Steam sign-ins with real accounts (built from Playnite's flows,
   not yet signed in live); Ubisoft owned games would need an account API Ubisoft doesn't offer.
+- **Battle.net owned games**: a web sign-in (account.battle.net games list) like Steam's, and
+  `--game=<id>` installs. Check the Battle.net provider live once a game finished installing.
+- **EA app**: owned games need EA's web API (the app's own database is encrypted); try the
+  `origin2://` / `link2ea://` launch path for games the plain executable does not start.
 
 ## Blocked
 

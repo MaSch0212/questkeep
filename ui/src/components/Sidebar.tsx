@@ -5,6 +5,7 @@ import * as api from "../lib/api";
 import { libraryView, type LibraryView } from "../lib/query";
 import { store } from "../lib/store";
 import { isProviderSyncing } from "../lib/syncStatus";
+import { AddGameButton } from "./AddGameButton";
 import { SourceIcon } from "./SourceIcon";
 import { SyncIndicator } from "./SyncIndicator";
 
@@ -106,9 +107,7 @@ export function Sidebar(props: SidebarProps) {
       </ul>
 
       <div class="sidebar__footer">
-        <button type="button" class="btn btn--primary" onClick={props.onAdd}>
-          Add game
-        </button>
+        <AddGameButton onAdd={props.onAdd} />
         <button
           type="button"
           class="nav-item nav-item--icon"

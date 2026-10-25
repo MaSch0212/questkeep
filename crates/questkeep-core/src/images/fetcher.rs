@@ -683,6 +683,16 @@ fn build_icon(shared: &MetadataShared, game: &Game) -> Option<(Vec<u8>, bool)> {
             .icon_candidates(source_id)
             .iter()
             .find_map(|candidate| {
+                // A provider may name an executable whose icon to use (Battle.net games start
+                // through a URI, so their executable is not the play action).
+                if let ImageCandidate::File(path) = &candidate
+                    && path
+                        .extension()
+                        .is_some_and(|e| e.eq_ignore_ascii_case("exe"))
+                {
+                    let icon = crate::platform::executable_icon(path, EXECUTABLE_ICON_SIZE)?;
+                    return icon_png_from_rgba(&icon, SquareFrom::Icon);
+                }
                 let loaded = match candidate {
                     ImageCandidate::File(path) => load_file(path),
                     ImageCandidate::Url(url) => download(&shared.http, url),

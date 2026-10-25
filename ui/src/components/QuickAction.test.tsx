@@ -123,6 +123,7 @@ describe("store banner and icon", () => {
         canScan: true,
         canScanOwned: true,
         canUninstall: true,
+        addGameOptions: [],
       },
     ]);
     const { listen } = await import("@tauri-apps/api/event");

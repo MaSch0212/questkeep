@@ -27,6 +27,9 @@ export const scanAllLibraries = () => invoke<void>("scan_all_libraries");
 export const launchGame = (id: string) => invoke<void>("launch_game", { id });
 export const installGame = (id: string) => invoke<void>("install_game", { id });
 export const uninstallGame = (id: string) => invoke<void>("uninstall_game", { id });
+/** Opens a provider's own way to add games; the new game is imported once the provider sees it. */
+export const addGameWithOption = (providerId: string, optionId: string) =>
+  invoke<void>("add_game_with_option", { providerId, optionId });
 export const refreshMetadata = (id: string) => invoke<void>("refresh_metadata", { id });
 export const runningGames = () => invoke<string[]>("running_games");
 export const appInfo = () => invoke<AppInfo>("app_info");

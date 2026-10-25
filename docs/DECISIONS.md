@@ -512,3 +512,18 @@ Short log of choices made while building. Newest at the bottom of each section.
   `providers/icons/`, sent as `ProviderInfo.icon`) instead of the UI mapping ids to an icon
   package: a new provider brings its logo with it. The markup is compiled in, so the UI inserts it
   with `innerHTML`; sources without a provider fall back to a generic glyph.
+- **Providers can offer extra ways to add games** (`add_game_options`, a split "Add game" button).
+  After one runs, a worker scans that provider every 5 s for up to 10 min and imports the first new
+  game, so nothing has to be synced by hand.
+- **Prism Launcher's "Add Instance" is opened with Ctrl+N**: Prism has no command-line option for
+  it. Questkeep starts Prism (`--show-window`, allowed to take the foreground) and sends Ctrl+N only
+  once a `prismlauncher.exe` window titled "Prism Launcher…" is in front, so the keys never reach
+  another program. Instances play through `--launch <id>`, tracked by the Java process name, since
+  Prism hands the launch to its running window and exits.
+- **Battle.net reads the agent's `product.db`** (protobuf, a minimal reader in the provider) for
+  installs and their "installed" flag (downloads in progress are skipped), and `aggregate.json` for
+  names, the `battlenet://` launch URI and box art. Owned games need a Battle.net web sign-in (later).
+- **EA app games come from the Windows "Apps" list** (entries uninstalled by EA's `Cleanup.exe`)
+  and each game's `__Installerinstallerdata.xml` (content id, title, launcher path). The EA app's
+  own database is encrypted, so only installed games are listed; they start through their
+  executable and are tracked by install folder, as the EA app may relaunch them.

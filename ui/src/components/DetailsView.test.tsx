@@ -89,6 +89,7 @@ describe("DetailsView", () => {
         canScan: true,
         canScanOwned: true,
         canUninstall: true,
+        addGameOptions: [],
       },
     ]);
     render(() => <DetailsView />);

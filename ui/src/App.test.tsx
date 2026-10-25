@@ -49,6 +49,7 @@ beforeEach(() => {
       canScan: false,
       canScanOwned: false,
       canUninstall: false,
+      addGameOptions: [],
     },
     {
       id: "steam",
@@ -57,6 +58,7 @@ beforeEach(() => {
       canScan: true,
       canScanOwned: true,
       canUninstall: true,
+      addGameOptions: [],
     },
   ]);
   vi.mocked(api.appInfo).mockResolvedValue({

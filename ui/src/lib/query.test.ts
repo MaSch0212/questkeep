@@ -45,6 +45,7 @@ describe("helpers", () => {
         canScan: false,
         canScanOwned: false,
         canUninstall: false,
+        addGameOptions: [],
       },
       {
         id: "steam",
@@ -53,6 +54,7 @@ describe("helpers", () => {
         canScan: true,
         canScanOwned: true,
         canUninstall: true,
+        addGameOptions: [],
       },
     ];
     expect(mergeSources(providers, new Set(["steam", "fake"]))).toEqual([

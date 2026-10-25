@@ -308,6 +308,7 @@ pub fn run() {
             commands::launch_game,
             commands::install_game,
             commands::uninstall_game,
+            commands::add_game_with_option,
             commands::refresh_metadata,
             commands::refetch_artwork,
             commands::running_games,

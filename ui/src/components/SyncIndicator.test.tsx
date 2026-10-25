@@ -84,6 +84,7 @@ describe("SyncIndicator", () => {
         canScan: true,
         canScanOwned: true,
         canUninstall: true,
+        addGameOptions: [],
       },
       {
         id: "epic",
@@ -92,6 +93,7 @@ describe("SyncIndicator", () => {
         canScan: true,
         canScanOwned: true,
         canUninstall: true,
+        addGameOptions: [],
       },
     ]);
     render(() => <SyncIndicator />);

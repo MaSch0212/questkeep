@@ -25,6 +25,7 @@ beforeEach(async () => {
       canScan: false,
       canScanOwned: false,
       canUninstall: false,
+      addGameOptions: [],
     },
     {
       id: "steam",
@@ -33,6 +34,7 @@ beforeEach(async () => {
       canScan: true,
       canScanOwned: true,
       canUninstall: true,
+      addGameOptions: [],
     },
   ]);
   const { listen } = await import("@tauri-apps/api/event");
@@ -77,5 +79,67 @@ describe("Sidebar sources", () => {
     const button = screen.getByRole("button", { name: "Syncing Steam…" });
     expect(button).toBeDisabled();
     expect(button.closest(".source-item")).toHaveClass("source-item--syncing");
+  });
+});
+
+async function withPrism() {
+  vi.mocked(api.listProviders).mockResolvedValue([
+    {
+      id: "manual",
+      name: "Manual",
+      icon: "<svg></svg>",
+      canScan: false,
+      canScanOwned: false,
+      canUninstall: false,
+      addGameOptions: [],
+    },
+    {
+      id: "prism",
+      name: "Prism Launcher",
+      icon: "<svg></svg>",
+      canScan: true,
+      canScanOwned: false,
+      canUninstall: false,
+      addGameOptions: [{ id: "new-instance", label: "New Minecraft instance" }],
+    },
+  ]);
+  store.reset();
+  await store.init();
+}
+
+describe("Sidebar add game button", () => {
+  it("is a plain button when no provider offers other ways", async () => {
+    const onAdd = vi.fn<() => void>();
+    render(() => <Sidebar onAdd={onAdd} />);
+    expect(screen.queryByRole("button", { name: "More ways to add games" })).toBeNull();
+    await fireEvent.click(screen.getByRole("button", { name: "Add game" }));
+    expect(onAdd).toHaveBeenCalled();
+  });
+
+  it("opens a menu with the providers' options and runs the chosen one", async () => {
+    await withPrism();
+    vi.mocked(api.addGameWithOption).mockResolvedValue(undefined);
+    render(() => <Sidebar onAdd={vi.fn<() => void>()} />);
+    const arrow = screen.getByRole("button", { name: "More ways to add games" });
+    expect(arrow).toHaveAttribute("aria-expanded", "false");
+    await fireEvent.click(arrow);
+    expect(arrow).toHaveAttribute("aria-expanded", "true");
+    const item = screen.getByRole("menuitem", { name: "New Minecraft instance" });
+    await fireEvent.click(item);
+    expect(api.addGameWithOption).toHaveBeenCalledWith("prism", "new-instance");
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
+
+  it("opens with the arrow keys and closes with Escape", async () => {
+    await withPrism();
+    render(() => <Sidebar onAdd={vi.fn<() => void>()} />);
+    const arrow = screen.getByRole("button", { name: "More ways to add games" });
+    await fireEvent.keyDown(arrow, { key: "ArrowDown" });
+    const item = screen.getByRole("menuitem", { name: "New Minecraft instance" });
+    await new Promise((resolve) => queueMicrotask(() => resolve(undefined)));
+    expect(item).toHaveFocus();
+    await fireEvent.keyDown(item, { key: "Escape" });
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(arrow).toHaveFocus();
   });
 });

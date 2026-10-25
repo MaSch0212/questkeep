@@ -242,6 +242,7 @@ describe("GOG Galaxy launch option", () => {
         canScan: true,
         canScanOwned: false,
         canUninstall: true,
+        addGameOptions: [],
       },
     ]);
     await store.init();
@@ -272,6 +273,7 @@ describe("GOG Galaxy launch option", () => {
         canScan: true,
         canScanOwned: true,
         canUninstall: true,
+        addGameOptions: [],
       },
     ]);
     await store.init();
@@ -297,6 +299,7 @@ describe("GOG Galaxy launch option", () => {
         canScan: true,
         canScanOwned: true,
         canUninstall: true,
+        addGameOptions: [],
       },
     ]);
     await store.init();

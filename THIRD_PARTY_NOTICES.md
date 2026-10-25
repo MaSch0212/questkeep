@@ -68,8 +68,13 @@ today).
 
 Each provider ships its logo as an SVG in `crates/questkeep-core/src/providers/icons/`.
 
-- Steam, Epic Games, GOG.com, Ubisoft, Lutris and Heroic are monochrome glyphs from Simple Icons
-  (https://simpleicons.org), released under CC0 1.0.
+- Steam, Epic Games, GOG.com, Ubisoft, Battle.net, EA, Lutris and Heroic are monochrome glyphs
+  from Simple Icons (https://simpleicons.org), released under CC0 1.0.
+- Prism Launcher's logo (`prism.svg`) is adapted from the Prism Launcher logo
+  (https://github.com/PrismLauncher/PrismLauncher, `program_info/`), licensed under CC BY-SA 4.0
+  (https://creativecommons.org/licenses/by-sa/4.0/). Changes: the colored facets were redrawn in
+  one color with varying opacity and the inner cube was cut out; the adapted file is under the same
+  license.
 - Xbox, Amazon and the folder used for manually added games are from Font Awesome Free 6.7.2 by
   Fonticons, Inc. (https://fontawesome.com), licensed under CC BY 4.0
   (https://creativecommons.org/licenses/by/4.0/). The path data is unchanged; only a

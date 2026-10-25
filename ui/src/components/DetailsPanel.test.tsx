@@ -28,6 +28,7 @@ async function loadProviders(canUninstall: boolean) {
       canScan: true,
       canScanOwned: true,
       canUninstall,
+      addGameOptions: [],
     },
   ]);
   vi.mocked(api.appInfo).mockResolvedValue({
