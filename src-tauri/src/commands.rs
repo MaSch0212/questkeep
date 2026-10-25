@@ -95,6 +95,18 @@ pub async fn list_providers(state: State<'_, Arc<AppState>>) -> CmdResult<Vec<Pr
     blocking(state, |s| Ok(s.library.provider_infos())).await
 }
 
+/// Scans every store, one after another. Progress and results arrive as core events
+/// (`scansQueued`, `scanStarted`, `libraryScanned`, `scanFailed`); failures are not an error here.
+#[tauri::command]
+pub async fn scan_all_libraries(state: State<'_, Arc<AppState>>) -> CmdResult<()> {
+    blocking(state, |s| {
+        s.library.scan_all();
+        s.queue_downloads();
+        Ok(())
+    })
+    .await
+}
+
 #[tauri::command]
 pub async fn scan_library(
     state: State<'_, Arc<AppState>>,

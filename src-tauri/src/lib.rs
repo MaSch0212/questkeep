@@ -297,6 +297,7 @@ pub fn run() {
             commands::remove_game,
             commands::list_providers,
             commands::scan_library,
+            commands::scan_all_libraries,
             commands::launch_game,
             commands::install_game,
             commands::uninstall_game,

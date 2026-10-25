@@ -91,7 +91,10 @@ pub fn create(app: &AppHandle, state: &Arc<AppState>) -> tauri::Result<()> {
             | CoreEvent::GameStarted { .. }
             | CoreEvent::GameStopped { .. } => Trigger::Games,
             CoreEvent::LibraryScanned { .. } => Trigger::Scan,
-            CoreEvent::GameError { .. } => return,
+            CoreEvent::GameError { .. }
+            | CoreEvent::ScansQueued { .. }
+            | CoreEvent::ScanStarted { .. }
+            | CoreEvent::ScanFailed { .. } => return,
         };
         // The receiver only goes away at shutdown.
         let _ = tx.send(trigger);

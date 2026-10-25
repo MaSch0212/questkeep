@@ -22,7 +22,9 @@ export const removeGame = (id: string) => invoke<void>("remove_game", { id });
 export const listProviders = () => invoke<ProviderInfo[]>("list_providers");
 export const scanLibrary = (providerId: string) =>
   invoke<ScanSummary>("scan_library", { providerId });
-export const launchGame = (id: string) => invoke<void>("launch_game", { id });
+/** Scans every store; progress arrives as core events. */
+export const scanAllLibraries = () => invoke<void>("scan_all_libraries");
+export const launchGame =(id: string) => invoke<void>("launch_game", { id });
 export const installGame = (id: string) => invoke<void>("install_game", { id });
 export const uninstallGame = (id: string) => invoke<void>("uninstall_game", { id });
 export const refreshMetadata = (id: string) => invoke<void>("refresh_metadata", { id });

@@ -25,9 +25,20 @@ pub enum CoreEvent {
     GameRemoved {
         id: Uuid,
     },
+    /// A full sync is about to scan these providers, one after another.
+    ScansQueued {
+        providers: Vec<String>,
+    },
+    ScanStarted {
+        provider: String,
+    },
     LibraryScanned {
         provider: String,
         summary: ScanSummary,
+    },
+    ScanFailed {
+        provider: String,
+        message: String,
     },
     GameStarted {
         id: Uuid,

@@ -353,8 +353,23 @@ impl Library {
 
     /// Runs a provider's installed-games scan, plus its owned-games scan when supported and
     /// configured, and merges the result into the library. Fails only when nothing could be
-    /// scanned.
+    /// scanned. Announced as `ScanStarted`, then `LibraryScanned` or `ScanFailed`, so the UI can
+    /// show one sync status for all scans.
     pub fn scan(&self, provider_id: &str) -> Result<ScanSummary> {
+        self.events.publish(CoreEvent::ScanStarted {
+            provider: provider_id.to_string(),
+        });
+        let result = self.scan_provider(provider_id);
+        if let Err(err) = &result {
+            self.events.publish(CoreEvent::ScanFailed {
+                provider: provider_id.to_string(),
+                message: err.to_string(),
+            });
+        }
+        result
+    }
+
+    fn scan_provider(&self, provider_id: &str) -> Result<ScanSummary> {
         let provider = self
             .providers
             .get(provider_id)
@@ -415,10 +430,18 @@ impl Library {
 
     /// Scans every provider that supports scanning; failures are logged, not fatal.
     pub fn scan_all(&self) -> Vec<(String, Result<ScanSummary>)> {
-        self.providers
+        let scannable: Vec<_> = self
+            .providers
             .infos()
             .into_iter()
             .filter(|p| p.can_scan)
+            .collect();
+        // Lets the UI list the stores still waiting, so the sync isn't "done" between two scans.
+        self.events.publish(CoreEvent::ScansQueued {
+            providers: scannable.iter().map(|p| p.id.clone()).collect(),
+        });
+        scannable
+            .into_iter()
             .map(|p| {
                 let result = self.scan(&p.id);
                 if let Err(err) = &result {
@@ -775,10 +798,37 @@ mod tests {
         assert!(events.iter().any(
             |e| matches!(e, CoreEvent::LibraryScanned { provider, .. } if provider == "fake")
         ));
+        // The next scan publishes events, and the recorder needs this lock.
+        drop(events);
         assert!(matches!(
             lib.scan("nope"),
             Err(CoreError::UnknownProvider(_))
         ));
+    }
+
+    #[test]
+    fn scans_announce_start_queue_and_failure() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut providers = ProviderRegistry::new();
+        // An empty FakeStore reports "store not installed".
+        providers.register(Arc::new(FakeStore(Vec::new())));
+        let (lib, seen) = library(tmp.path(), providers);
+        let results = lib.scan_all();
+        assert!(results[0].1.is_err());
+        let events = seen.lock().unwrap();
+        let kinds: Vec<_> = events
+            .iter()
+            .map(|e| match e {
+                CoreEvent::ScansQueued { providers } => format!("queued {providers:?}"),
+                CoreEvent::ScanStarted { provider } => format!("started {provider}"),
+                CoreEvent::ScanFailed { provider, message } => {
+                    assert!(message.contains("not installed"));
+                    format!("failed {provider}")
+                }
+                other => format!("{other:?}"),
+            })
+            .collect();
+        assert_eq!(kinds, [r#"queued ["fake"]"#, "started fake", "failed fake"]);
     }
 
     /// Store whose client is missing but whose account lists owned games when configured.
