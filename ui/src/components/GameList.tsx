@@ -13,6 +13,7 @@ import { isNavKey } from "../lib/gridNav";
 import {
   asGamesRow,
   asHeaderRow,
+  type HeaderRow,
   layoutGroups,
   navigateSlots,
   scrollTopForRow,
@@ -24,6 +25,7 @@ import { store } from "../lib/store";
 import { GameRow, rowDomId } from "./GameRow";
 import { GameRowCompact } from "./GameRowCompact";
 import { GroupHeader } from "./GroupHeader";
+import { StickyGroupHeader } from "./StickyGroupHeader";
 import { Logo } from "./Logo";
 
 const FALLBACK_HEIGHT = 700;
@@ -174,6 +176,15 @@ export function GameList(props: { compact?: boolean }) {
     }
   }
 
+  /** Collapsing from the pinned header keeps that header at the top. */
+  function toggleFromTop(row: HeaderRow) {
+    store.toggleGroup(row.group.key);
+    if (scroller) {
+      scroller.scrollTop = row.top;
+      setScrollTop(row.top);
+    }
+  }
+
   function onSelect(slot: number) {
     moveTo(slot, props.compact ? store.selectGame : store.selectAndOpen);
     scroller?.focus({ preventScroll: true });
@@ -201,6 +212,12 @@ export function GameList(props: { compact?: boolean }) {
         aria-activedescendant={activeDescendant()}
         onKeyDown={onKeyDown}
       >
+        <StickyGroupHeader
+          layout={layout()}
+          scrollTop={scrollTop()}
+          variant="list"
+          onToggle={toggleFromTop}
+        />
         <div class="list__canvas" style={{ height: `${layout().height}px` }}>
           <For each={rows()}>
             {(index) => {

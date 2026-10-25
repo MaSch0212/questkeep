@@ -8,6 +8,7 @@ import {
   navigateSlots,
   scrollTopForRow,
   slotKey,
+  stickyHeader,
   visibleRowRange,
   type GameGroup,
 } from "./grouping";
@@ -169,3 +170,46 @@ function layoutOptions() {
     collapsed: new Set<string>(),
   };
 }
+
+describe("stickyHeader", () => {
+  // Two groups, one row each: header 0-40 (after 10 padding), row 50-150, header 150-190, row 190-290.
+  const grouped = layoutGroups(
+    [
+      { key: "a", label: "A", source: null, games: [hades] },
+      { key: "b", label: "B", source: null, games: [celeste] },
+    ],
+    {
+      columns: 4,
+      rowHeight: 100,
+      headerHeight: 40,
+      padding: 10,
+      headers: true,
+      collapsed: new Set(),
+    },
+  );
+  const pinned = (scrollTop: number) => {
+    const at = stickyHeader(grouped, scrollTop);
+    return at && [at.row.group.key, at.offset];
+  };
+
+  it("pins the header scrolled past and lets the next one push it up", () => {
+    expect(pinned(0)).toBeNull();
+    expect(pinned(10)).toEqual(["a", 0]);
+    expect(pinned(100)).toEqual(["a", 0]);
+    expect(pinned(130)).toEqual(["a", -20]);
+    expect(pinned(150)).toEqual(["b", 0]);
+    expect(pinned(1000)).toEqual(["b", 0]);
+  });
+
+  it("pins nothing in an ungrouped view", () => {
+    const flat = layoutGroups(groupGames(games, "none", categories, sourceName), {
+      columns: 4,
+      rowHeight: 100,
+      headerHeight: 40,
+      padding: 10,
+      headers: false,
+      collapsed: new Set(),
+    });
+    expect(stickyHeader(flat, 500)).toBeNull();
+  });
+});

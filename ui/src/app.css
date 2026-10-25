@@ -2190,6 +2190,25 @@ ul {
   align-items: flex-end;
   padding-bottom: var(--qk-space-2);
 }
+/* Pinned group header (see StickyGroupHeader): a zero-height sticky layer over the rows. */
+.sticky-group {
+  position: sticky;
+  top: 0;
+  z-index: var(--qk-z-sticky);
+  height: 0;
+}
+.sticky-group__bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  background: var(--qk-color-bg);
+}
+.sticky-group__bar--grid {
+  align-items: flex-end;
+  padding: 0 var(--qk-grid-padding) var(--qk-space-2);
+}
 .grid__group,
 .list__group {
   display: flex;

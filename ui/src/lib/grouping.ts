@@ -247,3 +247,24 @@ export function navigateSlots(
 export function slotKey(slot: Pick<Slot, "game" | "groupKey">): string {
   return slot.groupKey === "" ? slot.game.id : `${slot.game.id}:${slot.groupKey}`;
 }
+
+/**
+ * The group header to pin at the top of a grouped view scrolled to `scrollTop`: the last header
+ * at or above the top edge. `offset` (zero or negative) pushes it up while the next header
+ * scrolls in under it. `null` while the first header is still below the top, or without groups.
+ */
+export function stickyHeader(
+  layout: GroupedLayout,
+  scrollTop: number,
+): { row: HeaderRow; offset: number } | null {
+  let current: HeaderRow | undefined;
+  for (const row of layout.rows) {
+    if (row.kind !== "header") continue;
+    if (row.top > scrollTop) {
+      if (!current) return null;
+      return { row: current, offset: Math.min(0, row.top - scrollTop - current.height) };
+    }
+    current = row;
+  }
+  return current ? { row: current, offset: 0 } : null;
+}

@@ -13,6 +13,7 @@ import { isNavKey } from "../lib/gridNav";
 import {
   asGamesRow,
   asHeaderRow,
+  type HeaderRow,
   layoutGroups,
   navigateSlots,
   rowSlots,
@@ -24,6 +25,7 @@ import { createSlotCursor } from "../lib/slotCursor";
 import { store } from "../lib/store";
 import { GameTile, tileDomId } from "./GameTile";
 import { GroupHeader } from "./GroupHeader";
+import { StickyGroupHeader } from "./StickyGroupHeader";
 import { Logo } from "./Logo";
 
 const FALLBACK_WIDTH = 1000;
@@ -199,6 +201,15 @@ export function GameGrid() {
     }
   }
 
+  /** Collapsing from the pinned header keeps that header at the top. */
+  function toggleFromTop(row: HeaderRow) {
+    store.toggleGroup(row.group.key);
+    if (scroller) {
+      scroller.scrollTop = row.top;
+      setScrollTop(row.top);
+    }
+  }
+
   function onSelect(slot: number) {
     moveTo(slot, store.selectAndOpen);
     scroller?.focus({ preventScroll: true });
@@ -216,6 +227,12 @@ export function GameGrid() {
       aria-activedescendant={activeDescendant()}
       onKeyDown={onKeyDown}
     >
+      <StickyGroupHeader
+        layout={layout()}
+        scrollTop={scrollTop()}
+        variant="grid"
+        onToggle={toggleFromTop}
+      />
       <div class="grid__canvas" style={{ height: `${layout().height}px` }}>
         <For each={rows()}>
           {(index) => {

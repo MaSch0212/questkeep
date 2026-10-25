@@ -150,6 +150,7 @@
   --qk-popover-width: 340px;
   --qk-popover-gap: 6px;
   --qk-account-accent-width: 3px;
+  --qk-z-sticky: 2;
   --qk-z-modal: 10;
   --qk-z-popover: 20;
   --qk-titlebar-tool-width: 34px;

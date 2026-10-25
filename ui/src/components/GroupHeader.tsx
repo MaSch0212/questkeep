@@ -4,12 +4,19 @@ import type { GameGroup } from "../lib/grouping";
 import { SourceIcon } from "./SourceIcon";
 
 /** The header row of a group in the grid or a list: click to collapse or expand it. */
-export function GroupHeader(props: { group: GameGroup; collapsed: boolean; onToggle: () => void }) {
+export function GroupHeader(props: {
+  group: GameGroup;
+  collapsed: boolean;
+  onToggle: () => void;
+  /** False for the pinned copy of a header, so Tab only reaches the real one. */
+  tabbable?: boolean;
+}) {
   const count = () => props.group.games.length;
   return (
     <button
       type="button"
       class="group-header"
+      tabindex={props.tabbable === false ? -1 : undefined}
       aria-expanded={!props.collapsed}
       title={props.collapsed ? "Show this group" : "Collapse this group"}
       onClick={() => props.onToggle()}
