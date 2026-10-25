@@ -110,9 +110,9 @@ Short log of choices made while building. Newest at the bottom of each section.
   Windows. Building it ourselves allows a dev-only hidden mode (`QUESTKEEP_HIDDEN=1`, see
   `scripts/dev-hidden.ps1`) for testing through the DevTools port without a window or focus change,
   and showing the normal window only after setup avoids a white flash.
-- **Store glyphs from Simple Icons (CC0)**, importing only the named icons; Xbox, Amazon Games and
-  manual games use lucide icons (Simple Icons has no Xbox or Amazon Games glyph). Display names
-  come from `ProviderInfo` first.
+- **Store logos from Simple Icons (CC0)**; Xbox, Amazon and the manual-game folder come from Font
+  Awesome Free (CC BY 4.0) because Simple Icons removed Xbox and Amazon. Each provider ships its
+  logo (see "Each provider ships its own logo" below).
 - **Quick actions are tabbable only on the selected tile or row**, so Tab doesn't walk thousands
   of buttons. Enter still opens details; Ctrl+Enter / F5 stay the keyboard way to play or install.
   Install is offered when the game has a store id (`ProviderInfo` has no `canInstall`). In the list
@@ -484,3 +484,7 @@ Short log of choices made while building. Newest at the bottom of each section.
 - **Custom title bar (`decorations: false`)** drawn by `TitleBar.tsx`; the native shadow and
   resize edges stay. Its caption buttons are out of the tab order like native ones (Win+Up/Down,
   Alt+F4 remain the keyboard paths). Windows 11 Snap Layouts on hover over maximize is lost for now.
+- **Each provider ships its own logo** (`LibraryProvider::icon_svg`, files in
+  `providers/icons/`, sent as `ProviderInfo.icon`) instead of the UI mapping ids to an icon
+  package: a new provider brings its logo with it. The markup is compiled in, so the UI inserts it
+  with `innerHTML`; sources without a provider fall back to a generic glyph.

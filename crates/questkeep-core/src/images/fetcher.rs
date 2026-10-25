@@ -787,6 +787,9 @@ mod tests {
         fn name(&self) -> &str {
             "Local"
         }
+        fn icon_svg(&self) -> &'static str {
+            "<svg/>"
+        }
         fn scan_installed(&self) -> Result<Vec<ImportedGame>, ProviderError> {
             Ok(vec![])
         }
@@ -923,6 +926,9 @@ mod tests {
         fn name(&self) -> &str {
             "Meta"
         }
+        fn icon_svg(&self) -> &'static str {
+            "<svg/>"
+        }
         fn scan_installed(&self) -> Result<Vec<ImportedGame>, ProviderError> {
             Ok(vec![])
         }
@@ -1007,6 +1013,9 @@ mod tests {
         }
         fn name(&self) -> &str {
             "Icons"
+        }
+        fn icon_svg(&self) -> &'static str {
+            "<svg/>"
         }
         fn scan_installed(&self) -> Result<Vec<ImportedGame>, ProviderError> {
             Ok(vec![])
@@ -1194,6 +1203,9 @@ mod tests {
         }
         fn name(&self) -> &str {
             "Partial"
+        }
+        fn icon_svg(&self) -> &'static str {
+            "<svg/>"
         }
         fn scan_installed(&self) -> Result<Vec<ImportedGame>, ProviderError> {
             Ok(vec![])

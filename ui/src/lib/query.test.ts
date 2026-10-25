@@ -38,13 +38,27 @@ describe("helpers", () => {
   });
   it("merges providers with seen sources", () => {
     const providers = [
-      { id: "manual", name: "Manual", canScan: false, canScanOwned: false, canUninstall: false },
-      { id: "steam", name: "Steam", canScan: true, canScanOwned: true, canUninstall: true },
+      {
+        id: "manual",
+        name: "Manual",
+        icon: "<svg></svg>",
+        canScan: false,
+        canScanOwned: false,
+        canUninstall: false,
+      },
+      {
+        id: "steam",
+        name: "Steam",
+        icon: "<svg></svg>",
+        canScan: true,
+        canScanOwned: true,
+        canUninstall: true,
+      },
     ];
     expect(mergeSources(providers, new Set(["steam", "fake"]))).toEqual([
-      { id: "manual", name: "Manual" },
-      { id: "steam", name: "Steam" },
-      { id: "fake", name: "Fake" },
+      { id: "manual", name: "Manual", canScan: false },
+      { id: "steam", name: "Steam", canScan: true },
+      { id: "fake", name: "Fake", canScan: false },
     ]);
   });
   it("describes scan summaries", () => {

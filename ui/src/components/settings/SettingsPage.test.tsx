@@ -235,7 +235,14 @@ describe("GOG Galaxy launch option", () => {
   it("saves the option and rescans GOG", async () => {
     await loadAppInfo("C:/data", "C:/data/logs");
     vi.mocked(api.listProviders).mockResolvedValue([
-      { id: "gog", name: "GOG", canScan: true, canScanOwned: false, canUninstall: true },
+      {
+        id: "gog",
+        name: "GOG",
+        icon: "<svg></svg>",
+        canScan: true,
+        canScanOwned: false,
+        canUninstall: true,
+      },
     ]);
     await store.init();
     vi.mocked(api.scanLibrary).mockResolvedValue({
@@ -258,7 +265,14 @@ describe("GOG Galaxy launch option", () => {
   it("saves the Xbox Game Pass option and rescans Xbox", async () => {
     await loadAppInfo("C:/data", "C:/data/logs");
     vi.mocked(api.listProviders).mockResolvedValue([
-      { id: "xbox", name: "Xbox", canScan: true, canScanOwned: true, canUninstall: true },
+      {
+        id: "xbox",
+        name: "Xbox",
+        icon: "<svg></svg>",
+        canScan: true,
+        canScanOwned: true,
+        canUninstall: true,
+      },
     ]);
     await store.init();
     vi.mocked(api.scanLibrary).mockResolvedValue({ added: 0, updated: 0, uninstalled: 0 });

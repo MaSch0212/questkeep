@@ -70,6 +70,10 @@ impl LibraryProvider for AmazonProvider {
         "Amazon Games"
     }
 
+    fn icon_svg(&self) -> &'static str {
+        crate::providers::icons::AMAZON
+    }
+
     fn can_scan(&self) -> bool {
         self.enabled || self.app.as_ref().is_some_and(AmazonAppPaths::has_data)
     }

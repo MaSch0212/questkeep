@@ -49,6 +49,10 @@ impl LibraryProvider for SteamProvider {
         "Steam"
     }
 
+    fn icon_svg(&self) -> &'static str {
+        crate::providers::icons::STEAM
+    }
+
     fn scan_installed(&self) -> Result<Vec<ImportedGame>, ProviderError> {
         if self.roots.is_empty() {
             return Err(ProviderError::NotFound(

@@ -54,6 +54,10 @@ impl LibraryProvider for HeroicSideloadProvider {
         "Heroic (sideloaded)"
     }
 
+    fn icon_svg(&self) -> &'static str {
+        crate::providers::icons::HEROIC
+    }
+
     fn can_scan(&self) -> bool {
         self.enabled
     }

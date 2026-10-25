@@ -131,6 +131,10 @@ impl LibraryProvider for UbisoftProvider {
         "Ubisoft Connect"
     }
 
+    fn icon_svg(&self) -> &'static str {
+        crate::providers::icons::UBISOFT
+    }
+
     fn can_scan(&self) -> bool {
         cfg!(windows)
     }

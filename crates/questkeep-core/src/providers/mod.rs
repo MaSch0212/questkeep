@@ -6,6 +6,7 @@ pub mod epic;
 pub mod gog;
 pub mod heroic;
 pub mod heroic_sideload;
+mod icons;
 pub mod lutris;
 pub mod manual;
 mod sqlite;
@@ -53,6 +54,8 @@ pub trait LibraryProvider: Send + Sync {
     fn id(&self) -> &str;
     /// Human-readable name, e.g. `Steam`.
     fn name(&self) -> &str;
+    /// The store's logo: a complete monochrome `<svg>` drawn with `currentColor`.
+    fn icon_svg(&self) -> &'static str;
     /// Whether [`scan_installed`](Self::scan_installed) is meaningful for this provider.
     fn can_scan(&self) -> bool {
         true
@@ -140,6 +143,8 @@ pub enum ImageCandidate {
 pub struct ProviderInfo {
     pub id: String,
     pub name: String,
+    /// The store's logo as SVG markup (see [`LibraryProvider::icon_svg`]).
+    pub icon: String,
     pub can_scan: bool,
     pub can_scan_owned: bool,
     pub can_uninstall: bool,
@@ -207,6 +212,7 @@ impl ProviderRegistry {
             .map(|p| ProviderInfo {
                 id: p.id().to_string(),
                 name: p.name().to_string(),
+                icon: p.icon_svg().to_string(),
                 can_scan: p.can_scan(),
                 can_scan_owned: p.can_scan_owned(),
                 can_uninstall: p.can_uninstall(),
@@ -233,8 +239,27 @@ mod tests {
         fn name(&self) -> &str {
             "Fake Store"
         }
+        fn icon_svg(&self) -> &'static str {
+            "<svg/>"
+        }
         fn scan_installed(&self) -> Result<Vec<ImportedGame>, ProviderError> {
             Ok(vec![])
+        }
+    }
+
+    #[test]
+    fn builtin_providers_ship_a_tintable_svg_icon() {
+        let registry =
+            ProviderRegistry::with_builtin(Arc::new(crate::auth::MemoryTokenStore::new()), None);
+        for provider in registry.iter() {
+            let svg = provider.icon_svg().trim();
+            let id = provider.id();
+            assert!(svg.starts_with("<svg ") && svg.ends_with("</svg>"), "{id}");
+            assert!(
+                svg.contains("viewBox=") && svg.contains("currentColor"),
+                "{id}"
+            );
+            assert!(!svg.contains("<script"), "{id}");
         }
     }
 
@@ -279,6 +304,7 @@ mod tests {
             vec![ProviderInfo {
                 id: "fake".into(),
                 name: "Fake Store".into(),
+                icon: "<svg/>".into(),
                 can_scan: true,
                 can_scan_owned: false,
                 can_uninstall: false

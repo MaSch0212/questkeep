@@ -77,7 +77,22 @@ describe("SyncIndicator", () => {
 
   it("lists every store of the run in the popover, with the finish time afterwards", async () => {
     vi.mocked(api.listProviders).mockResolvedValue([
-      { id: "steam", name: "Steam", canScan: true, canScanOwned: true, canUninstall: true },
+      {
+        id: "steam",
+        name: "Steam",
+        icon: "<svg></svg>",
+        canScan: true,
+        canScanOwned: true,
+        canUninstall: true,
+      },
+      {
+        id: "epic",
+        name: "Epic Games",
+        icon: "<svg></svg>",
+        canScan: true,
+        canScanOwned: true,
+        canUninstall: true,
+      },
     ]);
     render(() => <SyncIndicator />);
     send({ type: "scansQueued", providers: ["steam", "epic", "gog"] });
@@ -90,7 +105,7 @@ describe("SyncIndicator", () => {
     expect(items).toHaveLength(3);
     expect(items[0]).toHaveTextContent("Steam");
     expect(items[0]).toHaveTextContent("2 added, 5 updated");
-    expect(items[1]).toHaveTextContent("Epic Games");
+    expect(items[1]).toHaveTextContent("Epic");
     expect(items[1]).toHaveTextContent("Scanning…");
     expect(items[2]).toHaveTextContent("Waiting");
     expect(screen.getByRole("button", { name: "Sync all" })).toBeDisabled();

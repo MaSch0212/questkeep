@@ -697,6 +697,9 @@ mod tests {
         fn name(&self) -> &str {
             "Fake"
         }
+        fn icon_svg(&self) -> &'static str {
+            "<svg/>"
+        }
         fn scan_installed(&self) -> Result<Vec<ImportedGame>, ProviderError> {
             if self.0.is_empty() {
                 Err(ProviderError::NotFound("Fake store not installed".into()))
@@ -840,6 +843,9 @@ mod tests {
         fn name(&self) -> &str {
             "Account"
         }
+        fn icon_svg(&self) -> &'static str {
+            "<svg/>"
+        }
         fn scan_installed(&self) -> Result<Vec<ImportedGame>, ProviderError> {
             Ok(vec![ImportedGame {
                 playtime_seconds: Some(10),
@@ -953,6 +959,9 @@ mod tests {
         }
         fn name(&self) -> &str {
             "Account"
+        }
+        fn icon_svg(&self) -> &'static str {
+            "<svg/>"
         }
         fn scan_installed(&self) -> Result<Vec<ImportedGame>, ProviderError> {
             Ok(vec![ImportedGame::installed("1", "Installed")])

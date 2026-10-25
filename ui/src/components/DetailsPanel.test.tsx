@@ -21,7 +21,14 @@ beforeEach(() => {
 
 async function loadProviders(canUninstall: boolean) {
   vi.mocked(api.listProviders).mockResolvedValue([
-    { id: "steam", name: "Steam", canScan: true, canScanOwned: true, canUninstall },
+    {
+      id: "steam",
+      name: "Steam",
+      icon: "<svg></svg>",
+      canScan: true,
+      canScanOwned: true,
+      canUninstall,
+    },
   ]);
   vi.mocked(api.appInfo).mockResolvedValue({
     version: "0",

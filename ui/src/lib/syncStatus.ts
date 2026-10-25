@@ -88,6 +88,13 @@ export function isSyncBusy(state: SyncState): boolean {
   return state.entries.some((e) => e.status === "waiting" || e.status === "running");
 }
 
+/** This store is waiting for its turn or being scanned. */
+export function isProviderSyncing(state: SyncState, provider: string): boolean {
+  return state.entries.some(
+    (e) => e.provider === provider && (e.status === "waiting" || e.status === "running"),
+  );
+}
+
 /** "Syncing 2 of 7…" while busy, otherwise a neutral name for the indicator. */
 export function syncLabel(state: SyncState): string {
   if (!isSyncBusy(state)) return "Sync status";

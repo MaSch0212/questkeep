@@ -116,6 +116,10 @@ impl LibraryProvider for XboxProvider {
         "Xbox"
     }
 
+    fn icon_svg(&self) -> &'static str {
+        crate::providers::icons::XBOX
+    }
+
     fn can_scan(&self) -> bool {
         cfg!(windows)
     }

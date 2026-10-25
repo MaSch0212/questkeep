@@ -17,13 +17,21 @@ async function syncAll() {
 }
 
 /**
- * Top bar button showing library sync: spins while any store is being scanned; the popover lists
- * the stores of the current or last run and starts a full sync.
+ * Button on the sidebar's Sources heading showing library sync: spins while any store is being
+ * scanned; the popover lists the stores of the current or last run and starts a full sync. The
+ * popover is fixed-positioned at the button so the scrolling sidebar does not clip it.
  */
 export function SyncIndicator() {
   const [open, setOpen] = createSignal(false);
   const [wrapper, setWrapper] = createSignal<HTMLDivElement>();
   const [button, setButton] = createSignal<HTMLButtonElement>();
+  const [anchor, setAnchor] = createSignal({ top: 0, left: 0 });
+
+  function toggle() {
+    const rect = button()?.getBoundingClientRect();
+    if (rect) setAnchor({ top: rect.bottom, left: rect.left });
+    setOpen((value) => !value);
+  }
 
   function close(returnFocus: boolean) {
     setOpen(false);
@@ -58,18 +66,26 @@ export function SyncIndicator() {
       <button
         ref={setButton}
         type="button"
-        class="icon-btn icon-btn--bordered"
+        class="icon-btn icon-btn--small"
         classList={{ "icon-btn--active": open() }}
         aria-label={syncLabel(store.syncState())}
         title={syncLabel(store.syncState())}
         aria-haspopup="dialog"
         aria-expanded={open()}
-        onClick={() => setOpen((value) => !value)}
+        onClick={toggle}
       >
         <RefreshCw class="icon" classList={{ "icon--spin": store.syncBusy() }} aria-hidden="true" />
       </button>
       <Show when={open()}>
-        <div class="sync__popover" role="dialog" aria-label="Library sync">
+        <div
+          class="sync__popover"
+          role="dialog"
+          aria-label="Library sync"
+          style={{
+            top: `calc(${anchor().top}px + var(--qk-popover-gap))`,
+            left: `${anchor().left}px`,
+          }}
+        >
           <h2 class="sync__title">Library sync</h2>
           <Show
             when={store.syncState().entries.length > 0}

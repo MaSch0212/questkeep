@@ -400,6 +400,10 @@ impl LibraryProvider for EpicProvider {
         "Epic Games"
     }
 
+    fn icon_svg(&self) -> &'static str {
+        crate::providers::icons::EPIC
+    }
+
     fn scan_installed(&self) -> Result<Vec<ImportedGame>, ProviderError> {
         if let Some(paths) = &self.heroic {
             return heroic::legendary_games(paths);

@@ -200,8 +200,15 @@ ul {
   letter-spacing: 0.08em;
   color: var(--qk-color-text-faint);
 }
-.sidebar__heading {
+.sidebar__section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--qk-space-2);
   margin-top: var(--qk-space-3);
+}
+.sidebar__section .sidebar__heading {
+  padding-top: 0;
 }
 .sidebar__footer {
   margin-top: auto;
@@ -232,6 +239,36 @@ ul {
   display: flex;
   align-items: center;
   gap: var(--qk-space-2);
+}
+.nav-item__text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nav-item .source-icon {
+  width: var(--qk-icon-size);
+  height: var(--qk-icon-size);
+}
+/* A source with its sync button, shown while hovered, focused or syncing. */
+.source-item {
+  position: relative;
+}
+.source-item .nav-item {
+  padding-right: calc(var(--qk-icon-btn-small-size) + var(--qk-space-2));
+}
+.source-item__sync {
+  position: absolute;
+  top: 50%;
+  right: var(--qk-space-1);
+  transform: translateY(-50%);
+  opacity: 0;
+  transition: opacity var(--qk-duration-fast) var(--qk-easing);
+}
+.source-item:hover .source-item__sync,
+.source-item:focus-within .source-item__sync,
+.source-item--syncing .source-item__sync {
+  opacity: 1;
 }
 .check {
   display: flex;
@@ -310,6 +347,14 @@ ul {
 }
 .icon-btn--bordered {
   border-color: var(--qk-color-border);
+}
+.icon-btn--small {
+  width: var(--qk-icon-btn-small-size);
+  height: var(--qk-icon-btn-small-size);
+  font-size: var(--qk-font-size-md);
+}
+.icon-btn:disabled {
+  cursor: default;
 }
 .toggle-btn {
   display: inline-grid;
@@ -500,9 +545,14 @@ ul {
   white-space: nowrap;
 }
 .source-icon {
+  display: inline-flex;
   width: var(--qk-source-icon-size);
   height: var(--qk-source-icon-size);
   flex: none;
+}
+.source-icon > svg {
+  width: 100%;
+  height: 100%;
 }
 .tile__source .icon {
   width: var(--qk-source-icon-size);
@@ -1167,9 +1217,7 @@ ul {
   }
 }
 .sync__popover {
-  position: absolute;
-  top: calc(100% + var(--qk-popover-gap));
-  right: 0;
+  position: fixed;
   z-index: var(--qk-z-popover);
   display: flex;
   flex-direction: column;

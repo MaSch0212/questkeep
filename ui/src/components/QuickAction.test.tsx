@@ -116,7 +116,14 @@ describe("quick action on a row", () => {
 describe("store banner and icon", () => {
   it("shows the store name on the tile banner and in the list row", async () => {
     vi.mocked(api.listProviders).mockResolvedValue([
-      { id: "steam", name: "Steam", canScan: true, canScanOwned: true, canUninstall: true },
+      {
+        id: "steam",
+        name: "Steam",
+        icon: "<svg></svg>",
+        canScan: true,
+        canScanOwned: true,
+        canUninstall: true,
+      },
     ]);
     const { listen } = await import("@tauri-apps/api/event");
     vi.mocked(listen).mockResolvedValue(() => undefined);
@@ -153,7 +160,7 @@ describe("store banner and icon", () => {
     expect(container.querySelector(".list-row__source svg")).not.toBeNull();
   });
 
-  it("falls back to a generic glyph and the id for an unknown source", () => {
+  it("falls back to a generic glyph and the capitalized id for an unknown source", () => {
     const { container } = render(() => (
       <GameTile
         game={makeGame({ source: "itch" })}
@@ -162,7 +169,7 @@ describe("store banner and icon", () => {
         onLaunch={vi.fn<() => void>()}
       />
     ));
-    expect(container.querySelector(".tile__source")).toHaveTextContent("itch");
+    expect(container.querySelector(".tile__source")).toHaveTextContent("Itch");
     expect(container.querySelector(".tile__source svg")).not.toBeNull();
   });
 });

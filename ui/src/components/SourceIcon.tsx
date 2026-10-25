@@ -1,44 +1,17 @@
-import { Show, type Component } from "solid-js";
-import { Dynamic } from "solid-js/web";
-import Folder from "lucide-solid/icons/folder";
-import Gamepad2 from "lucide-solid/icons/gamepad-2";
-import ShoppingBag from "lucide-solid/icons/shopping-bag";
+import { Show } from "solid-js";
 import Store from "lucide-solid/icons/store";
-import { sourceInfo, type FallbackGlyph } from "../lib/sources";
+import { sourceInfo } from "../lib/sources";
 import { store } from "../lib/store";
 
-const FALLBACKS: Record<FallbackGlyph, Component<{ class?: string }>> = {
-  gamepad: Gamepad2,
-  bag: ShoppingBag,
-  folder: Folder,
-  generic: Store,
-};
-
-/** The store's logo glyph (decorative; callers provide the name as text or a title). */
+/**
+ * The store's logo (decorative; callers provide the name as text or a title). The SVG comes from
+ * the provider in the core, compiled into the app, so inserting it as markup is safe.
+ */
 export function SourceIcon(props: { source: string }) {
-  const glyph = () => sourceInfo(props.source).glyph;
+  const icon = () => sourceInfo(props.source, store.providers()).icon;
   return (
-    <Show
-      when={(() => {
-        const g = glyph();
-        return g.kind === "path" ? g : undefined;
-      })()}
-      fallback={(() => {
-        const g = glyph();
-        return (
-          <Dynamic
-            component={FALLBACKS[g.kind === "fallback" ? g.icon : "generic"]}
-            class="icon"
-            aria-hidden="true"
-          />
-        );
-      })()}
-    >
-      {(brand) => (
-        <svg class="source-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d={brand().path} />
-        </svg>
-      )}
+    <Show when={icon()} fallback={<Store class="icon" aria-hidden="true" />}>
+      {(svg) => <span class="source-icon" aria-hidden="true" innerHTML={svg()} />}
     </Show>
   );
 }

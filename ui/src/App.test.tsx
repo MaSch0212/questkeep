@@ -42,8 +42,22 @@ beforeEach(() => {
   localStorage.clear();
   store.reset();
   vi.mocked(api.listProviders).mockResolvedValue([
-    { id: "manual", name: "Manual", canScan: false, canScanOwned: false, canUninstall: false },
-    { id: "steam", name: "Steam", canScan: true, canScanOwned: true, canUninstall: true },
+    {
+      id: "manual",
+      name: "Manual",
+      icon: "<svg></svg>",
+      canScan: false,
+      canScanOwned: false,
+      canUninstall: false,
+    },
+    {
+      id: "steam",
+      name: "Steam",
+      icon: "<svg></svg>",
+      canScan: true,
+      canScanOwned: true,
+      canUninstall: true,
+    },
   ]);
   vi.mocked(api.appInfo).mockResolvedValue({
     version: "0.1.0",

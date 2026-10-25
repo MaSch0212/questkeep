@@ -46,6 +46,8 @@ export function normalizeSearch(value: string): string | null {
 export interface SourceEntry {
   id: string;
   name: string;
+  /** The provider can scan this machine (false for sources without a provider). */
+  canScan: boolean;
 }
 
 /** Providers first (in their order), then any other source seen in the library, e.g. "fake". */
@@ -53,10 +55,16 @@ export function mergeSources(
   providers: readonly ProviderInfo[],
   seen: ReadonlySet<string>,
 ): SourceEntry[] {
-  const entries: SourceEntry[] = providers.map((p) => ({ id: p.id, name: p.name }));
+  const entries: SourceEntry[] = providers.map((p) => ({
+    id: p.id,
+    name: p.name,
+    canScan: p.canScan,
+  }));
   const known = new Set(providers.map((p) => p.id));
   for (const id of [...seen].toSorted()) {
-    if (!known.has(id)) entries.push({ id, name: id.charAt(0).toUpperCase() + id.slice(1) });
+    if (!known.has(id)) {
+      entries.push({ id, name: id.charAt(0).toUpperCase() + id.slice(1), canScan: false });
+    }
   }
   return entries;
 }

@@ -3,4 +3,8 @@
 /**
  * Public description of a registered provider.
  */
-export type ProviderInfo = { id: string, name: string, canScan: boolean, canScanOwned: boolean, canUninstall: boolean, };
+export type ProviderInfo = { id: string, name: string, 
+/**
+ * The store's logo as SVG markup (see [`LibraryProvider::icon_svg`]).
+ */
+icon: string, canScan: boolean, canScanOwned: boolean, canUninstall: boolean, };

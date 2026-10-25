@@ -356,6 +356,10 @@ impl LibraryProvider for LutrisProvider {
         "Lutris"
     }
 
+    fn icon_svg(&self) -> &'static str {
+        crate::providers::icons::LUTRIS
+    }
+
     fn can_scan(&self) -> bool {
         self.enabled
     }

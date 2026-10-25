@@ -1,7 +1,12 @@
+import RefreshCw from "lucide-solid/icons/refresh-cw";
 import Settings from "lucide-solid/icons/settings";
-import { For } from "solid-js";
+import { For, Show } from "solid-js";
+import * as api from "../lib/api";
 import { libraryView, type LibraryView } from "../lib/query";
 import { store } from "../lib/store";
+import { isProviderSyncing } from "../lib/syncStatus";
+import { SourceIcon } from "./SourceIcon";
+import { SyncIndicator } from "./SyncIndicator";
 
 const VIEWS: { id: LibraryView; label: string }[] = [
   { id: "all", label: "All games" },
@@ -16,6 +21,15 @@ interface SidebarProps {
 const inLibrary = () => store.page() === "library";
 
 const view = () => libraryView(store.query());
+
+/** Progress, the result and failures arrive as scan events and end up in the sync summary. */
+async function syncSource(id: string) {
+  try {
+    await api.scanLibrary(id);
+  } catch {
+    // Already reported through the scanFailed event.
+  }
+}
 
 export function Sidebar(props: SidebarProps) {
   return (
@@ -49,22 +63,45 @@ export function Sidebar(props: SidebarProps) {
         <span>Installed only</span>
       </label>
 
-      <h2 class="sidebar__heading">Sources</h2>
+      <div class="sidebar__section">
+        <h2 class="sidebar__heading">Sources</h2>
+        <SyncIndicator />
+      </div>
       <ul class="sidebar__list">
         <For each={store.sources()}>
-          {(source) => (
-            <li>
-              <button
-                type="button"
-                class="nav-item"
-                classList={{ "nav-item--active": store.query().sources.includes(source.id) }}
-                aria-pressed={store.query().sources.includes(source.id)}
-                onClick={() => store.toggleSourceFilter(source.id)}
-              >
-                {source.name}
-              </button>
-            </li>
-          )}
+          {(source) => {
+            const syncing = () => isProviderSyncing(store.syncState(), source.id);
+            return (
+              <li class="source-item" classList={{ "source-item--syncing": syncing() }}>
+                <button
+                  type="button"
+                  class="nav-item nav-item--icon"
+                  classList={{ "nav-item--active": store.query().sources.includes(source.id) }}
+                  aria-pressed={store.query().sources.includes(source.id)}
+                  onClick={() => store.toggleSourceFilter(source.id)}
+                >
+                  <SourceIcon source={source.id} />
+                  <span class="nav-item__text">{source.name}</span>
+                </button>
+                <Show when={source.canScan}>
+                  <button
+                    type="button"
+                    class="icon-btn icon-btn--small source-item__sync"
+                    aria-label={syncing() ? `Syncing ${source.name}…` : `Sync ${source.name}`}
+                    title={syncing() ? `Syncing ${source.name}…` : `Sync ${source.name}`}
+                    disabled={syncing()}
+                    onClick={() => void syncSource(source.id)}
+                  >
+                    <RefreshCw
+                      class="icon"
+                      classList={{ "icon--spin": syncing() }}
+                      aria-hidden="true"
+                    />
+                  </button>
+                </Show>
+              </li>
+            );
+          }}
         </For>
       </ul>
 

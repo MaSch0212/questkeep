@@ -64,9 +64,17 @@ reachable while this was written, so check https://www.steamgriddb.com/api/v2 an
 terms before distributing builds, and add any attribution they require (none is shown in the UI
 today).
 
-## Simple Icons
+## Store logos (Simple Icons, Font Awesome Free)
 
-The store logos (Steam, Epic Games, GOG.com, Ubisoft, Lutris, Heroic) are monochrome glyphs from
-the Simple Icons npm package (https://simpleicons.org), released under CC0 1.0. The logos
+Each provider ships its logo as an SVG in `crates/questkeep-core/src/providers/icons/`.
+
+- Steam, Epic Games, GOG.com, Ubisoft, Lutris and Heroic are monochrome glyphs from Simple Icons
+  (https://simpleicons.org), released under CC0 1.0.
+- Xbox, Amazon and the folder used for manually added games are from Font Awesome Free 6.7.2 by
+  Fonticons, Inc. (https://fontawesome.com), licensed under CC BY 4.0
+  (https://creativecommons.org/licenses/by/4.0/). The path data is unchanged; only a
+  `fill="currentColor"` wrapper was added.
+
+The logos
 themselves are trademarks of their respective owners and are used only to identify the store a
 game comes from; Questkeep is not affiliated with or endorsed by them.

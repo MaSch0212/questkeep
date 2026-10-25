@@ -82,7 +82,14 @@ describe("DetailsView", () => {
   it("keeps the actions of the panel on the page", async () => {
     await load([makeGame({ source: "steam", sourceGameId: "1" })]);
     vi.mocked(api.listProviders).mockResolvedValue([
-      { id: "steam", name: "Steam", canScan: true, canScanOwned: true, canUninstall: true },
+      {
+        id: "steam",
+        name: "Steam",
+        icon: "<svg></svg>",
+        canScan: true,
+        canScanOwned: true,
+        canUninstall: true,
+      },
     ]);
     render(() => <DetailsView />);
     await fireEvent.click(await screen.findByRole("button", { name: "Play" }));

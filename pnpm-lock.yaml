@@ -26,9 +26,6 @@ importers:
       lucide-solid:
         specifier: ^1.0.0
         version: 1.58.0(solid-js@1.9.17)
-      simple-icons:
-        specifier: ^16.35.0
-        version: 16.35.0
       solid-js:
         specifier: ^1.0.0
         version: 1.9.17
@@ -1230,10 +1227,6 @@ packages:
     resolution: {integrity: sha512-UeEzHwAK+yl0YLbsvROV1t5yMYEwZZ0CfKYxDvUgS2fO9Vxdf8djqVIB+OuVpuawRNPqw68LE1Du/GMsW2ZPqA==}
     engines: {node: '>=10'}
 
-  simple-icons@16.35.0:
-    resolution: {integrity: sha512-TCfl/2+GTrx0nCo4pEWGvxhOb8c6NsqOU1OpwjtF4lwJAthB8IYVD0fuIMjLMg6JFuG1YBO0t1iETQqJLqkoJA==}
-    engines: {node: '>=0.12.18'}
-
   solid-js@1.9.17:
     resolution: {integrity: sha512-4GAmLOWPfNV8H9Jfn2LSFTpNEG6jiOKPiwd5lnLGQtehHaX6l3TOLzJqQ7mqwB/3k1Yy3zyumFVopmc/tm34ow==}
 
@@ -2313,8 +2306,6 @@ snapshots:
       seroval: 1.6.9
 
   seroval@1.6.9: {}
-
-  simple-icons@16.35.0: {}
 
   solid-js@1.9.17:
     dependencies:

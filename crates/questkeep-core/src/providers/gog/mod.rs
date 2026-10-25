@@ -209,6 +209,10 @@ impl LibraryProvider for GogProvider {
         "GOG"
     }
 
+    fn icon_svg(&self) -> &'static str {
+        crate::providers::icons::GOG
+    }
+
     fn scan_installed(&self) -> Result<Vec<ImportedGame>, ProviderError> {
         if let Installs::Heroic(paths) = &self.installs {
             return heroic::gog_games(paths);
