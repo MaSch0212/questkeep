@@ -17,8 +17,8 @@ async function attempt(work: () => Promise<void>): Promise<string | null> {
   }
 }
 
-export function launchGame(id: string): Promise<string | null> {
-  return attempt(() => api.launchGame(id));
+export function launchGame(id: string, copyId: string | null = null): Promise<string | null> {
+  return attempt(() => api.launchGame(id, copyId));
 }
 
 /** Keyboard/double-click launch: failures surface as a toast. */
@@ -29,16 +29,44 @@ export async function launchWithToast(id: string): Promise<void> {
 }
 
 /** Hands the install to the store client. Resolves to an error message, or null on success. */
-export function installGame(id: string): Promise<string | null> {
-  return attempt(() => api.installGame(id));
+export function installGame(id: string, copyId: string | null = null): Promise<string | null> {
+  return attempt(() => api.installGame(id, copyId));
 }
 
 /**
  * Hands the uninstall to the store client or the game's uninstaller, which asks the user to
  * confirm. Resolves to an error message, or null on success.
  */
-export function uninstallGame(id: string): Promise<string | null> {
-  return attempt(() => api.uninstallGame(id));
+export function uninstallGame(id: string, copyId: string | null = null): Promise<string | null> {
+  return attempt(() => api.uninstallGame(id, copyId));
+}
+
+/** Shows a changed game at once (combining, separating, play order). */
+async function changeEntry(work: () => Promise<Game>): Promise<string | null> {
+  return attempt(async () => {
+    const game = await work();
+    const open = store.detailsOpen();
+    store.upsertGame(game);
+    store.scheduleRefresh();
+    // The shown game may have become part of another one.
+    store.selectGame(game.id);
+    if (open) store.openDetails();
+  });
+}
+
+/** Combines other games into `into` (the same game in several stores). */
+export function combineGames(into: string, others: string[]): Promise<string | null> {
+  return changeEntry(() => api.combineGames(into, others));
+}
+
+/** Takes one store's copy out of its combined game again. */
+export function separateCopy(copyId: string): Promise<string | null> {
+  return changeEntry(() => api.separateCopy(copyId));
+}
+
+/** Makes a store's copy the one Play starts. */
+export function preferCopy(copyId: string): Promise<string | null> {
+  return changeEntry(() => api.preferCopy(copyId));
 }
 
 /** Keyboard/double-click install: failures surface as a toast. */

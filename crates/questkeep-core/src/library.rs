@@ -323,8 +323,89 @@ impl Library {
             .map_err(|err| CoreError::Launch(format!("Could not open {}: {err}", provider.name())))
     }
 
+    /// The library entry of a game (the entry a combined copy belongs to), with all its copies.
     pub fn get_game(&self, id: Uuid) -> Result<Game> {
-        Ok(self.resolve_images(self.db.get_game(id)?))
+        Ok(self.resolve_images(self.db.get_entry(id)?))
+    }
+
+    /// The copy of an entry to play: `copy` when given (it must belong to the entry), else the
+    /// first installed copy in the entry's play order, else its first copy.
+    pub fn play_target(&self, id: Uuid, copy: Option<Uuid>) -> Result<Game> {
+        let entry = self.db.get_entry(id)?;
+        let chosen = match copy {
+            Some(copy) => {
+                entry
+                    .copies
+                    .iter()
+                    .find(|c| c.id == copy)
+                    .ok_or_else(|| {
+                        CoreError::Invalid(format!(
+                            "That store's copy isn't part of '{}'.",
+                            entry.name
+                        ))
+                    })?
+                    .id
+            }
+            None => entry
+                .copies
+                .iter()
+                .find(|c| c.installed)
+                .or(entry.copies.first())
+                .map_or(entry.id, |c| c.id),
+        };
+        self.db.get_game(chosen)
+    }
+
+    /// Checks that `copy` is one of the copies of `id`'s entry.
+    fn copy_of(&self, id: Uuid, copy: Uuid) -> Result<Uuid> {
+        Ok(self.play_target(id, Some(copy))?.id)
+    }
+
+    /// Combines other entries into `into`'s entry (one game owned in several stores) and
+    /// returns the combined entry.
+    pub fn combine_games(&self, into: Uuid, others: &[Uuid]) -> Result<Game> {
+        let combined = self.db.combine_games(into, others)?;
+        for id in &combined.absorbed {
+            self.events.publish(CoreEvent::GameRemoved { id: *id });
+        }
+        self.events.publish(CoreEvent::GamesChanged {
+            ids: vec![combined.entry],
+        });
+        self.events.publish(CoreEvent::CategoriesChanged);
+        self.get_game(combined.entry)
+    }
+
+    /// Takes a store's copy out of its entry again and returns the remaining entry.
+    pub fn separate_copy(&self, copy: Uuid) -> Result<Game> {
+        let entry = self.db.separate_copy(copy)?;
+        self.events.publish(CoreEvent::GamesChanged {
+            ids: vec![entry, copy],
+        });
+        self.events.publish(CoreEvent::CategoriesChanged);
+        self.get_game(entry)
+    }
+
+    /// Makes a copy the one Play starts (when installed) and returns its entry.
+    pub fn prefer_copy(&self, copy: Uuid) -> Result<Game> {
+        let entry = self.db.prefer_copy(copy)?;
+        self.events
+            .publish(CoreEvent::GamesChanged { ids: vec![entry] });
+        self.get_game(entry)
+    }
+
+    /// Groups of entries that look like the same game in different stores.
+    pub fn find_duplicates(&self) -> Result<Vec<Vec<Game>>> {
+        Ok(self
+            .db
+            .find_duplicates()?
+            .into_iter()
+            .map(|group| group.into_iter().map(|g| self.resolve_images(g)).collect())
+            .collect())
+    }
+
+    /// Remembers that these entries are different games.
+    pub fn dismiss_duplicates(&self, ids: &[Uuid]) -> Result<()> {
+        self.db.dismiss_duplicates(ids)
     }
 
     pub fn add_manual_game(&self, input: &NewManualGame) -> Result<Game> {
@@ -765,8 +846,21 @@ impl Library {
 
     /// Hands the install over to the store client (e.g. opens `steam://install/440`). The next
     /// scan picks the game up as installed.
-    pub fn install_game(&self, id: Uuid) -> Result<()> {
-        let action = self.install_action(id)?;
+    /// `copy` picks the store for a game owned in several; by default the first copy (in play
+    /// order) that isn't installed and that its store can install.
+    pub fn install_game(&self, id: Uuid, copy: Option<Uuid>) -> Result<()> {
+        let action = match copy {
+            Some(copy) => self.install_action(self.copy_of(id, copy)?)?,
+            None => {
+                let entry = self.db.get_entry(id)?;
+                entry
+                    .copies
+                    .iter()
+                    .filter(|c| !c.installed)
+                    .find_map(|c| self.install_action(c.id).ok())
+                    .map_or_else(|| self.install_action(entry.id), Ok)?
+            }
+        };
         run_store_action(&action)
             .map_err(|err| CoreError::Launch(format!("Could not start the install: {err}")))
     }
@@ -803,8 +897,13 @@ impl Library {
     /// Hands the uninstall over to the store client or the game's uninstaller. Questkeep never
     /// deletes files itself and writes nothing to the database: once the game is gone, the next
     /// scan marks it as not installed.
-    pub fn uninstall_game(&self, id: Uuid) -> Result<()> {
-        let action = self.uninstall_action(id)?;
+    /// `copy` picks the store for a game installed in several; by default the copy Play starts.
+    pub fn uninstall_game(&self, id: Uuid, copy: Option<Uuid>) -> Result<()> {
+        let target = match copy {
+            Some(copy) => self.copy_of(id, copy)?,
+            None => self.play_target(id, None)?.id,
+        };
+        let action = self.uninstall_action(target)?;
         run_store_action(&action)
             .map_err(|err| CoreError::Launch(format!("Could not start the uninstall: {err}")))
     }
@@ -1125,6 +1224,63 @@ mod tests {
         *store.0.lock().unwrap() = Some(HashMap::new());
         lib.scan("tags").unwrap();
         assert_eq!(counts(&lib), vec![("Backlog".into(), 1)]);
+    }
+
+    #[test]
+    fn combined_games_play_their_preferred_installed_copy() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (lib, seen) = library(tmp.path(), ProviderRegistry::new());
+        let db = lib.database();
+        let mut owned = ImportedGame::installed("1", "Rocket League");
+        owned.installed = false;
+        db.upsert_imported("steam", &[owned], Utc::now()).unwrap();
+        db.upsert_imported(
+            "epic",
+            &[ImportedGame::installed("2", "Rocket League")],
+            Utc::now(),
+        )
+        .unwrap();
+        db.upsert_imported(
+            "gog",
+            &[ImportedGame::installed("3", "Rocket League")],
+            Utc::now(),
+        )
+        .unwrap();
+        let ids: Vec<Uuid> = lib
+            .list_games(&GameQuery::default())
+            .unwrap()
+            .iter()
+            .map(|g| g.id)
+            .collect();
+        let copy = |source: &str| {
+            lib.list_games(&GameQuery::default())
+                .unwrap()
+                .iter()
+                .flat_map(|g| g.copies.clone())
+                .find(|c| c.source == source)
+                .unwrap()
+                .id
+        };
+        let (steam, epic, gog) = (copy("steam"), copy("epic"), copy("gog"));
+        assert_eq!(ids.len(), 3);
+        // Copies follow in the order given.
+        let entry = lib.combine_games(steam, &[epic, gog]).unwrap();
+        assert_eq!(entry.id, steam);
+        assert!(
+            seen.lock()
+                .unwrap()
+                .iter()
+                .any(|e| matches!(e, CoreEvent::GameRemoved { id } if *id == epic))
+        );
+        // Steam's copy comes first but isn't installed: Epic's plays.
+        assert_eq!(lib.play_target(steam, None).unwrap().id, epic);
+        assert_eq!(lib.play_target(epic, Some(gog)).unwrap().source, "gog");
+        lib.prefer_copy(gog).unwrap();
+        assert_eq!(lib.play_target(steam, None).unwrap().id, gog);
+        db.upsert_imported("xbox", &[ImportedGame::installed("4", "Other")], Utc::now())
+            .unwrap();
+        assert!(lib.play_target(steam, Some(copy("xbox"))).is_err());
+        assert_eq!(lib.get_game(gog).unwrap().copies.len(), 3);
     }
 
     #[test]

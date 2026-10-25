@@ -562,3 +562,13 @@ Short log of choices made while building. Newest at the bottom of each section.
   with several categories shows once per group; the keyboard cursor walks slots (game + group), not
   games. Collapsed groups are remembered per view until the app closes. The filter value `:none`
   means "No category".
+- **A game in several stores is one entry with copies** (migration 6). Each store's copy keeps
+  its own row, so syncs, installs and tracked playtime stay per store; combined copies point at
+  the entry's row (`merged_into`, never a chain) and `copy_position` orders them. The library
+  reads `library_entries` (entries only; installed, playtime and last played over all copies),
+  and store filters and grouping by store see every copy. The entry keeps its name, cover and
+  details; favorites and categories carry over. Play starts the first installed copy (a menu
+  picks another store); separating a copy remembers the pair so it isn't suggested again.
+- **Duplicates are suggested, never combined automatically**: same name ignoring case and
+  symbols ("Rocket League®" = "Rocket League"), never two copies from one store in a group. After
+  each sync a toast points out new suggestions; the review dialog combines or dismisses them.

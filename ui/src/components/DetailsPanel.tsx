@@ -1,7 +1,11 @@
+import ArrowUpToLine from "lucide-solid/icons/arrow-up-to-line";
+import ChevronDown from "lucide-solid/icons/chevron-down";
+import Combine from "lucide-solid/icons/combine";
 import EyeOff from "lucide-solid/icons/eye-off";
 import Eye from "lucide-solid/icons/eye";
 import ImageDown from "lucide-solid/icons/image-down";
 import PackageMinus from "lucide-solid/icons/package-minus";
+import Unlink from "lucide-solid/icons/unlink";
 import Pencil from "lucide-solid/icons/pencil";
 import Star from "lucide-solid/icons/star";
 import X from "lucide-solid/icons/x";
@@ -18,21 +22,28 @@ import {
 import type { Game } from "../bindings/Game";
 import {
   changeCover,
+  combineGames,
   installGame,
   launchGame,
   refetchArtwork,
   refreshMetadata,
   removeCover,
+  preferCopy,
   removeGame,
+  separateCopy,
   uninstallGame,
   updateGame,
 } from "../lib/actions";
+import { copiesOf, playCopy } from "../lib/copies";
 import { formatDate, formatPlaytime, formatRelativeDate, formatReleaseDate } from "../lib/format";
 import { store } from "../lib/store";
 import { CategoryEditor } from "./CategoryEditor";
 import { Cover } from "./Cover";
+import { CombinePicker } from "./CombinePicker";
 import { LaunchOptionsForm } from "./LaunchOptionsForm";
-import { SourceIcon, sourceName } from "./SourceIcon";
+import { Menu, type MenuEntry } from "./Menu";
+import type { PopoverAnchor } from "./Popover";
+import { SourceIcon, SourceIcons, sourceName, storeNames } from "./SourceIcon";
 
 const DESCRIPTION_CLAMP_CHARS = 300;
 const DESCRIPTION_CLAMP_LINES = 5;
@@ -53,6 +64,17 @@ interface DetailsPanelProps {
   onClose: () => void;
 }
 
+/** Opens a popup under `button`, or closes it when it is open. */
+function toggleAnchored(
+  current: () => PopoverAnchor | null,
+  set: (anchor: PopoverAnchor | null) => void,
+  button: HTMLButtonElement | undefined,
+  align: "start" | "end",
+) {
+  const rect = button?.getBoundingClientRect();
+  if (rect) set(current() ? null : { rect, align });
+}
+
 export function DetailsPanel(props: DetailsPanelProps) {
   const [error, setError] = createSignal<string | null>(null);
   const [editingName, setEditingName] = createSignal(false);
@@ -66,11 +88,27 @@ export function DetailsPanel(props: DetailsPanelProps) {
   const [uninstallButton, setUninstallButton] = createSignal<HTMLButtonElement>();
   const [cancelUninstallButton, setCancelUninstallButton] = createSignal<HTMLButtonElement>();
 
+  const [storeMenu, setStoreMenu] = createSignal<PopoverAnchor | null>(null);
+  const [combining, setCombining] = createSignal<PopoverAnchor | null>(null);
+  let storeMenuButton: HTMLButtonElement | undefined;
+  let combineButton: HTMLButtonElement | undefined;
+
   const running = () => store.isRunning(props.game.id);
-  const canUninstall = () =>
-    props.game.installed &&
-    props.game.sourceGameId !== null &&
-    store.providers().some((p) => p.id === props.game.source && p.canUninstall);
+  const copies = () => copiesOf(props.game);
+  const combined = () => copies().length > 1;
+  // Uninstall acts on the copy Play starts.
+  const uninstallCopy = () => {
+    const copy = playCopy(props.game);
+    return copy?.installed ? copy : undefined;
+  };
+  const canUninstall = () => {
+    const copy = uninstallCopy();
+    return (
+      copy !== undefined &&
+      copy.sourceGameId !== null &&
+      store.providers().some((p) => p.id === copy.source && p.canUninstall)
+    );
+  };
   const isPage = () => props.variant === "page";
   const isManual = () => props.game.source === "manual";
   const heroUrl = () => (heroFailed() ? null : store.backgroundUrl(props.game));
@@ -123,9 +161,30 @@ export function DetailsPanel(props: DetailsPanelProps) {
     if (failure) setError(failure);
   }
 
-  async function install() {
+  /** Play or install with one store's copy (the store menu next to Play). */
+  const storeEntries = (): MenuEntry[] => [
+    { kind: "heading", label: "Stores" },
+    ...copies().map((copy): MenuEntry => {
+      const name = sourceName(copy.source);
+      return copy.installed
+        ? {
+            label: `Play with ${name}`,
+            icon: () => <SourceIcon source={copy.source} />,
+            hint: copy.id === playCopy(props.game)?.id ? "Default" : undefined,
+            disabled: running(),
+            onSelect: () => void run(() => launchGame(props.game.id, copy.id)),
+          }
+        : {
+            label: `Install with ${name}`,
+            icon: () => <SourceIcon source={copy.source} />,
+            onSelect: () => void install(copy.id),
+          };
+    }),
+  ];
+
+  async function install(copyId: string | null = null) {
     setError(null);
-    const failure = await installGame(props.game.id);
+    const failure = await installGame(props.game.id, copyId);
     if (failure) setError(failure);
     else store.pushToast("info", "Install handed to the store client");
   }
@@ -143,7 +202,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
   async function uninstall() {
     setError(null);
     setConfirmingUninstall(false);
-    const failure = await uninstallGame(props.game.id);
+    const failure = await uninstallGame(props.game.id, uninstallCopy()?.id ?? null);
     if (failure) setError(failure);
     else store.pushToast("info", "Uninstall handed to the store client");
     queueMicrotask(() => uninstallButton()?.focus());
@@ -247,22 +306,56 @@ export function DetailsPanel(props: DetailsPanelProps) {
           </Show>
         </div>
 
-        <Show
-          when={props.game.installed}
-          fallback={
-            <button type="button" class="btn btn--primary btn--play" onClick={() => void install()}>
-              Install
-            </button>
-          }
-        >
-          <button
-            type="button"
-            class="btn btn--primary btn--play"
-            disabled={running()}
-            onClick={() => void run(() => launchGame(props.game.id))}
+        <div class="play-split">
+          <Show
+            when={props.game.installed}
+            fallback={
+              <button
+                type="button"
+                class="btn btn--primary btn--play"
+                onClick={() => void install()}
+              >
+                Install
+              </button>
+            }
           >
-            {running() ? "Running…" : "Play"}
-          </button>
+            <button
+              type="button"
+              class="btn btn--primary btn--play"
+              disabled={running()}
+              onClick={() => void run(() => launchGame(props.game.id))}
+            >
+              {running() ? "Running…" : "Play"}
+            </button>
+          </Show>
+          <Show when={combined()}>
+            <button
+              ref={(el) => (storeMenuButton = el)}
+              type="button"
+              class="btn btn--primary play-split__more"
+              aria-label="Choose a store"
+              title="Play or install with another store"
+              aria-haspopup="menu"
+              aria-expanded={storeMenu() !== null}
+              onClick={() => toggleAnchored(storeMenu, setStoreMenu, storeMenuButton, "end")}
+            >
+              <ChevronDown class="icon" aria-hidden="true" />
+            </button>
+          </Show>
+        </div>
+        <Show when={storeMenu()}>
+          {(anchor) => (
+            <Menu
+              anchor={anchor()}
+              label="Stores"
+              inside={() => [storeMenuButton]}
+              onClose={(returnFocus) => {
+                setStoreMenu(null);
+                if (returnFocus) storeMenuButton?.focus();
+              }}
+              entries={storeEntries()}
+            />
+          )}
         </Show>
         <Show when={error()}>
           <p class="error-text" role="alert">
@@ -316,10 +409,10 @@ export function DetailsPanel(props: DetailsPanelProps) {
             <dt>{props.game.publishers.length === 1 ? "Publisher" : "Publishers"}</dt>
             <dd>{props.game.publishers.join(", ")}</dd>
           </Show>
-          <dt>Source</dt>
+          <dt>{combined() ? "Stores" : "Store"}</dt>
           <dd class="facts__source">
-            <SourceIcon source={props.game.source} />
-            <span>{sourceName(props.game.source)}</span>
+            <SourceIcons game={props.game} />
+            <span>{storeNames(props.game)}</span>
           </dd>
           <dt>Install directory</dt>
           <dd class="facts__path">{props.game.installDir ?? "Unknown"}</dd>
@@ -365,6 +458,72 @@ export function DetailsPanel(props: DetailsPanelProps) {
         </div>
 
         <CategoryEditor game={props.game} />
+
+        <section class="copies" aria-label="Stores">
+          <Show when={combined()}>
+            <ul class="copies__list">
+              <For each={copies()}>
+                {(copy, index) => (
+                  <li class="copies__row">
+                    <SourceIcon source={copy.source} />
+                    <span class="copies__name">{sourceName(copy.source)}</span>
+                    <span class="copies__state">
+                      {copy.installed ? "Installed" : "Not installed"}
+                      {copy.playtimeSeconds > 0 ? ` · ${formatPlaytime(copy.playtimeSeconds)}` : ""}
+                    </span>
+                    <Show when={index() > 0}>
+                      <button
+                        type="button"
+                        class="icon-btn icon-btn--small"
+                        aria-label={`Play with ${sourceName(copy.source)} first`}
+                        title="Play with this store first when it's installed"
+                        onClick={() => void run(() => preferCopy(copy.id))}
+                      >
+                        <ArrowUpToLine class="icon" aria-hidden="true" />
+                      </button>
+                    </Show>
+                    <button
+                      type="button"
+                      class="icon-btn icon-btn--small"
+                      aria-label={`Separate ${sourceName(copy.source)}'s copy`}
+                      title="Show this store's copy as a game of its own again"
+                      onClick={() => void run(() => separateCopy(copy.id))}
+                    >
+                      <Unlink class="icon" aria-hidden="true" />
+                    </button>
+                  </li>
+                )}
+              </For>
+            </ul>
+          </Show>
+          <button
+            ref={(el) => (combineButton = el)}
+            type="button"
+            class="btn"
+            aria-haspopup="dialog"
+            aria-expanded={combining() !== null}
+            onClick={() => toggleAnchored(combining, setCombining, combineButton, "start")}
+          >
+            <Combine class="icon" aria-hidden="true" /> Combine with another game…
+          </button>
+          <Show when={combining()}>
+            {(anchor) => (
+              <CombinePicker
+                game={props.game}
+                anchor={anchor()}
+                inside={() => [combineButton]}
+                onPick={(other) => {
+                  setCombining(null);
+                  void run(() => combineGames(props.game.id, [other.id]));
+                }}
+                onClose={(returnFocus) => {
+                  setCombining(null);
+                  if (returnFocus) combineButton?.focus();
+                }}
+              />
+            )}
+          </Show>
+        </section>
 
         <div class="details__row">
           <button
@@ -432,7 +591,13 @@ export function DetailsPanel(props: DetailsPanelProps) {
                   }
                 }}
               >
-                <p>Uninstall “{props.game.name}”? The store will ask to confirm.</p>
+                <p>
+                  Uninstall “{props.game.name}”
+                  <Show when={combined() && uninstallCopy()}>
+                    {(copy) => <> from {sourceName(copy().source)}</>}
+                  </Show>
+                  ? The store will ask to confirm.
+                </p>
                 <div class="details__row">
                   <button
                     type="button"

@@ -94,7 +94,7 @@ describe("DetailsView", () => {
     ]);
     render(() => <DetailsView />);
     await fireEvent.click(await screen.findByRole("button", { name: "Play" }));
-    expect(api.launchGame).toHaveBeenCalledWith("g1");
+    expect(api.launchGame).toHaveBeenCalledWith("g1", null);
     for (const name of [
       "Favorite",
       "Hidden",

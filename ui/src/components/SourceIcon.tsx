@@ -1,4 +1,6 @@
-import { Show } from "solid-js";
+import { For, Show } from "solid-js";
+import type { Game } from "../bindings/Game";
+import { storesOf } from "../lib/copies";
 import Store from "lucide-solid/icons/store";
 import { sourceInfo } from "../lib/sources";
 import { store } from "../lib/store";
@@ -19,4 +21,18 @@ export function SourceIcon(props: { source: string }) {
 /** Display name of a game's source, from the registered providers. */
 export function sourceName(source: string): string {
   return sourceInfo(source, store.providers()).name;
+}
+
+/** Names of every store a game is in, in play order ("Steam, Epic Games"). */
+export function storeNames(game: Game): string {
+  return storesOf(game).map(sourceName).join(", ");
+}
+
+/** Logos of every store a game is in, in play order (decorative; give the names as text). */
+export function SourceIcons(props: { game: Game }) {
+  return (
+    <span class="source-icons" aria-hidden="true">
+      <For each={storesOf(props.game)}>{(source) => <SourceIcon source={source} />}</For>
+    </span>
+  );
 }

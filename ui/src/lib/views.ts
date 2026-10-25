@@ -5,6 +5,7 @@ import type { LibraryView } from "../bindings/LibraryView";
 import type { SectionOrder } from "../bindings/SectionOrder";
 import type { ViewLayout } from "../bindings/ViewLayout";
 import type { ViewSection } from "../bindings/ViewSection";
+import { storesOf } from "./copies";
 
 /** What a view shows right now: its saved state or the unsaved changes made to it. */
 export interface ViewState {
@@ -104,7 +105,9 @@ function hasPlayed(game: Game): boolean {
 
 /** Whether a game passes a query's filters (the keyword is ignored). Mirrors the core's SQL. */
 export function matchesFilters(query: GameQuery, game: Game): boolean {
-  if (query.sources.length > 0 && !query.sources.includes(game.source)) return false;
+  if (query.sources.length > 0 && !storesOf(game).some((s) => query.sources.includes(s))) {
+    return false;
+  }
   if (query.favorite !== "any" && game.favorite !== (query.favorite === "yes")) return false;
   if (query.installed !== "any" && game.installed !== (query.installed === "yes")) return false;
   if (query.hidden === "visible" && game.hidden) return false;

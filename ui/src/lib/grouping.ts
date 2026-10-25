@@ -1,6 +1,7 @@
 import type { Category } from "../bindings/Category";
 import type { Game } from "../bindings/Game";
 import type { GroupBy } from "../bindings/GroupBy";
+import { storesOf } from "./copies";
 import type { NavKey } from "./gridNav";
 import { NO_CATEGORY } from "./views";
 
@@ -38,7 +39,10 @@ export function groupGames(
     group.games.push(game);
   };
   if (by === "source") {
-    for (const game of games) add(game.source, sourceName(game.source), game.source, game);
+    // A game in several stores shows in each of them.
+    for (const game of games) {
+      for (const source of storesOf(game)) add(source, sourceName(source), source, game);
+    }
   } else {
     const names = new Map(categories.map((c) => [c.id, c.name]));
     for (const game of games) {

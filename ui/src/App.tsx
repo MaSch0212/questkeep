@@ -1,6 +1,7 @@
 import { createSignal, onCleanup, onMount, Show } from "solid-js";
 import { DEFAULT_SPLIT_BREAKPOINT, isSplitWidth, readSplitBreakpoint } from "./lib/layoutMode";
 import { AddGameDialog } from "./components/AddGameDialog";
+import { DuplicatesDialog } from "./components/DuplicatesDialog";
 import { DetailsPanel } from "./components/DetailsPanel";
 import { DetailsView } from "./components/DetailsView";
 import { GameGrid } from "./components/GameGrid";
@@ -149,6 +150,9 @@ export function App() {
       </div>
       <Show when={adding()}>
         <AddGameDialog onClose={() => setAdding(false)} />
+      </Show>
+      <Show when={store.duplicatesOpen()}>
+        <DuplicatesDialog onClose={() => store.setDuplicatesOpen(false)} />
       </Show>
       <Toasts />
     </div>

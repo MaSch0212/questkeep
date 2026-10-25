@@ -155,9 +155,15 @@ pub async fn add_game_with_option(
 }
 
 #[tauri::command]
-pub async fn launch_game(state: State<'_, Arc<AppState>>, id: String) -> CmdResult<()> {
+/// Plays a game; `copy_id` picks the store's copy of a game owned in several.
+pub async fn launch_game(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    copy_id: Option<String>,
+) -> CmdResult<()> {
     blocking(state, move |s| {
-        let game = s.library.get_game(parse_id(&id)?)?;
+        let copy = copy_id.as_deref().map(parse_id).transpose()?;
+        let game = s.library.play_target(parse_id(&id)?, copy)?;
         s.launcher.launch(&game)
     })
     .await
@@ -165,14 +171,81 @@ pub async fn launch_game(state: State<'_, Arc<AppState>>, id: String) -> CmdResu
 
 /// Starts installing an owned game through its store client.
 #[tauri::command]
-pub async fn install_game(state: State<'_, Arc<AppState>>, id: String) -> CmdResult<()> {
-    blocking(state, move |s| s.library.install_game(parse_id(&id)?)).await
+pub async fn install_game(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    copy_id: Option<String>,
+) -> CmdResult<()> {
+    blocking(state, move |s| {
+        let copy = copy_id.as_deref().map(parse_id).transpose()?;
+        s.library.install_game(parse_id(&id)?, copy)
+    })
+    .await
 }
 
 /// Hands the uninstall to the store client or the game's uninstaller, which asks the user.
 #[tauri::command]
-pub async fn uninstall_game(state: State<'_, Arc<AppState>>, id: String) -> CmdResult<()> {
-    blocking(state, move |s| s.library.uninstall_game(parse_id(&id)?)).await
+pub async fn uninstall_game(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    copy_id: Option<String>,
+) -> CmdResult<()> {
+    blocking(state, move |s| {
+        let copy = copy_id.as_deref().map(parse_id).transpose()?;
+        s.library.uninstall_game(parse_id(&id)?, copy)
+    })
+    .await
+}
+
+/// Combines other games into `into` (one game owned in several stores); returns the entry.
+#[tauri::command]
+pub async fn combine_games(
+    state: State<'_, Arc<AppState>>,
+    into: String,
+    others: Vec<String>,
+) -> CmdResult<Game> {
+    blocking(state, move |s| {
+        let others = others
+            .iter()
+            .map(|id| parse_id(id))
+            .collect::<Result<Vec<_>, _>>()?;
+        s.library.combine_games(parse_id(&into)?, &others)
+    })
+    .await
+}
+
+/// Takes a store's copy out of its combined game; returns the remaining game.
+#[tauri::command]
+pub async fn separate_copy(state: State<'_, Arc<AppState>>, id: String) -> CmdResult<Game> {
+    blocking(state, move |s| s.library.separate_copy(parse_id(&id)?)).await
+}
+
+/// Makes a store's copy the one Play starts; returns its game.
+#[tauri::command]
+pub async fn prefer_copy(state: State<'_, Arc<AppState>>, id: String) -> CmdResult<Game> {
+    blocking(state, move |s| s.library.prefer_copy(parse_id(&id)?)).await
+}
+
+/// Groups of games that look like the same game in different stores.
+#[tauri::command]
+pub async fn find_duplicates(state: State<'_, Arc<AppState>>) -> CmdResult<Vec<Vec<Game>>> {
+    blocking(state, |s| s.library.find_duplicates()).await
+}
+
+/// Remembers that these games are different, so they aren't suggested together again.
+#[tauri::command]
+pub async fn dismiss_duplicates(
+    state: State<'_, Arc<AppState>>,
+    ids: Vec<String>,
+) -> CmdResult<()> {
+    blocking(state, move |s| {
+        let ids = ids
+            .iter()
+            .map(|id| parse_id(id))
+            .collect::<Result<Vec<_>, _>>()?;
+        s.library.dismiss_duplicates(&ids)
+    })
+    .await
 }
 
 /// Re-downloads store metadata (and a missing background) for one game in the background.

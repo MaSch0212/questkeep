@@ -1,6 +1,17 @@
 import type { Game } from "./bindings/Game";
 
+/** A game; unless `copies` is given, its only copy is itself (as the core reports it). */
 export function makeGame(overrides: Partial<Game> = {}): Game {
+  const game = makeRawGame(overrides);
+  if (overrides.copies) return game;
+  const { id, source, sourceGameId, installed, playtimeSeconds, lastPlayed } = game;
+  return {
+    ...game,
+    copies: [{ id, source, sourceGameId, installed, playtimeSeconds, lastPlayed }],
+  };
+}
+
+function makeRawGame(overrides: Partial<Game>): Game {
   return {
     id: "g1",
     name: "Hades",
@@ -34,6 +45,7 @@ export function makeGame(overrides: Partial<Game> = {}): Game {
     categories: [],
     metadataUpdatedAt: null,
     extra: {},
+    copies: [],
     ...overrides,
   };
 }

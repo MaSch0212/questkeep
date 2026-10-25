@@ -339,7 +339,7 @@ fn launch(app: &AppHandle, id: Uuid) {
     std::thread::spawn(move || {
         let result = state
             .library
-            .get_game(id)
+            .play_target(id, None)
             .and_then(|game| state.launcher.launch(&game));
         if let Err(err) = result {
             tracing::warn!(%err, %id, "launching from the tray failed");

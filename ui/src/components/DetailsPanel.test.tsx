@@ -53,7 +53,7 @@ describe("DetailsPanel", () => {
     vi.mocked(api.launchGame).mockResolvedValue(undefined);
     render(() => <DetailsPanel game={makeGame()} onClose={vi.fn<() => void>()} />);
     await fireEvent.click(screen.getByRole("button", { name: "Play" }));
-    expect(api.launchGame).toHaveBeenCalledWith("g1");
+    expect(api.launchGame).toHaveBeenCalledWith("g1", null);
   });
 
   it("shows launch errors", async () => {
@@ -176,7 +176,7 @@ describe("DetailsPanel", () => {
       expect(screen.getByText(/Uninstall “Hades”\? The store will ask to confirm\./)).toBeVisible();
       await waitFor(() => expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus());
       await fireEvent.click(screen.getByRole("button", { name: "Uninstall" }));
-      await waitFor(() => expect(api.uninstallGame).toHaveBeenCalledWith("g1"));
+      await waitFor(() => expect(api.uninstallGame).toHaveBeenCalledWith("g1", "g1"));
     });
 
     it("cancels with the Cancel button or Escape and returns focus", async () => {
@@ -210,7 +210,7 @@ describe("DetailsPanel", () => {
     ));
     expect(screen.queryByRole("button", { name: "Play" })).toBeNull();
     await fireEvent.click(screen.getByRole("button", { name: "Install" }));
-    expect(api.installGame).toHaveBeenCalledWith("g1");
+    expect(api.installGame).toHaveBeenCalledWith("g1", null);
     expect(api.launchGame).not.toHaveBeenCalled();
   });
 

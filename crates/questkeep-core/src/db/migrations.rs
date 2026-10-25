@@ -164,6 +164,55 @@ const MIGRATIONS: &[&str] = &[
         WHERE NOT EXISTS (SELECT 1 FROM game_categories x
             WHERE x.game_id = t.game_id AND x.category_id = s.category_id AND x.excluded = 1);
     "#,
+    // 6: one library entry for a game owned in several stores. Each store's copy keeps its row
+    // (syncs, installs and tracked playtime stay per store); combined copies point at the entry's
+    // row (`merged_into`, never a chain) and `copy_position` orders an entry's copies (the first
+    // installed one plays). `library_entries` is the library as shown: entries only, with
+    // installed, playtime and last played over all copies. Store categories of every copy count
+    // for the entry. `duplicate_dismissals` holds pairs the user said are different games.
+    r#"
+    ALTER TABLE games ADD COLUMN merged_into TEXT REFERENCES games (id) ON DELETE SET NULL;
+    ALTER TABLE games ADD COLUMN copy_position INTEGER NOT NULL DEFAULT 0;
+    CREATE INDEX games_merged_into ON games (merged_into) WHERE merged_into IS NOT NULL;
+
+    CREATE TABLE duplicate_dismissals (
+        game_id  TEXT NOT NULL REFERENCES games (id) ON DELETE CASCADE,
+        other_id TEXT NOT NULL REFERENCES games (id) ON DELETE CASCADE,
+        PRIMARY KEY (game_id, other_id)
+    );
+
+    CREATE VIEW library_entries AS
+    SELECT g.id, g.name, g.sorting_name, g.search_key, g.source, g.source_game_id,
+        (g.installed OR EXISTS
+            (SELECT 1 FROM games m WHERE m.merged_into = g.id AND m.installed)) AS installed,
+        g.install_dir, g.play_action,
+        g.playtime_seconds + COALESCE(
+            (SELECT SUM(m.playtime_seconds) FROM games m WHERE m.merged_into = g.id), 0)
+            AS playtime_seconds,
+        g.play_count + COALESCE(
+            (SELECT SUM(m.play_count) FROM games m WHERE m.merged_into = g.id), 0) AS play_count,
+        COALESCE(
+            MAX(g.last_played,
+                (SELECT MAX(m.last_played) FROM games m WHERE m.merged_into = g.id)),
+            g.last_played,
+            (SELECT MAX(m.last_played) FROM games m WHERE m.merged_into = g.id)) AS last_played,
+        g.date_added, g.favorite, g.hidden, g.cover_path, g.icon_path, g.background_path,
+        g.description, g.release_date, g.developers, g.publishers, g.genres,
+        g.metadata_updated_at, g.extra, g.merged_into, g.copy_position
+    FROM games g WHERE g.merged_into IS NULL;
+
+    DROP VIEW game_category_links;
+    CREATE VIEW game_category_links (game_id, category_id) AS
+        SELECT game_id, category_id FROM game_categories WHERE excluded = 0
+        UNION
+        SELECT COALESCE(g.merged_into, g.id), s.category_id
+        FROM game_tags t
+        JOIN games g ON g.id = t.game_id
+        JOIN category_sources s ON s.source = t.source AND s.name = t.name
+        WHERE NOT EXISTS (SELECT 1 FROM game_categories x
+            WHERE x.game_id = COALESCE(g.merged_into, g.id) AND x.category_id = s.category_id
+            AND x.excluded = 1);
+    "#,
 ];
 
 /// Latest schema version this build knows.

@@ -154,7 +154,15 @@ describe("Menus", () => {
       within(menu)
         .getAllByRole("menuitem")
         .map((i) => i.textContent),
-    ).toEqual(["Edit views", "Add game", "Open launcher", "Sync", "Settings", "Exit Questkeep"]);
+    ).toEqual([
+      "Edit views",
+      "Add game",
+      "Open launcher",
+      "Sync",
+      "Games in several stores…",
+      "Settings",
+      "Exit Questkeep",
+    ]);
     await fireEvent.click(within(menu).getByRole("menuitem", { name: "Sync" }));
     const sync = screen.getByRole("menu", { name: "Sync" });
     await fireEvent.click(within(sync).getByRole("menuitem", { name: "Epic Games" }));

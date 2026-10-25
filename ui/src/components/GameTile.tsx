@@ -3,7 +3,8 @@ import type { Game } from "../bindings/Game";
 import { store } from "../lib/store";
 import { Cover } from "./Cover";
 import { QuickAction } from "./QuickAction";
-import { SourceIcon, sourceName } from "./SourceIcon";
+import { storesOf } from "../lib/copies";
+import { SourceIcons, sourceName, storeNames } from "./SourceIcon";
 import Download from "lucide-solid/icons/download";
 import Star from "lucide-solid/icons/star";
 
@@ -43,9 +44,11 @@ export function GameTile(props: GameTileProps) {
     >
       <div class="tile__cover">
         <Cover game={props.game} />
-        <div class="tile__source" title={sourceName(props.game.source)} aria-hidden="true">
-          <SourceIcon source={props.game.source} />
-          <span class="tile__source-name">{sourceName(props.game.source)}</span>
+        <div class="tile__source" title={storeNames(props.game)} aria-hidden="true">
+          <SourceIcons game={props.game} />
+          <Show when={storesOf(props.game).length === 1}>
+            <span class="tile__source-name">{sourceName(props.game.source)}</span>
+          </Show>
         </div>
         <div class="tile__quick">
           <QuickAction game={props.game} tabbable={props.selected} />

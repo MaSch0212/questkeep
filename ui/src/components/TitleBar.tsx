@@ -1,4 +1,5 @@
 import ChevronDown from "lucide-solid/icons/chevron-down";
+import Combine from "lucide-solid/icons/combine";
 import Copy from "lucide-solid/icons/copy";
 import Minus from "lucide-solid/icons/minus";
 import Pencil from "lucide-solid/icons/pencil";
@@ -169,6 +170,11 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
       label: "Sync",
       icon: () => <RefreshCw class="icon" aria-hidden="true" />,
       entries: syncEntries,
+    },
+    {
+      label: "Games in several stores…",
+      icon: () => <Combine class="icon" aria-hidden="true" />,
+      onSelect: () => store.setDuplicatesOpen(true),
     },
     { kind: "separator" },
     {

@@ -177,6 +177,10 @@
   --qk-group-header-height: 40px;
   --qk-list-group-height: 32px;
   --qk-category-picker-width: 280px;
+  --qk-combine-picker-width: 340px;
+  --qk-duplicates-width: 640px;
+  --qk-duplicates-max-height: 60vh;
+  --qk-split-gap: 2px;
   --qk-category-picker-max-height: 240px;
   --qk-spin-duration: 1s;
   --qk-running-dot-size: 8px;

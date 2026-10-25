@@ -41,6 +41,8 @@ Also: GOG playtime from GOG Galaxy's local database; IGDB fills missing genres (
 - **Categories follow-ups**: Heroic categories; assign categories to several games at once; more
   group-by fields (genre, release year); map a single store category onto an existing category
   without merging whole categories; check `sharedconfig.vdf` tags on an older Steam install.
+- **Combined games follow-ups**: smarter duplicate matching (editions, "GOTY", subtitles);
+  edit launch options per copy; a bulk "combine selected" once multi-select exists.
 - **Command bar commands**: run app actions (sync a store, open settings, switch views) from
   Ctrl+K, not only games.
 

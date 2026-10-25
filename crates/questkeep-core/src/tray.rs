@@ -241,6 +241,7 @@ mod tests {
             publishers: vec![],
             genres: vec![],
             categories: vec![],
+            copies: vec![],
             metadata_updated_at: None,
             extra: serde_json::Value::Null,
         };

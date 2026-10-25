@@ -4,7 +4,8 @@ import { formatPlaytime, formatRelativeDate, releaseYear } from "../lib/format";
 import { store } from "../lib/store";
 import { GameIcon } from "./GameIcon";
 import { QuickAction } from "./QuickAction";
-import { SourceIcon, sourceName } from "./SourceIcon";
+import { storesOf } from "../lib/copies";
+import { SourceIcons, sourceName, storeNames } from "./SourceIcon";
 import Download from "lucide-solid/icons/download";
 import Star from "lucide-solid/icons/star";
 
@@ -27,7 +28,7 @@ export function rowDomId(id: string): string {
 /** One fixed-height row of the list view. */
 export function GameRow(props: GameRowProps) {
   const running = () => store.isRunning(props.game.id);
-  const source = () => sourceName(props.game.source);
+  const stores = () => storesOf(props.game);
 
   return (
     <div
@@ -59,9 +60,14 @@ export function GameRow(props: GameRowProps) {
           <QuickAction game={props.game} tabbable={props.selected} />
         </div>
       </div>
-      <div class="list-row__cell list-row__source" title={source()}>
-        <SourceIcon source={props.game.source} />
-        <span class="list-row__text">{source()}</span>
+      <div class="list-row__cell list-row__source" title={storeNames(props.game)}>
+        <SourceIcons game={props.game} />
+        <Show
+          when={stores().length === 1}
+          fallback={<span class="visually-hidden">{storeNames(props.game)}</span>}
+        >
+          <span class="list-row__text">{sourceName(props.game.source)}</span>
+        </Show>
       </div>
       <div class="list-row__cell list-row__state">
         <Show

@@ -50,6 +50,8 @@ export interface Toast {
   id: number;
   kind: "info" | "error";
   message: string;
+  /** A button on the toast (e.g. "Review"). */
+  action?: { label: string; run: () => void };
 }
 
 const REFRESH_DEBOUNCE_MS = 60;
@@ -78,6 +80,7 @@ function createAppStore() {
   const [appInfo, setAppInfo] = createSignal<AppInfo | null>(null);
   const [seenSources, setSeenSources] = createSignal<ReadonlySet<string>>(new Set());
   const [toasts, setToasts] = createSignal<Toast[]>([]);
+  const [duplicatesOpen, setDuplicatesOpen] = createSignal(false);
   const [coverVersions, setCoverVersions] = createStore<Record<string, number>>({});
   const [page, setPage] = createSignal<Page>("library");
   const [syncState, setSyncState] = createSignal<SyncState>(IDLE_SYNC);
@@ -131,10 +134,39 @@ function createAppStore() {
     setToasts((list) => list.filter((t) => t.id !== id));
   }
 
-  function pushToast(kind: Toast["kind"], message: string) {
+  function pushToast(kind: Toast["kind"], message: string, action?: Toast["action"]) {
     const id = ++toastSeq;
-    setToasts((list) => [...list.slice(-4), { id, kind, message }]);
-    setTimeout(() => dismissToast(id), kind === "error" ? 8000 : 4500);
+    setToasts((list) => [...list.slice(-4), { id, kind, message, action }]);
+    setTimeout(() => dismissToast(id), kind === "error" || action ? 8000 : 4500);
+  }
+
+  // Groups of games in several stores that a toast already pointed out this session.
+  const notifiedDuplicates = new Set<string>();
+
+  /** After a sync: points out games that newly look like the same game in several stores. */
+  async function checkDuplicates() {
+    let found: Game[][];
+    try {
+      found = (await api.findDuplicates()) ?? [];
+    } catch {
+      return; // only a hint; the dialog shows errors
+    }
+    const keys = found.map((group) =>
+      group
+        .map((g) => g.id)
+        .toSorted()
+        .join(),
+    );
+    const fresh = keys.filter((key) => !notifiedDuplicates.has(key)).length;
+    for (const key of keys) notifiedDuplicates.add(key);
+    if (fresh === 0) return;
+    pushToast(
+      "info",
+      found.length === 1
+        ? "1 game looks like it's in more than one store"
+        : `${found.length} games look like they're in more than one store`,
+      { label: "Review", run: () => setDuplicatesOpen(true) },
+    );
   }
 
   // One status for every scan, however it started; one toast when the run ends.
@@ -142,6 +174,7 @@ function createAppStore() {
     onChange: setSyncState,
     onFinished: (state) => {
       pushToast("info", syncResultText(state));
+      void checkDuplicates();
       // The core records the end of a "sync all" right after its last store.
       setTimeout(() => void loadSyncTimes(), 500);
     },
@@ -424,8 +457,19 @@ function createAppStore() {
     });
   }
 
+  // Copy id -> library entry id, for games combined from several stores.
+  const entryOfCopy = createMemo(() => {
+    const map = new Map<string, string>();
+    for (const game of games()) for (const copy of game.copies) map.set(copy.id, game.id);
+    return map;
+  });
+
+  /** Whether a game (any of its store copies) is running. */
   function isRunning(id: string): boolean {
-    return running().has(id);
+    const ids = running();
+    if (ids.has(id)) return true;
+    for (const runningId of ids) if (entryOfCopy().get(runningId) === id) return true;
+    return false;
   }
 
   function setRunningState(id: string, value: boolean) {
@@ -570,6 +614,9 @@ function createAppStore() {
     appInfo,
     sources,
     toasts,
+    duplicatesOpen,
+    setDuplicatesOpen,
+    checkDuplicates,
     viewMode,
     setViewMode,
     groupBy,

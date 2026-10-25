@@ -68,9 +68,24 @@ export const scanLibrary = (providerId: string) =>
   invoke<ScanSummary>("scan_library", { providerId });
 /** Scans every store; progress arrives as core events. */
 export const scanAllLibraries = () => invoke<void>("scan_all_libraries");
-export const launchGame = (id: string) => invoke<void>("launch_game", { id });
-export const installGame = (id: string) => invoke<void>("install_game", { id });
-export const uninstallGame = (id: string) => invoke<void>("uninstall_game", { id });
+/** `copyId` picks one store's copy of a game owned in several; by default the core picks. */
+export const launchGame = (id: string, copyId: string | null = null) =>
+  invoke<void>("launch_game", { id, copyId });
+export const installGame = (id: string, copyId: string | null = null) =>
+  invoke<void>("install_game", { id, copyId });
+export const uninstallGame = (id: string, copyId: string | null = null) =>
+  invoke<void>("uninstall_game", { id, copyId });
+/** Combines other games into `into` (the same game in several stores); returns the entry. */
+export const combineGames = (into: string, others: string[]) =>
+  invoke<Game>("combine_games", { into, others });
+/** Takes a store's copy out of its combined game; returns the remaining game. */
+export const separateCopy = (id: string) => invoke<Game>("separate_copy", { id });
+/** Makes a store's copy the one Play starts; returns its game. */
+export const preferCopy = (id: string) => invoke<Game>("prefer_copy", { id });
+/** Groups of games that look like the same game in different stores, best entry first. */
+export const findDuplicates = () => invoke<Game[][]>("find_duplicates");
+/** Remembers that these games are different. */
+export const dismissDuplicates = (ids: string[]) => invoke<void>("dismiss_duplicates", { ids });
 /** Opens a provider's own way to add games; the new game is imported once the provider sees it. */
 export const addGameWithOption = (providerId: string, optionId: string) =>
   invoke<void>("add_game_with_option", { providerId, optionId });

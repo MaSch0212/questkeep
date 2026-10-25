@@ -9,8 +9,8 @@ use uuid::Uuid;
 use super::Database;
 use crate::error::{CoreError, Result};
 use crate::model::{
-    Game, GameMetadata, GameQuery, GameUpdate, HiddenFilter, ImportedGame, NO_CATEGORY, PlayAction,
-    PlayedFilter, ScanSummary, SortField, TriState, sorting_name,
+    Game, GameCopy, GameMetadata, GameQuery, GameUpdate, HiddenFilter, ImportedGame, NO_CATEGORY,
+    PlayAction, PlayedFilter, ScanSummary, SortField, TriState, sorting_name,
 };
 
 const COLUMNS: &str = "id, name, sorting_name, source, source_game_id, installed, install_dir, \
@@ -67,7 +67,12 @@ fn query_filter(query: &GameQuery) -> (String, Vec<Box<dyn ToSql>>) {
             args.push(Box::new(source.clone()));
             placeholders.push(format!("?{}", args.len()));
         }
-        clauses.push(format!("source IN ({})", placeholders.join(", ")));
+        // Any of a combined game's stores.
+        let list = placeholders.join(", ");
+        clauses.push(format!(
+            "(source IN ({list}) OR EXISTS (SELECT 1 FROM games m \
+             WHERE m.merged_into = games.id AND m.source IN ({list})))"
+        ));
     }
     let flag = |column: &str, filter: TriState| match filter {
         TriState::Any => None,
@@ -152,7 +157,72 @@ fn row_to_game(row: &Row<'_>) -> rusqlite::Result<Game> {
             .unwrap_or_default(),
         metadata_updated_at: row.get("metadata_updated_at")?,
         extra: serde_json::from_str(&extra).unwrap_or_else(|_| serde_json::json!({})),
+        copies: Vec::new(),
     })
+    .map(|mut game| {
+        game.copies = vec![own_copy(&game)];
+        game
+    })
+}
+
+/// A game row as the only copy of itself.
+fn own_copy(game: &Game) -> GameCopy {
+    GameCopy {
+        id: game.id,
+        source: game.source.clone(),
+        source_game_id: game.source_game_id.clone(),
+        installed: game.installed,
+        playtime_seconds: game.playtime_seconds,
+        last_played: game.last_played,
+    }
+}
+
+/// Fills `copies` of library entries that have games combined into them. Entries come from
+/// `library_entries` (installed and playtime over all copies), so each copy is read from its
+/// own row.
+fn attach_copies(conn: &rusqlite::Connection, games: &mut [Game]) -> Result<()> {
+    let mut stmt = conn.prepare_cached(
+        "SELECT id, COALESCE(merged_into, id), source, source_game_id, installed, \
+         playtime_seconds, last_played FROM games \
+         WHERE merged_into IS NOT NULL OR id IN \
+         (SELECT merged_into FROM games WHERE merged_into IS NOT NULL) \
+         ORDER BY copy_position, merged_into IS NOT NULL, date_added, id",
+    )?;
+    let mut by_entry: HashMap<String, Vec<GameCopy>> = HashMap::new();
+    let rows = stmt.query_map([], |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, String>(2)?,
+            r.get::<_, Option<String>>(3)?,
+            r.get::<_, bool>(4)?,
+            r.get::<_, i64>(5)?,
+            r.get::<_, Option<DateTime<Utc>>>(6)?,
+        ))
+    })?;
+    for row in rows {
+        let (id, entry, source, source_game_id, installed, playtime, last_played) = row?;
+        let Ok(id) = Uuid::parse_str(&id) else {
+            continue;
+        };
+        by_entry.entry(entry).or_default().push(GameCopy {
+            id,
+            source,
+            source_game_id,
+            installed,
+            playtime_seconds: u64::try_from(playtime).unwrap_or_default(),
+            last_played,
+        });
+    }
+    if by_entry.is_empty() {
+        return Ok(());
+    }
+    for game in games {
+        if let Some(copies) = by_entry.remove(&game.id.to_string()) {
+            game.copies = copies;
+        }
+    }
+    Ok(())
 }
 
 /// Parses a JSON string array column; malformed data yields an empty list.
@@ -192,8 +262,28 @@ impl Database {
         self.get_game(id)
     }
 
+    /// One game row as stored: a single store's copy, even when it is combined into an entry.
     pub fn get_game(&self, id: Uuid) -> Result<Game> {
         self.find_game(id)?.ok_or(CoreError::GameNotFound(id))
+    }
+
+    /// The library entry a game belongs to (itself, or the entry it was combined into), with
+    /// all its copies.
+    pub fn get_entry(&self, id: Uuid) -> Result<Game> {
+        let conn = self.conn();
+        let entry = conn
+            .query_row(
+                &format!(
+                    "SELECT {COLUMNS} FROM library_entries AS games WHERE id = \
+                     (SELECT COALESCE(merged_into, id) FROM games WHERE id = ?1)"
+                ),
+                [id.to_string()],
+                row_to_game,
+            )
+            .optional()?;
+        let mut games: Vec<Game> = entry.into_iter().collect();
+        attach_copies(&conn, &mut games)?;
+        games.pop().ok_or(CoreError::GameNotFound(id))
     }
 
     pub fn find_game(&self, id: Uuid) -> Result<Option<Game>> {
@@ -208,9 +298,11 @@ impl Database {
     }
 
     pub fn count_games(&self) -> Result<u64> {
-        let n: i64 = self
-            .conn()
-            .query_row("SELECT COUNT(*) FROM games", [], |r| r.get(0))?;
+        let n: i64 = self.conn().query_row(
+            "SELECT COUNT(*) FROM games WHERE merged_into IS NULL",
+            [],
+            |r| r.get(0),
+        )?;
         Ok(u64::try_from(n).unwrap_or_default())
     }
 
@@ -228,21 +320,23 @@ impl Database {
             SortField::Playtime => format!("playtime_seconds {dir}, {by_name}"),
             SortField::DateAdded => format!("date_added {dir}, {by_name}"),
         };
-        let sql = format!("SELECT {COLUMNS} FROM games {where_sql} ORDER BY {order}");
+        let sql =
+            format!("SELECT {COLUMNS} FROM library_entries AS games {where_sql} ORDER BY {order}");
 
         let conn = self.conn();
         let mut stmt = conn.prepare_cached(&sql)?;
         let params: Vec<&dyn ToSql> = args.iter().map(|a| a.as_ref()).collect();
-        let games = stmt
+        let mut games = stmt
             .query_map(params.as_slice(), row_to_game)?
             .collect::<rusqlite::Result<Vec<_>>>()?;
+        attach_copies(&conn, &mut games)?;
         Ok(games)
     }
 
     /// How many games match `query` (its sort is ignored).
     pub fn count_matching(&self, query: &GameQuery) -> Result<u64> {
         let (where_sql, args) = query_filter(query);
-        let sql = format!("SELECT COUNT(*) FROM games {where_sql}");
+        let sql = format!("SELECT COUNT(*) FROM library_entries AS games {where_sql}");
         let conn = self.conn();
         let mut stmt = conn.prepare_cached(&sql)?;
         let params: Vec<&dyn ToSql> = args.iter().map(|a| a.as_ref()).collect();
@@ -541,14 +635,15 @@ impl Database {
 
     /// Store games whose metadata was never fetched: `(id, source, source_game_id)`.
     pub fn games_needing_metadata(&self) -> Result<Vec<(Uuid, String, String)>> {
-        self.store_game_keys("metadata_updated_at IS NULL")
+        self.store_game_keys("metadata_updated_at IS NULL AND merged_into IS NULL")
     }
 
     /// Games that have no cover yet, including manual ones: `(id, source, source_game_id)`.
     pub fn games_without_cover(&self) -> Result<Vec<(Uuid, String, Option<String>)>> {
         let conn = self.conn();
         let mut stmt = conn.prepare(
-            "SELECT id, source, source_game_id FROM games WHERE cover_path IS NULL \
+            "SELECT id, source, source_game_id FROM games \
+             WHERE cover_path IS NULL AND merged_into IS NULL \
              ORDER BY installed DESC, sorting_name",
         )?;
         let rows = stmt.query_map([], |r| {
@@ -574,7 +669,7 @@ impl Database {
         let conn = self.conn();
         let mut stmt = conn.prepare(
             "SELECT id, source, source_game_id, extra FROM games \
-             WHERE description IS NULL OR genres = '[]' \
+             WHERE (description IS NULL OR genres = '[]') AND merged_into IS NULL \
              ORDER BY installed DESC, sorting_name",
         )?;
         let rows = stmt.query_map([], |r| {

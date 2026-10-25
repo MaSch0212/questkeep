@@ -47,11 +47,30 @@ pub struct Game {
     pub genres: Vec<String>,
     /// Ids of the game's categories, in no particular order.
     pub categories: Vec<String>,
+    /// The stores this game is in: its own row first unless reordered, then the copies combined
+    /// into it, in play order (the first installed one plays). `installed`, playtime and last
+    /// played above cover all of them. One entry for a game in a single store.
+    pub copies: Vec<GameCopy>,
     /// When store metadata was last fetched; `None` means never.
     pub metadata_updated_at: Option<DateTime<Utc>>,
     /// Free-form data for future fields and plugins.
     #[ts(type = "Record<string, unknown>")]
     pub extra: serde_json::Value,
+}
+
+/// One store's copy of a library entry (see [`Game::copies`]).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct GameCopy {
+    /// The copy's own game id (the entry's id for its own row).
+    pub id: Uuid,
+    pub source: String,
+    pub source_game_id: Option<String>,
+    pub installed: bool,
+    #[ts(type = "number")]
+    pub playtime_seconds: u64,
+    pub last_played: Option<DateTime<Utc>>,
 }
 
 /// Store metadata for one game, as returned by a provider.

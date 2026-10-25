@@ -3,7 +3,7 @@ import type { Game } from "../bindings/Game";
 import Star from "lucide-solid/icons/star";
 import { store } from "../lib/store";
 import { GameIcon } from "./GameIcon";
-import { SourceIcon, sourceName } from "./SourceIcon";
+import { SourceIcons, storeNames } from "./SourceIcon";
 import { rowDomId } from "./GameRow";
 
 interface GameRowCompactProps {
@@ -15,7 +15,7 @@ interface GameRowCompactProps {
   domKey?: string;
 }
 
-/** One row of the narrow list in the details view: store icon, small cover, name. */
+/** One row of the narrow list in the details view: small cover, name, store icons. */
 export function GameRowCompact(props: GameRowCompactProps) {
   const running = () => store.isRunning(props.game.id);
   return (
@@ -31,9 +31,6 @@ export function GameRowCompact(props: GameRowCompactProps) {
       aria-label={props.game.installed ? props.game.name : `${props.game.name} (not installed)`}
       onClick={() => props.onSelect(props.game.id)}
     >
-      <span class="compact-row__source" title={sourceName(props.game.source)}>
-        <SourceIcon source={props.game.source} />
-      </span>
       <div class="list-row__thumb">
         <GameIcon game={props.game} />
       </div>
@@ -48,6 +45,10 @@ export function GameRowCompact(props: GameRowCompactProps) {
           <Star class="icon icon--filled" aria-hidden="true" />
         </span>
       </Show>
+      {/* At the end, so several stores never push the name aside. */}
+      <span class="compact-row__source" title={storeNames(props.game)}>
+        <SourceIcons game={props.game} />
+      </span>
     </div>
   );
 }

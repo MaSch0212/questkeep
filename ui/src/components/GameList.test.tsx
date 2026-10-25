@@ -67,7 +67,7 @@ describe("GameList", () => {
     await load();
     render(() => <GameList />);
     await fireEvent.dblClick(screen.getByRole("option", { name: "Hades" }));
-    expect(api.launchGame).toHaveBeenCalledWith("g1");
+    expect(api.launchGame).toHaveBeenCalledWith("g1", null);
     expect(api.installGame).not.toHaveBeenCalled();
   });
 
@@ -87,6 +87,6 @@ describe("GameList", () => {
       ctrlKey: true,
     });
     await waitFor(() => expect(api.installGame).toHaveBeenCalledTimes(2));
-    expect(api.installGame).toHaveBeenCalledWith("g1");
+    expect(api.installGame).toHaveBeenCalledWith("g1", null);
   });
 });
