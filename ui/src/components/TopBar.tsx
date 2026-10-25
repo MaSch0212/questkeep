@@ -6,6 +6,8 @@ import ArrowDown from "lucide-solid/icons/arrow-down";
 import ArrowUp from "lucide-solid/icons/arrow-up";
 import LayoutGrid from "lucide-solid/icons/layout-grid";
 import List from "lucide-solid/icons/list";
+import PanelLeft from "lucide-solid/icons/panel-left";
+import { SyncIndicator } from "./SyncIndicator";
 
 const SEARCH_DEBOUNCE_MS = 80;
 
@@ -59,6 +61,7 @@ export function TopBar(props: TopBarProps) {
       <span class="topbar__count" aria-live="polite">
         {store.games().length} {store.games().length === 1 ? "game" : "games"}
       </span>
+      <SyncIndicator />
       <div class="view-toggle" role="group" aria-label="Library view">
         <button
           type="button"
@@ -81,6 +84,17 @@ export function TopBar(props: TopBarProps) {
           onClick={() => store.setViewMode("list")}
         >
           <List class="icon" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          class="icon-btn icon-btn--bordered"
+          classList={{ "icon-btn--active": store.viewMode() === "details" }}
+          aria-label="Details view"
+          aria-pressed={store.viewMode() === "details"}
+          title="Details view"
+          onClick={() => store.setViewMode("details")}
+        >
+          <PanelLeft class="icon" aria-hidden="true" />
         </button>
       </div>
       <select

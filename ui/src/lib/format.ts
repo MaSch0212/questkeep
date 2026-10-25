@@ -49,6 +49,11 @@ export function formatReleaseDate(value: string | null, locale?: string): string
   return new Intl.DateTimeFormat(locale, options).format(date);
 }
 
+/** Clock time (hours and minutes) of a timestamp in milliseconds, in the user's locale. */
+export function formatClockTime(ms: number, locale?: string): string {
+  return new Date(ms).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
+}
+
 /** "Today", "Yesterday", "3 days ago", otherwise the locale date. */
 export function formatRelativeDate(iso: string | null, now: Date = new Date()): string {
   if (!iso) return "Never";

@@ -14,11 +14,17 @@ import {
   defaultDescending,
   defaultQuery,
   mergeSources,
-  scanSummaryText,
   toggleSource,
   withLibraryView,
   type LibraryView,
 } from "./query";
+import {
+  createSyncTracker,
+  IDLE_SYNC,
+  isSyncBusy,
+  syncResultText,
+  type SyncState,
+} from "./syncStatus";
 import { loadViewMode, saveViewMode, type ViewMode } from "./viewMode";
 
 export type Page = "library" | "settings";
@@ -45,6 +51,7 @@ function createAppStore() {
   const [coverVersions, setCoverVersions] = createStore<Record<string, number>>({});
   const [page, setPage] = createSignal<Page>("library");
   const [viewMode, setViewModeSignal] = createSignal<ViewMode>(loadViewMode());
+  const [syncState, setSyncState] = createSignal<SyncState>(IDLE_SYNC);
 
   const indexById = createMemo(() => {
     const map = new Map<string, number>();
@@ -66,7 +73,7 @@ function createAppStore() {
   const sources = createMemo(() => mergeSources(providers(), seenSources()));
 
   // Scroll offset of the library, kept while another page (settings) replaces it.
-  const libraryScroll: Record<ViewMode, number> = { grid: 0, list: 0 };
+  const libraryScroll: Record<ViewMode, number> = { grid: 0, list: 0, details: 0 };
   let requestSeq = 0;
   let refreshTimer: ReturnType<typeof setTimeout> | undefined;
   let toastSeq = 0;
@@ -80,6 +87,12 @@ function createAppStore() {
     setToasts((list) => [...list.slice(-4), { id, kind, message }]);
     setTimeout(() => dismissToast(id), kind === "error" ? 8000 : 4500);
   }
+
+  // One status for every scan, however it started; one toast when the run ends.
+  const syncTracker = createSyncTracker({
+    onChange: setSyncState,
+    onFinished: (state) => pushToast("info", syncResultText(state)),
+  });
 
   async function refresh(): Promise<void> {
     const seq = ++requestSeq;
@@ -183,8 +196,13 @@ function createAppStore() {
         });
         scheduleRefresh();
         break;
+      case "scansQueued":
+      case "scanStarted":
+      case "scanFailed":
+        syncTracker.handle(event);
+        break;
       case "libraryScanned":
-        pushToast("info", `${event.provider}: ${scanSummaryText(event.summary)}`);
+        syncTracker.handle(event);
         scheduleRefresh();
         break;
       case "gameStarted":
@@ -254,6 +272,8 @@ function createAppStore() {
       setPage("library");
       libraryScroll.grid = 0;
       libraryScroll.list = 0;
+      libraryScroll.details = 0;
+      syncTracker.reset();
       setRunning(new Set<string>());
       setProviders([]);
       setAppInfo(null);
@@ -279,6 +299,8 @@ function createAppStore() {
     toasts,
     viewMode,
     setViewMode,
+    syncState,
+    syncBusy: () => isSyncBusy(syncState()),
     page,
     showSettings: () => setPage("settings"),
     showLibrary: () => setPage("library"),
