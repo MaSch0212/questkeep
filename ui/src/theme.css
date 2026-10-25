@@ -22,6 +22,7 @@
   --qk-color-danger: #ff7a85;
   --qk-color-danger-soft: #3a1f26;
   --qk-color-success: #6fd6a0;
+  --qk-color-success-soft: #1c3529;
   --qk-color-star: #ffd166;
   --qk-color-running: #6fd6a0;
   --qk-color-backdrop: #05060acc;
@@ -139,6 +140,7 @@
   --qk-dview-play-height: 46px;
   --qk-popover-width: 340px;
   --qk-popover-gap: 6px;
+  --qk-account-accent-width: 3px;
   --qk-z-popover: 10;
   --qk-spin-duration: 1s;
   --qk-running-dot-size: 8px;

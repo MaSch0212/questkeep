@@ -72,11 +72,28 @@ describe("withSteamSettings", () => {
   });
 });
 
+/** Opens the Steam key form in the Accounts section (a key is saved, so it says "Change key"). */
+async function openSteamKey() {
+  vi.mocked(api.accountStatus).mockResolvedValue([
+    {
+      provider: "steam",
+      name: "Steam",
+      signedIn: false,
+      displayName: null,
+      supportsCodeSignIn: false,
+      codeUrl: null,
+    },
+  ]);
+  render(() => <SettingsPage />);
+  expect(await screen.findByText("Using a Steam Web API key")).toBeInTheDocument();
+  await fireEvent.click(screen.getByRole("button", { name: /Change key/ }));
+}
+
 describe("SettingsPage", () => {
   it("is organised in headed sections with a section nav", () => {
     render(() => <SettingsPage />);
     const nav = within(screen.getByRole("navigation", { name: "Settings sections" }));
-    for (const name of ["General", "Library and stores", "Steam API key", "About"]) {
+    for (const name of ["General", "Stores and accounts", "About"]) {
       expect(screen.getByRole("heading", { name })).toBeInTheDocument();
       expect(nav.getByRole("button", { name })).toBeInTheDocument();
     }
@@ -175,20 +192,20 @@ describe("SettingsPage", () => {
   });
 
   it("hides the API key until asked and explains where it is stored", async () => {
-    render(() => <SettingsPage />);
-    const input = await screen.findByLabelText("Steam Web API key (optional)");
+    await openSteamKey();
+    const input = screen.getByLabelText("Steam Web API key");
     await waitFor(() => expect(input).toHaveValue("OLDKEY"));
     expect(input).toHaveAttribute("type", "password");
     await fireEvent.click(screen.getByRole("button", { name: "Show API key" }));
     expect(input).toHaveAttribute("type", "text");
     expect(screen.getAllByText(/credential store/).length).toBeGreaterThan(0);
-    expect(screen.getByText(/last signed in to Steam/)).toBeInTheDocument();
+    expect(screen.getByText(/last signed in to the Steam client/)).toBeInTheDocument();
   });
 
   it("saves the Steam section without dropping other providers, then rescans", async () => {
     vi.mocked(api.scanLibrary).mockResolvedValue({ added: 3, updated: 1, uninstalled: 0 });
-    render(() => <SettingsPage />);
-    const key = await screen.findByLabelText("Steam Web API key (optional)");
+    await openSteamKey();
+    const key = screen.getByLabelText("Steam Web API key");
     await waitFor(() => expect(key).toHaveValue("OLDKEY"));
     await fireEvent.input(key, { target: { value: "NEWKEY" } });
     await fireEvent.input(screen.getByLabelText("SteamID64 (optional)"), {
@@ -222,8 +239,8 @@ describe("SettingsPage", () => {
   });
 
   it("does not rescan when the credentials did not change", async () => {
-    render(() => <SettingsPage />);
-    const key = await screen.findByLabelText("Steam Web API key (optional)");
+    await openSteamKey();
+    const key = screen.getByLabelText("Steam Web API key");
     await waitFor(() => expect(key).toHaveValue("OLDKEY"));
     await fireEvent.click(screen.getByRole("button", { name: "Save Steam key" }));
     await waitFor(() => expect(api.saveSettings).toHaveBeenCalled());
@@ -261,6 +278,13 @@ describe("GOG Galaxy launch option", () => {
     const saved = vi.mocked(api.saveSettings).mock.calls.at(-1)?.[0];
     expect(saved?.providers.gog).toEqual({ launchThroughGalaxy: true });
     expect(saved?.providers.steam).toEqual({ apiKey: "OLDKEY", extraFlag: 7 });
+
+    // The row also syncs the store, from a small icon button.
+    vi.mocked(api.scanLibrary).mockClear();
+    const gog = screen.getByRole("group", { name: "GOG" });
+    await fireEvent.click(within(gog).getByRole("button", { name: "Sync GOG" }));
+    expect(api.scanLibrary).toHaveBeenCalledWith("gog");
+    expect(within(gog).getByText("Imports the games installed on this PC")).toBeInTheDocument();
   });
 
   it("saves the Xbox Game Pass option and rescans Xbox", async () => {

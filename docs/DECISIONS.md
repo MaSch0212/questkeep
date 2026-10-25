@@ -535,3 +535,7 @@ Short log of choices made while building. Newest at the bottom of each section.
   `prompt=none` hands that session a token for EA's GraphQL service (the approach Lutris uses; only
   the public endpoints were taken over, no code). Owned EA games keep their content id, or the
   install's id when its manifest lists that content id.
+- **One settings list per store** ("Stores and accounts"): sign-in, Steam's API key (shown
+  instead of the sign-in, never both), store options and a sync icon button live in the store's
+  row; the separate library and Steam sections are gone. Sync results arrive as the usual sync
+  toast.

@@ -6,9 +6,7 @@ import { AccountsSection } from "./AccountsSection";
 import { ArtworkSection } from "./ArtworkSection";
 import { DeveloperSection } from "./DeveloperSection";
 import { GeneralSection } from "./GeneralSection";
-import { LibrarySection } from "./LibrarySection";
 import { MetadataSection } from "./MetadataSection";
-import { SteamSection } from "./SteamSection";
 import { UpdatesSection } from "./UpdatesSection";
 import { createSettingsModel, type SettingsModel } from "./useSettings";
 
@@ -23,9 +21,7 @@ interface SectionDef {
 /** To add a settings section: write one component and add one entry here. */
 const SECTIONS: SectionDef[] = [
   { id: "general", title: "General", component: GeneralSection },
-  { id: "library", title: "Library and stores", component: LibrarySection },
-  { id: "steam", title: "Steam API key", component: SteamSection },
-  { id: "accounts", title: "Accounts", component: AccountsSection },
+  { id: "stores", title: "Stores and accounts", component: AccountsSection },
   { id: "artwork", title: "Artwork", component: ArtworkSection },
   { id: "metadata", title: "Metadata", component: MetadataSection },
   {

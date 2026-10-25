@@ -57,12 +57,37 @@ beforeEach(() => {
   store.reset();
 });
 
+const steam = (over: Partial<AccountStatus> = {}): AccountStatus => ({
+  provider: "steam",
+  name: "Steam",
+  signedIn: false,
+  displayName: null,
+  supportsCodeSignIn: false,
+  codeUrl: null,
+  ...over,
+});
+
+function renderAccounts() {
+  return render(() => {
+    // Created once: a JSX prop expression runs again on every read.
+    const model = createSettingsModel();
+    return <AccountsSection model={model} />;
+  });
+}
+
 describe("AccountsSection", () => {
+  beforeEach(() => {
+    vi.mocked(api.getSettings).mockResolvedValue(makeSettings());
+  });
+
   it("renders each store's status", async () => {
     vi.mocked(api.accountStatus).mockResolvedValue([gog(), epic()]);
-    render(() => <AccountsSection />);
+    renderAccounts();
     expect(await screen.findByText("Signed in as Ada")).toBeInTheDocument();
     expect(screen.getByText("Not signed in")).toBeInTheDocument();
+    expect(screen.getByText("1 of 2 accounts connected")).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Epic Games" })).toHaveClass("account--connected");
+    expect(screen.getByRole("group", { name: "GOG" })).not.toHaveClass("account--connected");
     expect(screen.getByRole("button", { name: "Sign in to GOG" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign out of Epic Games" })).toBeInTheDocument();
   });
@@ -71,7 +96,7 @@ describe("AccountsSection", () => {
     let finish: ((ok: boolean) => void) | undefined;
     vi.mocked(api.accountStatus).mockResolvedValueOnce([gog()]);
     vi.mocked(api.signIn).mockReturnValue(new Promise<boolean>((r) => (finish = r)));
-    render(() => <AccountsSection />);
+    renderAccounts();
     await fireEvent.click(await screen.findByRole("button", { name: "Sign in to GOG" }));
     expect(api.signIn).toHaveBeenCalledWith("gog");
     expect(screen.getByRole("button", { name: "Sign in to GOG" })).toBeDisabled();
@@ -86,7 +111,7 @@ describe("AccountsSection", () => {
   it("does nothing when the sign-in window was closed", async () => {
     vi.mocked(api.accountStatus).mockResolvedValue([gog()]);
     vi.mocked(api.signIn).mockResolvedValue(false);
-    render(() => <AccountsSection />);
+    renderAccounts();
     await fireEvent.click(await screen.findByRole("button", { name: "Sign in to GOG" }));
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Sign in to GOG" })).not.toBeDisabled(),
@@ -98,7 +123,7 @@ describe("AccountsSection", () => {
   it("submits a trimmed code from the fallback", async () => {
     vi.mocked(api.accountStatus).mockResolvedValue([gog()]);
     vi.mocked(api.signInWithCode).mockResolvedValue(gog({ signedIn: true }));
-    render(() => <AccountsSection />);
+    renderAccounts();
     await fireEvent.click(
       await screen.findByRole("button", { name: /Sign in with a code instead/ }),
     );
@@ -115,7 +140,7 @@ describe("AccountsSection", () => {
   it("lists Xbox from the account status and accepts the pasted redirect address", async () => {
     vi.mocked(api.accountStatus).mockResolvedValue([xbox()]);
     vi.mocked(api.signInWithCode).mockResolvedValue(xbox({ signedIn: true }));
-    render(() => <AccountsSection />);
+    renderAccounts();
     expect(await screen.findByRole("group", { name: "Xbox" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign in to Xbox" })).toBeInTheDocument();
     await fireEvent.click(screen.getByRole("button", { name: /Sign in with a code instead/ }));
@@ -136,7 +161,7 @@ describe("AccountsSection", () => {
   it("shows errors as toasts", async () => {
     vi.mocked(api.accountStatus).mockResolvedValue([gog()]);
     vi.mocked(api.signIn).mockRejectedValue("Login failed");
-    render(() => <AccountsSection />);
+    renderAccounts();
     await fireEvent.click(await screen.findByRole("button", { name: "Sign in to GOG" }));
     await waitFor(() => expect(toasts()).toContain("Login failed"));
   });
@@ -144,7 +169,7 @@ describe("AccountsSection", () => {
   it("signs out after an inline confirmation", async () => {
     vi.mocked(api.accountStatus).mockResolvedValueOnce([epic()]);
     vi.mocked(api.signOut).mockResolvedValue(epic({ signedIn: false }));
-    render(() => <AccountsSection />);
+    renderAccounts();
     await fireEvent.click(await screen.findByRole("button", { name: "Sign out of Epic Games" }));
     expect(api.signOut).not.toHaveBeenCalled();
     vi.mocked(api.accountStatus).mockResolvedValue([epic({ signedIn: false, displayName: null })]);
@@ -152,6 +177,39 @@ describe("AccountsSection", () => {
     await waitFor(() => expect(api.signOut).toHaveBeenCalledWith("epic"));
     expect(await screen.findByText("Not signed in")).toBeInTheDocument();
     expect(toasts()).toContain("Signed out of Epic Games");
+  });
+
+  it("offers Steam either a sign-in or a Web API key", async () => {
+    vi.mocked(api.accountStatus).mockResolvedValue([steam()]);
+    vi.mocked(api.getSettings).mockResolvedValue(
+      makeSettings({ providers: { epic: { token: "keep-me" } } }),
+    );
+    vi.mocked(api.saveSettings).mockResolvedValue(undefined);
+    vi.mocked(api.scanLibrary).mockResolvedValue({ added: 1, updated: 0, uninstalled: 0 });
+    renderAccounts();
+    await fireEvent.click(
+      await screen.findByRole("button", { name: /Use a Steam Web API key instead/ }),
+    );
+    expect(screen.getByRole("button", { name: "Save Steam key" })).toBeDisabled();
+    await fireEvent.input(screen.getByLabelText("Steam Web API key"), {
+      target: { value: " KEY123 " },
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "Save Steam key" }));
+    await waitFor(() =>
+      expect(api.saveSettings).toHaveBeenCalledWith(
+        makeSettings({
+          providers: { epic: { token: "keep-me" }, steam: { apiKey: "KEY123" } },
+        }),
+      ),
+    );
+    // With a key saved, the row counts as connected and offers removing it, not signing in.
+    expect(await screen.findByText("Using a Steam Web API key")).toBeInTheDocument();
+    expect(screen.getByText("1 of 1 account connected")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Sign in to Steam" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Use a Steam Web API key instead/ })).toBeNull();
+    await fireEvent.click(screen.getByRole("button", { name: "Remove key" }));
+    await waitFor(() => expect(toasts()).toContain("Steam key removed"));
+    expect(await screen.findByRole("button", { name: "Sign in to Steam" })).toBeInTheDocument();
   });
 });
 

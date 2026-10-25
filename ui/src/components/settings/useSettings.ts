@@ -59,7 +59,10 @@ export function createSettingsModel() {
       setSettings(next);
       setApiKey(textOf(next.providers.steam?.apiKey));
       setSteamId(textOf(next.providers.steam?.steamId));
-      store.pushToast("info", "Steam key saved");
+      store.pushToast(
+        "info",
+        textOf(next.providers.steam?.apiKey) === "" ? "Steam key removed" : "Steam key saved",
+      );
     } catch (error) {
       store.pushToast("error", errorMessage(error));
       setSavingSteam(false);
@@ -76,6 +79,16 @@ export function createSettingsModel() {
         store.pushToast("error", errorMessage(error));
       }
     }
+  }
+
+  /** Whether a Steam Web API key is saved (not just typed). */
+  const steamKeySaved = () => textOf(settings()?.providers.steam?.apiKey) !== "";
+
+  /** Forgets the Steam Web API key and SteamID. */
+  async function removeSteamKey() {
+    setApiKey("");
+    setSteamId("");
+    await saveSteam();
   }
 
   /**
@@ -165,6 +178,8 @@ export function createSettingsModel() {
     toggle,
     setProviderOption,
     saveSteam,
+    steamKeySaved,
+    removeSteamKey,
     saveGridDb,
     saveIgdb,
   };
