@@ -102,6 +102,33 @@ describe("App", () => {
     expect(await screen.findByRole("gridcell", { name: "Hades" })).toBeInTheDocument();
   });
 
+  it("switches to the details view: narrow list plus page, no side panel", async () => {
+    vi.mocked(api.listGames).mockResolvedValue([
+      makeGame({ id: "1", name: "Hades" }),
+      makeGame({ id: "2", name: "Celeste" }),
+    ]);
+    render(() => <App />);
+    await fireEvent.click(await screen.findByRole("button", { name: "Details view" }));
+    expect(screen.getByRole("button", { name: "Details view" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(localStorage.getItem("questkeep.viewMode")).toBe("details");
+    expect(await screen.findByRole("option", { name: "Hades" })).toBeInTheDocument();
+    // First game selected; exactly one details region (the page), without a close button.
+    await waitFor(() =>
+      expect(screen.getByRole("complementary", { name: "Game details" })).toHaveTextContent(
+        "Hades",
+      ),
+    );
+    expect(screen.getAllByRole("complementary", { name: "Game details" })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Close details" })).toBeNull();
+    expect(screen.queryByRole("grid")).toBeNull();
+    // Escape does not close the page.
+    await fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.getByRole("complementary", { name: "Game details" })).toBeInTheDocument();
+  });
+
   it("opens settings as a page and returns to the library with the search intact", async () => {
     vi.mocked(api.listGames).mockResolvedValue([
       makeGame({ id: "1", name: "Hades" }),

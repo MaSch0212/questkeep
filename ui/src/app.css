@@ -468,10 +468,90 @@ ul {
   pointer-events: none;
 }
 .tile__badges--top {
-  top: var(--qk-space-2);
+  top: calc(var(--qk-tile-banner-height) + var(--qk-space-2));
 }
 .tile__badges--bottom {
   bottom: var(--qk-space-2);
+}
+/* Store banner across the top of the cover; the cover art shows through. */
+.tile__source {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--qk-space-1);
+  height: var(--qk-tile-banner-height);
+  padding: 0 var(--qk-space-2);
+  background: var(--qk-color-banner-bg);
+  backdrop-filter: blur(var(--qk-badge-blur));
+  font-size: var(--qk-font-size-xs);
+  font-weight: var(--qk-font-weight-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--qk-color-title-on-cover);
+  pointer-events: none;
+}
+.tile__source-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.source-icon {
+  width: var(--qk-source-icon-size);
+  height: var(--qk-source-icon-size);
+  flex: none;
+}
+.tile__source .icon {
+  width: var(--qk-source-icon-size);
+  height: var(--qk-source-icon-size);
+}
+
+/* Quick action (Play / Install) on a tile or row: on hover, selection and keyboard focus. */
+.quick-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--qk-space-1);
+  min-height: var(--qk-control-height);
+  padding: 0 var(--qk-space-4);
+  background: var(--qk-color-accent);
+  border: 1px solid var(--qk-color-accent);
+  border-radius: var(--qk-radius-pill);
+  box-shadow: var(--qk-shadow-badge);
+  color: var(--qk-color-accent-contrast);
+  font-family: var(--qk-font-family);
+  font-size: var(--qk-font-size-sm);
+  font-weight: var(--qk-font-weight-bold);
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.quick-action:hover:not(:disabled) {
+  background: var(--qk-color-accent-hover);
+}
+.quick-action--running,
+.quick-action:disabled {
+  background: var(--qk-color-quick-bg);
+  border-color: var(--qk-color-badge-border);
+  color: var(--qk-color-running);
+  cursor: default;
+}
+.tile__quick {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--qk-duration-fast) var(--qk-easing);
+}
+.tile:hover .tile__quick,
+.grid:focus .tile--selected .tile__quick,
+.tile__quick:focus-within {
+  opacity: 1;
 }
 .badge {
   display: inline-flex;
@@ -602,8 +682,29 @@ ul {
   cursor: pointer;
   border-bottom: 1px solid var(--qk-color-border);
 }
+.list-row {
+  position: relative;
+}
 .list-row:hover {
   background: var(--qk-color-surface-hover);
+}
+.list-row__source {
+  display: flex;
+  align-items: center;
+  gap: var(--qk-space-2);
+}
+.list-row__quick {
+  position: absolute;
+  top: 50%;
+  right: var(--qk-space-4);
+  transform: translateY(-50%);
+  opacity: 0;
+  transition: opacity var(--qk-duration-fast) var(--qk-easing);
+}
+.list-row:hover .list-row__quick,
+.list__scroller:focus .list-row--selected .list-row__quick,
+.list-row__quick:focus-within {
+  opacity: 1;
 }
 /* Keyboard cursor: subtle, only while the list has focus. "Open" is the accent highlight. */
 .list__scroller:focus .list-row--selected {
@@ -663,6 +764,118 @@ ul {
 }
 .state--running {
   color: var(--qk-color-running);
+}
+
+/* Details view: narrow list on the left, the selected game on the right */
+.dview {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.dview__list {
+  display: flex;
+  flex: none;
+  width: var(--qk-dview-list-width);
+  min-height: 0;
+  border-right: 1px solid var(--qk-color-border);
+}
+.dview__page {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.dview__empty {
+  margin: auto;
+}
+.compact-row {
+  display: flex;
+  align-items: center;
+  gap: var(--qk-space-2);
+  height: 100%;
+  padding: 0 var(--qk-space-3);
+  border-bottom: 1px solid var(--qk-color-border);
+  cursor: pointer;
+}
+.compact-row:hover {
+  background: var(--qk-color-surface-hover);
+}
+.compact-row--selected,
+.compact-row--selected:hover {
+  background: var(--qk-color-accent-soft);
+}
+.compact-row--missing .list-row__thumb,
+.compact-row--missing .compact-row__name {
+  opacity: var(--qk-dimmed-opacity);
+}
+.compact-row .list-row__thumb {
+  flex: none;
+}
+.compact-row__source {
+  display: inline-flex;
+  flex: none;
+  width: var(--qk-icon-size);
+  color: var(--qk-color-text-muted);
+}
+.compact-row__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.compact-row__running {
+  flex: none;
+  width: var(--qk-running-dot-size);
+  height: var(--qk-running-dot-size);
+  background: var(--qk-color-running);
+  border-radius: var(--qk-radius-pill);
+}
+.list--compact .list__scroller {
+  overflow-y: auto;
+}
+
+/* Details page (variant of the details panel used by the details view) */
+.details--page {
+  position: relative;
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  border-left: 0;
+  box-shadow: none;
+  animation: none;
+}
+.details--page .details__scroll {
+  flex: 1;
+  padding: 0 var(--qk-space-6) var(--qk-space-6);
+}
+.details--page .details__scroll > * {
+  max-width: var(--qk-dview-content-width);
+}
+.details--page .details__scroll > .details__hero {
+  max-width: none;
+  height: var(--qk-dview-hero-height);
+  margin: 0 calc(var(--qk-space-6) * -1);
+}
+.details--page .details__cover {
+  align-self: flex-start;
+  width: var(--qk-dview-cover-width);
+  margin-top: var(--qk-space-5);
+}
+.details--page .details__cover--overlap {
+  margin-top: calc(var(--qk-dview-hero-overlap) * -1);
+}
+.details--page .btn--play {
+  width: auto;
+  align-self: flex-start;
+  min-width: var(--qk-dview-play-width);
+  min-height: var(--qk-dview-play-height);
+}
+.facts__source {
+  display: flex;
+  align-items: center;
+  gap: var(--qk-space-2);
 }
 
 /* Cover */
@@ -942,6 +1155,68 @@ ul {
   gap: var(--qk-space-3);
 }
 
+/* Sync indicator */
+.sync {
+  position: relative;
+}
+.icon--spin {
+  animation: qk-spin var(--qk-spin-duration) linear infinite;
+}
+@keyframes qk-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.sync__popover {
+  position: absolute;
+  top: calc(100% + var(--qk-popover-gap));
+  right: 0;
+  z-index: var(--qk-z-popover);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--qk-space-3);
+  width: var(--qk-popover-width);
+  padding: var(--qk-space-4);
+  background: var(--qk-color-surface-raised);
+  border: 1px solid var(--qk-color-border);
+  border-radius: var(--qk-radius-md);
+  box-shadow: var(--qk-shadow-popover);
+}
+.sync__title {
+  font-size: var(--qk-font-size-md);
+}
+.sync__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-2);
+}
+.sync__item {
+  display: flex;
+  align-items: center;
+  gap: var(--qk-space-2);
+  min-width: 0;
+}
+.sync__store {
+  flex: none;
+}
+.sync__status {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  font-size: var(--qk-font-size-sm);
+  color: var(--qk-color-text-muted);
+}
+.sync__item--failed .sync__status {
+  color: var(--qk-color-danger);
+}
+.sync__finished {
+  font-size: var(--qk-font-size-sm);
+}
+
 /* Toasts */
 .toasts {
   position: fixed;
@@ -984,7 +1259,8 @@ ul {
 
 @media (prefers-reduced-motion: reduce) {
   .details,
-  .toast {
+  .toast,
+  .icon--spin {
     animation: none;
   }
   .tile:hover .tile__cover {

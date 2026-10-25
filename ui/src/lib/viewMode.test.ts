@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { loadViewMode, saveViewMode, VIEW_MODE_KEY } from "./viewMode";
+import { loadViewMode, parseViewMode, saveViewMode, VIEW_MODE_KEY } from "./viewMode";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -7,13 +7,21 @@ afterEach(() => {
 });
 
 describe("viewMode", () => {
-  it("defaults to grid and round-trips list", () => {
+  it("defaults to grid and round-trips list and details", () => {
     expect(loadViewMode()).toBe("grid");
-    saveViewMode("list");
-    expect(localStorage.getItem(VIEW_MODE_KEY)).toBe("list");
-    expect(loadViewMode()).toBe("list");
-    saveViewMode("grid");
-    expect(loadViewMode()).toBe("grid");
+    for (const mode of ["list", "details", "grid"] as const) {
+      saveViewMode(mode);
+      expect(localStorage.getItem(VIEW_MODE_KEY)).toBe(mode);
+      expect(loadViewMode()).toBe(mode);
+    }
+  });
+
+  it("parses stored values, keeping old ones working", () => {
+    expect(parseViewMode("grid")).toBe("grid");
+    expect(parseViewMode("list")).toBe("list");
+    expect(parseViewMode("details")).toBe("details");
+    expect(parseViewMode(null)).toBe("grid");
+    expect(parseViewMode("tiles")).toBe("grid");
   });
 
   it("ignores garbage and unavailable storage", () => {

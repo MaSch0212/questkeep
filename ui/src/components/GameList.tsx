@@ -13,10 +13,12 @@ import { isNavKey, nextIndex } from "../lib/gridNav";
 import { store } from "../lib/store";
 import { rowRange, rowTop, scrollTopForRow, visibleRows, type RowLayout } from "../lib/virtualRows";
 import { GameRow, rowDomId } from "./GameRow";
+import { GameRowCompact } from "./GameRowCompact";
 import { Logo } from "./Logo";
 
 const FALLBACK_HEIGHT = 700;
 const DEFAULT_ROW_HEIGHT = 52;
+const DEFAULT_COMPACT_ROW_HEIGHT = 44;
 const DEFAULT_PADDING = 8;
 const OVERSCAN_ROWS = 6;
 
@@ -38,12 +40,18 @@ function activateSelected() {
  * List view of the library: one fixed-height row per game, virtualized with the same row maths
  * as the cover grid (`lib/virtualRows.ts`), so 5000+ games scroll smoothly. One focusable listbox
  * with `aria-activedescendant` for keyboard navigation.
+ *
+ * `compact` is the narrow list of the details view: no column header, smaller rows, and selecting
+ * a game shows it on the page beside the list instead of opening the details panel.
  */
-export function GameList() {
+export function GameList(props: { compact?: boolean }) {
+  const mode = () => (props.compact ? "details" : "list");
   let scroller: HTMLDivElement | undefined;
   const [height, setHeight] = createSignal(FALLBACK_HEIGHT);
   const [scrollTop, setScrollTop] = createSignal(0);
-  const [rowHeight, setRowHeight] = createSignal(DEFAULT_ROW_HEIGHT);
+  const [rowHeight, setRowHeight] = createSignal(
+    props.compact ? DEFAULT_COMPACT_ROW_HEIGHT : DEFAULT_ROW_HEIGHT,
+  );
   const [padding, setPadding] = createSignal(DEFAULT_PADDING);
 
   const layout = createMemo<RowLayout>(() => ({
@@ -60,7 +68,11 @@ export function GameList() {
   onMount(() => {
     const element = scroller;
     if (!element) return;
-    setRowHeight(readNumber(element, "--qk-list-row-height", DEFAULT_ROW_HEIGHT));
+    setRowHeight(
+      props.compact
+        ? readNumber(element, "--qk-compact-row-height", DEFAULT_COMPACT_ROW_HEIGHT)
+        : readNumber(element, "--qk-list-row-height", DEFAULT_ROW_HEIGHT),
+    );
     setPadding(readNumber(element, "--qk-list-padding", DEFAULT_PADDING));
     const observer = new ResizeObserver((entries) => {
       const rect = entries[0]?.contentRect;
@@ -78,7 +90,7 @@ export function GameList() {
     element.addEventListener("scroll", onScroll, { passive: true });
     // Coming from the grid view or another page: restore the scroll position, then bring the
     // selected game into view.
-    const saved = store.libraryScroll("list");
+    const saved = store.libraryScroll(mode());
     const target =
       store.selectedIndex() >= 0
         ? scrollTopForRow(store.selectedIndex(), saved, height(), layout())
@@ -88,7 +100,7 @@ export function GameList() {
       setScrollTop(target);
     }
     onCleanup(() => {
-      store.rememberLibraryScroll("list", element.scrollTop);
+      store.rememberLibraryScroll(mode(), element.scrollTop);
       observer.disconnect();
       element.removeEventListener("scroll", onScroll);
       cancelAnimationFrame(frame);
@@ -137,7 +149,7 @@ export function GameList() {
     if (event.key === "Enter") {
       event.preventDefault();
       if (event.ctrlKey || event.metaKey) activateSelected();
-      else store.openDetails();
+      else if (!props.compact) store.openDetails();
     } else if (event.key === "F5") {
       event.preventDefault();
       activateSelected();
@@ -145,21 +157,24 @@ export function GameList() {
   }
 
   function onSelect(id: string) {
-    store.selectAndOpen(id);
+    if (props.compact) store.selectGame(id);
+    else store.selectAndOpen(id);
     scroller?.focus({ preventScroll: true });
   }
 
   return (
-    <div class="list">
-      <div class="list__header" aria-hidden="true">
-        <span />
-        <span>Name</span>
-        <span>Source</span>
-        <span>Status</span>
-        <span>Playtime</span>
-        <span>Last played</span>
-        <span class="list-row__year">Released</span>
-      </div>
+    <div class="list" classList={{ "list--compact": props.compact === true }}>
+      <Show when={!props.compact}>
+        <div class="list__header" aria-hidden="true">
+          <span />
+          <span>Name</span>
+          <span>Source</span>
+          <span>Status</span>
+          <span>Playtime</span>
+          <span>Last played</span>
+          <span class="list-row__year">Released</span>
+        </div>
+      </Show>
       <div
         ref={(el) => (scroller = el)}
         class="list__scroller"
@@ -181,13 +196,24 @@ export function GameList() {
                       height: `${rowHeight()}px`,
                     }}
                   >
-                    <GameRow
-                      game={game()}
-                      selected={game().id === store.selectedId()}
-                      open={store.detailsOpen() && game().id === store.selectedId()}
-                      onSelect={onSelect}
-                      onLaunch={(id) => void activateGame(id)}
-                    />
+                    <Show
+                      when={!props.compact}
+                      fallback={
+                        <GameRowCompact
+                          game={game()}
+                          selected={game().id === store.selectedId()}
+                          onSelect={onSelect}
+                        />
+                      }
+                    >
+                      <GameRow
+                        game={game()}
+                        selected={game().id === store.selectedId()}
+                        open={store.detailsOpen() && game().id === store.selectedId()}
+                        onSelect={onSelect}
+                        onLaunch={(id) => void activateGame(id)}
+                      />
+                    </Show>
                   </div>
                 )}
               </Show>

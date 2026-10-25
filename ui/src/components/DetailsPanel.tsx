@@ -31,6 +31,7 @@ import { formatDate, formatPlaytime, formatRelativeDate, formatReleaseDate } fro
 import { store } from "../lib/store";
 import { Cover } from "./Cover";
 import { LaunchOptionsForm } from "./LaunchOptionsForm";
+import { SourceIcon, sourceName } from "./SourceIcon";
 
 const DESCRIPTION_CLAMP_CHARS = 300;
 const DESCRIPTION_CLAMP_LINES = 5;
@@ -43,6 +44,11 @@ interface DetailsPanelProps {
   game: Game;
   /** Shown beside the library instead of overlaying it. */
   split?: boolean;
+  /**
+   * "panel" (default): the side panel / flyout with a close button. "page": the full-size page
+   * of the details view, which is always shown, so it has no close button.
+   */
+  variant?: "panel" | "page";
   onClose: () => void;
 }
 
@@ -64,6 +70,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
     props.game.installed &&
     props.game.sourceGameId !== null &&
     store.providers().some((p) => p.id === props.game.source && p.canUninstall);
+  const isPage = () => props.variant === "page";
   const isManual = () => props.game.source === "manual";
   const heroUrl = () => (heroFailed() ? null : store.backgroundUrl(props.game));
   const released = () => formatReleaseDate(props.game.releaseDate);
@@ -169,20 +176,25 @@ export function DetailsPanel(props: DetailsPanelProps) {
   return (
     <aside
       class="details"
-      classList={{ "details--split": props.split === true }}
+      classList={{
+        "details--split": props.split === true,
+        "details--page": isPage(),
+      }}
       aria-label="Game details"
     >
-      <div class="details__header">
-        <button
-          type="button"
-          class="icon-btn"
-          aria-label="Close details"
-          title="Close (Esc)"
-          onClick={props.onClose}
-        >
-          <X class="icon" aria-hidden="true" />
-        </button>
-      </div>
+      <Show when={!isPage()}>
+        <div class="details__header">
+          <button
+            type="button"
+            class="icon-btn"
+            aria-label="Close details"
+            title="Close (Esc)"
+            onClick={props.onClose}
+          >
+            <X class="icon" aria-hidden="true" />
+          </button>
+        </div>
+      </Show>
 
       <div class="details__scroll">
         <Show when={heroUrl()}>
@@ -304,8 +316,9 @@ export function DetailsPanel(props: DetailsPanelProps) {
             <dd>{props.game.publishers.join(", ")}</dd>
           </Show>
           <dt>Source</dt>
-          <dd>
-            {store.providers().find((p) => p.id === props.game.source)?.name ?? props.game.source}
+          <dd class="facts__source">
+            <SourceIcon source={props.game.source} />
+            <span>{sourceName(props.game.source)}</span>
           </dd>
           <dt>Install directory</dt>
           <dd class="facts__path">{props.game.installDir ?? "Unknown"}</dd>

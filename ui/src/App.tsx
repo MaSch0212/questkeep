@@ -2,6 +2,7 @@ import { createSignal, onCleanup, onMount, Show } from "solid-js";
 import { DEFAULT_SPLIT_BREAKPOINT, isSplitWidth, readSplitBreakpoint } from "./lib/layoutMode";
 import { AddGameDialog } from "./components/AddGameDialog";
 import { DetailsPanel } from "./components/DetailsPanel";
+import { DetailsView } from "./components/DetailsView";
 import { GameGrid } from "./components/GameGrid";
 import { GameList } from "./components/GameList";
 import { SettingsPage } from "./components/settings/SettingsPage";
@@ -49,7 +50,7 @@ export function App() {
       event.preventDefault();
       searchInput?.focus();
       searchInput?.select();
-    } else if (event.key === "Escape" && store.detailsOpen()) {
+    } else if (event.key === "Escape" && store.viewMode() !== "details" && store.detailsOpen()) {
       store.closeDetails();
     }
   }
@@ -89,10 +90,18 @@ export function App() {
           }
         >
           <div class="app__content" ref={observeContent}>
-            <Show when={store.viewMode() === "list"} fallback={<GameGrid />}>
-              <GameList />
+            <Show when={store.viewMode() !== "details"} fallback={<DetailsView />}>
+              <Show when={store.viewMode() === "list"} fallback={<GameGrid />}>
+                <GameList />
+              </Show>
             </Show>
-            <Show when={store.detailsOpen() ? store.selectedGame() : undefined}>
+            <Show
+              when={
+                store.viewMode() !== "details" && store.detailsOpen()
+                  ? store.selectedGame()
+                  : undefined
+              }
+            >
               {(game) => (
                 <DetailsPanel game={game()} split={split()} onClose={() => store.closeDetails()} />
               )}

@@ -25,6 +25,8 @@
   --qk-color-running: #6fd6a0;
   --qk-color-backdrop: #05060acc;
   --qk-color-badge-bg: #0b0d12cc;
+  --qk-color-banner-bg: #0b0d12b3;
+  --qk-color-quick-bg: #0b0d12e6;
   --qk-color-cover-bg: #0d0f13;
   --qk-color-title-on-cover: #ffffff;
   --qk-color-badge-border: #ffffff1f;
@@ -72,6 +74,7 @@
   --qk-shadow-dialog: 0 24px 64px #000000aa;
   --qk-shadow-badge: 0 1px 4px #00000099;
   --qk-shadow-toast: 0 8px 24px #00000088;
+  --qk-shadow-popover: 0 12px 32px #000000aa;
 
   /* Motion */
   --qk-duration-fast: 120ms;
@@ -122,6 +125,21 @@
   --qk-details-hero-height: 170px;
   --qk-details-hero-overlap: 90px;
   --qk-description-clamp-lines: 5;
+  --qk-tile-banner-height: 22px;
+  --qk-source-icon-size: 12px;
+  --qk-compact-row-height: 44px;
+  --qk-dview-list-width: 320px;
+  --qk-dview-hero-height: 280px;
+  --qk-dview-hero-overlap: 70px;
+  --qk-dview-cover-width: 150px;
+  --qk-dview-content-width: 780px;
+  --qk-dview-play-width: 200px;
+  --qk-dview-play-height: 46px;
+  --qk-popover-width: 340px;
+  --qk-popover-gap: 6px;
+  --qk-z-popover: 10;
+  --qk-spin-duration: 1s;
+  --qk-running-dot-size: 8px;
 }
 
 @media (prefers-reduced-motion: reduce) {
