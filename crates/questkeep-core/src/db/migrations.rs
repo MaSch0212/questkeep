@@ -107,6 +107,63 @@ const MIGRATIONS: &[&str] = &[
 
     ALTER TABLE views ADD COLUMN group_by TEXT NOT NULL DEFAULT 'none';
     "#,
+    // 5: category order and store mappings. A store's own tags are kept as the store reports
+    // them (`game_tags`) and reach categories through `category_sources`, so merging, separating
+    // and renaming only move mappings. `game_categories` keeps the user's links and, with
+    // `excluded`, the imported categories the user took off a game. `game_category_links` is
+    // what a game ends up with.
+    r#"
+    ALTER TABLE categories ADD COLUMN position INTEGER NOT NULL DEFAULT 0;
+    UPDATE categories SET position =
+        (SELECT COUNT(*) FROM categories c WHERE c.name < categories.name COLLATE NOCASE);
+
+    CREATE TABLE category_sources (
+        source      TEXT NOT NULL,
+        name        TEXT NOT NULL COLLATE NOCASE,
+        category_id TEXT NOT NULL REFERENCES categories (id) ON DELETE CASCADE,
+        PRIMARY KEY (source, name)
+    );
+    CREATE INDEX category_sources_category ON category_sources (category_id);
+    INSERT OR IGNORE INTO category_sources (source, name, category_id)
+        SELECT source, name, id FROM categories WHERE source IS NOT NULL;
+    INSERT OR IGNORE INTO category_sources (source, name, category_id)
+        SELECT DISTINCT gc.imported_from, c.name, c.id
+        FROM game_categories gc JOIN categories c ON c.id = gc.category_id
+        WHERE gc.imported_from IS NOT NULL;
+
+    CREATE TABLE game_tags (
+        game_id TEXT NOT NULL REFERENCES games (id) ON DELETE CASCADE,
+        source  TEXT NOT NULL,
+        name    TEXT NOT NULL COLLATE NOCASE,
+        PRIMARY KEY (game_id, name)
+    );
+    CREATE INDEX game_tags_source ON game_tags (source, name);
+    INSERT OR IGNORE INTO game_tags (game_id, source, name)
+        SELECT gc.game_id, gc.imported_from, c.name
+        FROM game_categories gc JOIN categories c ON c.id = gc.category_id
+        WHERE gc.imported_from IS NOT NULL;
+
+    CREATE TABLE user_game_categories (
+        game_id     TEXT NOT NULL REFERENCES games (id) ON DELETE CASCADE,
+        category_id TEXT NOT NULL REFERENCES categories (id) ON DELETE CASCADE,
+        excluded    INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (game_id, category_id)
+    );
+    INSERT INTO user_game_categories (game_id, category_id)
+        SELECT game_id, category_id FROM game_categories WHERE imported_from IS NULL;
+    DROP TABLE game_categories;
+    ALTER TABLE user_game_categories RENAME TO game_categories;
+    CREATE INDEX game_categories_category ON game_categories (category_id);
+    ALTER TABLE categories DROP COLUMN source;
+
+    CREATE VIEW game_category_links (game_id, category_id) AS
+        SELECT game_id, category_id FROM game_categories WHERE excluded = 0
+        UNION
+        SELECT t.game_id, s.category_id
+        FROM game_tags t JOIN category_sources s ON s.source = t.source AND s.name = t.name
+        WHERE NOT EXISTS (SELECT 1 FROM game_categories x
+            WHERE x.game_id = t.game_id AND x.category_id = s.category_id AND x.excluded = 1);
+    "#,
 ];
 
 /// Latest schema version this build knows.
@@ -198,6 +255,60 @@ mod tests {
             .query_row("SELECT genres FROM games WHERE id = 'a'", [], |r| r.get(0))
             .unwrap();
         assert_eq!(genres, "[]");
+    }
+
+    #[test]
+    fn moves_imported_category_links_to_store_tags() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE schema_version (version INTEGER NOT NULL);
+             INSERT INTO schema_version VALUES (4);",
+        )
+        .unwrap();
+        let tx = conn.transaction().unwrap();
+        for step in &MIGRATIONS[..4] {
+            tx.execute_batch(step).unwrap();
+        }
+        tx.execute_batch(
+            "INSERT INTO games (id, name, sorting_name, search_key, source, date_added) VALUES
+                 ('g', 'G', 'G', 'g', 'steam', '2026-01-01T00:00:00Z');
+             INSERT INTO categories (id, name, source) VALUES
+                 ('rpg', 'RPG', 'steam'), ('mine', 'Backlog', NULL), ('coop', 'Co-op', NULL);
+             INSERT INTO game_categories (game_id, category_id, imported_from) VALUES
+                 ('g', 'rpg', 'steam'), ('g', 'mine', NULL), ('g', 'coop', 'steam');",
+        )
+        .unwrap();
+        tx.commit().unwrap();
+
+        assert_eq!(migrate(&mut conn).unwrap(), LATEST_VERSION);
+        let rows = |sql: &str| -> Vec<String> {
+            conn.prepare(sql)
+                .unwrap()
+                .query_map([], |r| r.get(0))
+                .unwrap()
+                .collect::<rusqlite::Result<_>>()
+                .unwrap()
+        };
+        assert_eq!(
+            rows("SELECT name FROM categories ORDER BY position"),
+            vec!["Backlog", "Co-op", "RPG"]
+        );
+        assert_eq!(
+            rows("SELECT category_id FROM category_sources ORDER BY name"),
+            vec!["coop", "rpg"]
+        );
+        assert_eq!(
+            rows("SELECT name FROM game_tags ORDER BY name"),
+            vec!["Co-op", "RPG"]
+        );
+        assert_eq!(
+            rows("SELECT category_id FROM game_categories"),
+            vec!["mine"]
+        );
+        assert_eq!(
+            rows("SELECT category_id FROM game_category_links ORDER BY category_id"),
+            vec!["coop", "mine", "rpg"]
+        );
     }
 
     #[test]

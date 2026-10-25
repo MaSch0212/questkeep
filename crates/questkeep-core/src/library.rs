@@ -259,6 +259,34 @@ impl Library {
         Ok(())
     }
 
+    /// Puts the categories in this order (the rest follow in their old order).
+    pub fn reorder_categories(&self, ids: &[String]) -> Result<()> {
+        self.db.reorder_categories(ids)?;
+        self.events.publish(CoreEvent::CategoriesChanged);
+        Ok(())
+    }
+
+    /// Merges `from` into `into` (games and store categories) and returns `into`.
+    pub fn merge_categories(&self, from: &str, into: &str) -> Result<Category> {
+        let changed = self.db.merge_categories(from, into)?;
+        self.categories_changed(changed);
+        self.db.category(into)
+    }
+
+    /// Gives a store category merged into `id` its own category again and returns that one.
+    pub fn separate_category_source(&self, id: &str, source: &str, name: &str) -> Result<Category> {
+        let (target, changed) = self.db.separate_category_source(id, source, name)?;
+        self.categories_changed(changed);
+        self.db.category(&target)
+    }
+
+    fn categories_changed(&self, games: Vec<Uuid>) {
+        self.events.publish(CoreEvent::CategoriesChanged);
+        if !games.is_empty() {
+            self.events.publish(CoreEvent::GamesChanged { ids: games });
+        }
+    }
+
     /// Gives a game exactly these categories.
     pub fn set_game_categories(&self, id: Uuid, category_ids: &[String]) -> Result<Game> {
         self.db.set_game_categories(id, category_ids)?;

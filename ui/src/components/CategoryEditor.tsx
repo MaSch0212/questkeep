@@ -18,10 +18,7 @@ export function CategoryEditor(props: { game: Game }) {
   let addButton: HTMLButtonElement | undefined;
 
   const assigned = createMemo(() =>
-    store
-      .categories()
-      .filter((c) => props.game.categories.includes(c.id))
-      .toSorted((a, b) => collator.compare(a.name, b.name)),
+    store.categories().filter((c) => props.game.categories.includes(c.id)),
   );
 
   function save(ids: string[]) {
@@ -97,7 +94,9 @@ export function CategoryEditor(props: { game: Game }) {
 }
 
 function importedTitle(category: Category): string | undefined {
-  return category.source ? `Imported from ${sourceName(category.source)}` : undefined;
+  if (category.sources.length === 0) return undefined;
+  const from = category.sources.map((s) => `${sourceName(s.source)} (“${s.name}”)`);
+  return `Synced with ${from.join(", ")}`;
 }
 
 /**

@@ -17,7 +17,7 @@ const COLUMNS: &str = "id, name, sorting_name, source, source_game_id, installed
     play_action, playtime_seconds, play_count, last_played, date_added, favorite, hidden, \
     cover_path, icon_path, background_path, description, release_date, developers, publishers, \
     genres, metadata_updated_at, extra, \
-    (SELECT group_concat(category_id, char(31)) FROM game_categories WHERE game_id = games.id) \
+    (SELECT group_concat(category_id, char(31)) FROM game_category_links WHERE game_id = games.id) \
     AS category_ids";
 
 /// `extra` key set when the user renamed a store game, so re-scans keep their name.
@@ -87,7 +87,7 @@ fn query_filter(query: &GameQuery) -> (String, Vec<Box<dyn ToSql>>) {
         PlayedFilter::Never => clauses.push("playtime_seconds = 0 AND play_count = 0".into()),
     }
     if !query.categories.is_empty() {
-        let linked = "SELECT 1 FROM game_categories gc WHERE gc.game_id = games.id";
+        let linked = "SELECT 1 FROM game_category_links gc WHERE gc.game_id = games.id";
         let mut any = Vec::new();
         let mut placeholders = Vec::new();
         for id in &query.categories {

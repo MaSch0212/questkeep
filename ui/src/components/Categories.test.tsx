@@ -9,6 +9,7 @@ import { makeGame } from "../test-utils";
 import { CategoryEditor } from "./CategoryEditor";
 import { GameGrid } from "./GameGrid";
 import { GameList } from "./GameList";
+import { CategoriesSection } from "./settings/CategoriesSection";
 import { TopBar } from "./TopBar";
 
 vi.mock("../lib/api");
@@ -18,12 +19,12 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn<() => void>() }));
 
-const category = (id: string, name: string, gameCount = 1): Category => ({
-  id,
-  name,
-  source: null,
-  gameCount,
-});
+const category = (
+  id: string,
+  name: string,
+  gameCount = 1,
+  sources: Category["sources"] = [],
+): Category => ({ id, name, gameCount, sources });
 const rpg = category("c1", "RPG", 2);
 const coop = category("c2", "Co-op");
 
@@ -160,5 +161,54 @@ describe("CategoryEditor", () => {
     expect(screen.queryByRole("option", { name: /Create/ })).toBeNull();
     await fireEvent.keyDown(input, { key: "Enter" });
     expect(api.setGameCategories).toHaveBeenLastCalledWith("h", ["c1"]);
+  });
+});
+
+const rows = () =>
+  screen
+    .getAllByRole("listitem")
+    .map((li) => li.querySelector(".category-list__name")?.textContent);
+
+describe("CategoriesSection", () => {
+  beforeEach(() => setUp());
+
+  it("reorders with Alt+arrows", async () => {
+    render(() => <CategoriesSection />);
+    expect(rows()).toEqual(["Co-op", "RPG"]);
+    screen.getByRole("button", { name: "Rename Co-op" }).focus();
+    await fireEvent.keyDown(screen.getByRole("button", { name: "Rename Co-op" }), {
+      key: "ArrowDown",
+      altKey: true,
+    });
+    expect(api.reorderCategories).toHaveBeenCalledWith(["c1", "c2"]);
+    expect(rows()).toEqual(["RPG", "Co-op"]);
+    const rename = screen.getByRole("button", { name: "Rename Co-op" });
+    expect(rename).toHaveFocus();
+  });
+
+  it("merges into another category after confirming", async () => {
+    vi.mocked(api.mergeCategories).mockResolvedValue(rpg);
+    render(() => <CategoriesSection />);
+    await fireEvent.click(screen.getByRole("button", { name: "Merge Co-op into…" }));
+    const menu = screen.getByRole("menu", { name: "Merge Co-op into" });
+    await fireEvent.click(within(menu).getByRole("menuitem", { name: /RPG/ }));
+    expect(api.mergeCategories).not.toHaveBeenCalled();
+    await fireEvent.click(screen.getByRole("button", { name: "Merge" }));
+    expect(api.mergeCategories).toHaveBeenCalledWith("c2", "c1");
+  });
+
+  it("shows synced store categories and separates merged ones", async () => {
+    vi.mocked(api.listCategories).mockResolvedValue([
+      category("c1", "Playing", 3, [
+        { source: "gog", name: "Currently playing" },
+        { source: "steam", name: "playing" },
+      ]),
+    ]);
+    await store.loadCategories();
+    render(() => <CategoriesSection />);
+    // Steam's "playing" is the category's own name: nothing to separate.
+    expect(screen.getAllByRole("button", { name: /^Separate/ })).toHaveLength(1);
+    await fireEvent.click(screen.getByRole("button", { name: /^Separate .*“Currently playing”$/ }));
+    expect(api.separateCategorySource).toHaveBeenCalledWith("c1", "gog", "Currently playing");
   });
 });

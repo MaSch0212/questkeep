@@ -339,6 +339,15 @@ function createAppStore() {
     }
   }
 
+  /** Shows the new order at once, then saves it (a failure reloads the saved one). */
+  async function reorderCategories(ids: string[]) {
+    const byId = new Map(categories().map((c) => [c.id, c]));
+    setCategories(ids.flatMap((id) => byId.get(id) ?? []));
+    if ((await editCategories(() => api.reorderCategories(ids))) === null) {
+      await loadCategories();
+    }
+  }
+
   /** Gives a game exactly these categories and shows the result right away. */
   async function setGameCategories(id: string, categoryIds: string[]) {
     const game = await editCategories(() => api.setGameCategories(id, categoryIds));
@@ -576,6 +585,11 @@ function createAppStore() {
     renameCategory: (id: string, name: string) =>
       editCategories(() => api.renameCategory(id, name)),
     deleteCategory: (id: string) => editCategories(() => api.deleteCategory(id)),
+    reorderCategories,
+    mergeCategories: (from: string, into: string) =>
+      editCategories(() => api.mergeCategories(from, into)),
+    separateCategorySource: (id: string, source: string, name: string) =>
+      editCategories(() => api.separateCategorySource(id, source, name)),
     syncState,
     syncBusy: () => isSyncBusy(syncState()),
     page,

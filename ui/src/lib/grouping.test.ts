@@ -16,10 +16,10 @@ import { NO_CATEGORY } from "./views";
 const category = (id: string, name: string): Category => ({
   id,
   name,
-  source: null,
   gameCount: 0,
+  sources: [],
 });
-const categories = [category("c1", "RPG"), category("c2", "co-op"), category("c3", "Empty")];
+const categories = [category("c2", "co-op"), category("c1", "RPG"), category("c3", "Empty")];
 const sourceName = (id: string) => ({ steam: "Steam", epic: "Epic Games" })[id] ?? id;
 
 const hades = makeGame({ id: "h", name: "Hades", source: "steam", categories: ["c1", "c2"] });
@@ -31,10 +31,12 @@ const names = (groups: GameGroup[]) =>
   groups.map((g) => `${g.label}: ${g.games.map((game) => game.name).join(", ")}`);
 
 describe("groupGames", () => {
-  it("puts a game into each of its categories, keeping the order, uncategorized last", () => {
+  it("puts a game into each of its categories, in the categories' order, uncategorized last", () => {
     const groups = groupGames(games, "category", categories, sourceName);
     expect(names(groups)).toEqual(["co-op: Hades", "RPG: Celeste, Hades", "No category: Doom"]);
     expect(groups.at(-1)?.key).toBe(NO_CATEGORY);
+    const reordered = groupGames(games, "category", categories.toReversed(), sourceName);
+    expect(names(reordered)).toEqual(["RPG: Celeste, Hades", "co-op: Hades", "No category: Doom"]);
   });
 
   it("groups by store name and leaves ungrouped views as one group", () => {

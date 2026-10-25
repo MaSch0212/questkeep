@@ -41,6 +41,14 @@ export const createCategory = (name: string) => invoke<Category>("create_categor
 export const renameCategory = (id: string, name: string) =>
   invoke<Category>("rename_category", { id, name });
 export const deleteCategory = (id: string) => invoke<void>("delete_category", { id });
+/** Puts the categories in this order. */
+export const reorderCategories = (ids: string[]) => invoke<void>("reorder_categories", { ids });
+/** Merges `from` into `into` (games and store categories); returns `into`. */
+export const mergeCategories = (from: string, into: string) =>
+  invoke<Category>("merge_categories", { from, into });
+/** Gives a store category merged into `id` its own category again; returns that category. */
+export const separateCategorySource = (id: string, source: string, name: string) =>
+  invoke<Category>("separate_category_source", { id, source, name });
 /** Gives a game exactly these categories; returns the updated game. */
 export const setGameCategories = (id: string, categoryIds: string[]) =>
   invoke<Game>("set_game_categories", { id, categoryIds });

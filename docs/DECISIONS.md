@@ -548,13 +548,16 @@ Short log of choices made while building. Newest at the bottom of each section.
   Settings) and a command bar that finds any game regardless of the open view. Last sync times are
   stored (`sync_times`) so the sync popup can show them after a restart. Stores open their own
   launcher through `LibraryProvider::launcher`.
-- **Categories are n:m** (`categories`, `game_categories`, migration 4). Each link records the
-  store that imported it (`imported_from`), so a store's sync replaces only its own links and never
-  touches the user's; a user removing an imported link sees it return on the next sync. Steam
-  collections (cloud-storage JSON, `sharedconfig.vdf` tags as fallback), GOG Galaxy tags and Lutris
-  categories are imported (`LibraryProvider::scan_categories`; `None` keeps the old links).
-  Renaming a category makes it the user's (no source, user links); a store still using the old name
-  creates it again. Categories a store created disappear with its last link.
+- **Categories are n:m, and store categories map onto them** (migrations 4 and 5). A store's own
+  tags are stored as the store reports them (`game_tags`) and reach Questkeep categories through
+  `category_sources` (store + name -> category); `game_categories` holds the user's links and, with
+  `excluded`, imported categories the user took off a game (those stay off). So merging, separating
+  and renaming only move mappings, and a sync never touches the user's choices. Unmapped store
+  names go to the category of the same name, created at the end of the list when missing; a
+  category left with no mapping and no user games after a sync is removed. Steam collections
+  (cloud-storage JSON, `sharedconfig.vdf` tags as fallback), GOG Galaxy tags and Lutris categories
+  are imported (`LibraryProvider::scan_categories`; `None` keeps the old tags).
+- **Categories have a user order** (`position`), used by grouping, filters and the picker.
 - **Grouping is part of a view** (None, Category, Store), saved with it and kept in drafts. A game
   with several categories shows once per group; the keyboard cursor walks slots (game + group), not
   games. Collapsed groups are remembered per view until the app closes. The filter value `:none`

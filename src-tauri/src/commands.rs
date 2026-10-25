@@ -506,6 +506,36 @@ pub async fn delete_category(state: State<'_, Arc<AppState>>, id: String) -> Cmd
 }
 
 #[tauri::command]
+pub async fn reorder_categories(
+    state: State<'_, Arc<AppState>>,
+    ids: Vec<String>,
+) -> CmdResult<()> {
+    blocking(state, move |s| s.library.reorder_categories(&ids)).await
+}
+
+#[tauri::command]
+pub async fn merge_categories(
+    state: State<'_, Arc<AppState>>,
+    from: String,
+    into: String,
+) -> CmdResult<Category> {
+    blocking(state, move |s| s.library.merge_categories(&from, &into)).await
+}
+
+#[tauri::command]
+pub async fn separate_category_source(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    source: String,
+    name: String,
+) -> CmdResult<Category> {
+    blocking(state, move |s| {
+        s.library.separate_category_source(&id, &source, &name)
+    })
+    .await
+}
+
+#[tauri::command]
 pub async fn set_game_categories(
     state: State<'_, Arc<AppState>>,
     id: String,

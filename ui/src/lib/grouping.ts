@@ -17,8 +17,9 @@ export interface GameGroup {
 const collator = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
 
 /**
- * Splits the (already sorted) games into groups, keeping their order inside each group. Groups
- * are ordered by name; "No category" comes last. Without grouping there is one group, key "".
+ * Splits the (already sorted) games into groups, keeping their order inside each group. Category
+ * groups follow the categories' order with "No category" last; store groups are ordered by name.
+ * Without grouping there is one group, key "".
  */
 export function groupGames(
   games: readonly Game[],
@@ -46,11 +47,12 @@ export function groupGames(
       for (const id of known) add(id, names.get(id) ?? "", null, game);
     }
   }
-  return [...groups.values()].toSorted((a, b) => {
-    if (a.key === NO_CATEGORY) return 1;
-    if (b.key === NO_CATEGORY) return -1;
-    return collator.compare(a.label, b.label);
-  });
+  if (by === "source") {
+    return [...groups.values()].toSorted((a, b) => collator.compare(a.label, b.label));
+  }
+  const order = new Map(categories.map((c, index) => [c.id, index]));
+  const rank = (group: GameGroup) => order.get(group.key) ?? categories.length;
+  return [...groups.values()].toSorted((a, b) => rank(a) - rank(b));
 }
 
 /** One game's place in a grouped layout (the same game can have several). */
