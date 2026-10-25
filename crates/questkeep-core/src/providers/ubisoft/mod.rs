@@ -61,6 +61,7 @@ fn default_configurations() -> Option<PathBuf> {
 }
 
 /// `UbisoftConnect.exe` below the launcher's install folder, when the file exists.
+#[cfg(any(windows, test))]
 fn client_in(dir: &str) -> Option<PathBuf> {
     let dir = dir.trim().trim_end_matches(['\\', '/']);
     if dir.is_empty() {

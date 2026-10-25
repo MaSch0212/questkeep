@@ -45,7 +45,11 @@ impl PrismPaths {
     /// Looks at the usual places for this OS.
     pub fn detect() -> Self {
         let mut command = None;
+        // Windows may fill it in two steps; every other branch sets it once.
+        #[cfg(windows)]
         let mut data_dir = None;
+        #[cfg(not(windows))]
+        let data_dir;
         #[cfg(windows)]
         {
             let exe = crate::platform::uninstall_entries()
