@@ -392,9 +392,13 @@ Short log of choices made while building. Newest at the bottom of each section.
   (the registry's own `UninstallString` runs exactly that). Checked 2026-10-25 with Trackmania (5595).
 - **The `configurations` cache is a catalogue, not a library**: protobuf (repeated field 1 =
   `{1: uplay id, 2: install id, 3: YAML}`), 676 products on the maintainer's PC including games he
-  doesn't own and DLC. Playnite imports it as the library; we only take names and artwork from it.
-  The ownership cache is encrypted, so owned-but-not-installed Ubisoft games would need an online
-  sign-in (not built). Artwork URLs are under
+  doesn't own and DLC. The ownership cache is encrypted and Ubisoft has no sign-in for other
+  apps, so uninstalled games come from this catalogue only when the user opts in
+  (`providers.ubisoft.importCatalogue`), filtered like Playnite does: `root.start_game` present,
+  not `is_ulc`, not another product's `addons` id, no `third_party_platform`, a real name. On the
+  maintainer's PC that leaves 26 of 676 products (including Division Beta/PTS test builds, which
+  Playnite keeps too). Off by default because it may list games the user doesn't own. Artwork URLs
+  are under
   `https://ubistatic3-a.akamaihd.net/orbit/uplay_launcher_3_0/assets/`; thumbnails are 240x280
   (about 6:7), so `covers_are_low_quality` is `true` and SteamGridDB goes first.
 - **Amazon on Windows reads the Amazon Games app's SQLite files** in
@@ -403,8 +407,28 @@ Short log of choices made while building. Newest at the bottom of each section.
   backgrounds from `ProductDetails.sqlite` (`game_product_info`, a cache of viewed store pages; no
   portrait art). The id is the Amazon product UUID, the same as Nile's `product.id` on Linux
   (per Playnite; not compared on a machine with both). `Entitlements.sqlite` is DPAPI-encrypted, so
-  there are no owned games without a sign-in. Launch `amazon-games://play/<id>`, install
+  owned games need a sign-in (below). Launch `amazon-games://play/<id>`, install
   `amazon-games://install/<id>`; the app has no uninstall URI, so Uninstall opens the app.
+- **Amazon sign-in is Playnite's launcher flow** (Windows only; Heroic covers Linux): the login
+  window opens `www.amazon.com/ap/signin` with the launcher's public device client id, a PKCE S256
+  challenge and the launcher's Electron user agent, and catches the return to `www.amazon.com` with
+  `openid.oa2.authorization_code`. `api.amazon.com/auth/register` registers the PC as a launcher
+  device (serial = Windows `MachineGuid`, so signing in again reuses the device); only the refresh
+  token is kept (keyring), `auth/token` refreshes. Owned games: `gaming.amazon.com/api/distribution/
+  entitlements` (`GetEntitlements`, paged, Prime "Fuel" loot skipped); its icon and background URLs
+  serve as artwork for games the app's cache doesn't know. The verifier is replaced after each
+  successful sign-in, so the code-paste fallback and the window share one login URL.
+- **Steam sign-in is the store website session** (Playnite does the same): Steam has no sign-in for
+  other apps, but every store page of a signed-in user carries a short-lived `webapi_token` that
+  `GetOwnedGames` accepts as `access_token` (also for private profiles). The login window for Steam
+  is the only one with a persistent profile (`<data>/webview/steam`); a script on store pages
+  reports SteamID, token and persona name through a capture navigation to
+  `questkeep.invalid/steam-session`. Before each owned scan a hidden, unfocused, unthrottled window
+  loads the store with that profile (Steam renews its cookies itself) and reports again, or
+  `signedout=1` after 5 s on a signed-out page (the wait lets Steam's renewal redirect finish).
+  The core gets that through `auth::WebSession` and keeps only SteamID and name (keyring) and the
+  token in memory. Signing out deletes the profile's browsing data. With an API key configured, a
+  failing sign-in falls back to the key; the key alone still works as before.
 
 ## Tray and autostart
 

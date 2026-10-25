@@ -24,6 +24,14 @@ pub struct Product {
     pub thumb_image: Option<String>,
     pub background_image: Option<String>,
     pub icon_image: Option<String>,
+    /// `root.start_game` exists: the launcher can start it (DLC and bundles have none).
+    pub startable: bool,
+    /// `root.is_ulc`: unlockable content of another game.
+    pub is_ulc: bool,
+    /// `root.third_party_platform` exists: sold and started through another store (Steam).
+    pub third_party: bool,
+    /// Ids of `root.addons` (this product's DLC).
+    pub addon_ids: Vec<u32>,
 }
 
 /// All products of a configurations file by Ubisoft product id. When an id appears more than once
@@ -149,7 +157,15 @@ impl<'a> Reader<'a> {
 pub fn parse_product(id: u32, yaml: &str) -> Product {
     let loc = default_localizations(yaml);
     let resolve = |value: String| loc.get(&value).cloned().unwrap_or(value);
-    let root = root_scalars(yaml);
+    let RootInfo {
+        scalars: root,
+        keys,
+        addon_ids,
+    } = root_info(yaml);
+    let yes = |key: &str| {
+        root.get(key)
+            .is_some_and(|v| matches!(v.to_ascii_lowercase().as_str(), "yes" | "true"))
+    };
     let image = |key: &str| {
         root.get(key).map(|v| resolve(v.clone())).map(|file| {
             if file.starts_with("http") {
@@ -168,6 +184,10 @@ pub fn parse_product(id: u32, yaml: &str) -> Product {
         thumb_image: image("thumb_image"),
         background_image: image("background_image"),
         icon_image: image("icon_image"),
+        startable: keys.iter().any(|k| k == "start_game"),
+        is_ulc: yes("is_ulc"),
+        third_party: keys.iter().any(|k| k == "third_party_platform"),
+        addon_ids,
     }
 }
 
@@ -191,12 +211,26 @@ fn key_value(line: &str) -> Option<(&str, &str)> {
     (valid && (value.is_empty() || value.starts_with(' '))).then(|| (key, value.trim()))
 }
 
-/// The direct scalar children of the top-level `root:` mapping.
-fn root_scalars(yaml: &str) -> HashMap<String, String> {
-    let mut out = HashMap::new();
+/// What the top-level `root:` mapping holds directly.
+struct RootInfo {
+    /// Children with a scalar value.
+    scalars: HashMap<String, String>,
+    /// Every child key, including those holding a mapping or list (`start_game:`).
+    keys: Vec<String>,
+    /// `id`s of the `addons:` list items.
+    addon_ids: Vec<u32>,
+}
+
+fn root_info(yaml: &str) -> RootInfo {
+    let mut info = RootInfo {
+        scalars: HashMap::new(),
+        keys: Vec::new(),
+        addon_ids: Vec::new(),
+    };
     let mut lines = yaml.lines().skip_while(|l| l.trim_end() != "root:");
     lines.next();
     let mut child_indent = None;
+    let mut in_addons = false;
     for line in lines {
         if is_blank(line) {
             continue;
@@ -206,16 +240,28 @@ fn root_scalars(yaml: &str) -> HashMap<String, String> {
             break;
         }
         let child_indent = *child_indent.get_or_insert(indent);
-        if indent != child_indent {
+        let item = line.trim_start().strip_prefix("- ");
+        // List items may sit at the key's own indentation (`addons:\n  - id: 96`).
+        if indent > child_indent || (indent == child_indent && item.is_some()) {
+            if in_addons
+                && let Some(("id", value)) = item.and_then(key_value)
+                && let Ok(id) = unquote(value).parse()
+            {
+                info.addon_ids.push(id);
+            }
             continue;
         }
-        if let Some((key, value)) = key_value(line)
-            && !value.is_empty()
-        {
-            out.insert(key.to_string(), unquote(value));
+        in_addons = false;
+        if let Some((key, value)) = key_value(line) {
+            info.keys.push(key.to_string());
+            if value.is_empty() {
+                in_addons = key == "addons";
+            } else {
+                info.scalars.insert(key.to_string(), unquote(value));
+            }
         }
     }
-    out
+    info
 }
 
 /// The `localizations: default:` table (`l1: Some Name`).
@@ -253,6 +299,29 @@ fn default_localizations(yaml: &str) -> HashMap<String, String> {
         }
     }
     out
+}
+
+/// The products of the cache that are games of their own, picked the way Playnite's Ubisoft
+/// library does: the launcher can start them, and they are not DLC (another product's addon or
+/// unlockable content) or sold through another store. The cache also holds products the user
+/// only looked at, so this is a best guess at the library, not a list of owned games.
+pub fn catalogue_games(products: &HashMap<u32, Product>) -> Vec<&Product> {
+    let dlc: std::collections::HashSet<u32> = products
+        .values()
+        .flat_map(|p| p.addon_ids.iter().copied())
+        .chain(products.values().filter(|p| p.is_ulc).map(|p| p.id))
+        .collect();
+    let mut games: Vec<&Product> = products
+        .values()
+        .filter(|p| p.startable && !p.is_ulc && !p.third_party && !dlc.contains(&p.id))
+        .filter(|p| {
+            p.name
+                .as_deref()
+                .is_some_and(|n| !n.trim().is_empty() && !super::install::is_placeholder(n))
+        })
+        .collect();
+    games.sort_by_key(|p| p.id);
+    games
 }
 
 /// Plain, single-quoted or double-quoted YAML scalar to its text.
@@ -336,6 +405,58 @@ pub(super) mod tests {
                 .unwrap()
                 .ends_with("17319894db2463c9d82d789b3e46461f.jpg")
         );
+    }
+
+    #[test]
+    fn reads_the_catalogue_flags() {
+        let p = parse_product(5595, TRACKMANIA);
+        assert!(p.startable && !p.is_ulc && !p.third_party && p.addon_ids.is_empty());
+        // Both list layouts of the real cache: items at the key's indentation and deeper.
+        let yaml = "root:\n  name: Base\n  addons:\n  - id: 96\n    is_visible: no\n    name: \"DLC: One\"\n  - id: '97'\n  start_game:\n    online:\n      executables:\n      - path: game.exe\n  third_party_platform:\n    name: Steam\n  is_ulc: yes\nlocalizations: {}\n";
+        let p = parse_product(1, yaml);
+        assert_eq!(p.addon_ids, [96, 97]);
+        assert!(p.startable && p.third_party && p.is_ulc);
+        let yaml = "root:\n  name: Base\n  addons:\n    - id: 912\n      thumb_image: x.jpg\n  icon_image: i.ico\n";
+        let p = parse_product(2, yaml);
+        assert_eq!(p.addon_ids, [912]);
+        assert!(!p.startable);
+        assert!(p.icon_image.unwrap().ends_with("i.ico"));
+    }
+
+    #[test]
+    fn catalogue_keeps_startable_games_of_their_own() {
+        let product = |id: u32, name: &str| Product {
+            id,
+            name: Some(name.into()),
+            startable: true,
+            ..Product::default()
+        };
+        let products: HashMap<u32, Product> = [
+            Product {
+                addon_ids: vec![3],
+                ..product(1, "Base Game")
+            },
+            product(3, "Base Game - Season Pass"),
+            Product {
+                is_ulc: true,
+                ..product(4, "Bonus")
+            },
+            Product {
+                third_party: true,
+                ..product(5, "Sold on Steam")
+            },
+            Product {
+                startable: false,
+                ..product(6, "Bundle")
+            },
+            product(7, "GAMENAME"),
+            product(8, "Another Game"),
+        ]
+        .into_iter()
+        .map(|p| (p.id, p))
+        .collect();
+        let ids: Vec<u32> = catalogue_games(&products).iter().map(|p| p.id).collect();
+        assert_eq!(ids, [1, 8]);
     }
 
     #[test]

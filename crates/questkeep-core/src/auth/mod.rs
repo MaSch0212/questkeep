@@ -87,6 +87,18 @@ pub trait AccountAuth: Send + Sync {
     fn sign_out(&self) -> Result<(), AuthError>;
 }
 
+/// A store sign-in kept as a browser session in its own profile, for stores whose website is the
+/// only way to sign in (Steam). The app implements it with a hidden webview; the core never sees
+/// cookies, only what the store's own page hands out.
+pub trait WebSession: Send + Sync {
+    /// Loads the store's page with the saved session and returns the capture address its page
+    /// produced (the provider defines the format), or `Ok(None)` when the session is signed out.
+    /// The error text is shown to users.
+    fn refresh(&self, provider: &str) -> Result<Option<String>, String>;
+    /// Deletes the saved browser session (cookies and storage).
+    fn clear(&self, provider: &str) -> Result<(), String>;
+}
+
 /// Percent-encodes everything except unreserved characters.
 pub fn url_encode(text: &str) -> String {
     let mut out = String::with_capacity(text.len());

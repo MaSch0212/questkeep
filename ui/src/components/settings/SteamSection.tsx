@@ -29,16 +29,17 @@ export function SteamSection(props: { model: SettingsModel }) {
         }}
       >
         <p class="muted">
-          The Steam Web API key lets Questkeep list games you own but have not installed. Create one
-          at{" "}
+          Sign in to Steam under Accounts to list games you own but have not installed. A Steam Web
+          API key is an alternative that needs no sign-in, but only works when your profile&apos;s
+          game details are public. Create one at{" "}
           <button type="button" class="link-btn" onClick={() => void openLink(STEAM_KEY_URL)}>
             {STEAM_KEY_URL}
           </button>
-          .
+          . When you are signed in, the key is only used if the sign-in stops working.
         </p>
         <div class="field">
           <label class="field__label" for="steam-api-key">
-            Steam Web API key
+            Steam Web API key (optional)
           </label>
           <div class="field__row">
             <input
@@ -87,7 +88,7 @@ export function SteamSection(props: { model: SettingsModel }) {
         </p>
         <div class="form__actions">
           <button type="submit" class="btn btn--primary" disabled={props.model.savingSteam()}>
-            {props.model.savingSteam() ? "Saving…" : "Save Steam account"}
+            {props.model.savingSteam() ? "Saving…" : "Save Steam key"}
           </button>
         </div>
       </form>

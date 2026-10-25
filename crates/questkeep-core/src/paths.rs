@@ -80,6 +80,11 @@ impl DataPaths {
         self.root.join("cache")
     }
 
+    /// Browser profiles of store sessions (one folder per store; Steam keeps its sign-in there).
+    pub fn webview_dir(&self) -> PathBuf {
+        self.root.join("webview")
+    }
+
     /// Where the main window was last placed.
     pub fn window_file(&self) -> PathBuf {
         self.root.join("window.json")

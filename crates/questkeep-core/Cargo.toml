@@ -7,6 +7,8 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+# PKCE (Amazon sign-in) and reading JWT expiry (Steam web session); versions already locked.
+base64 = "0.22.1"
 chrono = { version = "0.4.45", features = ["serde"] }
 dirs = "7.0.0"
 # Decoding and resizing of icons only; PNG/JPEG/ICO cover everything the sources deliver.
@@ -14,6 +16,7 @@ image = { version = "0.25.10", default-features = false, features = ["png", "jpe
 rusqlite = { version = "0.40.2", features = ["bundled", "chrono", "serde_json"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
+sha2 = "0.10.9"
 sysinfo = "0.39.6"
 thiserror = "2.0.21"
 tracing = "0.1.44"

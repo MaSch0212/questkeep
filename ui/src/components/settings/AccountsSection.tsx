@@ -32,6 +32,8 @@ export function codeHint(provider: string): string {
       return "Copy the authorizationCode value from the page that follows.";
     case "xbox":
       return "The browser ends on a blank page. Copy the whole address from its address bar.";
+    case "amazon":
+      return "Amazon then shows its front page. Copy the whole address from the address bar.";
     default:
       return "Copy the code, or the whole address of the final page.";
   }
@@ -104,7 +106,9 @@ export function AccountsSection() {
     <div class="form">
       <p class="muted">
         Sign in to list games you own but have not installed. Sign-in tokens are stored in your
-        system&apos;s credential store, not in the Questkeep data folder.
+        system&apos;s credential store, not in the Questkeep data folder. Steam is the exception: it
+        only has its website sign-in, so Questkeep keeps that browser session in its data folder and
+        deletes it when you sign out.
       </p>
       <Show when={accounts()} fallback={<p class="muted">Loading…</p>}>
         {(list) => (

@@ -4,6 +4,7 @@ import * as api from "../../lib/api";
 import { errorMessage } from "../../lib/errors";
 import {
   GOG_LAUNCH_THROUGH_GALAXY,
+  UBISOFT_IMPORT_CATALOGUE,
   XBOX_HIDE_GAME_PASS,
   providerFlag,
 } from "../../lib/providerSettings";
@@ -104,6 +105,32 @@ export function LibrarySection(props: { model: SettingsModel }) {
               Games in PC Game Pass are only listed while installed. Xbox can't tell a bought game
               from a Game Pass one, so games you bought that are also in Game Pass are left out too.
               Games already in your library stay; hide or remove them there.
+            </p>
+          </>
+        )}
+      </Show>
+      <Show when={store.providers().some((p) => p.id === "ubisoft") && props.model.settings()}>
+        {(current) => (
+          <>
+            <label class="check">
+              <input
+                type="checkbox"
+                checked={providerFlag(current(), "ubisoft", UBISOFT_IMPORT_CATALOGUE)}
+                onChange={(e) =>
+                  void props.model.setProviderOption(
+                    "ubisoft",
+                    UBISOFT_IMPORT_CATALOGUE,
+                    e.currentTarget.checked,
+                  )
+                }
+              />
+              <span>Import Ubisoft Connect games that are not installed</span>
+            </label>
+            <p class="muted">
+              Ubisoft has no sign-in for other apps, so these come from the list of games Ubisoft
+              Connect keeps on this PC (DLC and games sold through other stores are left out). It
+              can include games you only looked at or played in a free weekend, and test versions.
+              Turning this off again keeps the games in your library; hide or remove them there.
             </p>
           </>
         )}

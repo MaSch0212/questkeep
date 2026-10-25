@@ -3264,6 +3264,7 @@ dependencies = [
 name = "questkeep-core"
 version = "0.2.0"
 dependencies = [
+ "base64 0.22.1",
  "chrono",
  "dirs 7.0.0",
  "image",
@@ -3271,6 +3272,7 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
+ "sha2",
  "sysinfo",
  "tempfile",
  "thiserror 2.0.21",

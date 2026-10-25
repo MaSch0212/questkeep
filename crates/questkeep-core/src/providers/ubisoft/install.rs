@@ -62,7 +62,7 @@ pub fn clean_name(name: &str) -> String {
 }
 
 /// Placeholders some configs carry instead of a name (their real name lives elsewhere).
-fn is_placeholder(name: &str) -> bool {
+pub(super) fn is_placeholder(name: &str) -> bool {
     matches!(name, "GAMENAME" | "NAME")
 }
 

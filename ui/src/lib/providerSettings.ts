@@ -6,6 +6,9 @@ export const GOG_LAUNCH_THROUGH_GALAXY = "launchThroughGalaxy";
 /** Key under `providers.xbox` that leaves PC Game Pass titles out of the owned Xbox games. */
 export const XBOX_HIDE_GAME_PASS = "hideGamePass";
 
+/** Key under `providers.ubisoft` that imports the games of the launcher's product cache. */
+export const UBISOFT_IMPORT_CATALOGUE = "importCatalogue";
+
 /** A boolean provider option (`providers.<id>.<key>`), false when unset or not a boolean. */
 export function providerFlag(settings: Settings, providerId: string, key: string): boolean {
   return settings.providers[providerId]?.[key] === true;

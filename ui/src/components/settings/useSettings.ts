@@ -59,7 +59,7 @@ export function createSettingsModel() {
       setSettings(next);
       setApiKey(textOf(next.providers.steam?.apiKey));
       setSteamId(textOf(next.providers.steam?.steamId));
-      store.pushToast("info", "Steam account saved");
+      store.pushToast("info", "Steam key saved");
     } catch (error) {
       store.pushToast("error", errorMessage(error));
       setSavingSteam(false);

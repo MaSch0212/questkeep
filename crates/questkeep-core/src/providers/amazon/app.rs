@@ -234,7 +234,7 @@ fn uri(verb: &str, id: &str) -> Option<String> {
 }
 
 /// Strips trademark signs and surplus whitespace from a title.
-fn clean_name(name: &str) -> String {
+pub(super) fn clean_name(name: &str) -> String {
     name.replace(['\u{2122}', '\u{00ae}', '\u{00a9}'], "")
         .split_whitespace()
         .collect::<Vec<_>>()

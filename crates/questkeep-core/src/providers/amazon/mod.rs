@@ -1,7 +1,8 @@
 //! Amazon Games. On Linux, installed games and the owned library come from the Heroic Games
 //! Launcher's Nile runner data, see [`super::heroic`]; Heroic is signed in to Amazon itself, so no
-//! account is needed here. On Windows they come from the Amazon Games app's own databases, see
-//! [`app`].
+//! account is needed here. On Windows installed games come from the Amazon Games app's own
+//! databases, see [`app`], and owned games from an Amazon sign-in, see [`account`] (the app's
+//! own entitlement cache is encrypted).
 //!
 //! The game id is the Amazon product id (`product.id` in Nile's library, Heroic's `app_name`, and
 //! `Id` in the Amazon Games app's `DbSet` table: all the same UUID), so a library moved between
@@ -9,18 +10,25 @@
 
 // Logic derived from Playnite (MIT), see THIRD_PARTY_NOTICES.md
 
+mod account;
 mod app;
+
+use std::sync::Arc;
 
 use super::heroic::{self, HeroicPaths};
 use super::{ImageCandidate, LibraryProvider, ProviderError};
+use crate::auth::AccountAuth;
 use crate::model::{ImportedGame, PlayAction};
 
+pub use account::{AmazonAccount, CODE_PARAM, LOGIN_RETURN_PREFIX};
 pub use app::AmazonAppPaths;
 
 pub const AMAZON_SOURCE: &str = "amazon";
 
 #[derive(Debug, Clone, Default)]
 pub struct AmazonProvider {
+    /// Signed-in account for owned games (Windows; Heroic covers them elsewhere).
+    account: Option<Arc<AmazonAccount>>,
     paths: HeroicPaths,
     /// Heroic is only used on Linux; elsewhere this stays `false`.
     enabled: bool,
@@ -42,6 +50,7 @@ impl AmazonProvider {
             paths: HeroicPaths::detect(),
             enabled: true,
             app: None,
+            account: None,
         }
     }
 
@@ -50,6 +59,7 @@ impl AmazonProvider {
             paths,
             enabled: true,
             app: None,
+            account: None,
         }
     }
 
@@ -58,6 +68,16 @@ impl AmazonProvider {
             app: Some(app),
             ..Self::default()
         }
+    }
+
+    /// Enables account sign-in and the owned-games list (used where Heroic is not).
+    pub fn with_account(mut self, account: Arc<AmazonAccount>) -> Self {
+        self.account = Some(account);
+        self
+    }
+
+    fn signed_in_account(&self) -> Option<&AmazonAccount> {
+        self.account.as_deref().filter(|a| a.is_signed_in())
     }
 }
 
@@ -75,7 +95,9 @@ impl LibraryProvider for AmazonProvider {
     }
 
     fn can_scan(&self) -> bool {
-        self.enabled || self.app.as_ref().is_some_and(AmazonAppPaths::has_data)
+        self.enabled
+            || self.app.as_ref().is_some_and(AmazonAppPaths::has_data)
+            || self.signed_in_account().is_some()
     }
 
     fn scan_installed(&self) -> Result<Vec<ImportedGame>, ProviderError> {
@@ -91,16 +113,24 @@ impl LibraryProvider for AmazonProvider {
         heroic::nile_games(&self.paths, false)
     }
 
-    /// Heroic only: the Amazon Games app keeps its entitlements encrypted (DPAPI).
+    /// Heroic's library, or the signed-in account (the Amazon Games app keeps its entitlements
+    /// encrypted with DPAPI, so they cannot be read locally).
     fn can_scan_owned(&self) -> bool {
-        self.enabled && !heroic::nile_library(&self.paths).is_empty()
+        self.account.is_some() || (self.enabled && !heroic::nile_library(&self.paths).is_empty())
     }
 
     fn scan_owned(&self, _config: &serde_json::Value) -> Result<Vec<ImportedGame>, ProviderError> {
-        if !self.enabled {
-            return Err(ProviderError::Unsupported);
+        if self.enabled {
+            return heroic::nile_games(&self.paths, true);
         }
-        heroic::nile_games(&self.paths, true)
+        match &self.account {
+            Some(account) => account.fetch_owned(),
+            None => Err(ProviderError::Unsupported),
+        }
+    }
+
+    fn account(&self) -> Option<&dyn AccountAuth> {
+        self.account.as_deref().map(|a| a as &dyn AccountAuth)
     }
 
     /// Windows only; Heroic has no install URI.
@@ -138,10 +168,12 @@ impl LibraryProvider for AmazonProvider {
             .collect()
     }
 
+    /// The app's store-page cache, then the artwork of the last owned-games scan.
     fn background_candidates(&self, source_game_id: &str) -> Vec<ImageCandidate> {
         self.app
             .as_ref()
             .and_then(|a| a.product_art(source_game_id).background)
+            .or_else(|| self.account.as_ref()?.art(source_game_id).background)
             .map(ImageCandidate::Url)
             .into_iter()
             .collect()
@@ -151,6 +183,7 @@ impl LibraryProvider for AmazonProvider {
         self.app
             .as_ref()
             .and_then(|a| a.product_art(source_game_id).icon)
+            .or_else(|| self.account.as_ref()?.art(source_game_id).icon)
             .map(ImageCandidate::Url)
             .into_iter()
             .collect()

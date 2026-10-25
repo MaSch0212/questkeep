@@ -21,7 +21,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::auth::{AccountAuth, TokenStore};
+use crate::auth::{AccountAuth, TokenStore, WebSession};
 use crate::model::{GameMetadata, ImportedGame, PlayAction};
 
 /// Errors a provider can report. Messages are shown to users.
@@ -164,10 +164,18 @@ impl ProviderRegistry {
     /// The providers shipped with Questkeep. Providers that support account sign-in keep their
     /// tokens in `tokens` (the system keyring in the app). Store answers worth keeping between
     /// runs go below `cache_dir` (`DataPaths::cache_dir`); `None` keeps them in memory only.
-    pub fn with_builtin(tokens: Arc<dyn TokenStore>, cache_dir: Option<&Path>) -> Self {
+    /// `web` keeps the store sessions of website-only sign-ins (Steam); the app supplies it.
+    pub fn with_builtin(
+        tokens: Arc<dyn TokenStore>,
+        cache_dir: Option<&Path>,
+        web: Option<Arc<dyn WebSession>>,
+    ) -> Self {
         let mut registry = Self::new();
         registry.register(Arc::new(manual::ManualProvider));
-        registry.register(Arc::new(steam::SteamProvider::detect()));
+        registry
+            .register(Arc::new(steam::SteamProvider::detect().with_account(
+                Arc::new(steam::SteamAccount::new(tokens.clone(), web)),
+            )));
         let mut epic = epic::EpicProvider::detect()
             .with_account(Arc::new(epic::EpicAccount::new(tokens.clone())));
         if let Some(dir) = cache_dir {
@@ -179,14 +187,21 @@ impl ProviderRegistry {
                 .with_account(Arc::new(xbox::XboxAccount::new(tokens.clone()))),
         ));
         registry.register(Arc::new(
-            gog::GogProvider::detect().with_account(Arc::new(gog::GogAccount::new(tokens))),
+            gog::GogProvider::detect().with_account(Arc::new(gog::GogAccount::new(tokens.clone()))),
         ));
         registry.register(Arc::new(ubisoft::UbisoftProvider::detect()));
         // Lutris only exists on Linux; leaving it out elsewhere keeps the provider list honest.
         #[cfg(not(windows))]
         registry.register(Arc::new(lutris::LutrisProvider::detect()));
-        // Amazon reads the Amazon Games app on Windows and Heroic elsewhere.
-        registry.register(Arc::new(amazon::AmazonProvider::detect()));
+        // Amazon reads the Amazon Games app (installed) and an Amazon sign-in (owned) on Windows,
+        // and Heroic, which is signed in itself, elsewhere.
+        let amazon = amazon::AmazonProvider::detect();
+        let amazon = if cfg!(windows) {
+            amazon.with_account(Arc::new(amazon::AmazonAccount::new(tokens)))
+        } else {
+            amazon
+        };
+        registry.register(Arc::new(amazon));
         #[cfg(not(windows))]
         registry.register(Arc::new(heroic_sideload::HeroicSideloadProvider::detect()));
         registry
@@ -249,8 +264,11 @@ mod tests {
 
     #[test]
     fn builtin_providers_ship_a_tintable_svg_icon() {
-        let registry =
-            ProviderRegistry::with_builtin(Arc::new(crate::auth::MemoryTokenStore::new()), None);
+        let registry = ProviderRegistry::with_builtin(
+            Arc::new(crate::auth::MemoryTokenStore::new()),
+            None,
+            None,
+        );
         for provider in registry.iter() {
             let svg = provider.icon_svg().trim();
             let id = provider.id();
@@ -265,8 +283,11 @@ mod tests {
 
     #[test]
     fn builtin_epic_and_gog_support_account_sign_in() {
-        let registry =
-            ProviderRegistry::with_builtin(Arc::new(crate::auth::MemoryTokenStore::new()), None);
+        let registry = ProviderRegistry::with_builtin(
+            Arc::new(crate::auth::MemoryTokenStore::new()),
+            None,
+            None,
+        );
         for id in ["epic", "gog"] {
             let provider = registry.get(id).unwrap();
             assert!(provider.can_scan_owned(), "{id}");
@@ -279,7 +300,9 @@ mod tests {
                 Err(ProviderError::NotConfigured(_))
             ));
         }
-        assert!(registry.get("steam").unwrap().account().is_none());
+        // Steam signs in through the store website: no code to paste.
+        let steam = registry.get("steam").unwrap().account().unwrap().status();
+        assert!(!steam.signed_in && !steam.supports_code_sign_in);
         assert!(matches!(
             registry.get("epic").unwrap().metadata("Sugar"),
             Err(ProviderError::NotConfigured(_))

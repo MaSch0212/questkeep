@@ -3,9 +3,10 @@
 //! Installed games come from `HKLM\SOFTWARE\WOW6432Node\Ubisoft\Launcher\Installs\<id>`
 //! (`InstallDir`; the key name is Ubisoft's numeric product id). Names and artwork come from the
 //! launcher's own product cache (`config`), which lists every product the launcher knows, owned
-//! or not, so it is never used as a list of owned games. The launcher's ownership cache is
-//! encrypted, so owned-but-not-installed games would need an online account sign-in, which this
-//! provider does not have: only installed games are imported.
+//! or not. The launcher's ownership cache is encrypted and Ubisoft has no sign-in for other
+//! applications, so games that are not installed only come from that product cache, filtered the
+//! way Playnite does (see [`config::catalogue_games`]), and only when the user turns that on
+//! (`importCatalogue` in the provider settings): it may list games the user does not own.
 //!
 //! Games start and uninstall through the `uplay://` protocol of Ubisoft Connect.
 
@@ -26,6 +27,8 @@ use super::{ImageCandidate, LibraryProvider, ProviderError};
 use crate::model::{ImportedGame, PlayAction};
 
 pub const UBISOFT_SOURCE: &str = "ubisoft";
+/// Provider setting that turns on importing the launcher's product cache.
+pub const IMPORT_CATALOGUE: &str = "importCatalogue";
 
 type Products = Arc<HashMap<u32, config::Product>>;
 
@@ -137,6 +140,39 @@ impl LibraryProvider for UbisoftProvider {
 
     fn can_scan(&self) -> bool {
         cfg!(windows)
+    }
+
+    /// Whether it runs is decided by the setting, see [`scan_owned`](Self::scan_owned).
+    fn can_scan_owned(&self) -> bool {
+        true
+    }
+
+    /// The games of the launcher's product cache, when `config` has `"importCatalogue": true`.
+    fn scan_owned(&self, config: &serde_json::Value) -> Result<Vec<ImportedGame>, ProviderError> {
+        if config
+            .get(IMPORT_CATALOGUE)
+            .and_then(serde_json::Value::as_bool)
+            != Some(true)
+        {
+            return Err(ProviderError::NotConfigured(
+                "Importing the Ubisoft Connect catalogue is turned off.".into(),
+            ));
+        }
+        let products = self.read_products();
+        if let Ok(mut cache) = self.products.lock() {
+            *cache = Some(products.clone());
+        }
+        let mut games: Vec<ImportedGame> = config::catalogue_games(&products)
+            .into_iter()
+            .filter_map(|p| {
+                let name = install::clean_name(p.name.as_deref()?);
+                let mut game = ImportedGame::installed(p.id.to_string(), name);
+                game.installed = false;
+                Some(game)
+            })
+            .collect();
+        games.sort_by_cached_key(|g| (g.name.to_lowercase(), g.source_game_id.clone()));
+        Ok(games)
     }
 
     fn scan_installed(&self) -> Result<Vec<ImportedGame>, ProviderError> {
@@ -303,13 +339,36 @@ mod tests {
     }
 
     #[test]
-    fn owned_scan_is_not_supported() {
-        let p = UbisoftProvider::with_data(Vec::new(), None);
-        assert!(!p.can_scan_owned());
+    fn catalogue_import_is_opt_in_and_filtered() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("configurations");
+        let dlc = "root:\n  name: Trackmania Club Access\n  is_ulc: yes\n  start_game:\n    x: 1\n";
+        let steam = "root:\n  name: Sold Elsewhere\n  start_game:\n    x: 1\n  third_party_platform:\n    name: Steam\n";
+        std::fs::write(
+            &path,
+            encode(&[(5595, TRACKMANIA), (26, BROTHERHOOD), (7, dlc), (8, steam)]),
+        )
+        .unwrap();
+        let p = provider(tmp.path(), Some(path));
+        assert!(p.can_scan_owned());
         assert!(matches!(
             p.scan_owned(&serde_json::Value::Null),
-            Err(ProviderError::Unsupported)
+            Err(ProviderError::NotConfigured(_))
         ));
+        let games = p
+            .scan_owned(&serde_json::json!({ "importCatalogue": true }))
+            .unwrap();
+        let names: Vec<_> = games
+            .iter()
+            .map(|g| (g.name.as_str(), g.installed))
+            .collect();
+        assert_eq!(
+            names,
+            [
+                ("Assassin's Creed Brotherhood", false),
+                ("Trackmania", false)
+            ]
+        );
     }
 
     /// Read-only look at this machine:
@@ -320,6 +379,12 @@ mod tests {
     fn live_scan() {
         let p = UbisoftProvider::detect();
         println!("{} products in the launcher cache", p.products().len());
+        let products = p.products();
+        let catalogue = config::catalogue_games(&products);
+        println!("{} catalogue games", catalogue.len());
+        for product in catalogue {
+            println!("  {} | {:?}", product.id, product.name);
+        }
         match p.scan_installed() {
             Ok(games) => {
                 println!("{} Ubisoft games", games.len());

@@ -427,6 +427,7 @@ mod tests {
         let registry = crate::providers::ProviderRegistry::with_builtin(
             Arc::new(MemoryTokenStore::new()),
             None,
+            None,
         );
         let xbox = registry.get("xbox").unwrap();
         assert!(xbox.can_scan_owned());

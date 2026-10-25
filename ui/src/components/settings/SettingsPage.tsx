@@ -24,7 +24,7 @@ interface SectionDef {
 const SECTIONS: SectionDef[] = [
   { id: "general", title: "General", component: GeneralSection },
   { id: "library", title: "Library and stores", component: LibrarySection },
-  { id: "steam", title: "Steam account", component: SteamSection },
+  { id: "steam", title: "Steam API key", component: SteamSection },
   { id: "accounts", title: "Accounts", component: AccountsSection },
   { id: "artwork", title: "Artwork", component: ArtworkSection },
   { id: "metadata", title: "Metadata", component: MetadataSection },

@@ -1,4 +1,5 @@
-//! Steam web access: owned games (Web API, needs the user's key) and store metadata. Fetching
+//! Steam web access: owned games (Web API, with the user's key or a web session token) and
+//! store metadata. Fetching
 //! and parsing are separate so the parsers are tested with fixtures and never touch the network.
 
 use chrono::DateTime;
@@ -33,22 +34,42 @@ fn redact(message: &str, secret: Option<&str>) -> String {
     }
 }
 
+/// How a Web API request is authorized.
+pub enum Credential<'a> {
+    /// The user's Web API key.
+    Key(&'a str),
+    /// The `webapi_token` of a signed-in store session.
+    Token(&'a str),
+}
+
+/// Why an owned-games request failed.
+pub enum OwnedError {
+    /// HTTP 401/403: the key or token is not (or no longer) accepted.
+    Rejected,
+    Other(ProviderError),
+}
+
 /// Fetches the owned games of a Steam account.
-pub fn fetch_owned(api_key: &str, steam_id: &str) -> Result<Vec<ImportedGame>, ProviderError> {
+pub fn fetch_owned(
+    credential: Credential<'_>,
+    steam_id: &str,
+) -> Result<Vec<ImportedGame>, OwnedError> {
+    let (param, secret) = match credential {
+        Credential::Key(key) => ("key", key),
+        Credential::Token(token) => ("access_token", token),
+    };
     let url = format!(
-        "https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key={}&steamid={}&include_appinfo=1&include_played_free_games=1&format=json",
-        encode(api_key),
+        "https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?{param}={}&steamid={}&include_appinfo=1&include_played_free_games=1&format=json",
+        encode(secret),
         encode(steam_id)
     );
-    match http_get(&url, Some(api_key)) {
-        Ok(body) => parse_owned_games(&body),
-        Err(HttpFailure::Status(401 | 403)) => Err(ProviderError::Network(
-            "The Steam Web API key was rejected.".into(),
-        )),
-        Err(HttpFailure::Status(code)) => Err(ProviderError::Network(format!(
+    match http_get(&url, Some(secret)) {
+        Ok(body) => parse_owned_games(&body).map_err(OwnedError::Other),
+        Err(HttpFailure::Status(401 | 403)) => Err(OwnedError::Rejected),
+        Err(HttpFailure::Status(code)) => Err(OwnedError::Other(ProviderError::Network(format!(
             "Steam Web API returned HTTP {code}"
-        ))),
-        Err(HttpFailure::Other(message)) => Err(ProviderError::Network(message)),
+        )))),
+        Err(HttpFailure::Other(message)) => Err(OwnedError::Other(ProviderError::Network(message))),
     }
 }
 

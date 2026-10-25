@@ -1,8 +1,10 @@
 //! Steam provider: finds installed games from the local `appmanifest_*.acf` files of every Steam
-//! library folder. No network access and no Steam login are needed.
+//! library folder (no network, no login). Owned games come from the Steam Web API, authorized by
+//! a store sign-in (see [`account`]) or the user's own API key.
 
 // Logic derived from Playnite (MIT), see THIRD_PARTY_NOTICES.md
 
+mod account;
 mod icon;
 mod local;
 mod scan;
@@ -10,9 +12,13 @@ pub mod vdf;
 mod web;
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use super::{ImageCandidate, LibraryProvider, ProviderError};
+use crate::auth::AccountAuth;
 use crate::model::{GameMetadata, ImportedGame, PlayAction};
+
+pub use account::{CAPTURE_PREFIX, LOGIN_URL, SESSION_URL, SteamAccount};
 
 pub const STEAM_SOURCE: &str = "steam";
 
@@ -20,6 +26,8 @@ pub const STEAM_SOURCE: &str = "steam";
 #[derive(Debug, Clone, Default)]
 pub struct SteamProvider {
     roots: Vec<PathBuf>,
+    /// Store sign-in for owned games, when the app supplies one.
+    account: Option<Arc<SteamAccount>>,
 }
 
 impl SteamProvider {
@@ -30,7 +38,16 @@ impl SteamProvider {
 
     /// Uses the given Steam root directories (the ones containing `steamapps`).
     pub fn with_roots(roots: Vec<PathBuf>) -> Self {
-        Self { roots }
+        Self {
+            roots,
+            account: None,
+        }
+    }
+
+    /// Enables the store sign-in for owned games.
+    pub fn with_account(mut self, account: Arc<SteamAccount>) -> Self {
+        self.account = Some(account);
+        self
     }
 
     /// The Steam root directories this provider reads. The image cache looks into
@@ -69,11 +86,30 @@ impl LibraryProvider for SteamProvider {
         true
     }
 
-    /// Owned games through the Steam Web API. `config` is `{ "apiKey": string, "steamId"?: string }`;
-    /// without a `steamId` the most recent login of the local Steam client is used.
+    /// Owned games through the Steam Web API: with the store sign-in when signed in, else with
+    /// `config` = `{ "apiKey": string, "steamId"?: string }` (without a `steamId` the most
+    /// recent login of the local Steam client is used). A failing sign-in falls back to the key.
     fn scan_owned(&self, config: &serde_json::Value) -> Result<Vec<ImportedGame>, ProviderError> {
+        if let Some(account) = self.account.as_deref().filter(|a| a.is_signed_in()) {
+            match Self::owned_with_session(account) {
+                Ok(games) => return Ok(games),
+                Err(err) if config_text(config, "apiKey").is_some() => {
+                    tracing::warn!(%err, "Steam sign-in failed, using the API key");
+                }
+                Err(err) => return Err(err),
+            }
+        }
         let (api_key, steam_id) = self.owned_credentials(config)?;
-        web::fetch_owned(&api_key, &steam_id)
+        web::fetch_owned(web::Credential::Key(&api_key), &steam_id).map_err(|e| match e {
+            web::OwnedError::Rejected => {
+                ProviderError::Network("The Steam Web API key was rejected.".into())
+            }
+            web::OwnedError::Other(err) => err,
+        })
+    }
+
+    fn account(&self) -> Option<&dyn AccountAuth> {
+        self.account.as_deref().map(|a| a as &dyn AccountAuth)
     }
 
     fn install_action(&self, app_id: &str) -> Option<PlayAction> {
@@ -208,21 +244,13 @@ impl SteamProvider {
         &self,
         config: &serde_json::Value,
     ) -> Result<(String, String), ProviderError> {
-        let text = |key: &str| {
-            config
-                .get(key)
-                .and_then(serde_json::Value::as_str)
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-                .map(str::to_string)
-        };
-        let api_key = text("apiKey").ok_or_else(|| {
+        let api_key = config_text(config, "apiKey").ok_or_else(|| {
             ProviderError::NotConfigured(
-                "Add a Steam Web API key in Settings to import games you own but haven't installed."
+                "Sign in to Steam or add a Steam Web API key in Settings to import games you own but haven't installed."
                     .into(),
             )
         })?;
-        let steam_id = text("steamId")
+        let steam_id = config_text(config, "steamId")
             .or_else(|| {
                 self.roots
                     .iter()
@@ -235,6 +263,37 @@ impl SteamProvider {
             })?;
         Ok((api_key, steam_id))
     }
+}
+
+impl SteamProvider {
+    /// Owned games with the store session's token; a rejected token is renewed once.
+    fn owned_with_session(account: &SteamAccount) -> Result<Vec<ImportedGame>, ProviderError> {
+        let (steam_id, token) = account.web_token(false)?;
+        match web::fetch_owned(web::Credential::Token(&token), &steam_id) {
+            Err(web::OwnedError::Rejected) => {
+                let (steam_id, token) = account.web_token(true)?;
+                web::fetch_owned(web::Credential::Token(&token), &steam_id).map_err(|e| match e {
+                    web::OwnedError::Rejected => ProviderError::NotConfigured(
+                        "Steam did not accept the sign-in. Sign in to Steam again in Settings."
+                            .into(),
+                    ),
+                    web::OwnedError::Other(err) => err,
+                })
+            }
+            Err(web::OwnedError::Other(err)) => Err(err),
+            Ok(games) => Ok(games),
+        }
+    }
+}
+
+/// A trimmed, non-empty string setting.
+fn config_text(config: &serde_json::Value, key: &str) -> Option<String> {
+    config
+        .get(key)
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
 }
 
 fn is_app_id(id: &str) -> bool {
