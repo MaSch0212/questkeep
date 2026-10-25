@@ -1414,6 +1414,22 @@ ul {
 .account__name {
   font-weight: 600;
 }
+.account__head--toggle {
+  margin: calc(-1 * var(--qk-space-3));
+  padding: var(--qk-space-3);
+  border-radius: var(--qk-radius-md);
+  cursor: pointer;
+}
+/* Leaves the accent bar of connected rows visible under the hover background. */
+.account--connected > .account__head--toggle {
+  margin-left: calc(var(--qk-account-accent-width) - var(--qk-space-3));
+  padding-left: calc(var(--qk-space-3) - var(--qk-account-accent-width));
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+.account__head--toggle:hover {
+  background: var(--qk-color-surface-hover);
+}
 .account__toggle {
   flex: none;
   width: var(--qk-icon-btn-small-size);

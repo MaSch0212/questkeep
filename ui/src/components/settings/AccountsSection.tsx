@@ -174,7 +174,17 @@ export function AccountsSection(props: { model: SettingsModel }) {
                 role="group"
                 aria-label={entry.name}
               >
-                <div class="account__head">
+                {/* The whole head opens and closes the row; its buttons keep their own action, and
+                    the chevron button is the keyboard path. */}
+                <div
+                  class="account__head"
+                  classList={{ "account__head--toggle": expandable(entry) }}
+                  onClick={(event) => {
+                    const target = event.target as Element;
+                    if (!expandable(entry) || target.closest("button, a, input, label")) return;
+                    patch(entry.id, { open: !row(entry.id).open });
+                  }}
+                >
                   <Show
                     when={expandable(entry)}
                     fallback={<span class="account__toggle" aria-hidden="true" />}
@@ -226,7 +236,7 @@ export function AccountsSection(props: { model: SettingsModel }) {
                   <Show when={entry.canScan}>
                     <button
                       type="button"
-                      class="icon-btn icon-btn--small"
+                      class="icon-btn"
                       aria-label={syncing() ? `Syncing ${entry.name}…` : `Sync ${entry.name}`}
                       title={syncing() ? `Syncing ${entry.name}…` : `Sync ${entry.name}`}
                       disabled={syncing()}

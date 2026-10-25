@@ -188,6 +188,19 @@ describe("AccountsSection", () => {
     expect(toasts()).toContain("Signed out of Epic Games");
   });
 
+  it("opens and closes a row by clicking anywhere on its head", async () => {
+    vi.mocked(api.accountStatus).mockResolvedValue([epic()]);
+    renderAccounts();
+    const toggle = await screen.findByRole("button", { name: "Epic Games settings" });
+    await fireEvent.click(screen.getByText("Signed in as Ada"));
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    // Buttons on the head keep their own action.
+    await fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await fireEvent.click(screen.getByText("Epic Games"));
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+  });
+
   it("has no chevron, but keeps its place, when a row has nothing to show", async () => {
     vi.mocked(api.accountStatus).mockResolvedValue([
       {
