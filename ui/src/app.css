@@ -1430,6 +1430,10 @@ ul {
 .account__head--toggle:hover {
   background: var(--qk-color-surface-hover);
 }
+/* The row itself uses the hover color, so its buttons need a stronger one. */
+.account__head--toggle .icon-btn:hover:not(:disabled) {
+  background: var(--qk-color-surface-active);
+}
 .account__toggle {
   flex: none;
   width: var(--qk-icon-btn-small-size);
