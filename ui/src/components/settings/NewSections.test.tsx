@@ -89,6 +89,12 @@ describe("AccountsSection", () => {
     expect(screen.getByRole("group", { name: "Epic Games" })).toHaveClass("account--connected");
     expect(screen.getByRole("group", { name: "GOG" })).not.toHaveClass("account--connected");
     expect(screen.getByRole("button", { name: "Sign in to GOG" })).toBeInTheDocument();
+    // Account actions sit in the collapsed part of the row.
+    expect(screen.queryByRole("button", { name: "Sign out of Epic Games" })).toBeNull();
+    const toggle = screen.getByRole("button", { name: "Epic Games settings" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByRole("button", { name: "Sign out of Epic Games" })).toBeInTheDocument();
   });
 
@@ -124,6 +130,7 @@ describe("AccountsSection", () => {
     vi.mocked(api.accountStatus).mockResolvedValue([gog()]);
     vi.mocked(api.signInWithCode).mockResolvedValue(gog({ signedIn: true }));
     renderAccounts();
+    await fireEvent.click(await screen.findByRole("button", { name: "GOG settings" }));
     await fireEvent.click(
       await screen.findByRole("button", { name: /Sign in with a code instead/ }),
     );
@@ -143,6 +150,7 @@ describe("AccountsSection", () => {
     renderAccounts();
     expect(await screen.findByRole("group", { name: "Xbox" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign in to Xbox" })).toBeInTheDocument();
+    await fireEvent.click(await screen.findByRole("button", { name: "Xbox settings" }));
     await fireEvent.click(screen.getByRole("button", { name: /Sign in with a code instead/ }));
     expect(screen.getByText(/The browser ends on a blank page/)).toBeInTheDocument();
     await fireEvent.click(screen.getByRole("button", { name: "Open sign-in page" }));
@@ -170,6 +178,7 @@ describe("AccountsSection", () => {
     vi.mocked(api.accountStatus).mockResolvedValueOnce([epic()]);
     vi.mocked(api.signOut).mockResolvedValue(epic({ signedIn: false }));
     renderAccounts();
+    await fireEvent.click(await screen.findByRole("button", { name: "Epic Games settings" }));
     await fireEvent.click(await screen.findByRole("button", { name: "Sign out of Epic Games" }));
     expect(api.signOut).not.toHaveBeenCalled();
     vi.mocked(api.accountStatus).mockResolvedValue([epic({ signedIn: false, displayName: null })]);
@@ -177,6 +186,21 @@ describe("AccountsSection", () => {
     await waitFor(() => expect(api.signOut).toHaveBeenCalledWith("epic"));
     expect(await screen.findByText("Not signed in")).toBeInTheDocument();
     expect(toasts()).toContain("Signed out of Epic Games");
+  });
+
+  it("has no chevron, but keeps its place, when a row has nothing to show", async () => {
+    vi.mocked(api.accountStatus).mockResolvedValue([
+      {
+        ...epic({ signedIn: false, displayName: null }),
+        provider: "battlenet",
+        name: "Battle.net",
+      },
+    ]);
+    renderAccounts();
+    const row = await screen.findByRole("group", { name: "Battle.net" });
+    expect(screen.queryByRole("button", { name: "Battle.net settings" })).toBeNull();
+    expect(row.querySelector(".account__toggle")).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Sign in to Battle.net" })).toBeInTheDocument();
   });
 
   it("offers Steam either a sign-in or a Web API key", async () => {
@@ -187,6 +211,7 @@ describe("AccountsSection", () => {
     vi.mocked(api.saveSettings).mockResolvedValue(undefined);
     vi.mocked(api.scanLibrary).mockResolvedValue({ added: 1, updated: 0, uninstalled: 0 });
     renderAccounts();
+    await fireEvent.click(await screen.findByRole("button", { name: "Steam settings" }));
     await fireEvent.click(
       await screen.findByRole("button", { name: /Use a Steam Web API key instead/ }),
     );

@@ -86,6 +86,7 @@ async function openSteamKey() {
   ]);
   render(() => <SettingsPage />);
   expect(await screen.findByText("Using a Steam Web API key")).toBeInTheDocument();
+  await fireEvent.click(await screen.findByRole("button", { name: "Steam settings" }));
   await fireEvent.click(screen.getByRole("button", { name: /Change key/ }));
 }
 
@@ -269,6 +270,7 @@ describe("GOG Galaxy launch option", () => {
       uninstalled: 0,
     });
     render(() => <SettingsPage />);
+    await fireEvent.click(await screen.findByRole("button", { name: "GOG settings" }));
     const toggle = await screen.findByRole("checkbox", {
       name: "Launch GOG games through GOG Galaxy",
     });
@@ -303,6 +305,7 @@ describe("GOG Galaxy launch option", () => {
     await store.init();
     vi.mocked(api.scanLibrary).mockResolvedValue({ added: 0, updated: 0, uninstalled: 0 });
     render(() => <SettingsPage />);
+    await fireEvent.click(await screen.findByRole("button", { name: "Xbox settings" }));
     const toggle = await screen.findByRole("checkbox", {
       name: "Don't import Game Pass games from my Xbox account",
     });
@@ -329,6 +332,7 @@ describe("GOG Galaxy launch option", () => {
     await store.init();
     vi.mocked(api.scanLibrary).mockResolvedValue({ added: 0, updated: 0, uninstalled: 0 });
     render(() => <SettingsPage />);
+    await fireEvent.click(await screen.findByRole("button", { name: "Ubisoft Connect settings" }));
     const toggle = await screen.findByRole("checkbox", {
       name: "Import Ubisoft Connect games that are not installed",
     });

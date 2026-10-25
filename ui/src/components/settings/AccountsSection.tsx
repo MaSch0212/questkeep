@@ -15,12 +15,14 @@ import { isProviderSyncing } from "../../lib/syncStatus";
 import { SourceIcon } from "../SourceIcon";
 import { openLink } from "./openLink";
 import { SteamKeyForm } from "./SteamKeyForm";
-import { StoreOptions } from "./StoreOptions";
+import { StoreOptions, hasStoreOptions } from "./StoreOptions";
 import type { SettingsModel } from "./useSettings";
 
 interface RowState {
   signingIn: boolean;
   confirmingSignOut: boolean;
+  /** The row shows its settings and account actions. */
+  open: boolean;
   codeOpen: boolean;
   /** Steam only: the API key form is open. */
   keyOpen: boolean;
@@ -31,6 +33,7 @@ interface RowState {
 const initialRow = (): RowState => ({
   signingIn: false,
   confirmingSignOut: false,
+  open: false,
   codeOpen: false,
   keyOpen: false,
   code: "",
@@ -59,6 +62,17 @@ async function syncStore(id: string) {
   } catch {
     // Already reported through the scanFailed event.
   }
+}
+
+/** Whether the row has anything below its head: options, sign-out, key or code sign-in. */
+function expandable(entry: StoreRow): boolean {
+  return (
+    hasStoreOptions(entry.id) ||
+    (entry.account !== null &&
+      (entry.account.signedIn ||
+        entry.account.supportsCodeSignIn ||
+        entry.account.provider === "steam"))
+  );
 }
 
 /** Every store in one place: its sign-in (or Steam's API key), its options and a sync button. */
@@ -161,6 +175,26 @@ export function AccountsSection(props: { model: SettingsModel }) {
                 aria-label={entry.name}
               >
                 <div class="account__head">
+                  <Show
+                    when={expandable(entry)}
+                    fallback={<span class="account__toggle" aria-hidden="true" />}
+                  >
+                    <button
+                      type="button"
+                      class="icon-btn icon-btn--small account__toggle"
+                      aria-label={`${entry.name} settings`}
+                      title={row(entry.id).open ? "Hide settings" : "Show settings"}
+                      aria-expanded={row(entry.id).open}
+                      aria-controls={`store-${entry.id}-details`}
+                      onClick={() => patch(entry.id, { open: !row(entry.id).open })}
+                    >
+                      <ChevronRight
+                        class="icon account__chevron"
+                        classList={{ "account__chevron--open": row(entry.id).open }}
+                        aria-hidden="true"
+                      />
+                    </button>
+                  </Show>
                   <SourceIcon source={entry.id} />
                   <div class="account__info">
                     <span class="account__name">{entry.name}</span>
@@ -205,209 +239,205 @@ export function AccountsSection(props: { model: SettingsModel }) {
                       />
                     </button>
                   </Show>
-                  <Show when={entry.account}>
-                    {(account) => (
-                      <Show
-                        when={account().signedIn}
-                        fallback={
-                          <Show
-                            when={state(account()).connection === "apiKey"}
-                            fallback={
-                              <button
-                                type="button"
-                                class="btn"
-                                disabled={row(account().provider).signingIn}
-                                aria-label={`Sign in to ${account().name}`}
-                                onClick={() => void signIn(account())}
-                              >
-                                <LogIn class="icon" aria-hidden="true" />{" "}
-                                {row(account().provider).signingIn
-                                  ? "Waiting for sign-in…"
-                                  : "Sign in"}
-                              </button>
-                            }
-                          >
-                            <button
-                              type="button"
-                              class="btn"
-                              disabled={props.model.savingSteam()}
-                              onClick={() => void props.model.removeSteamKey()}
-                            >
-                              Remove key
-                            </button>
-                          </Show>
-                        }
-                      >
-                        <Show
-                          when={row(account().provider).confirmingSignOut}
-                          fallback={
-                            <button
-                              type="button"
-                              class="btn"
-                              aria-label={`Sign out of ${account().name}`}
-                              onClick={() => patch(account().provider, { confirmingSignOut: true })}
-                            >
-                              <LogOut class="icon" aria-hidden="true" /> Sign out
-                            </button>
-                          }
-                        >
-                          <div class="details__row">
-                            <button
-                              type="button"
-                              class="btn btn--danger-solid"
-                              onClick={() => void signOut(account())}
-                            >
-                              Confirm sign out
-                            </button>
-                            <button
-                              type="button"
-                              class="btn"
-                              onClick={() =>
-                                patch(account().provider, { confirmingSignOut: false })
-                              }
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </Show>
-                      </Show>
-                    )}
+                  <Show when={entry.account !== null && connection(entry) === "none"}>
+                    <button
+                      type="button"
+                      class="btn"
+                      disabled={row(entry.id).signingIn}
+                      aria-label={`Sign in to ${entry.name}`}
+                      onClick={() => entry.account && void signIn(entry.account)}
+                    >
+                      <LogIn class="icon" aria-hidden="true" />{" "}
+                      {row(entry.id).signingIn ? "Waiting for sign-in…" : "Sign in"}
+                    </button>
                   </Show>
                 </div>
-                <Show when={entry.account}>
-                  {(account) => (
-                    <>
-                      <Show when={row(account().provider).signingIn}>
-                        <p class="field__hint">Finish signing in in the window that opened.</p>
-                      </Show>
-                      <Show when={account().provider === "steam"}>
-                        <Show when={state(account()).connection === "apiKey"}>
-                          <p class="field__hint">Remove the key to sign in to Steam instead.</p>
-                        </Show>
-                        <Show when={account().signedIn && props.model.steamKeySaved()}>
-                          <p class="field__hint">
-                            A Steam Web API key is also saved; it is not needed while you are signed
-                            in.{" "}
-                            <button
-                              type="button"
-                              class="link-btn"
-                              disabled={props.model.savingSteam()}
-                              onClick={() => void props.model.removeSteamKey()}
-                            >
-                              Remove key
-                            </button>
-                          </p>
-                        </Show>
-                        <Show when={!account().signedIn}>
-                          <button
-                            type="button"
-                            class="link-btn account__disclosure"
-                            aria-expanded={row(account().provider).keyOpen}
-                            onClick={() =>
-                              patch(account().provider, {
-                                keyOpen: !row(account().provider).keyOpen,
-                              })
-                            }
-                          >
-                            <ChevronRight
-                              class="icon account__chevron"
-                              classList={{
-                                "account__chevron--open": row(account().provider).keyOpen,
-                              }}
-                              aria-hidden="true"
-                            />{" "}
-                            {state(account()).connection === "apiKey"
-                              ? "Change key"
-                              : "Use a Steam Web API key instead"}
-                          </button>
-                          <Show when={row(account().provider).keyOpen}>
-                            <SteamKeyForm model={props.model} />
-                          </Show>
-                        </Show>
-                      </Show>
-                      <Show when={!account().signedIn && account().supportsCodeSignIn}>
-                        <button
-                          type="button"
-                          class="link-btn account__disclosure"
-                          aria-expanded={row(account().provider).codeOpen}
-                          onClick={() =>
-                            patch(account().provider, {
-                              codeOpen: !row(account().provider).codeOpen,
-                            })
-                          }
-                        >
-                          <ChevronRight
-                            class="icon account__chevron"
-                            classList={{
-                              "account__chevron--open": row(account().provider).codeOpen,
-                            }}
-                            aria-hidden="true"
-                          />{" "}
-                          Sign in with a code instead
-                        </button>
-                        <Show when={row(account().provider).codeOpen}>
-                          <form
-                            class="form"
-                            onSubmit={(event) => {
-                              event.preventDefault();
-                              void signInWithCode(account());
-                            }}
-                          >
-                            <ol class="account__steps">
-                              <li>Open the sign-in page in your normal browser and sign in.</li>
-                              <li>{codeHint(account().provider)}</li>
-                              <li>Paste it below and submit.</li>
-                            </ol>
-                            <Show when={account().codeUrl}>
-                              {(url) => (
-                                <div>
+                <Show when={row(entry.id).signingIn}>
+                  <p class="field__hint">Finish signing in in the window that opened.</p>
+                </Show>
+                <Show when={expandable(entry) && row(entry.id).open}>
+                  <div class="account__body" id={`store-${entry.id}-details`}>
+                    <Show when={entry.account}>
+                      {(account) => (
+                        <>
+                          <Show when={account().signedIn}>
+                            <div class="details__row">
+                              <Show
+                                when={row(account().provider).confirmingSignOut}
+                                fallback={
                                   <button
                                     type="button"
                                     class="btn"
-                                    onClick={() => void openLink(url())}
+                                    aria-label={`Sign out of ${account().name}`}
+                                    onClick={() =>
+                                      patch(account().provider, { confirmingSignOut: true })
+                                    }
                                   >
-                                    Open sign-in page
+                                    <LogOut class="icon" aria-hidden="true" /> Sign out
                                   </button>
-                                </div>
-                              )}
-                            </Show>
-                            <div class="field">
-                              <label class="field__label" for={`code-${account().provider}`}>
-                                {account().name} sign-in code
-                              </label>
-                              <div class="field__row">
-                                <input
-                                  id={`code-${account().provider}`}
-                                  class="input"
-                                  type="text"
-                                  autocomplete="off"
-                                  spellcheck={false}
-                                  value={row(account().provider).code}
-                                  onInput={(e) =>
-                                    patch(account().provider, { code: e.currentTarget.value })
-                                  }
-                                />
+                                }
+                              >
                                 <button
-                                  type="submit"
-                                  class="btn btn--primary"
-                                  disabled={
-                                    row(account().provider).submitting ||
-                                    row(account().provider).code.trim() === ""
+                                  type="button"
+                                  class="btn btn--danger-solid"
+                                  onClick={() => void signOut(account())}
+                                >
+                                  Confirm sign out
+                                </button>
+                                <button
+                                  type="button"
+                                  class="btn"
+                                  onClick={() =>
+                                    patch(account().provider, { confirmingSignOut: false })
                                   }
                                 >
-                                  {row(account().provider).submitting
-                                    ? "Signing in…"
-                                    : "Submit code"}
+                                  Cancel
                                 </button>
-                              </div>
+                              </Show>
                             </div>
-                          </form>
-                        </Show>
-                      </Show>
-                    </>
-                  )}
+                          </Show>
+                          <Show when={state(account()).connection === "apiKey"}>
+                            <div class="details__row">
+                              <button
+                                type="button"
+                                class="btn"
+                                disabled={props.model.savingSteam()}
+                                onClick={() => void props.model.removeSteamKey()}
+                              >
+                                Remove key
+                              </button>
+                            </div>
+                          </Show>
+                          <Show when={account().provider === "steam"}>
+                            <Show when={state(account()).connection === "apiKey"}>
+                              <p class="field__hint">Remove the key to sign in to Steam instead.</p>
+                            </Show>
+                            <Show when={account().signedIn && props.model.steamKeySaved()}>
+                              <p class="field__hint">
+                                A Steam Web API key is also saved; it is not needed while you are
+                                signed in.{" "}
+                                <button
+                                  type="button"
+                                  class="link-btn"
+                                  disabled={props.model.savingSteam()}
+                                  onClick={() => void props.model.removeSteamKey()}
+                                >
+                                  Remove key
+                                </button>
+                              </p>
+                            </Show>
+                            <Show when={!account().signedIn}>
+                              <button
+                                type="button"
+                                class="link-btn account__disclosure"
+                                aria-expanded={row(account().provider).keyOpen}
+                                onClick={() =>
+                                  patch(account().provider, {
+                                    keyOpen: !row(account().provider).keyOpen,
+                                  })
+                                }
+                              >
+                                <ChevronRight
+                                  class="icon account__chevron"
+                                  classList={{
+                                    "account__chevron--open": row(account().provider).keyOpen,
+                                  }}
+                                  aria-hidden="true"
+                                />{" "}
+                                {state(account()).connection === "apiKey"
+                                  ? "Change key"
+                                  : "Use a Steam Web API key instead"}
+                              </button>
+                              <Show when={row(account().provider).keyOpen}>
+                                <SteamKeyForm model={props.model} />
+                              </Show>
+                            </Show>
+                          </Show>
+                          <Show when={!account().signedIn && account().supportsCodeSignIn}>
+                            <button
+                              type="button"
+                              class="link-btn account__disclosure"
+                              aria-expanded={row(account().provider).codeOpen}
+                              onClick={() =>
+                                patch(account().provider, {
+                                  codeOpen: !row(account().provider).codeOpen,
+                                })
+                              }
+                            >
+                              <ChevronRight
+                                class="icon account__chevron"
+                                classList={{
+                                  "account__chevron--open": row(account().provider).codeOpen,
+                                }}
+                                aria-hidden="true"
+                              />{" "}
+                              Sign in with a code instead
+                            </button>
+                            <Show when={row(account().provider).codeOpen}>
+                              <form
+                                class="form"
+                                onSubmit={(event) => {
+                                  event.preventDefault();
+                                  void signInWithCode(account());
+                                }}
+                              >
+                                <ol class="account__steps">
+                                  <li>Open the sign-in page in your normal browser and sign in.</li>
+                                  <li>{codeHint(account().provider)}</li>
+                                  <li>Paste it below and submit.</li>
+                                </ol>
+                                <Show when={account().codeUrl}>
+                                  {(url) => (
+                                    <div>
+                                      <button
+                                        type="button"
+                                        class="btn"
+                                        onClick={() => void openLink(url())}
+                                      >
+                                        Open sign-in page
+                                      </button>
+                                    </div>
+                                  )}
+                                </Show>
+                                <div class="field">
+                                  <label class="field__label" for={`code-${account().provider}`}>
+                                    {account().name} sign-in code
+                                  </label>
+                                  <div class="field__row">
+                                    <input
+                                      id={`code-${account().provider}`}
+                                      class="input"
+                                      type="text"
+                                      autocomplete="off"
+                                      spellcheck={false}
+                                      value={row(account().provider).code}
+                                      onInput={(e) =>
+                                        patch(account().provider, { code: e.currentTarget.value })
+                                      }
+                                    />
+                                    <button
+                                      type="submit"
+                                      class="btn btn--primary"
+                                      disabled={
+                                        row(account().provider).submitting ||
+                                        row(account().provider).code.trim() === ""
+                                      }
+                                    >
+                                      {row(account().provider).submitting
+                                        ? "Signing in…"
+                                        : "Submit code"}
+                                    </button>
+                                  </div>
+                                </div>
+                              </form>
+                            </Show>
+                          </Show>
+                        </>
+                      )}
+                    </Show>
+                    <StoreOptions providerId={entry.id} model={props.model} />
+                  </div>
                 </Show>
-                <StoreOptions providerId={entry.id} model={props.model} />
               </div>
             );
           }}

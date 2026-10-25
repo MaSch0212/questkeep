@@ -32,6 +32,11 @@ const OPTIONS: Record<string, StoreOption> = {
   },
 };
 
+/** Whether the store has options of its own. */
+export function hasStoreOptions(providerId: string): boolean {
+  return providerId in OPTIONS;
+}
+
 export function StoreOptions(props: { providerId: string; model: SettingsModel }) {
   const option = () => OPTIONS[props.providerId];
   return (
