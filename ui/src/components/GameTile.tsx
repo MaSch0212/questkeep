@@ -2,6 +2,8 @@ import { Show } from "solid-js";
 import type { Game } from "../bindings/Game";
 import { store } from "../lib/store";
 import { Cover } from "./Cover";
+import { QuickAction } from "./QuickAction";
+import { SourceIcon, sourceName } from "./SourceIcon";
 import Download from "lucide-solid/icons/download";
 import Star from "lucide-solid/icons/star";
 
@@ -39,6 +41,13 @@ export function GameTile(props: GameTileProps) {
     >
       <div class="tile__cover">
         <Cover game={props.game} />
+        <div class="tile__source" title={sourceName(props.game.source)} aria-hidden="true">
+          <SourceIcon source={props.game.source} />
+          <span class="tile__source-name">{sourceName(props.game.source)}</span>
+        </div>
+        <div class="tile__quick">
+          <QuickAction game={props.game} tabbable={props.selected} />
+        </div>
         <div class="tile__badges tile__badges--top">
           <Show when={props.game.favorite}>
             <span class="badge badge--star" title="Favorite">

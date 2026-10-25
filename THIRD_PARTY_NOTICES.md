@@ -63,3 +63,10 @@ locally for personal use. SteamGridDB is not affiliated with Questkeep. The API 
 reachable while this was written, so check https://www.steamgriddb.com/api/v2 and the site's
 terms before distributing builds, and add any attribution they require (none is shown in the UI
 today).
+
+## Simple Icons
+
+The store logos (Steam, Epic Games, GOG.com, Ubisoft, Lutris, Heroic) are monochrome glyphs from
+the Simple Icons npm package (https://simpleicons.org), released under CC0 1.0. The logos
+themselves are trademarks of their respective owners and are used only to identify the store a
+game comes from; Questkeep is not affiliated with or endorsed by them.

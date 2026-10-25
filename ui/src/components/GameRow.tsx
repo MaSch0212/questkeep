@@ -3,6 +3,8 @@ import type { Game } from "../bindings/Game";
 import { formatPlaytime, formatRelativeDate, releaseYear } from "../lib/format";
 import { store } from "../lib/store";
 import { Cover } from "./Cover";
+import { QuickAction } from "./QuickAction";
+import { SourceIcon, sourceName } from "./SourceIcon";
 import Download from "lucide-solid/icons/download";
 import Star from "lucide-solid/icons/star";
 
@@ -23,8 +25,7 @@ export function rowDomId(id: string): string {
 /** One fixed-height row of the list view. */
 export function GameRow(props: GameRowProps) {
   const running = () => store.isRunning(props.game.id);
-  const source = () =>
-    store.providers().find((p) => p.id === props.game.source)?.name ?? props.game.source;
+  const source = () => sourceName(props.game.source);
 
   return (
     <div
@@ -52,7 +53,10 @@ export function GameRow(props: GameRowProps) {
           </span>
         </Show>
       </div>
-      <div class="list-row__cell">{source()}</div>
+      <div class="list-row__cell list-row__source" title={source()}>
+        <SourceIcon source={props.game.source} />
+        <span class="list-row__text">{source()}</span>
+      </div>
       <div class="list-row__cell list-row__state">
         <Show
           when={props.game.installed}
@@ -71,6 +75,9 @@ export function GameRow(props: GameRowProps) {
       <div class="list-row__cell">{formatPlaytime(props.game.playtimeSeconds)}</div>
       <div class="list-row__cell">{formatRelativeDate(props.game.lastPlayed)}</div>
       <div class="list-row__cell list-row__year">{releaseYear(props.game.releaseDate) ?? ""}</div>
+      <div class="list-row__quick">
+        <QuickAction game={props.game} tabbable={props.selected} />
+      </div>
     </div>
   );
 }
