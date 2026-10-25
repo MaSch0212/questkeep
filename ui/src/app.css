@@ -351,8 +351,6 @@ ul {
   display: flex;
   flex-direction: column;
   gap: var(--qk-space-3);
-  width: var(--qk-duplicates-width);
-  max-width: 100%;
 }
 .duplicates__list {
   display: flex;
@@ -389,6 +387,7 @@ ul {
   min-width: 0;
 }
 .duplicates__name {
+  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -400,8 +399,13 @@ ul {
   font-size: var(--qk-font-size-sm);
   color: var(--qk-color-text-muted);
 }
+/* Fixed columns, so the stores and playtimes line up across rows. */
+.duplicates__store {
+  width: var(--qk-duplicates-store-width);
+}
 .duplicates__playtime {
-  margin-left: auto;
+  width: var(--qk-duplicates-playtime-width);
+  text-align: right;
 }
 .duplicates__actions {
   display: flex;
@@ -1230,6 +1234,9 @@ ul {
 }
 .modal__title {
   font-size: var(--qk-font-size-lg);
+}
+.modal--wide {
+  width: var(--qk-dialog-wide-width);
 }
 .modal__body {
   padding: var(--qk-space-4);

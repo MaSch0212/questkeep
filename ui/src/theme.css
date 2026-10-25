@@ -178,7 +178,9 @@
   --qk-list-group-height: 32px;
   --qk-category-picker-width: 280px;
   --qk-combine-picker-width: 340px;
-  --qk-duplicates-width: 640px;
+  --qk-dialog-wide-width: 900px;
+  --qk-duplicates-store-width: 110px;
+  --qk-duplicates-playtime-width: 90px;
   --qk-duplicates-max-height: 60vh;
   --qk-split-gap: 2px;
   --qk-category-picker-max-height: 240px;

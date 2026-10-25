@@ -4,6 +4,7 @@ import * as api from "../lib/api";
 import { errorMessage } from "../lib/errors";
 import { formatPlaytime } from "../lib/format";
 import { store } from "../lib/store";
+import { titleWhenCut } from "../lib/truncation";
 import { GameIcon } from "./GameIcon";
 import { Modal } from "./Modal";
 import { SourceIcons, storeNames } from "./SourceIcon";
@@ -54,7 +55,7 @@ export function DuplicatesDialog(props: { onClose: () => void }) {
   }
 
   return (
-    <Modal title="Games in several stores" onClose={props.onClose}>
+    <Modal title="Games in several stores" wide onClose={props.onClose}>
       <div class="duplicates">
         <Show
           when={!groups.loading || shown().length > 0}
@@ -80,7 +81,12 @@ export function DuplicatesDialog(props: { onClose: () => void }) {
                             <span class="list-row__thumb">
                               <GameIcon game={game} />
                             </span>
-                            <span class="duplicates__name">{game.name}</span>
+                            <span
+                              class="duplicates__name"
+                              onPointerEnter={(event) => titleWhenCut(event.currentTarget)}
+                            >
+                              {game.name}
+                            </span>
                             <SourceIcons game={game} />
                             <span class="duplicates__store">{storeNames(game)}</span>
                             <span class="duplicates__playtime">

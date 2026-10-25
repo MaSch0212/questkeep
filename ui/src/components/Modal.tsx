@@ -6,6 +6,8 @@ const FOCUSABLE =
 
 interface ModalProps {
   title: string;
+  /** For lists with long rows (e.g. game names side by side). */
+  wide?: boolean;
   onClose: () => void;
 }
 
@@ -59,6 +61,7 @@ export function Modal(props: ParentProps<ModalProps>) {
       <div
         ref={setDialog}
         class="modal"
+        classList={{ "modal--wide": props.wide === true }}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
