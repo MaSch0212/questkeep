@@ -76,6 +76,9 @@
   --qk-font-weight-normal: 400;
   --qk-font-weight-medium: 500;
   --qk-font-weight-bold: 600;
+  --qk-font-size-title: 28px;
+  --qk-line-height-tight: 1.15;
+  --qk-letter-spacing-caps: 0.06em;
   --qk-line-height: 1.4;
 
   /* Shadows */
@@ -141,12 +144,14 @@
   --qk-icon-btn-small-size: 24px;
   --qk-compact-row-height: 32px;
   --qk-dview-list-width: 320px;
-  --qk-dview-hero-height: 280px;
-  --qk-dview-hero-overlap: 70px;
-  --qk-dview-cover-width: 150px;
-  --qk-dview-content-width: 780px;
-  --qk-dview-play-width: 200px;
-  --qk-dview-play-height: 46px;
+  /* Game page from 560px of content width (container queries in app.css can not read variables;
+     the breakpoints 560px, 720px and 1000px live there). */
+  --qk-details-page-cover-width: 150px;
+  --qk-details-page-hero-height: 280px;
+  --qk-details-page-hero-overlap: 110px;
+  --qk-details-play-width: 180px;
+  --qk-details-play-height: 44px;
+  --qk-edit-cover-width: 130px;
   --qk-popover-width: 340px;
   --qk-popover-gap: 6px;
   --qk-account-accent-width: 3px;

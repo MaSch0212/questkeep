@@ -135,11 +135,14 @@ describe("details of a combined game", () => {
     await fireEvent.click(within(menu).getByRole("menuitem", { name: /Play with Epic/ }));
     await waitFor(() => expect(api.launchGame).toHaveBeenLastCalledWith("rl", "rl-epic"));
 
-    const stores = screen.getByRole("region", { name: "Stores" });
-    expect(within(stores).getByText(/Not installed · 1h/)).toBeTruthy();
-    await fireEvent.click(within(stores).getByRole("button", { name: "Play with Epic first" }));
+    const stores = screen.getByRole("list", { name: "Stores" });
+    expect(within(stores).getByText(/Not installed · preferred · 1h/)).toBeTruthy();
+    await fireEvent.click(within(stores).getByRole("button", { name: "Epic actions" }));
+    await fireEvent.click(screen.getByRole("menuitem", { name: "Play this store first" }));
     expect(api.preferCopy).toHaveBeenCalledWith("rl-epic");
-    await fireEvent.click(within(stores).getByRole("button", { name: "Separate Steam's copy" }));
+    await fireEvent.click(within(stores).getByRole("button", { name: "Steam actions" }));
+    expect(screen.queryByRole("menuitem", { name: "Play this store first" })).toBeNull();
+    await fireEvent.click(screen.getByRole("menuitem", { name: /Separate/ }));
     expect(api.separateCopy).toHaveBeenCalledWith("rl");
   });
 
@@ -151,7 +154,8 @@ describe("details of a combined game", () => {
     render(() => <DetailsPanel game={steam} onClose={() => undefined} />);
     expect(screen.queryByRole("button", { name: "Choose a store" })).toBeNull();
 
-    await fireEvent.click(screen.getByRole("button", { name: "Combine with another game…" }));
+    await fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+    await fireEvent.click(screen.getByRole("menuitem", { name: "Combine with another game…" }));
     const input = screen.getByRole("combobox", { name: "Find a game" });
     expect((input as HTMLInputElement).value).toBe("Rocket League");
     await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(1));

@@ -128,6 +128,15 @@ impl Library {
         }
     }
 
+    /// A game's install directory, for opening it in the file manager.
+    pub fn install_folder(&self, id: Uuid) -> Result<std::path::PathBuf> {
+        self.db
+            .get_entry(id)?
+            .install_dir
+            .map(std::path::PathBuf::from)
+            .ok_or_else(|| CoreError::Invalid("The game's install folder is unknown".into()))
+    }
+
     /// The game lists of the tray menu (recently played, favorites). One query over installed,
     /// non-hidden games; the shell calls this on a background thread when the library changed.
     pub fn tray_games(&self) -> Result<TrayGames> {
@@ -1828,5 +1837,24 @@ mod tests {
         let (lib, _) = library(tmp.path(), ProviderRegistry::new());
         assert_eq!(lib.seed_fake_library(250).unwrap(), 250);
         assert_eq!(lib.database().count_games().unwrap(), 250);
+    }
+
+    #[test]
+    fn install_folder_is_the_games_install_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (lib, _) = library(tmp.path(), ProviderRegistry::new());
+        let mut known = ImportedGame::installed("1", "Known");
+        known.install_dir = Some(r"C:\Games\Known".into());
+        let unknown = ImportedGame::installed("2", "Unknown");
+        lib.database()
+            .upsert_imported("steam", &[known, unknown], Utc::now())
+            .unwrap();
+        let games = lib.list_games(&GameQuery::default()).unwrap();
+        let id = |name: &str| games.iter().find(|g| g.name == name).unwrap().id;
+        assert_eq!(
+            lib.install_folder(id("Known")).unwrap(),
+            std::path::PathBuf::from(r"C:\Games\Known")
+        );
+        assert!(lib.install_folder(id("Unknown")).is_err());
     }
 }

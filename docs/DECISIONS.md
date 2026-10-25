@@ -572,3 +572,8 @@ Short log of choices made while building. Newest at the bottom of each section.
 - **Duplicates are suggested, never combined automatically**: same name ignoring case and
   symbols ("Rocket League®" = "Rocket League"), never two copies from one store in a group. After
   each sync a toast points out new suggestions; the review dialog combines or dismisses them.
+- **Game page: one place to edit**: favorite, hidden and categories change on the page; name,
+  cover and launch options only in the Edit dialog, applied on Save (a picked cover too), so the
+  page itself is read-only otherwise. Rare actions (metadata, artwork, combine, folder, uninstall,
+  remove) live in a "More" menu with confirm dialogs. The page and the side panel are one
+  component that rearranges with container queries.

@@ -275,40 +275,6 @@ ul {
   flex: none;
   padding: 0 var(--qk-space-2);
 }
-.copies {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--qk-space-2);
-}
-.copies__list {
-  display: flex;
-  flex-direction: column;
-  align-self: stretch;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  border: 1px solid var(--qk-color-border);
-  border-radius: var(--qk-radius-sm);
-}
-.copies__row {
-  display: flex;
-  align-items: center;
-  gap: var(--qk-space-2);
-  padding: var(--qk-space-1) var(--qk-space-2);
-}
-.copies__row + .copies__row {
-  border-top: 1px solid var(--qk-color-border);
-}
-.copies__name {
-  font-weight: var(--qk-font-weight-bold);
-}
-.copies__state {
-  flex: 1;
-  min-width: 0;
-  font-size: var(--qk-font-size-sm);
-  color: var(--qk-color-text-muted);
-}
 .combine-picker {
   display: flex;
   flex-direction: column;
@@ -969,49 +935,6 @@ ul {
   overflow-y: auto;
 }
 
-/* Details page (variant of the details panel used by the details view). Two classes, so it wins
-   over `.details` and `.details--split`, which come later in this file. */
-.details.details--page {
-  position: relative;
-  flex: 1;
-  width: auto;
-  min-width: 0;
-  border-left: 0;
-  box-shadow: none;
-  animation: none;
-}
-.details--page .details__scroll {
-  flex: 1;
-  padding: 0 var(--qk-space-6) var(--qk-space-6);
-}
-.details--page .details__scroll > * {
-  max-width: var(--qk-dview-content-width);
-}
-.details--page .details__scroll > .details__hero {
-  max-width: none;
-  height: var(--qk-dview-hero-height);
-  margin: 0 calc(var(--qk-space-6) * -1);
-}
-.details--page .details__cover {
-  align-self: flex-start;
-  width: var(--qk-dview-cover-width);
-  margin-top: var(--qk-space-5);
-}
-.details--page .details__cover--overlap {
-  margin-top: calc(var(--qk-dview-hero-overlap) * -1);
-}
-.details--page .btn--play {
-  width: auto;
-  align-self: flex-start;
-  min-width: var(--qk-dview-play-width);
-  min-height: var(--qk-dview-play-height);
-}
-.facts__source {
-  display: flex;
-  align-items: center;
-  gap: var(--qk-space-2);
-}
-
 /* Cover */
 .cover {
   display: block;
@@ -1059,6 +982,17 @@ ul {
   box-shadow: none;
   animation: none;
 }
+/* Details page (the details view): fills the space next to the list. Two classes, so it wins
+   over `.details` and `.details--split`. */
+.details.details--page {
+  position: relative;
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  border-left: 0;
+  box-shadow: none;
+  animation: none;
+}
 @keyframes qk-slide-in {
   from {
     transform: translateX(100%);
@@ -1073,28 +1007,26 @@ ul {
   padding: var(--qk-space-2);
 }
 .details__scroll {
+  --qk-details-pad: var(--qk-space-5);
+  container: details / inline-size;
   display: flex;
   flex-direction: column;
   gap: var(--qk-space-4);
-  padding: 0 var(--qk-space-5) var(--qk-space-5);
+  padding: 0 var(--qk-details-pad) var(--qk-details-pad);
   overflow-y: auto;
+}
+.details--page .details__scroll {
+  --qk-details-pad: var(--qk-space-6);
+  flex: 1;
 }
 /* Children keep their size and the panel scrolls; otherwise the hero and cover get squashed. */
 .details__scroll > * {
   flex-shrink: 0;
 }
-.details__cover {
-  width: var(--qk-details-cover-width);
-  aspect-ratio: var(--qk-tile-aspect-ratio);
-  align-self: center;
-  overflow: hidden;
-  border-radius: var(--qk-radius-md);
-  box-shadow: var(--qk-shadow-tile);
-}
 .details__hero {
   position: relative;
   height: var(--qk-details-hero-height);
-  margin: 0 calc(var(--qk-space-5) * -1);
+  margin: 0 calc(var(--qk-details-pad) * -1);
   overflow: hidden;
 }
 .details__hero img {
@@ -1109,9 +1041,183 @@ ul {
   inset: 0;
   background: linear-gradient(to bottom, transparent, var(--qk-color-surface));
 }
-.details__cover--overlap {
+/* Header: cover, title and the action row; overlaps the hero when there is one. */
+.details__head {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--qk-space-4);
+  padding-top: var(--qk-space-4);
+}
+.details__head--overlap {
   margin-top: calc(var(--qk-details-hero-overlap) * -1);
+  padding-top: 0;
+}
+.details__cover {
+  flex: none;
+  align-self: center;
+  width: var(--qk-details-cover-width);
+  aspect-ratio: var(--qk-tile-aspect-ratio);
+  overflow: hidden;
+  border-radius: var(--qk-radius-md);
+  box-shadow: var(--qk-shadow-tile);
+}
+.details__intro {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-2);
+  min-width: 0;
+}
+.details__title {
+  font-size: var(--qk-font-size-xl);
+  line-height: var(--qk-line-height-tight);
+  word-break: break-word;
+}
+.details__subtitle {
+  color: var(--qk-color-text-muted);
+}
+.details__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--qk-space-3) var(--qk-space-5);
+  margin-top: var(--qk-space-2);
+}
+.details__actions .play-split {
+  flex: 1 1 100%;
+}
+.details__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--qk-space-2) var(--qk-space-5);
+  margin: 0;
+}
+.details__stat dt {
+  font-size: var(--qk-font-size-xs);
+  color: var(--qk-color-text-muted);
+}
+.details__stat dd {
+  margin: 0;
+  font-weight: var(--qk-font-weight-bold);
+}
+.details__stores {
+  display: flex;
+  align-items: center;
+  gap: var(--qk-space-2);
+}
+.details__tools {
+  display: flex;
+  align-items: center;
+  gap: var(--qk-space-2);
+}
+.details__error {
+  margin: 0;
+}
+.details__cards {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: var(--qk-space-4);
+}
+.details-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-3);
+  min-width: 0;
+  padding: var(--qk-space-4);
+  background: var(--qk-color-surface-raised);
+  border: 1px solid var(--qk-color-border);
+  border-radius: var(--qk-radius-md);
+}
+.details-card__title,
+.details-card__subtitle {
+  margin: 0;
+  font-size: var(--qk-font-size-xs);
+  font-weight: var(--qk-font-weight-bold);
+  letter-spacing: var(--qk-letter-spacing-caps);
+  text-transform: uppercase;
+  color: var(--qk-color-text-muted);
+}
+.details-card__subtitle {
+  margin-top: var(--qk-space-1);
+  margin-bottom: calc(var(--qk-space-1) * -1);
+}
+.details__path {
+  overflow-wrap: anywhere;
+  font-family: var(--qk-font-mono);
+  font-size: var(--qk-font-size-sm);
+  color: var(--qk-color-text-muted);
+}
+.copies {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.copies__row {
+  display: flex;
+  align-items: center;
+  gap: var(--qk-space-2);
+  min-height: var(--qk-icon-btn-small-size);
+}
+.copies__name {
+  font-weight: var(--qk-font-weight-bold);
+}
+.copies__state {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--qk-font-size-sm);
+  color: var(--qk-color-text-muted);
+}
+
+/* Wider: cover beside the title, Play no longer full width. */
+@container details (min-width: 560px) {
+  .details__head {
+    flex-direction: row;
+    align-items: flex-end;
+    gap: var(--qk-space-5);
+  }
+  .details__cover {
+    align-self: flex-end;
+    width: var(--qk-details-page-cover-width);
+  }
+  .details__title {
+    font-size: var(--qk-font-size-title);
+  }
+  .details__actions .play-split {
+    flex: none;
+  }
+  .details__tools {
+    margin-left: auto;
+  }
+  .details__actions .btn--play {
+    min-width: var(--qk-details-play-width);
+    min-height: var(--qk-details-play-height);
+  }
+  .details__cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .details-card--about {
+    grid-column: 1 / -1;
+  }
+}
+@container details (min-width: 720px) {
+  .details__hero {
+    height: var(--qk-details-page-hero-height);
+  }
+  .details__head--overlap {
+    margin-top: calc(var(--qk-details-page-hero-overlap) * -1);
+  }
+}
+@container details (min-width: 1000px) {
+  .details__cards {
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .details-card--about {
+    grid-column: auto;
+  }
 }
 .description {
   display: flex;
@@ -1131,28 +1237,10 @@ ul {
   line-clamp: var(--qk-description-clamp-lines);
   overflow: hidden;
 }
-.details__name {
-  display: flex;
-  align-items: center;
-  gap: var(--qk-space-2);
-}
-.details__title {
-  flex: 1;
-  font-size: var(--qk-font-size-xl);
-  word-break: break-word;
-}
-.details__toggles,
 .details__row {
   display: flex;
   flex-wrap: wrap;
   gap: var(--qk-space-2);
-}
-.details__danger {
-  display: flex;
-  flex-direction: column;
-  gap: var(--qk-space-2);
-  padding-top: var(--qk-space-3);
-  border-top: 1px solid var(--qk-color-border);
 }
 .facts {
   display: grid;
@@ -1178,6 +1266,63 @@ ul {
 .facts__path .btn {
   flex: none;
   font-size: var(--qk-font-size-md);
+}
+
+/* Edit game dialog */
+.edit-game {
+  display: grid;
+  grid-template-columns: var(--qk-edit-cover-width) minmax(0, 1fr);
+  gap: var(--qk-space-4) var(--qk-space-5);
+}
+.edit-game__cover {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-2);
+}
+.edit-game__preview {
+  aspect-ratio: var(--qk-tile-aspect-ratio);
+  overflow: hidden;
+  border-radius: var(--qk-radius-md);
+  box-shadow: var(--qk-shadow-tile);
+}
+.edit-game__note {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--qk-font-size-xs);
+  color: var(--qk-color-text-muted);
+}
+.edit-game__cover-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-1);
+}
+.edit-game__fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-3);
+  min-width: 0;
+}
+.edit-game__actions {
+  grid-column: 1 / -1;
+}
+.fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-3);
+  min-width: 0;
+  margin: var(--qk-space-2) 0 0;
+  padding: 0;
+  border: 0;
+}
+.fieldset__legend {
+  margin-bottom: var(--qk-space-2);
+  padding: 0;
+  font-size: var(--qk-font-size-xs);
+  font-weight: var(--qk-font-weight-bold);
+  letter-spacing: var(--qk-letter-spacing-caps);
+  text-transform: uppercase;
+  color: var(--qk-color-text-muted);
 }
 
 /* Forms */

@@ -43,6 +43,9 @@ Also: GOG playtime from GOG Galaxy's local database; IGDB fills missing genres (
   without merging whole categories; check `sharedconfig.vdf` tags on an older Steam install.
 - **Combined games follow-ups**: smarter duplicate matching (editions, "GOTY", subtitles);
   edit launch options per copy; a bulk "combine selected" once multi-select exists.
+- **Edit all game details**: hand-edit description, genres, release date, developers and
+  publishers in the Edit dialog; user values must survive "Refresh metadata" (per-field override
+  flags or a separate user-values table).
 - **Command bar commands**: run app actions (sync a store, open settings, switch views) from
   Ctrl+K, not only games.
 

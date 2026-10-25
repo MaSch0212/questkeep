@@ -4,7 +4,6 @@ import type { NewManualGame } from "../bindings/NewManualGame";
 import type { PlayAction } from "../bindings/PlayAction";
 import * as api from "./api";
 import { errorMessage } from "./errors";
-import { pickImage } from "./pickers";
 import { store } from "./store";
 
 /** Runs `work` and resolves to an error message, or null on success. Never rejects. */
@@ -105,20 +104,16 @@ export function savePlayAction(id: string, playAction: PlayAction): Promise<stri
   return updateGame(id, { playAction });
 }
 
-export function changeCover(id: string): Promise<string | null> {
+/** Sets a picked image as the cover, or removes the custom cover (`null`). */
+export function setCover(id: string, path: string | null): Promise<string | null> {
   return attempt(async () => {
-    const path = await pickImage();
-    if (path === null) return;
     store.upsertGame(await api.setCover(id, path));
     store.bumpCover([id]);
   });
 }
 
-export function removeCover(id: string): Promise<string | null> {
-  return attempt(async () => {
-    store.upsertGame(await api.setCover(id, null));
-    store.bumpCover([id]);
-  });
+export function openInstallFolder(id: string): Promise<string | null> {
+  return attempt(() => api.openInstallFolder(id));
 }
 
 export function removeGame(id: string): Promise<string | null> {

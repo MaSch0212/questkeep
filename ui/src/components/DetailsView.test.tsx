@@ -58,7 +58,7 @@ describe("DetailsView", () => {
     expect(page()).toHaveTextContent("Play count");
     expect(page()).toHaveTextContent("A long descent.");
     expect(page()).toHaveTextContent("Roguelike");
-    expect(page().querySelector(".facts__source")).toHaveTextContent("Steam");
+    expect(page().querySelector(".details__stores")).toHaveTextContent("Steam");
     expect(container.querySelector(".details__hero img")).not.toBeNull();
     // The list highlights the selection.
     expect(screen.getByRole("option", { name: "Alpha" })).toHaveAttribute("aria-selected", "true");
@@ -95,14 +95,7 @@ describe("DetailsView", () => {
     render(() => <DetailsView />);
     await fireEvent.click(await screen.findByRole("button", { name: "Play" }));
     expect(api.launchGame).toHaveBeenCalledWith("g1", null);
-    for (const name of [
-      "Favorite",
-      "Hidden",
-      "Change cover…",
-      "Refresh metadata",
-      "Refetch artwork",
-      "Remove from library",
-    ]) {
+    for (const name of ["Favorite", "Hidden", "Edit", "More actions"]) {
       expect(screen.getByRole("button", { name })).toBeInTheDocument();
     }
   });

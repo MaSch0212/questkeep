@@ -98,6 +98,7 @@ export const getSettings = () => invoke<Settings>("get_settings");
 export const saveSettings = (settings: Settings) => invoke<void>("save_settings", { settings });
 /** Opens the app's data or logs folder in the file manager (done by the Rust side). */
 export const openAppFolder = (kind: "data" | "logs") => invoke<void>("open_app_folder", { kind });
+export const openInstallFolder = (id: string) => invoke<void>("open_install_folder", { id });
 export const seedFakeLibrary = (count: number) => invoke<number>("seed_fake_library", { count });
 
 export const refetchArtwork = (id: string) => invoke<void>("refetch_artwork", { id });

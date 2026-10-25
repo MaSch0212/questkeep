@@ -321,6 +321,7 @@ pub fn run() {
             commands::get_settings,
             commands::save_settings,
             commands::open_app_folder,
+            commands::open_install_folder,
             commands::take_notices,
             commands::seed_fake_library,
             commands::check_update,

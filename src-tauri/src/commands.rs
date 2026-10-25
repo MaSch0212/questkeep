@@ -354,6 +354,23 @@ pub async fn open_app_folder(
         })
 }
 
+/// Opens a game's install folder in the file manager, from Rust for the same reason.
+#[tauri::command]
+pub async fn open_install_folder(
+    app: tauri::AppHandle,
+    state: State<'_, Arc<AppState>>,
+    id: String,
+) -> CmdResult<()> {
+    use tauri_plugin_opener::OpenerExt;
+    let folder = blocking(state, move |s| s.library.install_folder(parse_id(&id)?)).await?;
+    app.opener()
+        .open_path(folder.display().to_string(), None::<&str>)
+        .map_err(|e| {
+            tracing::warn!(error = %e, "could not open an install folder");
+            format!("Could not open the folder: {e}")
+        })
+}
+
 /// Sign-in state of every store with an account (GOG, Epic).
 #[tauri::command]
 pub async fn account_status(state: State<'_, Arc<AppState>>) -> CmdResult<Vec<AccountStatus>> {
