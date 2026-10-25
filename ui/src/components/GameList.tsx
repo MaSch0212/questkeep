@@ -17,8 +17,8 @@ import { GameRowCompact } from "./GameRowCompact";
 import { Logo } from "./Logo";
 
 const FALLBACK_HEIGHT = 700;
-const DEFAULT_ROW_HEIGHT = 52;
-const DEFAULT_COMPACT_ROW_HEIGHT = 44;
+const DEFAULT_ROW_HEIGHT = 36;
+const DEFAULT_COMPACT_ROW_HEIGHT = 32;
 const DEFAULT_PADDING = 8;
 const OVERSCAN_ROWS = 6;
 

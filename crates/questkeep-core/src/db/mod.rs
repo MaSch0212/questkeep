@@ -3,6 +3,7 @@
 mod games;
 pub mod migrations;
 mod sessions;
+mod views;
 
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard, PoisonError};

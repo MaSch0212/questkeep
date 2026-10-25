@@ -112,6 +112,23 @@ impl LibraryProvider for SteamProvider {
         self.account.as_deref().map(|a| a as &dyn AccountAuth)
     }
 
+    /// `steam.exe` of the first install that has it (Windows), else the `steam://open/main` URI
+    /// (any detected Steam root).
+    fn launcher(&self) -> Option<PlayAction> {
+        if self.roots.is_empty() {
+            return None;
+        }
+        let exe = self
+            .roots
+            .iter()
+            .map(|root| root.join("steam.exe"))
+            .find(|exe| cfg!(windows) && exe.is_file());
+        Some(match exe {
+            Some(exe) => PlayAction::file(exe.to_string_lossy()),
+            None => PlayAction::uri("steam://open/main"),
+        })
+    }
+
     fn install_action(&self, app_id: &str) -> Option<PlayAction> {
         is_app_id(app_id).then(|| PlayAction::uri(format!("steam://install/{app_id}")))
     }
@@ -677,6 +694,32 @@ mod tests {
         );
         assert_eq!(p.uninstall_action("../x"), None);
         assert_eq!(p.uninstall_action(""), None);
+    }
+
+    #[test]
+    fn launcher_needs_a_steam_root() {
+        assert!(SteamProvider::with_roots(Vec::new()).launcher().is_none());
+        let dir = tempfile::tempdir().unwrap();
+        let action = SteamProvider::with_roots(vec![dir.path().to_path_buf()])
+            .launcher()
+            .unwrap();
+        assert_eq!(action.kind, ActionKind::Uri);
+        assert_eq!(action.target, "steam://open/main");
+    }
+
+    #[test]
+    fn launcher_starts_steam_exe_when_present() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("steam.exe"), "x").unwrap();
+        let action = SteamProvider::with_roots(vec![dir.path().to_path_buf()])
+            .launcher()
+            .unwrap();
+        if cfg!(windows) {
+            assert_eq!(action.kind, ActionKind::File);
+            assert!(action.target.ends_with("steam.exe"));
+        } else {
+            assert_eq!(action.kind, ActionKind::Uri);
+        }
     }
 
     #[test]

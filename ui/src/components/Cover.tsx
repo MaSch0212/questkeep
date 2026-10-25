@@ -2,7 +2,7 @@ import { createEffect, createMemo, createSignal, on, Show } from "solid-js";
 import type { Game } from "../bindings/Game";
 import { store } from "../lib/store";
 
-function hueFor(name: string): number {
+export function hueFor(name: string): number {
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) % 360;
   return hash;

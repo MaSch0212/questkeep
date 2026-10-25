@@ -116,7 +116,7 @@ describe("DetailsView", () => {
     expect(rows.length).toBeGreaterThan(5);
     expect(rows.length).toBeLessThan(40);
     expect(document.querySelector<HTMLElement>(".list__canvas")?.style.height).toBe(
-      `${5000 * 44 + 16}px`,
+      `${5000 * 32 + 16}px`,
     );
     expect(screen.queryByRole("option", { name: "Game 4999" })).toBeNull();
   });

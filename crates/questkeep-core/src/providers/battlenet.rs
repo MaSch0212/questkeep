@@ -276,6 +276,21 @@ fn default_agent_dir() -> PathBuf {
         .join(r"Battle.net\Agent")
 }
 
+/// `Battle.net.exe` of the Battle.net app's own "Apps" entry (the one whose uninstall command
+/// names `uid=battle.net`), when the file exists.
+fn client_from_entries(entries: &[crate::platform::UninstallEntry]) -> Option<PathBuf> {
+    entries
+        .iter()
+        .filter(|e| {
+            e.uninstall_string
+                .as_deref()
+                .is_some_and(|u| u.to_ascii_lowercase().contains("uid=battle.net"))
+        })
+        .filter_map(|e| e.install_location.as_deref())
+        .map(|dir| PathBuf::from(dir.trim().trim_end_matches(['\\', '/'])).join("Battle.net.exe"))
+        .find(|exe| exe.is_file())
+}
+
 /// Where uninstall commands come from.
 enum Uninstallers {
     /// The Windows "Apps" list of this machine.
@@ -457,6 +472,15 @@ impl LibraryProvider for BattleNetProvider {
         self.account.as_deref().map(|a| a as &dyn AccountAuth)
     }
 
+    /// Starts the Battle.net app (Windows; found through its "Apps" entry).
+    fn launcher(&self) -> Option<PlayAction> {
+        if !matches!(self.uninstallers, Uninstallers::System) {
+            return None;
+        }
+        let exe = client_from_entries(&crate::platform::uninstall_entries())?;
+        Some(PlayAction::file(exe.to_string_lossy()))
+    }
+
     /// Opens the game's page in Battle.net, which offers the install.
     fn install_action(&self, source_game_id: &str) -> Option<PlayAction> {
         (self.agent_dir.is_some() && source_game_id.chars().all(|c| c.is_ascii_alphanumeric()))
@@ -503,6 +527,33 @@ impl LibraryProvider for BattleNetProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn finds_the_client_from_its_apps_entry() {
+        use crate::platform::UninstallEntry;
+        let tmp = tempfile::tempdir().unwrap();
+        let entry = |uninstall: &str| UninstallEntry {
+            key: "Battle.net".into(),
+            install_location: Some(tmp.path().to_string_lossy().into_owned()),
+            uninstall_string: Some(uninstall.into()),
+            ..UninstallEntry::default()
+        };
+        let own = entry(r#""C:\x\Battle.net-Setup.exe" --uid=battle.net --lang=enUS"#);
+        let other = entry(r#""C:\x\Battle.net-Setup.exe" --uid=wow --lang=enUS"#);
+        assert_eq!(client_from_entries(std::slice::from_ref(&own)), None);
+        std::fs::write(tmp.path().join("Battle.net.exe"), "x").unwrap();
+        assert_eq!(client_from_entries(&[other]), None);
+        assert_eq!(
+            client_from_entries(&[own]),
+            Some(tmp.path().join("Battle.net.exe"))
+        );
+    }
+
+    #[test]
+    fn launcher_is_none_for_fixed_data() {
+        let p = BattleNetProvider::with_agent_dir(PathBuf::from("agent"), Vec::new());
+        assert!(p.launcher().is_none());
+    }
 
     fn varint(mut v: u64, out: &mut Vec<u8>) {
         loop {

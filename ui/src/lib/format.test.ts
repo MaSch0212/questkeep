@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatAgo,
   formatDate,
   formatPlaytime,
   formatRelativeDate,
@@ -68,5 +69,18 @@ describe("formatDate", () => {
     expect(formatDate(d.toISOString())).toBe(d.toLocaleDateString());
     expect(formatDate(null)).toBe("Unknown");
     expect(formatDate("x")).toBe("Unknown");
+  });
+});
+
+describe("formatAgo", () => {
+  const now = new Date("2026-05-10T12:00:00Z");
+  it("counts minutes and hours, then falls back to the date", () => {
+    expect(formatAgo(null, now)).toBe("Never");
+    expect(formatAgo("2026-05-10T11:59:40Z", now)).toBe("Just now");
+    expect(formatAgo("2026-05-10T11:48:00Z", now)).toBe("12 min ago");
+    expect(formatAgo("2026-05-10T09:00:00Z", now)).toBe("3 h ago");
+    expect(formatAgo("2026-05-08T09:00:00Z", now)).toBe(
+      formatRelativeDate("2026-05-08T09:00:00Z", now),
+    );
   });
 });

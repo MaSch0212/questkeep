@@ -2,7 +2,7 @@ import { Show } from "solid-js";
 import type { Game } from "../bindings/Game";
 import { formatPlaytime, formatRelativeDate, releaseYear } from "../lib/format";
 import { store } from "../lib/store";
-import { Cover } from "./Cover";
+import { GameIcon } from "./GameIcon";
 import { QuickAction } from "./QuickAction";
 import { SourceIcon, sourceName } from "./SourceIcon";
 import Download from "lucide-solid/icons/download";
@@ -43,7 +43,7 @@ export function GameRow(props: GameRowProps) {
       onDblClick={() => props.onLaunch(props.game.id)}
     >
       <div class="list-row__thumb">
-        <Cover game={props.game} />
+        <GameIcon game={props.game} />
       </div>
       <div class="list-row__name" title={props.game.name}>
         <span class="list-row__text">{props.game.name}</span>

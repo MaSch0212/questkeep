@@ -130,6 +130,12 @@ pub trait LibraryProvider: Send + Sync {
     fn icon_candidates(&self, _source_game_id: &str) -> Vec<ImageCandidate> {
         Vec::new()
     }
+    /// The action that opens the store's own launcher (a store URI or the client's executable),
+    /// or `None` when the launcher isn't installed on this PC or the provider has none. Must be
+    /// cheap: the UI asks every time it shows the "Open launcher" menu.
+    fn launcher(&self) -> Option<PlayAction> {
+        None
+    }
     /// Extra ways to add games that this provider offers next to "Add game", e.g. the launcher's
     /// own "new instance" dialog. Empty by default.
     fn add_game_options(&self) -> Vec<AddGameOption> {

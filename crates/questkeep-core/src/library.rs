@@ -16,8 +16,9 @@ use crate::images::{
     CoverJob, IGDB_CHECKED_KEY, Igdb, ImageCache, ImageKind, MetadataJob, SteamGridDb,
 };
 use crate::model::{
-    ActionKind, Game, GameQuery, GameUpdate, ImportedGame, MANUAL_SOURCE, NewManualGame,
-    PlayAction, ScanSummary, display_name_from_path,
+    ActionKind, Game, GameQuery, GameUpdate, ImportedGame, LibraryView, MANUAL_SOURCE,
+    NewManualGame, NewView, PlayAction, ScanSummary, SectionOrder, SyncTimes, TriState,
+    ViewSection, ViewUpdate, display_name_from_path,
 };
 use crate::paths::DataPaths;
 use crate::providers::{ProviderError, ProviderInfo, ProviderRegistry};
@@ -131,7 +132,7 @@ impl Library {
     /// non-hidden games; the shell calls this on a background thread when the library changed.
     pub fn tray_games(&self) -> Result<TrayGames> {
         let games = self.db.list_games(&GameQuery {
-            installed_only: true,
+            installed: TriState::Yes,
             ..GameQuery::default()
         })?;
         // Icons are shown from their absolute path; files that are gone count as missing, which
@@ -187,6 +188,79 @@ impl Library {
             .into_iter()
             .map(|g| self.resolve_images(g))
             .collect())
+    }
+
+    /// How many games each query matches, in order (the sidebar's view counts).
+    pub fn count_games(&self, queries: &[GameQuery]) -> Result<Vec<u64>> {
+        queries.iter().map(|q| self.db.count_matching(q)).collect()
+    }
+
+    pub fn list_views(&self) -> Result<Vec<ViewSection>> {
+        self.db.list_views()
+    }
+
+    pub fn create_view(&self, view: &NewView) -> Result<LibraryView> {
+        self.db.create_view(view)
+    }
+
+    pub fn update_view(&self, id: &str, update: &ViewUpdate) -> Result<LibraryView> {
+        self.db.update_view(id, update)
+    }
+
+    pub fn duplicate_view(&self, id: &str) -> Result<LibraryView> {
+        self.db.duplicate_view(id)
+    }
+
+    pub fn delete_view(&self, id: &str) -> Result<()> {
+        self.db.delete_view(id)
+    }
+
+    pub fn create_view_section(&self, name: &str) -> Result<ViewSection> {
+        self.db.create_section(name)
+    }
+
+    pub fn rename_view_section(&self, id: &str, name: &str) -> Result<()> {
+        self.db.rename_section(id, name)
+    }
+
+    pub fn delete_view_section(&self, id: &str) -> Result<()> {
+        self.db.delete_section(id)
+    }
+
+    pub fn arrange_views(&self, order: &[SectionOrder]) -> Result<()> {
+        self.db.arrange_views(order)
+    }
+
+    /// When each store, and the last "sync all", finished syncing.
+    pub fn sync_times(&self) -> Result<SyncTimes> {
+        self.db.sync_times()
+    }
+
+    /// Ids of the providers whose store launcher is installed on this PC, in registry order.
+    pub fn launchers(&self) -> Vec<String> {
+        self.providers
+            .infos()
+            .into_iter()
+            .filter(|info| {
+                self.providers
+                    .get(&info.id)
+                    .is_some_and(|p| p.launcher().is_some())
+            })
+            .map(|info| info.id)
+            .collect()
+    }
+
+    /// Starts a store's own launcher.
+    pub fn open_launcher(&self, provider_id: &str) -> Result<()> {
+        let provider = self
+            .providers
+            .get(provider_id)
+            .ok_or_else(|| CoreError::UnknownProvider(provider_id.to_string()))?;
+        let action = provider.launcher().ok_or_else(|| {
+            CoreError::Invalid(format!("{} isn't installed on this PC.", provider.name()))
+        })?;
+        run_store_action(&action)
+            .map_err(|err| CoreError::Launch(format!("Could not open {}: {err}", provider.name())))
     }
 
     pub fn get_game(&self, id: Uuid) -> Result<Game> {
@@ -407,7 +481,11 @@ impl Library {
             }
         };
         let games = merge_owned(installed, owned.unwrap_or_default());
-        let summary = self.db.upsert_imported(provider.id(), &games, Utc::now())?;
+        let now = Utc::now();
+        let summary = self.db.upsert_imported(provider.id(), &games, now)?;
+        if let Err(err) = self.db.record_sync(Some(provider_id), now) {
+            tracing::warn!(provider = provider_id, %err, "could not record the sync time");
+        }
         tracing::info!(
             provider = provider_id,
             found = games.len(),
@@ -440,7 +518,7 @@ impl Library {
         self.events.publish(CoreEvent::ScansQueued {
             providers: scannable.iter().map(|p| p.id.clone()).collect(),
         });
-        scannable
+        let results = scannable
             .into_iter()
             .map(|p| {
                 let result = self.scan(&p.id);
@@ -449,7 +527,11 @@ impl Library {
                 }
                 (p.id, result)
             })
-            .collect()
+            .collect();
+        if let Err(err) = self.db.record_sync(None, Utc::now()) {
+            tracing::warn!(%err, "could not record the sync time");
+        }
+        results
     }
 
     /// Cover-fetch jobs for games that don't have a cover yet. Store games always get a job (their

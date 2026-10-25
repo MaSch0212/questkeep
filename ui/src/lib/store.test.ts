@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Game } from "../bindings/Game";
+import type { GameQuery } from "../bindings/GameQuery";
+import type { LibraryView } from "../bindings/LibraryView";
+import type { ViewSection } from "../bindings/ViewSection";
 import { makeGame } from "../test-utils";
 import * as api from "./api";
+import { defaultQuery } from "./query";
 import { store } from "./store";
 
 vi.mock("./api");
@@ -12,6 +16,21 @@ vi.mock("@tauri-apps/api/core", () => ({
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn<() => void>() }));
 
 function noop() {}
+
+const view = (id: string, query: Partial<GameQuery>): LibraryView => ({
+  id,
+  name: id,
+  icon: "bookmark",
+  query: { ...defaultQuery(), ...query },
+  layout: "grid",
+});
+
+function testSections(): ViewSection[] {
+  return [
+    { id: "lib", name: "Library", views: [view("all", {}), view("fav", { favorite: "yes" })] },
+    { id: "other", name: "Other", views: [view("hidden", { hidden: "hidden" })] },
+  ];
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -55,11 +74,53 @@ describe("store", () => {
     expect(store.detailsOpen()).toBe(false);
   });
 
-  it("refetches when the query changes", async () => {
+  it("lists the open view's games and keeps unsaved changes per view", async () => {
     vi.mocked(api.listGames).mockResolvedValue([]);
-    store.setView("favorites");
+    vi.mocked(api.countGames).mockResolvedValue([]);
+    vi.mocked(api.listViews).mockResolvedValue(testSections());
+    await store.loadViews();
+    expect(store.activeViewId()).toBe("all");
+
+    store.selectView("fav");
     await vi.waitFor(() => expect(api.listGames).toHaveBeenCalled());
-    expect(vi.mocked(api.listGames).mock.calls[0]?.[0]).toMatchObject({ favoritesOnly: true });
+    expect(vi.mocked(api.listGames).mock.lastCall?.[0]).toMatchObject({ favorite: "yes" });
+
+    store.setViewMode("list");
+    store.setKeyword("ha");
+    expect(store.hasDraft("fav")).toBe(true);
+    expect(store.query().search).toBe("ha");
+
+    // Switching keeps the draft but clears the keyword.
+    store.selectView("all");
+    expect(store.keyword()).toBeNull();
+    expect(store.viewMode()).toBe("grid");
+    store.selectView("fav");
+    expect(store.viewMode()).toBe("list");
+
+    store.resetView();
+    expect(store.hasDraft("fav")).toBe(false);
+    expect(store.viewMode()).toBe("grid");
+  });
+
+  it("opens a game's page in a view that contains it", async () => {
+    vi.mocked(api.listGames).mockResolvedValue([]);
+    vi.mocked(api.countGames).mockResolvedValue([]);
+    vi.mocked(api.listViews).mockResolvedValue(testSections());
+    await store.loadViews();
+    store.selectView("fav");
+
+    const hidden = makeGame({ id: "h", hidden: true });
+    store.openGamePage(hidden);
+    expect(store.activeViewId()).toBe("hidden");
+    expect(store.selectedId()).toBe("h");
+    expect(store.detailsOpen()).toBe(true);
+
+    // No view contains a hidden game without the Hidden view: shown over the first view.
+    vi.mocked(api.listViews).mockResolvedValue(testSections().slice(0, 1));
+    await store.loadViews();
+    store.openGamePage(hidden);
+    expect(store.activeViewId()).toBe("all");
+    expect(store.selectedGame()?.id).toBe("h");
   });
 
   it("bumps cover versions on gamesChanged", () => {

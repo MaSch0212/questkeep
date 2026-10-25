@@ -9,8 +9,8 @@ use uuid::Uuid;
 use super::Database;
 use crate::error::{CoreError, Result};
 use crate::model::{
-    Game, GameMetadata, GameQuery, GameUpdate, HiddenFilter, ImportedGame, PlayAction, ScanSummary,
-    SortField, sorting_name,
+    Game, GameMetadata, GameQuery, GameUpdate, HiddenFilter, ImportedGame, PlayAction,
+    PlayedFilter, ScanSummary, SortField, TriState, sorting_name,
 };
 
 const COLUMNS: &str = "id, name, sorting_name, source, source_game_id, installed, install_dir, \
@@ -42,6 +42,54 @@ pub struct NewGameRecord {
 
 fn search_key(name: &str) -> String {
     name.to_lowercase()
+}
+
+/// The `WHERE` clause (empty when nothing filters) and its arguments for a query's filters.
+fn query_filter(query: &GameQuery) -> (String, Vec<Box<dyn ToSql>>) {
+    let mut clauses: Vec<String> = Vec::new();
+    let mut args: Vec<Box<dyn ToSql>> = Vec::new();
+
+    if let Some(search) = query
+        .search
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        args.push(Box::new(search_key(search)));
+        clauses.push(format!("instr(search_key, ?{}) > 0", args.len()));
+    }
+    if !query.sources.is_empty() {
+        let mut placeholders = Vec::with_capacity(query.sources.len());
+        for source in &query.sources {
+            args.push(Box::new(source.clone()));
+            placeholders.push(format!("?{}", args.len()));
+        }
+        clauses.push(format!("source IN ({})", placeholders.join(", ")));
+    }
+    let flag = |column: &str, filter: TriState| match filter {
+        TriState::Any => None,
+        TriState::Yes => Some(format!("{column} = 1")),
+        TriState::No => Some(format!("{column} = 0")),
+    };
+    clauses.extend(flag("favorite", query.favorite));
+    clauses.extend(flag("installed", query.installed));
+    match query.hidden {
+        HiddenFilter::Visible => clauses.push("hidden = 0".into()),
+        HiddenFilter::Hidden => clauses.push("hidden = 1".into()),
+        HiddenFilter::All => {}
+    }
+    match query.played {
+        PlayedFilter::Any => {}
+        PlayedFilter::Played => clauses.push("(playtime_seconds > 0 OR play_count > 0)".into()),
+        PlayedFilter::Never => clauses.push("playtime_seconds = 0 AND play_count = 0".into()),
+    }
+
+    let where_sql = if clauses.is_empty() {
+        String::new()
+    } else {
+        format!("WHERE {}", clauses.join(" AND "))
+    };
+    (where_sql, args)
 }
 
 fn row_to_game(row: &Row<'_>) -> rusqlite::Result<Game> {
@@ -141,38 +189,7 @@ impl Database {
 
     /// Lists games matching `query`, sorted as requested.
     pub fn list_games(&self, query: &GameQuery) -> Result<Vec<Game>> {
-        let mut clauses: Vec<String> = Vec::new();
-        let mut args: Vec<Box<dyn ToSql>> = Vec::new();
-
-        if let Some(search) = query
-            .search
-            .as_deref()
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-        {
-            args.push(Box::new(search_key(search)));
-            clauses.push(format!("instr(search_key, ?{}) > 0", args.len()));
-        }
-        if !query.sources.is_empty() {
-            let mut placeholders = Vec::with_capacity(query.sources.len());
-            for source in &query.sources {
-                args.push(Box::new(source.clone()));
-                placeholders.push(format!("?{}", args.len()));
-            }
-            clauses.push(format!("source IN ({})", placeholders.join(", ")));
-        }
-        if query.favorites_only {
-            clauses.push("favorite = 1".into());
-        }
-        match query.hidden {
-            HiddenFilter::Visible => clauses.push("hidden = 0".into()),
-            HiddenFilter::Hidden => clauses.push("hidden = 1".into()),
-            HiddenFilter::All => {}
-        }
-        if query.installed_only {
-            clauses.push("installed = 1".into());
-        }
-
+        let (where_sql, args) = query_filter(query);
         let dir = if query.descending { "DESC" } else { "ASC" };
         let by_name = "sorting_name COLLATE NOCASE ASC, id ASC";
         let order = match query.sort {
@@ -184,11 +201,6 @@ impl Database {
             SortField::Playtime => format!("playtime_seconds {dir}, {by_name}"),
             SortField::DateAdded => format!("date_added {dir}, {by_name}"),
         };
-        let where_sql = if clauses.is_empty() {
-            String::new()
-        } else {
-            format!("WHERE {}", clauses.join(" AND "))
-        };
         let sql = format!("SELECT {COLUMNS} FROM games {where_sql} ORDER BY {order}");
 
         let conn = self.conn();
@@ -198,6 +210,17 @@ impl Database {
             .query_map(params.as_slice(), row_to_game)?
             .collect::<rusqlite::Result<Vec<_>>>()?;
         Ok(games)
+    }
+
+    /// How many games match `query` (its sort is ignored).
+    pub fn count_matching(&self, query: &GameQuery) -> Result<u64> {
+        let (where_sql, args) = query_filter(query);
+        let sql = format!("SELECT COUNT(*) FROM games {where_sql}");
+        let conn = self.conn();
+        let mut stmt = conn.prepare_cached(&sql)?;
+        let params: Vec<&dyn ToSql> = args.iter().map(|a| a.as_ref()).collect();
+        let n: i64 = stmt.query_row(params.as_slice(), |r| r.get(0))?;
+        Ok(u64::try_from(n).unwrap_or_default())
     }
 
     /// Applies a partial update and returns the updated game.
@@ -789,6 +812,56 @@ mod tests {
     }
 
     #[test]
+    fn filters_by_played_and_negated_flags_and_counts() {
+        let db = db();
+        let now = Utc::now();
+        let played = db.insert_game(&manual("Played"), now).unwrap();
+        let fav = db.insert_game(&manual("Fav"), now).unwrap();
+        db.insert_game(&manual("Fresh"), now).unwrap();
+        let session = db.begin_session(played.id, now).unwrap();
+        db.finish_session(session, now, 60).unwrap();
+        db.update_game(
+            fav.id,
+            &GameUpdate {
+                favorite: Some(true),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let query = |played, favorite| GameQuery {
+            played,
+            favorite,
+            ..Default::default()
+        };
+        let names_of = |q: &GameQuery| -> Vec<String> {
+            db.list_games(q)
+                .unwrap()
+                .into_iter()
+                .map(|g| g.name)
+                .collect()
+        };
+        assert_eq!(
+            names_of(&query(PlayedFilter::Played, TriState::Any)),
+            ["Played"]
+        );
+        assert_eq!(
+            names_of(&query(PlayedFilter::Never, TriState::No)),
+            ["Fresh"]
+        );
+        assert_eq!(
+            names_of(&query(PlayedFilter::Any, TriState::No)),
+            ["Fresh", "Played"]
+        );
+        assert_eq!(
+            db.count_matching(&query(PlayedFilter::Never, TriState::Any))
+                .unwrap(),
+            2
+        );
+        assert_eq!(db.count_matching(&GameQuery::default()).unwrap(), 3);
+    }
+
+    #[test]
     fn filters_by_source_favorite_hidden_installed() {
         let db = db();
         let now = Utc::now();
@@ -827,7 +900,7 @@ mod tests {
 
         let favs = db
             .list_games(&GameQuery {
-                favorites_only: true,
+                favorite: TriState::Yes,
                 ..Default::default()
             })
             .unwrap();
@@ -852,7 +925,7 @@ mod tests {
         db.upsert_imported("steam", &[], now).unwrap();
         let installed = db
             .list_games(&GameQuery {
-                installed_only: true,
+                installed: TriState::Yes,
                 ..Default::default()
             })
             .unwrap();
@@ -1008,7 +1081,7 @@ mod tests {
         let steam = db
             .list_games(&GameQuery {
                 sources: vec!["steam".into()],
-                installed_only: true,
+                installed: TriState::Yes,
                 ..Default::default()
             })
             .unwrap();

@@ -1,5 +1,6 @@
 import type { CoreEvent } from "../bindings/CoreEvent";
 import type { ScanSummary } from "../bindings/ScanSummary";
+import { formatAgo } from "./format";
 
 /**
  * Library sync progress, built from core scan events. Several stores are scanned one after
@@ -184,4 +185,21 @@ export function createSyncTracker(options: SyncTrackerOptions): SyncTracker {
       set(IDLE_SYNC);
     },
   };
+}
+
+/**
+ * A store's line in the sync popup: the current run's status while it has one, otherwise when it
+ * last synced. With a `prefix`, the time reads "<prefix> 12 min ago" (or "<prefix>: never").
+ */
+export function syncRowText(
+  entry: SyncEntry | undefined,
+  lastIso: string | null,
+  prefix?: string,
+  now: Date = new Date(),
+): string {
+  if (entry && entry.status !== "done") return syncEntryText(entry);
+  if (lastIso === null) return prefix ? `${prefix}: never` : "Not synced yet";
+  const ago = formatAgo(lastIso, now);
+  const text = ago.charAt(0).toLowerCase() + ago.slice(1);
+  return prefix ? `${prefix} ${text}` : `Synced ${text}`;
 }

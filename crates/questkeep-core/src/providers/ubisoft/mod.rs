@@ -60,6 +60,30 @@ fn default_configurations() -> Option<PathBuf> {
     )
 }
 
+/// `UbisoftConnect.exe` below the launcher's install folder, when the file exists.
+fn client_in(dir: &str) -> Option<PathBuf> {
+    let dir = dir.trim().trim_end_matches(['\\', '/']);
+    if dir.is_empty() {
+        return None;
+    }
+    let exe = PathBuf::from(dir).join("UbisoftConnect.exe");
+    exe.is_file().then_some(exe)
+}
+
+/// The Ubisoft Connect client: `InstallDir` of `HKLM\SOFTWARE\Ubisoft\Launcher`, else the
+/// install location of its "Apps" entry.
+#[cfg(windows)]
+fn system_client() -> Option<PathBuf> {
+    crate::platform::registry_value(r"HKEY_LOCAL_MACHINE\SOFTWARE\Ubisoft\Launcher\InstallDir")
+        .and_then(|dir| client_in(&dir))
+        .or_else(|| {
+            crate::platform::uninstall_entries()
+                .into_iter()
+                .filter(|e| e.display_name.as_deref() == Some("Ubisoft Connect"))
+                .find_map(|e| client_in(e.install_location.as_deref()?))
+        })
+}
+
 impl UbisoftProvider {
     /// Reads the installs of this machine.
     pub fn detect() -> Self {
@@ -187,6 +211,18 @@ impl LibraryProvider for UbisoftProvider {
         Ok(games)
     }
 
+    /// Starts Ubisoft Connect (Windows; found through the registry).
+    fn launcher(&self) -> Option<PlayAction> {
+        match &self.installs {
+            #[cfg(windows)]
+            Installs::System => {
+                let exe = system_client()?;
+                Some(PlayAction::file(exe.to_string_lossy()))
+            }
+            Installs::Fixed(_) => None,
+        }
+    }
+
     /// Hands the install to Ubisoft Connect, which asks where to put the game.
     fn install_action(&self, source_game_id: &str) -> Option<PlayAction> {
         (cfg!(windows) && install::is_product_id(source_game_id))
@@ -238,6 +274,28 @@ fn url_candidate(url: Option<String>) -> Vec<ImageCandidate> {
 #[cfg(test)]
 mod tests {
     use std::path::Path;
+
+    #[test]
+    fn finds_the_client_in_the_install_folder() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().to_string_lossy().into_owned();
+        assert_eq!(client_in(&dir), None);
+        assert_eq!(client_in(""), None);
+        std::fs::write(tmp.path().join("UbisoftConnect.exe"), "x").unwrap();
+        assert_eq!(
+            client_in(&format!("{dir}/")),
+            Some(tmp.path().join("UbisoftConnect.exe"))
+        );
+    }
+
+    #[test]
+    fn launcher_is_none_for_fixed_data() {
+        assert!(
+            UbisoftProvider::with_data(Vec::new(), None)
+                .launcher()
+                .is_none()
+        );
+    }
 
     use super::config::tests::{BROTHERHOOD, TRACKMANIA, encode};
     use super::*;

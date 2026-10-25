@@ -2,7 +2,7 @@ import { Show } from "solid-js";
 import type { Game } from "../bindings/Game";
 import Star from "lucide-solid/icons/star";
 import { store } from "../lib/store";
-import { Cover } from "./Cover";
+import { GameIcon } from "./GameIcon";
 import { SourceIcon, sourceName } from "./SourceIcon";
 import { rowDomId } from "./GameRow";
 
@@ -33,7 +33,7 @@ export function GameRowCompact(props: GameRowCompactProps) {
         <SourceIcon source={props.game.source} />
       </span>
       <div class="list-row__thumb">
-        <Cover game={props.game} />
+        <GameIcon game={props.game} />
       </div>
       <span class="compact-row__name" title={props.game.name}>
         {props.game.name}

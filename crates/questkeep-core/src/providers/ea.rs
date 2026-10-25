@@ -158,6 +158,14 @@ fn resolve_launcher(
     base.join(rest.trim_start_matches(['\\', '/']).replace('/', "\\"))
 }
 
+/// The EA app's executable from the command of its `origin2://` protocol handler
+/// (`"C:\...\EADesktop.exe" "%1"`), when the file exists.
+fn client_from_command(command: &str) -> Option<PathBuf> {
+    let (program, _) = crate::platform::split_command_line(command)?;
+    let exe = PathBuf::from(program);
+    exe.is_file().then_some(exe)
+}
+
 /// Whether an "Apps" entry belongs to the EA app (or Origin).
 fn is_ea_entry(entry: &UninstallEntry) -> bool {
     !entry.key.starts_with("Steam App ")
@@ -372,6 +380,18 @@ impl LibraryProvider for EaProvider {
         self.account.as_deref().map(|a| a as &dyn AccountAuth)
     }
 
+    /// Starts the EA app, found through the command of its `origin2://` protocol handler
+    /// (Windows registry; the same protocol the install action uses).
+    fn launcher(&self) -> Option<PlayAction> {
+        if !matches!(self.system, System::Live) {
+            return None;
+        }
+        let command =
+            crate::platform::registry_value(r"HKEY_CLASSES_ROOT\origin2\shell\open\command\")?;
+        let exe = client_from_command(&command)?;
+        Some(PlayAction::file(exe.to_string_lossy()))
+    }
+
     /// Hands the install to the EA app (`origin2://`), which asks where to put the game.
     fn install_action(&self, source_game_id: &str) -> Option<PlayAction> {
         let plain = !source_game_id.is_empty()
@@ -401,6 +421,22 @@ impl LibraryProvider for EaProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn finds_the_client_in_a_protocol_command() {
+        let tmp = tempfile::tempdir().unwrap();
+        let exe = tmp.path().join("EADesktop.exe");
+        let command = format!("\"{}\" \"%1\"", exe.display());
+        assert_eq!(client_from_command(&command), None);
+        std::fs::write(&exe, "x").unwrap();
+        assert_eq!(client_from_command(&command), Some(exe));
+        assert_eq!(client_from_command(""), None);
+    }
+
+    #[test]
+    fn launcher_is_none_without_the_live_system() {
+        assert!(EaProvider::with_entries(Vec::new()).launcher().is_none());
+    }
 
     const DAI: &str = r#"<?xml version="1.0" encoding="utf-8"?>
 <DiPManifest version="4.0">

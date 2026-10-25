@@ -5,7 +5,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use questkeep_core::auth::AccountStatus;
-use questkeep_core::model::{Game, GameQuery, GameUpdate, NewManualGame, ScanSummary};
+use questkeep_core::model::{
+    Game, GameQuery, GameUpdate, LibraryView, NewManualGame, NewView, ScanSummary, SectionOrder,
+    SyncTimes, ViewSection, ViewUpdate,
+};
 use questkeep_core::providers::ProviderInfo;
 use questkeep_core::settings::Settings;
 use questkeep_core::{AppInfo, CoreError};
@@ -404,4 +407,92 @@ pub async fn install_update(app: tauri::AppHandle) -> CmdResult<()> {
             format!("Could not install the update: {e}")
         })?;
     app.restart()
+}
+
+#[tauri::command]
+pub async fn count_games(
+    state: State<'_, Arc<AppState>>,
+    queries: Vec<GameQuery>,
+) -> CmdResult<Vec<u64>> {
+    blocking(state, move |s| s.library.count_games(&queries)).await
+}
+
+#[tauri::command]
+pub async fn list_views(state: State<'_, Arc<AppState>>) -> CmdResult<Vec<ViewSection>> {
+    blocking(state, |s| s.library.list_views()).await
+}
+
+#[tauri::command]
+pub async fn create_view(state: State<'_, Arc<AppState>>, view: NewView) -> CmdResult<LibraryView> {
+    blocking(state, move |s| s.library.create_view(&view)).await
+}
+
+#[tauri::command]
+pub async fn update_view(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    update: ViewUpdate,
+) -> CmdResult<LibraryView> {
+    blocking(state, move |s| s.library.update_view(&id, &update)).await
+}
+
+#[tauri::command]
+pub async fn duplicate_view(state: State<'_, Arc<AppState>>, id: String) -> CmdResult<LibraryView> {
+    blocking(state, move |s| s.library.duplicate_view(&id)).await
+}
+
+#[tauri::command]
+pub async fn delete_view(state: State<'_, Arc<AppState>>, id: String) -> CmdResult<()> {
+    blocking(state, move |s| s.library.delete_view(&id)).await
+}
+
+#[tauri::command]
+pub async fn create_view_section(
+    state: State<'_, Arc<AppState>>,
+    name: String,
+) -> CmdResult<ViewSection> {
+    blocking(state, move |s| s.library.create_view_section(&name)).await
+}
+
+#[tauri::command]
+pub async fn rename_view_section(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    name: String,
+) -> CmdResult<()> {
+    blocking(state, move |s| s.library.rename_view_section(&id, &name)).await
+}
+
+#[tauri::command]
+pub async fn delete_view_section(state: State<'_, Arc<AppState>>, id: String) -> CmdResult<()> {
+    blocking(state, move |s| s.library.delete_view_section(&id)).await
+}
+
+#[tauri::command]
+pub async fn arrange_views(
+    state: State<'_, Arc<AppState>>,
+    order: Vec<SectionOrder>,
+) -> CmdResult<()> {
+    blocking(state, move |s| s.library.arrange_views(&order)).await
+}
+
+#[tauri::command]
+pub async fn sync_times(state: State<'_, Arc<AppState>>) -> CmdResult<SyncTimes> {
+    blocking(state, |s| s.library.sync_times()).await
+}
+
+#[tauri::command]
+pub async fn list_launchers(state: State<'_, Arc<AppState>>) -> CmdResult<Vec<String>> {
+    blocking(state, |s| Ok(s.library.launchers())).await
+}
+
+#[tauri::command]
+pub async fn open_launcher(state: State<'_, Arc<AppState>>, provider_id: String) -> CmdResult<()> {
+    blocking(state, move |s| s.library.open_launcher(&provider_id)).await
+}
+
+/// The Questkeep menu's "Exit": quits even when the app would otherwise wait in the tray.
+#[tauri::command]
+pub fn exit_app(app: tauri::AppHandle) {
+    crate::tray::exit(&app);
 }

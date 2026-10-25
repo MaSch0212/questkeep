@@ -133,6 +133,11 @@ impl LibraryProvider for AmazonProvider {
         self.account.as_deref().map(|a| a as &dyn AccountAuth)
     }
 
+    /// The Amazon Games app (Windows), when its executable exists.
+    fn launcher(&self) -> Option<PlayAction> {
+        self.app.as_ref()?.launcher_action()
+    }
+
     /// Windows only; Heroic has no install URI.
     fn install_action(&self, source_game_id: &str) -> Option<PlayAction> {
         self.app.as_ref()?.install_action(source_game_id)
@@ -200,6 +205,18 @@ mod tests {
     fn write(path: &Path, text: &str) {
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, text).unwrap();
+    }
+
+    #[test]
+    fn launcher_is_the_app_executable_when_it_exists() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = AmazonAppPaths::below(tmp.path());
+        assert!(AmazonProvider::with_app(paths.clone()).launcher().is_none());
+        write(&tmp.path().join("Amazon Games/App/Amazon Games.exe"), "x");
+        let action = AmazonProvider::with_app(paths).launcher().unwrap();
+        assert_eq!(action.kind, crate::model::ActionKind::File);
+        assert!(action.target.ends_with("Amazon Games.exe"));
+        assert!(AmazonProvider::default().launcher().is_none());
     }
 
     #[test]

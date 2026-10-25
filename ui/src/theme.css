@@ -36,6 +36,13 @@
   --qk-color-cursor: #6c7381;
   --qk-color-close-hover: #c42b1c;
   --qk-color-close-hover-text: #ffffff;
+  /* Unsaved changes to a view */
+  --qk-color-warn: #ffb86b;
+  --qk-color-warn-soft: #2a2219;
+  --qk-color-warn-border: #5a4128;
+  --qk-color-warn-hover: #3a2d1f;
+  --qk-color-play: #2f6d4f;
+  --qk-color-play-hover: #3a8462;
 
   /* Placeholder cover gradients: hue is set per tile, the rest comes from here */
   --qk-placeholder-saturation: 38%;
@@ -108,8 +115,9 @@
   --qk-grid-gap: 16px;
   --qk-grid-padding: 20px;
   --qk-control-height: 34px;
-  --qk-search-width: 340px;
-  --qk-sort-width: 150px;
+  --qk-keyword-width: 220px;
+  --qk-tool-size: 32px;
+  --qk-badge-min-size: 18px;
   --qk-dialog-width: 520px;
   --qk-toast-width: 340px;
   --qk-focus-ring-width: 2px;
@@ -119,9 +127,9 @@
   --qk-scrollbar-size: 10px;
   --qk-dimmed-opacity: 0.45;
   --qk-icon-size: 14px;
-  --qk-list-row-height: 52px;
+  --qk-list-row-height: 36px;
   --qk-list-padding: 8px;
-  --qk-list-thumb-width: 30px;
+  --qk-list-thumb-width: 22px;
   --qk-list-year-width: 72px;
   --qk-list-columns: var(--qk-list-thumb-width) minmax(0, 3fr) minmax(0, 1fr) minmax(0, 1.2fr)
     minmax(0, 1.2fr) minmax(0, 1.2fr) var(--qk-list-year-width);
@@ -131,7 +139,7 @@
   --qk-tile-banner-height: 22px;
   --qk-source-icon-size: 12px;
   --qk-icon-btn-small-size: 24px;
-  --qk-compact-row-height: 44px;
+  --qk-compact-row-height: 32px;
   --qk-dview-list-width: 320px;
   --qk-dview-hero-height: 280px;
   --qk-dview-hero-overlap: 70px;
@@ -142,7 +150,30 @@
   --qk-popover-width: 340px;
   --qk-popover-gap: 6px;
   --qk-account-accent-width: 3px;
-  --qk-z-popover: 10;
+  --qk-z-modal: 10;
+  --qk-z-popover: 20;
+  --qk-titlebar-tool-width: 34px;
+  --qk-titlebar-tool-height: 30px;
+  --qk-titlebar-dot-size: 6px;
+  --qk-command-width: 420px;
+  --qk-command-height: 30px;
+  --qk-command-panel-width: 500px;
+  --qk-command-row-height: 38px;
+  --qk-command-act-height: 26px;
+  --qk-menu-min-width: 240px;
+  --qk-filters-width: 430px;
+  --qk-filters-label-width: 110px;
+  --qk-nav-row-height: 32px;
+  --qk-edit-row-height: 32px;
+  --qk-edit-input-height: 26px;
+  --qk-drag-handle-width: 18px;
+  --qk-drop-line-height: 2px;
+  --qk-unsaved-dot-size: 6px;
+  --qk-icon-picker-cell: 30px;
+  --qk-icon-picker-columns: 7; /* matches the arrow-key maths in IconPicker.tsx */
+  --qk-game-icon-size: 22px;
+  --qk-game-icon-radius: 5px;
+  --qk-dragged-opacity: 0.4;
   --qk-spin-duration: 1s;
   --qk-running-dot-size: 8px;
 }

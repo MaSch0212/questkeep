@@ -52,6 +52,41 @@ const MIGRATIONS: &[&str] = &[
     ALTER TABLE games ADD COLUMN background_path TEXT;
     ALTER TABLE games ADD COLUMN metadata_updated_at TEXT;
     "#,
+    // 3: saved library views in sidebar sections, and when each store last synced.
+    // `query` is GameQuery JSON; missing fields take their defaults.
+    r#"
+    CREATE TABLE view_sections (
+        id       TEXT PRIMARY KEY NOT NULL,
+        position INTEGER NOT NULL,
+        name     TEXT NOT NULL
+    );
+    CREATE TABLE views (
+        id         TEXT PRIMARY KEY NOT NULL,
+        section_id TEXT NOT NULL REFERENCES view_sections (id) ON DELETE CASCADE,
+        position   INTEGER NOT NULL,
+        name       TEXT NOT NULL,
+        icon       TEXT NOT NULL,
+        query      TEXT NOT NULL DEFAULT '{}',
+        layout     TEXT NOT NULL DEFAULT 'grid'
+    );
+    CREATE INDEX views_section ON views (section_id, position);
+
+    INSERT INTO view_sections (id, position, name) VALUES
+        ('library', 0, 'Library'),
+        ('other', 1, 'Other');
+    INSERT INTO views (id, section_id, position, name, icon, query, layout) VALUES
+        ('all', 'library', 0, 'All games', 'library', '{}', 'grid'),
+        ('favorites', 'library', 1, 'Favorites', 'star', '{"favorite":"yes"}', 'grid'),
+        ('installed', 'library', 2, 'Installed', 'hard-drive', '{"installed":"yes"}', 'list'),
+        ('recent', 'library', 3, 'Recently played', 'clock',
+            '{"played":"played","sort":"lastPlayed","descending":true}', 'list'),
+        ('hidden', 'other', 0, 'Hidden', 'eye-off', '{"hidden":"hidden"}', 'list');
+
+    CREATE TABLE sync_times (
+        provider    TEXT PRIMARY KEY NOT NULL,
+        finished_at TEXT NOT NULL
+    );
+    "#,
 ];
 
 /// Latest schema version this build knows.

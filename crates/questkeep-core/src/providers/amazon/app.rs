@@ -80,10 +80,15 @@ impl AmazonAppPaths {
         Some(PlayAction::uri(uri("install", id)?))
     }
 
-    /// Opens the app; the game is removed there by the user.
-    pub fn uninstall_action(&self) -> Option<PlayAction> {
+    /// Starts the app itself.
+    pub fn launcher_action(&self) -> Option<PlayAction> {
         self.has_client()
             .then(|| PlayAction::file(self.client.to_string_lossy().into_owned()))
+    }
+
+    /// Opens the app; the game is removed there by the user.
+    pub fn uninstall_action(&self) -> Option<PlayAction> {
+        self.launcher_action()
     }
 
     /// Installed games from `GameInstallInfo.sqlite`, sorted by name. Rows whose install folder

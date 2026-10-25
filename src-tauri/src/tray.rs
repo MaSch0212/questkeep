@@ -301,7 +301,7 @@ fn show_popup(app: &AppHandle, rect: &tauri::Rect) {
 fn show_popup(_app: &AppHandle, _rect: &tauri::Rect) {}
 
 /// Tray "Exit": quits even though the app waits in the tray.
-fn exit(app: &AppHandle) {
+pub(crate) fn exit(app: &AppHandle) {
     if let Some(lifecycle) = app.try_state::<Lifecycle>() {
         lifecycle.request_quit();
     }

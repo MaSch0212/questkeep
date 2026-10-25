@@ -36,6 +36,21 @@ type PackageSource = fn() -> Vec<AppxPackage>;
 /// Setting key (under `providers.xbox`) for leaving PC Game Pass titles out of the owned list.
 pub const HIDE_GAME_PASS: &str = "hideGamePass";
 
+/// The `shell:AppsFolder\<family>!<app id>` action of the Xbox app among `packages`.
+fn xbox_app_action(packages: &[AppxPackage]) -> Option<PlayAction> {
+    let pkg = packages
+        .iter()
+        .find(|p| p.full_name.starts_with("Microsoft.GamingApp_"))?;
+    let (family, is_resource) = scan::parse_full_name(&pkg.full_name)?;
+    if is_resource {
+        return None;
+    }
+    let app_id = pkg.app_ids.first().map(String::as_str).unwrap_or("App");
+    Some(PlayAction::uri(format!(
+        r"shell:AppsFolder\{family}!{app_id}"
+    )))
+}
+
 #[derive(Debug)]
 pub struct XboxProvider {
     packages: PackageSource,
@@ -184,6 +199,12 @@ impl LibraryProvider for XboxProvider {
             .map(|product| product.metadata.clone()))
     }
 
+    /// Opens the Xbox app (`Microsoft.GamingApp`) through its `shell:AppsFolder` entry, when the
+    /// package is registered for this user. The shell target is run through `explorer.exe`.
+    fn launcher(&self) -> Option<PlayAction> {
+        xbox_app_action(&(self.packages)())
+    }
+
     /// Opens the game's Microsoft Store page, from where it can be installed; harmless for games
     /// that are already installed.
     fn install_action(&self, source_game_id: &str) -> Option<PlayAction> {
@@ -284,6 +305,29 @@ mod tests {
             root: content,
             app_ids: vec!["Game".into()],
         }]
+    }
+
+    #[test]
+    fn launcher_opens_the_xbox_app_package() {
+        let app = |app_ids: Vec<String>| AppxPackage {
+            full_name: "Microsoft.GamingApp_2.0.0.0_x64__8wekyb3d8bbwe".into(),
+            root: std::path::PathBuf::new(),
+            app_ids,
+        };
+        let action = xbox_app_action(&[app(vec!["Microsoft.Xbox.App".into()])]).unwrap();
+        assert_eq!(
+            action.target,
+            r"shell:AppsFolder\Microsoft.GamingApp_8wekyb3d8bbwe!Microsoft.Xbox.App"
+        );
+        assert_eq!(action.kind, crate::model::ActionKind::Uri);
+        assert!(
+            xbox_app_action(&[app(Vec::new())])
+                .unwrap()
+                .target
+                .ends_with("!App")
+        );
+        assert!(xbox_app_action(&fixture_packages()).is_none());
+        assert!(provider(Vec::new).launcher().is_none());
     }
 
     #[test]

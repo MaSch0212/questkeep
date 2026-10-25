@@ -2,7 +2,9 @@ import { fireEvent, render, screen, waitFor } from "@solidjs/testing-library";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import * as api from "./lib/api";
+import { defaultQuery } from "./lib/query";
 import { store } from "./lib/store";
+import type { ViewLayout } from "./bindings/ViewLayout";
 import { makeGame } from "./test-utils";
 
 vi.mock("./lib/api");
@@ -69,7 +71,22 @@ beforeEach(() => {
     devTools: false,
   });
   vi.mocked(api.runningGames).mockResolvedValue([]);
+  vi.mocked(api.countGames).mockResolvedValue([]);
+  vi.mocked(api.syncTimes).mockResolvedValue({ all: null, providers: {} });
+  vi.mocked(api.listLaunchers).mockResolvedValue([]);
+  vi.mocked(api.updateView).mockResolvedValue(undefined as never);
+  mockViews();
 });
+
+function mockViews(layout: ViewLayout = "grid") {
+  vi.mocked(api.listViews).mockResolvedValue([
+    {
+      id: "library",
+      name: "Library",
+      views: [{ id: "all", name: "All games", icon: "library", query: defaultQuery(), layout }],
+    },
+  ]);
+}
 
 afterEach(() => {
   globalThis.ResizeObserver = originalResizeObserver;
@@ -85,7 +102,10 @@ describe("App", () => {
     expect(await screen.findByRole("gridcell", { name: "Hades" })).toBeInTheDocument();
     expect(screen.getByRole("gridcell", { name: "Celeste" })).toBeInTheDocument();
     expect(screen.getByText("2 games")).toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: "Steam" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /All games/ })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
   });
 
   it("shows an empty state", async () => {
@@ -94,9 +114,9 @@ describe("App", () => {
     await waitFor(() => expect(screen.getByText(/No games to show/)).toBeInTheDocument());
   });
 
-  it("switches to the list view and remembers it", async () => {
+  it("switches the layout as an unsaved change of the view", async () => {
     vi.mocked(api.listGames).mockResolvedValue([makeGame({ id: "1", name: "Hades" })]);
-    const { unmount } = render(() => <App />);
+    render(() => <App />);
     const gridButton = await screen.findByRole("button", { name: "Grid view" });
     expect(gridButton).toHaveAttribute("aria-pressed", "true");
     await fireEvent.click(screen.getByRole("button", { name: "List view" }));
@@ -106,16 +126,23 @@ describe("App", () => {
     );
     expect(await screen.findByRole("option", { name: "Hades" })).toBeInTheDocument();
     expect(screen.queryByRole("grid")).toBeNull();
-    expect(localStorage.getItem("questkeep.viewMode")).toBe("list");
+    expect(store.hasDraft("all")).toBe(true);
+    expect(screen.getByRole("group", { name: "Unsaved changes to All games" })).toBeVisible();
+    expect(api.updateView).not.toHaveBeenCalled();
+  });
 
-    // A fresh start picks the remembered view up again.
-    unmount();
-    store.reset();
+  it("moves the layout remembered before views existed into All games", async () => {
+    localStorage.setItem("questkeep.viewMode", "list");
+    vi.mocked(api.listGames).mockResolvedValue([makeGame({ id: "1", name: "Hades" })]);
+    vi.mocked(api.updateView).mockImplementation(async () => {
+      mockViews("list");
+      return undefined as never;
+    });
     render(() => <App />);
     expect(await screen.findByRole("option", { name: "Hades" })).toBeInTheDocument();
-    await fireEvent.click(screen.getByRole("button", { name: "Grid view" }));
-    expect(localStorage.getItem("questkeep.viewMode")).toBe("grid");
-    expect(await screen.findByRole("gridcell", { name: "Hades" })).toBeInTheDocument();
+    expect(api.updateView).toHaveBeenCalledWith("all", { layout: "list" });
+    expect(localStorage.getItem("questkeep.viewMode")).toBeNull();
+    expect(store.hasDraft("all")).toBe(false);
   });
 
   it("switches to the details view: narrow list plus page, no side panel", async () => {
@@ -129,7 +156,6 @@ describe("App", () => {
       "aria-pressed",
       "true",
     );
-    expect(localStorage.getItem("questkeep.viewMode")).toBe("details");
     expect(await screen.findByRole("option", { name: "Hades" })).toBeInTheDocument();
     // First game selected; exactly one details region (the page), without a close button.
     await waitFor(() =>
@@ -145,7 +171,7 @@ describe("App", () => {
     expect(screen.getByRole("complementary", { name: "Game details" })).toBeInTheDocument();
   });
 
-  it("opens settings as a page and returns to the library with the search intact", async () => {
+  it("opens settings as a page and returns to the library with the filter intact", async () => {
     vi.mocked(api.listGames).mockResolvedValue([
       makeGame({ id: "1", name: "Hades" }),
       makeGame({ id: "2", name: "Celeste" }),
@@ -165,7 +191,10 @@ describe("App", () => {
     });
     render(() => <App />);
     await screen.findByRole("gridcell", { name: "Hades" });
-    const search = screen.getByLabelText("Search games");
+    await fireEvent.click(
+      screen.getByRole("button", { name: "Filter this view by name (Ctrl+F)" }),
+    );
+    const search = screen.getByLabelText("Filter this view by name");
     await fireEvent.input(search, { target: { value: "hades" } });
     await waitFor(() => expect(store.query().search).toBe("hades"));
 
@@ -179,13 +208,13 @@ describe("App", () => {
       "page",
     );
     // The top bar stays mounted (keeping the search text) but is hidden.
-    expect(screen.getByLabelText("Search games").closest("[hidden]")).not.toBeNull();
+    expect(screen.getByLabelText("Filter this view by name").closest("[hidden]")).not.toBeNull();
 
-    await fireEvent.click(screen.getByRole("button", { name: "All games" }));
+    await fireEvent.click(screen.getByRole("button", { name: /All games/ }));
     expect(await screen.findByRole("grid")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Settings", level: 1 })).toBeNull();
-    expect(screen.getByLabelText("Search games").closest("[hidden]")).toBeNull();
-    expect(screen.getByLabelText("Search games")).toHaveValue("hades");
+    expect(screen.getByLabelText("Filter this view by name").closest("[hidden]")).toBeNull();
+    expect(screen.getByLabelText("Filter this view by name")).toHaveValue("hades");
     expect(store.query().search).toBe("hades");
   });
 

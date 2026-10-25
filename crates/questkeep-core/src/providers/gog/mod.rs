@@ -270,6 +270,19 @@ impl LibraryProvider for GogProvider {
         self.account.as_deref().map(|a| a as &dyn AccountAuth)
     }
 
+    /// Starts `GalaxyClient.exe` (Windows; the registry's client path, when the file exists).
+    fn launcher(&self) -> Option<PlayAction> {
+        let client = match &self.installs {
+            Installs::Fixed { galaxy_client, .. } => galaxy_client.clone(),
+            #[cfg(windows)]
+            Installs::System => registry::galaxy_client(),
+            Installs::Heroic(_) => None,
+        }?;
+        client
+            .is_file()
+            .then(|| PlayAction::file(client.to_string_lossy()))
+    }
+
     /// Opens GOG Galaxy's install dialog for the game (`installationScreen`, one of the protocol
     /// commands GalaxyClient.exe handles next to `openGameView`, `installGame` and `launchGame`).
     fn install_action(&self, source_game_id: &str) -> Option<PlayAction> {
@@ -378,6 +391,24 @@ mod tests {
         assert_eq!(p.name(), "GOG");
         assert!(p.can_scan());
         assert!(!p.can_scan_owned());
+    }
+
+    #[test]
+    fn launcher_is_the_galaxy_client_when_it_exists() {
+        let tmp = tempfile::tempdir().unwrap();
+        let client = tmp.path().join("GalaxyClient.exe");
+        assert!(
+            GogProvider::with_records(vec![], Some(client.clone()))
+                .launcher()
+                .is_none()
+        );
+        fs::write(&client, "x").unwrap();
+        let action = GogProvider::with_records(vec![], Some(client.clone()))
+            .launcher()
+            .unwrap();
+        assert_eq!(action.kind, ActionKind::File);
+        assert_eq!(action.target, client.to_string_lossy());
+        assert!(GogProvider::with_records(vec![], None).launcher().is_none());
     }
 
     #[test]

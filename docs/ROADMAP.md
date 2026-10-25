@@ -35,6 +35,12 @@ Also: GOG playtime from GOG Galaxy's local database; IGDB fills missing genres (
 - **EA app**: try the `origin2://` / `link2ea://` launch path for games the plain executable does
   not start.
 
+- **Launchers**: verify "Open launcher" on real installs for EA (registry command), Ubisoft
+  (InstallDir), Battle.net and the Xbox app.
+- **More view filters**: genres, tags, platforms, release year, playtime ranges; saved per view.
+- **Command bar commands**: run app actions (sync a store, open settings, switch views) from
+  Ctrl+K, not only games.
+
 ## Blocked
 
 - **Per-game Epic launcher uninstall**: no URI exists; revisit if Epic documents one.

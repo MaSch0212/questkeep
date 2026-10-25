@@ -572,6 +572,15 @@ impl LibraryProvider for EpicProvider {
         self.catalog_images(source_game_id, |item| item.icon_urls())
     }
 
+    /// Opens the Epic Games Launcher's store page, when its data folder exists (the launcher ran
+    /// on this PC). No Epic launcher exists on Linux (Heroic is a separate tool).
+    fn launcher(&self) -> Option<PlayAction> {
+        let root = self.data_root.as_ref()?;
+        root.join("EpicGamesLauncher")
+            .is_dir()
+            .then(|| PlayAction::uri("com.epicgames.launcher://store"))
+    }
+
     /// Asks the launcher to install the game. Current launchers only act on the full
     /// `<namespace>:<catalogItemId>:<appName>` id (the bare appName just opens the launcher), so
     /// the signed-in library supplies the ids; without them the bare form is the fallback.
@@ -1215,6 +1224,20 @@ mod tests {
             ))
             .with_cache_dir(cache.path());
         assert!(!second.cover_candidates("Sugar").is_empty());
+    }
+
+    #[test]
+    fn launcher_needs_the_launcher_data_folder() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert!(
+            EpicProvider::with_data_root(tmp.path())
+                .launcher()
+                .is_none()
+        );
+        std::fs::create_dir_all(tmp.path().join("EpicGamesLauncher")).unwrap();
+        let action = EpicProvider::with_data_root(tmp.path()).launcher().unwrap();
+        assert_eq!(action.target, "com.epicgames.launcher://store");
+        assert!(EpicProvider::default().launcher().is_none());
     }
 
     #[test]

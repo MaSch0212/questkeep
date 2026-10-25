@@ -8,16 +8,23 @@ import type { Game } from "../bindings/Game";
 import type { GameQuery } from "../bindings/GameQuery";
 import type { ProviderInfo } from "../bindings/ProviderInfo";
 import type { SortField } from "../bindings/SortField";
+import type { SyncTimes } from "../bindings/SyncTimes";
+import type { ViewLayout } from "../bindings/ViewLayout";
+import type { ViewSection } from "../bindings/ViewSection";
 import * as api from "./api";
 import { errorMessage } from "./errors";
+import { defaultDescending, defaultQuery, mergeSources } from "./query";
 import {
-  defaultDescending,
-  defaultQuery,
-  mergeSources,
-  toggleSource,
-  withLibraryView,
-  type LibraryView,
-} from "./query";
+  allViews,
+  effectiveState,
+  findView,
+  sectionOrder,
+  viewForGame,
+  withChange,
+  withoutDraft,
+  type Drafts,
+  type ViewState,
+} from "./views";
 import {
   createSyncTracker,
   IDLE_SYNC,
@@ -25,7 +32,14 @@ import {
   syncResultText,
   type SyncState,
 } from "./syncStatus";
-import { loadViewMode, saveViewMode, type ViewMode } from "./viewMode";
+import { takeLegacyViewMode, type ViewMode } from "./viewMode";
+
+/** What "Save as new view" asks for. */
+export interface NewViewInput {
+  name: string;
+  icon: string;
+  sectionId: string;
+}
 
 export type Page = "library" | "settings";
 
@@ -38,7 +52,17 @@ export interface Toast {
 const REFRESH_DEBOUNCE_MS = 60;
 
 function createAppStore() {
-  const [query, setQuery] = createSignal<GameQuery>(defaultQuery());
+  const [sections, setSections] = createSignal<ViewSection[]>([]);
+  const [activeViewId, setActiveViewId] = createSignal<string | null>(null);
+  const [drafts, setDrafts] = createSignal<Drafts>({});
+  // The keyword filter: narrows the open view by name, never saved with it.
+  const [keyword, setKeyword] = createSignal<string | null>(null);
+  const [viewCounts, setViewCounts] = createSignal<Readonly<Record<string, number>>>({});
+  const [editingViews, setEditingViews] = createSignal(false);
+  const [syncTimes, setSyncTimes] = createSignal<SyncTimes>({ all: null, providers: {} });
+  const [launchers, setLaunchers] = createSignal<string[]>([]);
+  // A game opened from the command bar that no view contains; its details show anyway.
+  const [pinnedGame, setPinnedGame] = createSignal<Game | null>(null);
   const [games, setGames] = createSignal<Game[]>([]);
   const [loading, setLoading] = createSignal(false);
   const [selectedId, setSelectedId] = createSignal<string | null>(null);
@@ -50,8 +74,15 @@ function createAppStore() {
   const [toasts, setToasts] = createSignal<Toast[]>([]);
   const [coverVersions, setCoverVersions] = createStore<Record<string, number>>({});
   const [page, setPage] = createSignal<Page>("library");
-  const [viewMode, setViewModeSignal] = createSignal<ViewMode>(loadViewMode());
   const [syncState, setSyncState] = createSignal<SyncState>(IDLE_SYNC);
+
+  const activeView = createMemo(() => findView(sections(), activeViewId()));
+  const viewState = createMemo<ViewState>(() => {
+    const view = activeView();
+    return view ? effectiveState(view, drafts()) : { query: defaultQuery(), layout: "grid" };
+  });
+  const query = createMemo<GameQuery>(() => ({ ...viewState().query, search: keyword() }));
+  const viewMode = createMemo<ViewMode>(() => viewState().layout);
 
   const indexById = createMemo(() => {
     const map = new Map<string, number>();
@@ -68,6 +99,8 @@ function createAppStore() {
     if (id === null) return undefined;
     const index = indexById().get(id);
     if (index !== undefined) return games()[index];
+    const pinned = pinnedGame();
+    if (pinned?.id === id) return pinned;
     return previous?.id === id ? previous : undefined;
   });
   const sources = createMemo(() => mergeSources(providers(), seenSources()));
@@ -91,7 +124,11 @@ function createAppStore() {
   // One status for every scan, however it started; one toast when the run ends.
   const syncTracker = createSyncTracker({
     onChange: setSyncState,
-    onFinished: (state) => pushToast("info", syncResultText(state)),
+    onFinished: (state) => {
+      pushToast("info", syncResultText(state));
+      // The core records the end of a "sync all" right after its last store.
+      setTimeout(() => void loadSyncTimes(), 500);
+    },
   });
 
   async function refresh(): Promise<void> {
@@ -109,6 +146,7 @@ function createAppStore() {
         });
         setLoading(false);
       });
+      void refreshCounts();
     } catch (error) {
       if (seq !== requestSeq) return;
       setLoading(false);
@@ -121,9 +159,157 @@ function createAppStore() {
     refreshTimer = setTimeout(() => void refresh(), delay);
   }
 
-  function updateQuery(patch: Partial<GameQuery> | ((q: GameQuery) => GameQuery)) {
-    setQuery((q) => (typeof patch === "function" ? patch(q) : { ...q, ...patch }));
+  let countSeq = 0;
+  /** The sidebar's game count of every view, following unsaved changes. */
+  async function refreshCounts(): Promise<void> {
+    const seq = ++countSeq;
+    const views = allViews(sections());
+    if (views.length === 0) return;
+    try {
+      const counts = await api.countGames(
+        views.map((view) => effectiveState(view, drafts()).query),
+      );
+      if (seq !== countSeq) return;
+      setViewCounts(Object.fromEntries(views.map((view, i) => [view.id, counts[i] ?? 0])));
+    } catch {
+      // Counts are a convenience; the list itself reports errors.
+    }
+  }
+
+  /** Changes the open view's filters, sort or layout; kept as a draft until saved. */
+  function changeView(change: (state: ViewState) => ViewState) {
+    const view = activeView();
+    if (!view) return;
+    setDrafts((current) => withChange(current, view, change));
     scheduleRefresh(0);
+  }
+
+  function changeQuery(patch: Partial<GameQuery>) {
+    changeView((state) => ({ ...state, query: { ...state.query, ...patch } }));
+  }
+
+  function selectView(id: string) {
+    batch(() => {
+      setPage("library");
+      // Coming back from another page to the open view keeps its keyword filter.
+      if (id !== activeViewId()) setKeyword(null);
+      setActiveViewId(id);
+      setPinnedGame(null);
+    });
+    scheduleRefresh(0);
+  }
+
+  /** Loads the views; keeps the open one if it still exists, else opens the first. */
+  async function loadViews(): Promise<void> {
+    let list = (await api.listViews()) ?? [];
+    // Before views existed the layout was remembered locally; it becomes "All games"'s layout.
+    const legacy = takeLegacyViewMode();
+    const all = findView(list, "all");
+    if (legacy !== null && all && all.layout !== legacy) {
+      await api.updateView(all.id, { layout: legacy }).catch(() => undefined);
+      list = await api.listViews();
+    }
+    batch(() => {
+      setSections(list);
+      const ids = new Set(allViews(list).map((v) => v.id));
+      setDrafts((current) =>
+        Object.fromEntries(Object.entries(current).filter(([id]) => ids.has(id))),
+      );
+      if (!ids.has(activeViewId() ?? "")) setActiveViewId(allViews(list)[0]?.id ?? null);
+    });
+  }
+
+  /** Runs a change to the views in the core, then reloads them (also after a failure). */
+  async function editViews(action: () => Promise<unknown>): Promise<boolean> {
+    let ok = true;
+    try {
+      await action();
+    } catch (error) {
+      ok = false;
+      pushToast("error", errorMessage(error));
+    }
+    try {
+      await loadViews();
+    } catch (error) {
+      pushToast("error", errorMessage(error));
+    }
+    scheduleRefresh(0);
+    return ok;
+  }
+
+  /** Writes the open view's unsaved changes into it. */
+  async function updateActiveView() {
+    const view = activeView();
+    if (!view) return;
+    const state = viewState();
+    const ok = await editViews(() =>
+      api.updateView(view.id, { query: state.query, layout: state.layout }),
+    );
+    if (ok) setDrafts((current) => withoutDraft(current, view.id));
+  }
+
+  /** Saves the open view's current state as a new view and opens it; the old view goes back
+   *  to what it had saved. */
+  async function saveAsNewView(input: NewViewInput): Promise<boolean> {
+    const from = activeView();
+    const state = viewState();
+    let created: string | null = null;
+    const ok = await editViews(async () => {
+      const view = await api.createView({
+        sectionId: input.sectionId,
+        name: input.name,
+        icon: input.icon,
+        query: state.query,
+        layout: state.layout,
+      });
+      created = view.id;
+    });
+    if (ok && created !== null) {
+      const id: string = created;
+      if (from) setDrafts((current) => withoutDraft(current, from.id));
+      selectView(id);
+    }
+    return ok;
+  }
+
+  /** Moves views and sections as shown (optimistically), then stores the order. */
+  async function arrangeViews(next: ViewSection[]) {
+    setSections(next);
+    await editViews(() => api.arrangeViews(sectionOrder(next)));
+  }
+
+  /**
+   * Shows a game's details: in the open view when it contains the game, else in the first view
+   * that does. A game no view contains is shown over the first view.
+   */
+  function openGamePage(game: Game) {
+    const target = viewForGame(sections(), drafts(), activeViewId(), game);
+    batch(() => {
+      setPage("library");
+      setKeyword(null);
+      setActiveViewId(target?.id ?? allViews(sections())[0]?.id ?? null);
+      setPinnedGame(target ? null : game);
+      setSelectedId(game.id);
+      setDetailsOpen(true);
+    });
+    scheduleRefresh(0);
+  }
+
+  async function loadSyncTimes() {
+    try {
+      const times = await api.syncTimes();
+      if (times) setSyncTimes(times);
+    } catch {
+      // Only used for "last synced" labels.
+    }
+  }
+
+  async function loadLaunchers() {
+    try {
+      setLaunchers((await api.listLaunchers()) ?? []);
+    } catch (error) {
+      pushToast("error", errorMessage(error));
+    }
   }
 
   /** Replaces one game in the list with a fresher copy (e.g. a command result). */
@@ -146,13 +332,16 @@ function createAppStore() {
     return imageUrl(game, game.coverPath);
   }
 
+  function iconUrl(game: Game): string | null {
+    return imageUrl(game, game.iconPath);
+  }
+
   function backgroundUrl(game: Game): string | null {
     return imageUrl(game, game.backgroundPath);
   }
 
-  function setViewMode(mode: ViewMode) {
-    setViewModeSignal(mode);
-    saveViewMode(mode);
+  function setViewMode(mode: ViewLayout) {
+    changeView((state) => ({ ...state, layout: mode }));
   }
 
   function selectGame(id: string | null) {
@@ -204,6 +393,7 @@ function createAppStore() {
       case "libraryScanned":
         syncTracker.handle(event);
         scheduleRefresh();
+        void loadSyncTimes();
         break;
       case "gameStarted":
         setRunningState(event.id, true);
@@ -246,7 +436,10 @@ function createAppStore() {
       api.listProviders().then(setProviders),
       api.appInfo().then(setAppInfo),
       api.runningGames().then((ids) => setRunning(new Set(ids))),
-      refresh(),
+      // The list needs the open view first.
+      loadViews().then(refresh),
+      loadSyncTimes(),
+      loadLaunchers(),
     ]).then((results) => {
       for (const r of results)
         if (r.status === "rejected") pushToast("error", errorMessage(r.reason));
@@ -264,7 +457,15 @@ function createAppStore() {
     clearTimeout(refreshTimer);
     requestSeq++;
     batch(() => {
-      setQuery(defaultQuery());
+      setSections([]);
+      setActiveViewId(null);
+      setDrafts({});
+      setKeyword(null);
+      setViewCounts({});
+      setEditingViews(false);
+      setSyncTimes({ all: null, providers: {} });
+      setLaunchers([]);
+      setPinnedGame(null);
       setGames([]);
       setLoading(false);
       setSelectedId(null);
@@ -279,7 +480,6 @@ function createAppStore() {
       setAppInfo(null);
       setSeenSources(new Set<string>());
       setToasts([]);
-      setViewModeSignal(loadViewMode());
     });
   }
 
@@ -308,27 +508,61 @@ function createAppStore() {
       libraryScroll[mode] = top;
     },
     libraryScroll: (mode: ViewMode) => libraryScroll[mode],
-    // queries
-    setSearch: (search: string | null) => updateQuery({ search }),
-    setSort: (sort: SortField) => updateQuery({ sort, descending: defaultDescending(sort) }),
-    toggleDirection: () => updateQuery((q) => ({ ...q, descending: !q.descending })),
-    setView: (view: LibraryView) => {
-      setPage("library");
-      updateQuery((q) => withLibraryView(q, view));
+    // views
+    sections,
+    activeView,
+    activeViewId,
+    drafts,
+    hasDraft: (id: string) => id in drafts(),
+    viewCounts,
+    editingViews,
+    setEditingViews,
+    selectView,
+    loadViews,
+    resetView: () => {
+      const view = activeView();
+      if (view) setDrafts((current) => withoutDraft(current, view.id));
+      scheduleRefresh(0);
     },
-    toggleSourceFilter: (id: string) => {
-      setPage("library");
-      updateQuery((q) => ({ ...q, sources: toggleSource(q.sources, id) }));
+    updateActiveView,
+    saveAsNewView,
+    arrangeViews,
+    renameView: (id: string, name: string) => editViews(() => api.updateView(id, { name })),
+    setViewIcon: (id: string, icon: string) => editViews(() => api.updateView(id, { icon })),
+    duplicateView: (id: string) => editViews(() => api.duplicateView(id)),
+    deleteView: (id: string) => editViews(() => api.deleteView(id)),
+    createSection: async (name: string) => {
+      let id: string | null = null;
+      await editViews(async () => {
+        id = (await api.createViewSection(name)).id;
+      });
+      return id as string | null;
     },
-    setInstalledOnly: (installedOnly: boolean) => {
-      setPage("library");
-      updateQuery({ installedOnly });
+    renameSection: (id: string, name: string) => editViews(() => api.renameViewSection(id, name)),
+    deleteSection: (id: string) => editViews(() => api.deleteViewSection(id)),
+    // the open view's filters, sort and layout (kept as a draft until saved)
+    keyword,
+    setKeyword: (value: string | null) => {
+      setKeyword(value);
+      scheduleRefresh(0);
     },
+    setSort: (sort: SortField) => changeQuery({ sort, descending: defaultDescending(sort) }),
+    setSortField: (sort: SortField) => changeQuery({ sort }),
+    setDescending: (descending: boolean) => changeQuery({ descending }),
+    toggleDirection: () => changeQuery({ descending: !query().descending }),
+    changeQuery,
+    // sync and launchers
+    syncTimes,
+    loadSyncTimes,
+    launchers,
+    loadLaunchers,
+    openGamePage,
     refresh,
     scheduleRefresh,
     upsertGame,
     bumpCover,
     coverUrl,
+    iconUrl,
     backgroundUrl,
     // selection
     selectGame,

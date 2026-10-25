@@ -38,7 +38,7 @@ describe("GameList", () => {
     expect(screen.queryByRole("option", { name: "Game 4999" })).toBeNull();
     // The canvas keeps the full scroll height.
     expect(document.querySelector<HTMLElement>(".list__canvas")?.style.height).toBe(
-      `${5000 * 52 + 16}px`,
+      `${5000 * 36 + 16}px`,
     );
   });
 

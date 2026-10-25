@@ -539,3 +539,12 @@ Short log of choices made while building. Newest at the bottom of each section.
   instead of the sign-in, never both), store options and a sync icon button live in the store's
   row; the separate library and Steam sections are gone. Sync results arrive as the usual sync
   toast.
+- **Library views live in the database** (`views`, `view_sections`, migration 3), not in
+  localStorage: a view is a saved `GameQuery` plus layout, and the sidebar shows only views. The
+  keyword filter ("Filter this view…") is never saved with a view and is cleared when another view
+  opens; unsaved changes are kept per view as an in-memory draft until the app closes (orange dot).
+  The old localStorage layout becomes "All games"'s layout once.
+- **The title bar holds the app's actions** (Questkeep menu, Add game, Open launcher, Sync,
+  Settings) and a command bar that finds any game regardless of the open view. Last sync times are
+  stored (`sync_times`) so the sync popup can show them after a restart. Stores open their own
+  launcher through `LibraryProvider::launcher`.

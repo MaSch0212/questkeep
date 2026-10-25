@@ -18,6 +18,21 @@ export function loadViewMode(): ViewMode {
   }
 }
 
+/**
+ * The layout remembered before views existed, removed so it is applied only once (to the "All
+ * games" view). `null` when there is none.
+ */
+export function takeLegacyViewMode(): ViewMode | null {
+  try {
+    const value = localStorage.getItem(VIEW_MODE_KEY);
+    if (value === null) return null;
+    localStorage.removeItem(VIEW_MODE_KEY);
+    return parseViewMode(value);
+  } catch {
+    return null;
+  }
+}
+
 export function saveViewMode(mode: ViewMode): void {
   try {
     localStorage.setItem(VIEW_MODE_KEY, mode);

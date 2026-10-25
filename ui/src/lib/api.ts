@@ -8,11 +8,37 @@ import type { GameUpdate } from "../bindings/GameUpdate";
 import type { NewManualGame } from "../bindings/NewManualGame";
 import type { ProviderInfo } from "../bindings/ProviderInfo";
 import type { ScanSummary } from "../bindings/ScanSummary";
+import type { LibraryView } from "../bindings/LibraryView";
+import type { NewView } from "../bindings/NewView";
+import type { SectionOrder } from "../bindings/SectionOrder";
 import type { Settings } from "../bindings/Settings";
+import type { SyncTimes } from "../bindings/SyncTimes";
+import type { ViewSection } from "../bindings/ViewSection";
+import type { ViewUpdate } from "../bindings/ViewUpdate";
 
 /** The only module that talks to the Rust core. Every command may reject with a string. */
 export const listGames = (query: GameQuery) => invoke<Game[]>("list_games", { query });
 export const getGame = (id: string) => invoke<Game>("get_game", { id });
+/** How many games each query matches, in order. */
+export const countGames = (queries: GameQuery[]) => invoke<number[]>("count_games", { queries });
+export const listViews = () => invoke<ViewSection[]>("list_views");
+export const createView = (view: NewView) => invoke<LibraryView>("create_view", { view });
+export const updateView = (id: string, update: ViewUpdate) =>
+  invoke<LibraryView>("update_view", { id, update });
+export const duplicateView = (id: string) => invoke<LibraryView>("duplicate_view", { id });
+export const deleteView = (id: string) => invoke<void>("delete_view", { id });
+export const createViewSection = (name: string) =>
+  invoke<ViewSection>("create_view_section", { name });
+export const renameViewSection = (id: string, name: string) =>
+  invoke<void>("rename_view_section", { id, name });
+export const deleteViewSection = (id: string) => invoke<void>("delete_view_section", { id });
+export const arrangeViews = (order: SectionOrder[]) => invoke<void>("arrange_views", { order });
+export const syncTimes = () => invoke<SyncTimes>("sync_times");
+/** Ids of the providers whose store launcher is installed. */
+export const listLaunchers = () => invoke<string[]>("list_launchers");
+export const openLauncher = (providerId: string) => invoke<void>("open_launcher", { providerId });
+/** Quits Questkeep, even when it would otherwise keep running in the tray. */
+export const exitApp = () => invoke<void>("exit_app");
 export const addManualGame = (input: NewManualGame) => invoke<Game>("add_manual_game", { input });
 export const updateGame = (id: string, update: GameUpdate) =>
   invoke<Game>("update_game", { id, update });

@@ -7,6 +7,8 @@ import {
   syncEntryText,
   syncLabel,
   syncResultText,
+  syncRowText,
+  type SyncEntry,
   type SyncEvent,
   type SyncState,
 } from "./syncStatus";
@@ -182,5 +184,30 @@ describe("createSyncTracker", () => {
     vi.advanceTimersByTime(5000);
     expect(onFinished).not.toHaveBeenCalled();
     expect(tracker.state()).toEqual(IDLE_SYNC);
+  });
+});
+
+describe("syncRowText", () => {
+  const now = new Date("2026-05-10T12:00:00Z");
+  it("shows the run's status, else when the store last synced", () => {
+    expect(
+      syncRowText({ provider: "steam", status: "running" } as SyncEntry, null, undefined, now),
+    ).toBe("Scanning…");
+    expect(syncRowText(undefined, null, undefined, now)).toBe("Not synced yet");
+    expect(syncRowText(undefined, "2026-05-10T11:48:00Z", undefined, now)).toBe(
+      "Synced 12 min ago",
+    );
+    expect(
+      syncRowText(
+        { provider: "steam", status: "done" } as SyncEntry,
+        "2026-05-10T11:59:50Z",
+        undefined,
+        now,
+      ),
+    ).toBe("Synced just now");
+    expect(syncRowText(undefined, null, "Last full sync", now)).toBe("Last full sync: never");
+    expect(syncRowText(undefined, "2026-05-10T09:00:00Z", "Last full sync", now)).toBe(
+      "Last full sync 3 h ago",
+    );
   });
 });

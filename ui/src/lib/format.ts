@@ -65,3 +65,15 @@ export function formatRelativeDate(iso: string | null, now: Date = new Date()): 
   if (days >= 2 && days <= 6) return `${days} days ago`;
   return date.toLocaleDateString();
 }
+
+/** "Just now", "12 min ago", "3 h ago", then like {@link formatRelativeDate}. */
+export function formatAgo(iso: string | null, now: Date = new Date()): string {
+  if (!iso) return "Never";
+  const time = new Date(iso).getTime();
+  if (Number.isNaN(time)) return "Unknown";
+  const minutes = Math.floor((now.getTime() - time) / 60_000);
+  if (minutes < 1) return "Just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  if (minutes < 12 * 60) return `${Math.floor(minutes / 60)} h ago`;
+  return formatRelativeDate(iso, now);
+}

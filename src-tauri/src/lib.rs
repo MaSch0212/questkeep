@@ -324,6 +324,20 @@ pub fn run() {
             commands::sign_in,
             commands::sign_in_with_code,
             commands::sign_out,
+            commands::count_games,
+            commands::list_views,
+            commands::create_view,
+            commands::update_view,
+            commands::duplicate_view,
+            commands::delete_view,
+            commands::create_view_section,
+            commands::rename_view_section,
+            commands::delete_view_section,
+            commands::arrange_views,
+            commands::sync_times,
+            commands::list_launchers,
+            commands::open_launcher,
+            commands::exit_app,
         ]))
         .build(tauri::generate_context!());
 

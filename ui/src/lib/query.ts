@@ -2,30 +2,16 @@ import type { GameQuery } from "../bindings/GameQuery";
 import type { ProviderInfo } from "../bindings/ProviderInfo";
 import type { SortField } from "../bindings/SortField";
 
-export type LibraryView = "all" | "favorites" | "hidden";
-
 export function defaultQuery(): GameQuery {
   return {
     search: null,
     sort: "name",
     descending: false,
     sources: [],
-    favoritesOnly: false,
+    favorite: "any",
     hidden: "visible",
-    installedOnly: false,
-  };
-}
-
-export function libraryView(query: GameQuery): LibraryView {
-  if (query.hidden === "hidden") return "hidden";
-  return query.favoritesOnly ? "favorites" : "all";
-}
-
-export function withLibraryView(query: GameQuery, view: LibraryView): GameQuery {
-  return {
-    ...query,
-    favoritesOnly: view === "favorites",
-    hidden: view === "hidden" ? "hidden" : "visible",
+    installed: "any",
+    played: "any",
   };
 }
 

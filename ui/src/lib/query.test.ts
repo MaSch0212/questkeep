@@ -1,27 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   defaultDescending,
-  defaultQuery,
-  libraryView,
   mergeSources,
   normalizeSearch,
   scanSummaryText,
   toggleSource,
-  withLibraryView,
 } from "./query";
-
-describe("library view", () => {
-  it("maps views to query fields and back", () => {
-    const q = defaultQuery();
-    expect(libraryView(q)).toBe("all");
-    const fav = withLibraryView(q, "favorites");
-    expect(fav).toMatchObject({ favoritesOnly: true, hidden: "visible" });
-    expect(libraryView(fav)).toBe("favorites");
-    const hidden = withLibraryView(fav, "hidden");
-    expect(hidden).toMatchObject({ favoritesOnly: false, hidden: "hidden" });
-    expect(libraryView(hidden)).toBe("hidden");
-  });
-});
 
 describe("helpers", () => {
   it("picks default sort direction", () => {

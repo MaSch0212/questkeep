@@ -10,7 +10,29 @@ import { Sidebar } from "./components/Sidebar";
 import { TitleBar } from "./components/TitleBar";
 import { Toasts } from "./components/Toasts";
 import { TopBar } from "./components/TopBar";
+import type { CommandBarHandle } from "./components/CommandBar";
+import type { KeywordFilterHandle } from "./components/KeywordFilter";
 import { store } from "./lib/store";
+
+/** A printable character typed without modifiers (space stays with the focused button). */
+function isTypeToFilter(event: KeyboardEvent): boolean {
+  return (
+    event.key.length === 1 &&
+    event.key !== " " &&
+    event.key !== "/" &&
+    !event.ctrlKey &&
+    !event.altKey &&
+    !event.metaKey
+  );
+}
+
+/** Whether a key went to the game list (or nowhere in particular). */
+function inLibrary(target: EventTarget | null): boolean {
+  if (!(target instanceof Element) || target === document.body) return true;
+  return (
+    target.closest(".app__content") !== null && target.closest(".details, .dview__page") === null
+  );
+}
 
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -26,7 +48,8 @@ export function App() {
   const [adding, setAdding] = createSignal(false);
   const [contentWidth, setContentWidth] = createSignal(0);
   const [breakpoint, setBreakpoint] = createSignal(DEFAULT_SPLIT_BREAKPOINT);
-  let searchInput: HTMLInputElement | undefined;
+  let keywordFilter: KeywordFilterHandle | undefined;
+  let commandBar: CommandBarHandle | undefined;
 
   // Wide window: details sit beside the library; narrow: they overlay it as a flyout.
   const split = () => isSplitWidth(contentWidth(), breakpoint());
@@ -42,14 +65,29 @@ export function App() {
   }
 
   function onKeyDown(event: KeyboardEvent) {
-    if (adding() || store.page() !== "library") return;
-    const wantsSearch =
-      (event.ctrlKey && event.key.toLowerCase() === "f") ||
-      (event.key === "/" && !event.ctrlKey && !event.metaKey && !isTypingTarget(event.target));
-    if (wantsSearch) {
+    if (adding()) return;
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
       event.preventDefault();
-      searchInput?.focus();
-      searchInput?.select();
+      commandBar?.focus();
+      return;
+    }
+    if (store.page() !== "library") return;
+    const typing = isTypingTarget(event.target);
+    const wantsFilter =
+      (event.ctrlKey && event.key.toLowerCase() === "f") ||
+      (event.key === "/" && !event.ctrlKey && !event.metaKey && !typing);
+    if (wantsFilter) {
+      event.preventDefault();
+      keywordFilter?.open();
+    } else if (
+      isTypeToFilter(event) &&
+      !typing &&
+      !store.editingViews() &&
+      inLibrary(event.target)
+    ) {
+      // Typing over the games starts the filter with that character.
+      event.preventDefault();
+      keywordFilter?.open(event.key);
     } else if (event.key === "Escape" && store.viewMode() !== "details" && store.detailsOpen()) {
       store.closeDetails();
     }
@@ -74,12 +112,12 @@ export function App() {
 
   return (
     <div class="app">
-      <TitleBar />
-      <Sidebar onAdd={() => setAdding(true)} />
+      <TitleBar onAdd={() => setAdding(true)} commandRef={(handle) => (commandBar = handle)} />
+      <Sidebar />
       <div class="app__main">
-        {/* Stays mounted (just hidden) on other pages so the search box keeps its text. */}
+        {/* Stays mounted (just hidden) on other pages so the filter box keeps its text. */}
         <div hidden={store.page() !== "library"}>
-          <TopBar inputRef={(el) => (searchInput = el)} />
+          <TopBar keywordRef={(handle) => (keywordFilter = handle)} />
         </div>
         <Show
           when={store.page() === "library"}

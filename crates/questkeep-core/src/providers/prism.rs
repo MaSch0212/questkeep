@@ -309,6 +309,26 @@ impl LibraryProvider for PrismProvider {
         self.paths.data_dir.is_some()
     }
 
+    /// Starts Prism itself (with the Flatpak prefix, if any), when the program was found.
+    fn launcher(&self) -> Option<PlayAction> {
+        let command = self.paths.command.as_ref()?;
+        let mut action = PlayAction::file(command.program.to_string_lossy());
+        let args = command
+            .prefix
+            .iter()
+            .map(|a| {
+                if a.contains([' ', '"']) {
+                    format!("\"{}\"", a.replace('"', "\\\""))
+                } else {
+                    a.clone()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" ");
+        action.args = Some(args).filter(|a| !a.is_empty());
+        Some(action)
+    }
+
     fn scan_installed(&self) -> Result<Vec<ImportedGame>, ProviderError> {
         Ok(self
             .instances()?
@@ -512,6 +532,26 @@ mod tests {
             [ImageCandidate::File(instances.join("Awd/icon.ico"))]
         );
         assert!(provider.icon_candidates("missing").is_empty());
+    }
+
+    #[test]
+    fn launcher_starts_the_program_with_its_prefix() {
+        let (_tmp, provider, _) = setup(None);
+        let action = provider.launcher().unwrap();
+        assert_eq!(action.target, "prismlauncher.exe");
+        assert_eq!(action.args, None);
+        let flatpak = PrismProvider::with_paths(PrismPaths {
+            data_dir: None,
+            command: Some(PrismCommand {
+                program: PathBuf::from("flatpak"),
+                prefix: vec!["run".into(), "org.prismlauncher.PrismLauncher".into()],
+            }),
+        });
+        assert_eq!(
+            flatpak.launcher().unwrap().args.as_deref(),
+            Some("run org.prismlauncher.PrismLauncher")
+        );
+        assert!(PrismProvider::default().launcher().is_none());
     }
 
     #[test]
