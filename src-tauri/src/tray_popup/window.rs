@@ -22,13 +22,13 @@ use windows::Win32::Graphics::Direct2D::{
     ID2D1HwndRenderTarget,
 };
 use windows::Win32::Graphics::Dwm::{
-    DWM_WINDOW_CORNER_PREFERENCE, DWMWA_BORDER_COLOR, DWMWA_USE_IMMERSIVE_DARK_MODE,
-    DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND, DwmSetWindowAttribute,
+    DWM_WINDOW_CORNER_PREFERENCE, DWMWA_BORDER_COLOR, DWMWA_CLOAK, DWMWA_USE_IMMERSIVE_DARK_MODE,
+    DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND, DwmFlush, DwmSetWindowAttribute,
 };
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_UNKNOWN;
 use windows::Win32::Graphics::Gdi::{
     GetMonitorInfoW, InvalidateRect, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromPoint,
-    ScreenToClient, ValidateRect,
+    ScreenToClient, UpdateWindow, ValidateRect,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
@@ -280,7 +280,14 @@ fn run_with(
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(hwnd.0 as isize);
         if visible {
+            // The first frame needs the Direct2D device, which takes a moment; shown right away
+            // the popup would flash as an empty frame. So it is shown cloaked (DWM composes it
+            // but nothing appears), painted, and uncloaked once DWM has that frame.
+            set_cloaked(hwnd, true);
             let _ = ShowWindow(hwnd, SW_SHOW);
+            let _ = UpdateWindow(hwnd);
+            let _ = DwmFlush();
+            set_cloaked(hwnd, false);
             // The shell lets the tray icon's process take the foreground after a click on its
             // icon; without activation the popup could not notice clicks elsewhere.
             let _ = SetForegroundWindow(hwnd);
@@ -294,6 +301,15 @@ fn run_with(
         }
     }
     Ok(STATE.with(|s| s.borrow_mut().take().and_then(|state| state.action)))
+}
+
+/// Hides (or shows again) a window from the screen while DWM keeps composing it.
+fn set_cloaked(hwnd: HWND, cloaked: bool) {
+    let value = i32::from(cloaked);
+    // SAFETY: the attribute gets a pointer to a 4-byte BOOL, as documented.
+    unsafe {
+        let _ = DwmSetWindowAttribute(hwnd, DWMWA_CLOAK, (&value as *const i32).cast(), 4);
+    }
 }
 
 /// Windows 11 look: rounded corners, dark frame, a border in the theme's border color. Older
