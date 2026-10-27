@@ -307,6 +307,15 @@ impl Library {
 
     /// Ids of the providers whose store launcher is installed on this PC, in registry order.
     pub fn launchers(&self) -> Vec<String> {
+        self.launcher_infos()
+            .into_iter()
+            .map(|info| info.id)
+            .collect()
+    }
+
+    /// The stores whose own launcher is installed, with their names and logos (the tray lists
+    /// them). Cheap file and registry checks per store.
+    pub fn launcher_infos(&self) -> Vec<ProviderInfo> {
         self.providers
             .infos()
             .into_iter()
@@ -315,7 +324,6 @@ impl Library {
                     .get(&info.id)
                     .is_some_and(|p| p.launcher().is_some())
             })
-            .map(|info| info.id)
             .collect()
     }
 

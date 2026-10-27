@@ -48,54 +48,6 @@ pub fn executable_icon(path: &Path, size: u32) -> Option<crate::images::IconRgba
     }
 }
 
-/// A store client that is installed on this machine and can be opened by URI.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StoreClient {
-    /// Stable id (`steam`, `epic`, `gog`, `xbox`).
-    pub id: &'static str,
-    pub name: &'static str,
-    /// Opens the client (through [`open_uri`]).
-    pub uri: &'static str,
-}
-
-/// Store clients that look installed, in menu order. Cheap file/registry checks only; the
-/// detection is a hint (the client may still fail to open), not a guarantee.
-pub fn installed_store_clients() -> Vec<StoreClient> {
-    let mut clients = Vec::new();
-    if !steam_install_dirs().is_empty() {
-        clients.push(StoreClient {
-            id: "steam",
-            name: "Steam",
-            uri: "steam://open/main",
-        });
-    }
-    #[cfg(windows)]
-    {
-        if windows::epic_launcher_installed() {
-            clients.push(StoreClient {
-                id: "epic",
-                name: "Epic Games Launcher",
-                uri: "com.epicgames.launcher://store",
-            });
-        }
-        if windows::gog_galaxy_client().is_some() {
-            clients.push(StoreClient {
-                id: "gog",
-                name: "GOG Galaxy",
-                uri: "goggalaxy://openGameView/",
-            });
-        }
-        if windows::xbox_app_installed() {
-            clients.push(StoreClient {
-                id: "xbox",
-                name: "Xbox",
-                uri: "xbox:",
-            });
-        }
-    }
-    clients
-}
-
 fn existing_unique_dirs(candidates: Vec<PathBuf>, accept: impl Fn(&Path) -> bool) -> Vec<PathBuf> {
     let mut seen: Vec<PathBuf> = Vec::new();
     let mut out = Vec::new();

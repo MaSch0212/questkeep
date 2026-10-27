@@ -7,8 +7,8 @@
 //! [tile] [tile] ...
 //! Favorites
 //! (icon) Name                      rows, scrollable when there are many
-//! Stores
-//! (Steam) (GOG) (Epic)             pills, wrapping
+//! Launchers
+//! [logo] [logo] [logo] [logo]      launcher tiles, logo above the name, four per row
 //! ─────────────────────────────
 //! [Open Questkeep] [Update to x.y]   [Exit]
 //! ```
@@ -26,9 +26,9 @@ pub const ROW_HEIGHT: f32 = 40.0;
 pub const ICON_SIZE: f32 = 28.0;
 /// Favorites rows visible at once; more scroll.
 pub const MAX_VISIBLE_ROWS: usize = 6;
-pub const PILL_HEIGHT: f32 = 30.0;
-pub const PILL_PADDING: f32 = 14.0;
-pub const PILL_GAP: f32 = 8.0;
+pub const LAUNCHER_HEIGHT: f32 = 64.0;
+pub const LAUNCHER_ICON_SIZE: f32 = 24.0;
+pub const BUTTON_GAP: f32 = 8.0;
 pub const FOOTER_HEIGHT: f32 = 52.0;
 pub const BUTTON_HEIGHT: f32 = 34.0;
 pub const BUTTON_PADDING: f32 = 16.0;
@@ -37,7 +37,7 @@ pub const SECTION_GAP: f32 = 6.0;
 
 pub const RECENT_LABEL: &str = "Recently played";
 pub const FAVORITES_LABEL: &str = "Favorites";
-pub const STORES_LABEL: &str = "Stores";
+pub const LAUNCHERS_LABEL: &str = "Launchers";
 pub const EMPTY_RECENT: &str = "No recently played games yet";
 pub const OPEN_LABEL: &str = "Open Questkeep";
 pub const EXIT_LABEL: &str = "Exit";
@@ -78,7 +78,8 @@ impl Rect {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
     Launch(Uuid),
-    OpenUri(String),
+    /// Opens a store's launcher (provider id).
+    OpenLauncher(String),
     OpenWindow,
     /// Opens the window with its update dialog.
     ShowUpdate,
@@ -91,8 +92,8 @@ pub enum ItemKind {
     Tile(usize),
     /// Favorite `n` as a row.
     Row(usize),
-    /// Store client `n` as a pill.
-    Pill(usize),
+    /// Store launcher `n` as a logo tile.
+    Launcher(usize),
     OpenButton,
     /// Shown when an app update is available.
     UpdateButton,
@@ -112,8 +113,8 @@ pub struct Item {
 pub struct Content {
     pub recent: Vec<Uuid>,
     pub favorites: Vec<Uuid>,
-    /// Store client names and the URIs that open them.
-    pub stores: Vec<(String, String)>,
+    /// Provider ids of the installed store launchers.
+    pub launchers: Vec<String>,
     /// Version of an available app update.
     pub update: Option<String>,
 }
@@ -197,25 +198,26 @@ pub fn layout(content: &Content, scroll: f32, measure: impl Fn(&str) -> f32) -> 
         y += clip.h;
     }
 
-    if !content.stores.is_empty() {
+    if !content.launchers.is_empty() {
         y += SECTION_GAP;
-        labels.push((STORES_LABEL, Rect::new(PADDING, y, inner, LABEL_HEIGHT)));
+        labels.push((LAUNCHERS_LABEL, Rect::new(PADDING, y, inner, LABEL_HEIGHT)));
         y += LABEL_HEIGHT;
-        let mut x = PADDING;
-        for (i, (name, uri)) in content.stores.iter().enumerate() {
-            let w = (measure(name) + 2.0 * PILL_PADDING).ceil().min(inner);
-            if x > PADDING && x + w > PADDING + inner {
-                x = PADDING;
-                y += PILL_HEIGHT + PILL_GAP;
-            }
+        let tile_w = (inner - TILE_GAP * (COLUMNS as f32 - 1.0)) / COLUMNS as f32;
+        for (i, id) in content.launchers.iter().enumerate() {
+            let (row, col) = (i / COLUMNS, i % COLUMNS);
             items.push(Item {
-                kind: ItemKind::Pill(i),
-                action: Action::OpenUri(uri.clone()),
-                rect: Rect::new(x, y, w, PILL_HEIGHT),
+                kind: ItemKind::Launcher(i),
+                action: Action::OpenLauncher(id.clone()),
+                rect: Rect::new(
+                    PADDING + col as f32 * (tile_w + TILE_GAP),
+                    y + row as f32 * (LAUNCHER_HEIGHT + TILE_GAP),
+                    tile_w,
+                    LAUNCHER_HEIGHT,
+                ),
             });
-            x += w + PILL_GAP;
         }
-        y += PILL_HEIGHT;
+        let rows = content.launchers.len().div_ceil(COLUMNS);
+        y += rows as f32 * LAUNCHER_HEIGHT + (rows as f32 - 1.0) * TILE_GAP;
     }
 
     y += PADDING;
@@ -234,7 +236,7 @@ pub fn layout(content: &Content, scroll: f32, measure: impl Fn(&str) -> f32) -> 
             kind: ItemKind::UpdateButton,
             action: Action::ShowUpdate,
             rect: Rect::new(
-                PADDING + open_w + PILL_GAP,
+                PADDING + open_w + BUTTON_GAP,
                 button_y,
                 update_w,
                 BUTTON_HEIGHT,
@@ -448,13 +450,11 @@ mod tests {
         (0..n).map(|i| Uuid::from_u128(i as u128 + 1)).collect()
     }
 
-    fn content(recent: usize, favorites: usize, stores: usize) -> Content {
+    fn content(recent: usize, favorites: usize, launchers: usize) -> Content {
         Content {
             recent: ids(recent),
             favorites: ids(favorites),
-            stores: (0..stores)
-                .map(|i| (format!("Store {i}"), format!("store{i}://")))
-                .collect(),
+            launchers: (0..launchers).map(|i| format!("store{i}")).collect(),
             update: None,
         }
     }
@@ -469,7 +469,7 @@ mod tests {
     }
 
     #[test]
-    fn full_popup_has_tiles_rows_pills_and_buttons_in_tab_order() {
+    fn full_popup_has_tiles_rows_launchers_and_buttons_in_tab_order() {
         let l = layout(&content(10, 2, 2), 0.0, measure);
         let k = kinds(&l);
         assert_eq!(
@@ -479,12 +479,13 @@ mod tests {
         );
         assert_eq!(k[0], ItemKind::Tile(0));
         assert_eq!(k[8], ItemKind::Row(0));
-        assert_eq!(k[10], ItemKind::Pill(0));
+        assert_eq!(k[10], ItemKind::Launcher(0));
+        assert_eq!(l.items[10].action, Action::OpenLauncher("store0".into()));
         assert_eq!(k[12], ItemKind::OpenButton);
         assert_eq!(k[13], ItemKind::ExitButton);
         assert_eq!(
             l.labels.iter().map(|(t, _)| *t).collect::<Vec<_>>(),
-            vec![RECENT_LABEL, FAVORITES_LABEL, STORES_LABEL]
+            vec![RECENT_LABEL, FAVORITES_LABEL, LAUNCHERS_LABEL]
         );
         // Everything inside the popup, and the footer at the bottom.
         for item in &l.items {
@@ -535,7 +536,7 @@ mod tests {
         assert_eq!(
             l.labels.len(),
             1,
-            "no favorites or stores label without entries"
+            "no favorites or launchers label without entries"
         );
         assert!(l.favorites_clip.is_none());
     }
@@ -574,25 +575,24 @@ mod tests {
     }
 
     #[test]
-    fn pills_wrap() {
-        let c = Content {
-            stores: (0..6)
-                .map(|i| (format!("A long store name {i}"), format!("s{i}://")))
-                .collect(),
-            ..Content::default()
-        };
-        let l = layout(&c, 0.0, measure);
-        let pills: Vec<Rect> = l
+    fn launchers_are_tiles_four_per_row() {
+        let l = layout(&content(0, 0, 6), 0.0, measure);
+        let tiles: Vec<Rect> = l
             .items
             .iter()
-            .filter(|i| matches!(i.kind, ItemKind::Pill(_)))
+            .filter(|i| matches!(i.kind, ItemKind::Launcher(_)))
             .map(|i| i.rect)
             .collect();
-        assert!(
-            pills.iter().any(|p| p.y > pills[0].y),
-            "wrapped to a second line"
+        assert_eq!(tiles.len(), 6);
+        assert_eq!(tiles[0].h, LAUNCHER_HEIGHT);
+        assert_eq!(tiles[3].y, tiles[0].y);
+        assert_eq!(
+            tiles[4].x, tiles[0].x,
+            "fifth launcher starts the second row"
         );
-        assert!(pills.iter().all(|p| p.right() <= WIDTH - PADDING + 0.01));
+        assert!((tiles[4].y - tiles[0].bottom() - TILE_GAP).abs() < 0.01);
+        assert!(tiles.iter().all(|t| t.right() <= WIDTH - PADDING + 0.01));
+        assert!(tiles[5].bottom() < l.separator_y);
     }
 
     #[test]
@@ -627,7 +627,7 @@ mod tests {
             "from the grid into the favorites"
         );
         assert_eq!(nav(6, Nav::Down), Some(7));
-        assert_eq!(nav(7, Nav::Down), Some(8), "into the stores");
+        assert_eq!(nav(7, Nav::Down), Some(8), "into the launchers");
         assert_eq!(nav(8, Nav::Down), Some(9), "to Open Questkeep");
         assert_eq!(nav(9, Nav::Right), Some(10), "to Exit");
         assert_eq!(nav(6, Nav::Up), Some(5), "back up to the nearest tile");

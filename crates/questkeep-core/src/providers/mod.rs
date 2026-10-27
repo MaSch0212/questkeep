@@ -8,7 +8,7 @@ pub mod epic;
 pub mod gog;
 pub mod heroic;
 pub mod heroic_sideload;
-mod icons;
+pub mod icons;
 pub mod lutris;
 pub mod manual;
 pub mod prism;

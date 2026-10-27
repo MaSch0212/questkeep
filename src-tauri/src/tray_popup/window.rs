@@ -709,7 +709,6 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use questkeep_core::platform::StoreClient;
     use questkeep_core::tray::{TrayGame, TrayGames};
     use uuid::Uuid;
     use windows::Win32::System::Com::{
@@ -734,10 +733,10 @@ mod tests {
                 }],
                 favorites: vec![],
             },
-            clients: vec![StoreClient {
-                id: "steam",
-                name: "Steam",
-                uri: "steam://open/main",
+            launchers: vec![crate::tray::TrayLauncher {
+                id: "steam".into(),
+                name: "Steam".into(),
+                icon: questkeep_core::providers::icons::STEAM.into(),
             }],
             update: None,
         };

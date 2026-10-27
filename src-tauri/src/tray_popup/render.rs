@@ -9,14 +9,15 @@ use std::collections::HashMap;
 
 use uuid::Uuid;
 use windows::Win32::Graphics::Direct2D::Common::{
-    D2D_RECT_F, D2D_SIZE_U, D2D1_ALPHA_MODE_PREMULTIPLIED, D2D1_COLOR_F, D2D1_GRADIENT_STOP,
-    D2D1_PIXEL_FORMAT,
+    D2D_RECT_F, D2D_SIZE_F, D2D_SIZE_U, D2D1_ALPHA_MODE_PREMULTIPLIED, D2D1_COLOR_F,
+    D2D1_GRADIENT_STOP, D2D1_PIXEL_FORMAT,
 };
 use windows::Win32::Graphics::Direct2D::{
     D2D1_ANTIALIAS_MODE_PER_PRIMITIVE, D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR,
     D2D1_BITMAP_PROPERTIES, D2D1_DRAW_TEXT_OPTIONS_CLIP, D2D1_EXTEND_MODE_CLAMP,
     D2D1_FACTORY_TYPE_SINGLE_THREADED, D2D1_GAMMA_2_2, D2D1_LINEAR_GRADIENT_BRUSH_PROPERTIES,
-    D2D1_ROUNDED_RECT, D2D1CreateFactory, ID2D1Bitmap, ID2D1Brush, ID2D1Factory, ID2D1RenderTarget,
+    D2D1_ROUNDED_RECT, D2D1CreateFactory, ID2D1Bitmap, ID2D1Brush, ID2D1DeviceContext5,
+    ID2D1Factory, ID2D1RenderTarget,
 };
 use windows::Win32::Graphics::DirectWrite::{
     DWRITE_FACTORY_TYPE_SHARED, DWRITE_FONT_STRETCH_NORMAL, DWRITE_FONT_STYLE_NORMAL,
@@ -27,7 +28,8 @@ use windows::Win32::Graphics::DirectWrite::{
     DWRITE_WORD_WRAPPING_WRAP, DWriteCreateFactory, IDWriteFactory, IDWriteTextFormat,
 };
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
-use windows::core::{Result, w};
+use windows::Win32::UI::Shell::SHCreateMemStream;
+use windows::core::{Interface, Result, w};
 use windows_numerics::{Matrix3x2, Vector2};
 
 use super::layout::{self, ItemKind, Layout, Rect};
@@ -172,6 +174,7 @@ pub struct Renderer {
     placeholder: IDWriteTextFormat,
     empty: IDWriteTextFormat,
     letter: IDWriteTextFormat,
+    launcher_name: IDWriteTextFormat,
 }
 
 impl Renderer {
@@ -215,11 +218,13 @@ impl Renderer {
         let tile_name = format(12.0, DWRITE_FONT_WEIGHT_SEMI_BOLD, true)?;
         let placeholder = format(13.0, DWRITE_FONT_WEIGHT_SEMI_BOLD, true)?;
         let letter = format(15.0, DWRITE_FONT_WEIGHT_SEMI_BOLD, false)?;
+        let launcher_name = format(12.0, DWRITE_FONT_WEIGHT_SEMI_BOLD, false)?;
         // SAFETY: setting alignment on formats created above.
         unsafe {
             tile_name.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_FAR)?;
             placeholder.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER)?;
             letter.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER)?;
+            launcher_name.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER)?;
         }
         Ok(Self {
             label: format(12.0, DWRITE_FONT_WEIGHT_SEMI_BOLD, false)?,
@@ -229,6 +234,7 @@ impl Renderer {
             tile_name,
             placeholder,
             letter,
+            launcher_name,
             factory,
             dwrite,
         })
@@ -529,8 +535,8 @@ impl Painter<'_> {
                     // SAFETY: matches the push above.
                     unsafe { t.PopAxisAlignedClip() };
                 }
-                ItemKind::Pill(i) => {
-                    let Some(client) = data.clients.get(i) else {
+                ItemKind::Launcher(i) => {
+                    let Some(launcher) = data.launchers.get(i) else {
                         continue;
                     };
                     let bg = self.brush(
@@ -543,13 +549,27 @@ impl Painter<'_> {
                         },
                         1.0,
                     )?;
-                    let radius = r.h / 2.0;
-                    self.fill(r, radius, &bg);
+                    self.fill(r, TILE_RADIUS, &bg);
                     let border = self.brush(color::BORDER, 1.0)?;
-                    self.stroke(inflate(r, -0.5), radius, &border, 1.0);
-                    self.centered_text(client.name, r, &text);
+                    self.stroke(inflate(r, -0.5), TILE_RADIUS, &border, 1.0);
+                    let size = layout::LAUNCHER_ICON_SIZE;
+                    let icon = snapped(
+                        Rect::new(r.x + (r.w - size) / 2.0, r.y + 10.0, size, size),
+                        self.scale,
+                    );
+                    if self.svg(&launcher.icon, icon, color::TEXT).is_err() {
+                        let initial: String = launcher.name.chars().take(1).collect();
+                        self.text(&initial, &self.renderer.letter, icon, &text);
+                    }
+                    let name = Rect::new(r.x + 4.0, icon.bottom() + 4.0, r.w - 8.0, 20.0);
+                    self.text(
+                        &launcher.name,
+                        &self.renderer.launcher_name,
+                        name,
+                        if hovered { &text } else { &muted },
+                    );
                     if focused {
-                        self.stroke(inflate(r, 2.0), radius + 2.0, &focus, FOCUS_WIDTH);
+                        self.stroke(inflate(r, 2.0), TILE_RADIUS + 2.0, &focus, FOCUS_WIDTH);
                     }
                 }
                 ItemKind::OpenButton => {
@@ -637,6 +657,33 @@ impl Painter<'_> {
         Ok(())
     }
 
+    /// Draws SVG markup (a store logo) into `r`, with `currentColor` as `color`. Needs Direct2D
+    /// SVG support (Windows 10 1703+); the caller draws a fallback on error.
+    fn svg(&self, markup: &str, r: Rect, color: u32) -> Result<()> {
+        let markup = markup.replace("currentColor", &format!("#{color:06x}"));
+        let context: ID2D1DeviceContext5 = self.target.cast()?;
+        // SAFETY: the stream copies `markup`; drawing happens inside BeginDraw/EndDraw, and the
+        // transform is restored afterwards.
+        unsafe {
+            let stream = SHCreateMemStream(Some(markup.as_bytes())).ok_or_else(|| {
+                windows::core::Error::from(windows::Win32::Foundation::E_OUTOFMEMORY)
+            })?;
+            let document = context.CreateSvgDocument(
+                &stream,
+                D2D_SIZE_F {
+                    width: r.w,
+                    height: r.h,
+                },
+            )?;
+            let mut previous = Matrix3x2::default();
+            context.GetTransform(&mut previous);
+            context.SetTransform(&(Matrix3x2::translation(r.x, r.y) * previous));
+            context.DrawSvgDocument(&document);
+            context.SetTransform(&previous);
+        }
+        Ok(())
+    }
+
     fn centered_text(&self, label: &str, r: Rect, brush: &ID2D1Brush) {
         let w = self.renderer.measure(label);
         let x = r.x + (r.w - w) / 2.0;
@@ -708,7 +755,16 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
 
-    use questkeep_core::platform::StoreClient;
+    use crate::tray::TrayLauncher;
+    use questkeep_core::providers::icons;
+
+    fn launcher(id: &str, name: &str, icon: &str) -> TrayLauncher {
+        TrayLauncher {
+            id: id.into(),
+            name: name.into(),
+            icon: icon.into(),
+        }
+    }
     use questkeep_core::tray::{TrayGame, TrayGames};
     use windows::Win32::Graphics::Direct2D::{
         D2D1_FEATURE_LEVEL_DEFAULT, D2D1_RENDER_TARGET_PROPERTIES,
@@ -796,11 +852,7 @@ mod tests {
                     .map(|(n, (id, p))| entry(100 + n, id, None, Some(p.clone())))
                     .collect(),
             },
-            clients: vec![StoreClient {
-                id: "steam",
-                name: "Steam",
-                uri: "steam://open/main",
-            }],
+            launchers: vec![launcher("steam", "Steam", icons::STEAM)],
             update: None,
         }
     }
@@ -837,17 +889,15 @@ mod tests {
                         })
                         .collect(),
                 },
-                clients: vec![
-                    StoreClient {
-                        id: "steam",
-                        name: "Steam",
-                        uri: "steam://open/main",
-                    },
-                    StoreClient {
-                        id: "gog",
-                        name: "GOG Galaxy",
-                        uri: "goggalaxy://",
-                    },
+                launchers: vec![
+                    launcher("steam", "Steam", icons::STEAM),
+                    launcher("epic", "Epic Games", icons::EPIC),
+                    launcher("gog", "GOG", icons::GOG),
+                    launcher("xbox", "Xbox", icons::XBOX),
+                    launcher("ea", "EA app", icons::EA),
+                    launcher("ubisoft", "Ubisoft Connect", icons::UBISOFT),
+                    launcher("battlenet", "Battle.net", icons::BATTLENET),
+                    launcher("prism", "Prism Launcher", icons::PRISM),
                 ],
                 update: Some("0.3.0".into()),
             };

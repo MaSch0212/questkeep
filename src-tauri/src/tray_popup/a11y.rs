@@ -14,7 +14,7 @@ use super::layout::{self, ItemKind, Layout, Rect};
 const ROOT: NodeId = NodeId(1);
 const RECENT_GROUP: NodeId = NodeId(2);
 const FAVORITES_GROUP: NodeId = NodeId(3);
-const STORES_GROUP: NodeId = NodeId(4);
+const LAUNCHERS_GROUP: NodeId = NodeId(4);
 /// Items are `ITEM_BASE + index in the layout`.
 const ITEM_BASE: u64 = 1000;
 
@@ -51,10 +51,10 @@ fn item_label(data: &PopupData, kind: ItemKind) -> String {
             .favorites
             .get(i)
             .map_or_else(String::new, |g| g.name.clone()),
-        ItemKind::Pill(i) => data
-            .clients
+        ItemKind::Launcher(i) => data
+            .launchers
             .get(i)
-            .map_or_else(String::new, |c| format!("Open {}", c.name)),
+            .map_or_else(String::new, |l| format!("Open {}", l.name)),
         ItemKind::OpenButton => layout::OPEN_LABEL.to_string(),
         ItemKind::UpdateButton => data
             .update
@@ -91,7 +91,7 @@ fn union(rects: impl Iterator<Item = Rect>) -> Option<Rect> {
 /// logical layout to physical window pixels.
 pub fn tree(layout: &Layout, data: &PopupData, focus: Option<usize>, scale: f32) -> TreeUpdate {
     let mut nodes = Vec::with_capacity(layout.items.len() + 4);
-    let (mut recent, mut favorites, mut stores, mut footer) =
+    let (mut recent, mut favorites, mut launchers, mut footer) =
         (Vec::new(), Vec::new(), Vec::new(), Vec::new());
     for (index, item) in layout.items.iter().enumerate() {
         let id = item_node(index);
@@ -110,7 +110,7 @@ pub fn tree(layout: &Layout, data: &PopupData, focus: Option<usize>, scale: f32)
                 node.add_action(A11yAction::ScrollIntoView);
                 favorites.push(id);
             }
-            ItemKind::Pill(_) => stores.push(id),
+            ItemKind::Launcher(_) => launchers.push(id),
             ItemKind::OpenButton | ItemKind::UpdateButton | ItemKind::ExitButton => {
                 footer.push(id);
             }
@@ -142,10 +142,13 @@ pub fn tree(layout: &Layout, data: &PopupData, focus: Option<usize>, scale: f32)
         nodes.push((FAVORITES_GROUP, node));
         root_children.push(FAVORITES_GROUP);
     }
-    if !stores.is_empty() {
-        let area = rects(&stores);
-        nodes.push((STORES_GROUP, group(layout::STORES_LABEL, area, stores)));
-        root_children.push(STORES_GROUP);
+    if !launchers.is_empty() {
+        let area = rects(&launchers);
+        nodes.push((
+            LAUNCHERS_GROUP,
+            group(layout::LAUNCHERS_LABEL, area, launchers),
+        ));
+        root_children.push(LAUNCHERS_GROUP);
     }
     root_children.extend(footer);
 
@@ -175,7 +178,6 @@ pub fn tree(layout: &Layout, data: &PopupData, focus: Option<usize>, scale: f32)
 mod tests {
     use super::*;
     use crate::tray_popup::layout::layout;
-    use questkeep_core::platform::StoreClient;
     use questkeep_core::tray::{TrayGame, TrayGames};
     use uuid::Uuid;
 
@@ -194,10 +196,10 @@ mod tests {
                 recent: vec![game(1, "Hades"), game(2, "Celeste")],
                 favorites: vec![game(3, "Hollow Knight")],
             },
-            clients: vec![StoreClient {
-                id: "steam",
-                name: "Steam",
-                uri: "steam://open/main",
+            launchers: vec![crate::tray::TrayLauncher {
+                id: "steam".into(),
+                name: "Steam".into(),
+                icon: questkeep_core::providers::icons::STEAM.into(),
             }],
             update: None,
         }
@@ -255,7 +257,7 @@ mod tests {
             &[
                 RECENT_GROUP,
                 FAVORITES_GROUP,
-                STORES_GROUP,
+                LAUNCHERS_GROUP,
                 item_node(4),
                 item_node(5)
             ]

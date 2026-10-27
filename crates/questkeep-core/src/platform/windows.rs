@@ -59,15 +59,6 @@ pub(super) fn appx_packages() -> Vec<super::AppxPackage> {
         .collect()
 }
 
-/// The Epic Games Launcher keeps its data under `%ProgramData%\Epic\EpicGamesLauncher`, which
-/// exists once the launcher ran on this machine.
-pub(super) fn epic_launcher_installed() -> bool {
-    let program_data = std::env::var_os("ProgramData")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(r"C:\ProgramData"));
-    program_data.join(r"Epic\EpicGamesLauncher").is_dir()
-}
-
 /// `GalaxyClient.exe` of the installed GOG Galaxy, when present on disk (same registry keys the
 /// GOG provider reads).
 pub(super) fn gog_galaxy_client() -> Option<PathBuf> {
@@ -82,13 +73,6 @@ pub(super) fn gog_galaxy_client() -> Option<PathBuf> {
         let exe = PathBuf::from(dir.trim()).join("GalaxyClient.exe");
         exe.is_file().then_some(exe)
     })
-}
-
-/// Whether the Xbox app (`Microsoft.GamingApp`) is registered for the current user.
-pub(super) fn xbox_app_installed() -> bool {
-    appx_packages()
-        .iter()
-        .any(|p| p.full_name.starts_with("Microsoft.GamingApp_"))
 }
 
 /// Every program of the Windows "Apps" list: the 64- and 32-bit machine keys and the user key.

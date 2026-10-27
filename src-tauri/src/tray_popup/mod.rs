@@ -1,5 +1,5 @@
 //! The tray popup (Windows): a small native window shown from the tray icon instead of a context
-//! menu, with recent games as cover tiles, favorites with icons, store clients and the app
+//! menu, with recent games as cover tiles, favorites with icons, store launchers and the app
 //! actions. Drawn with Direct2D/DirectWrite on its own thread, created when opened and destroyed
 //! when it closes, so it costs nothing while the app waits in the tray. Other platforms keep the
 //! native tray menu (`tray.rs`).
@@ -19,8 +19,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use questkeep_core::images::{IconRgba, load_icon_rgba, load_image_filled, scale_icon};
-use questkeep_core::platform::StoreClient;
 use questkeep_core::tray::{TrayGame, TrayGames};
+
+pub use crate::tray::TrayLauncher;
 
 pub use layout::{Action, ScreenRect};
 use layout::{Content, Item, ItemKind, Layout, MAX_TILES};
@@ -32,7 +33,7 @@ pub use window::show;
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PopupData {
     pub games: TrayGames,
-    pub clients: Vec<StoreClient>,
+    pub launchers: Vec<TrayLauncher>,
     /// Version of an available app update.
     pub update: Option<String>,
 }
@@ -42,11 +43,7 @@ impl PopupData {
         Content {
             recent: self.games.recent.iter().map(|g| g.id).collect(),
             favorites: self.games.favorites.iter().map(|g| g.id).collect(),
-            stores: self
-                .clients
-                .iter()
-                .map(|c| (c.name.to_string(), c.uri.to_string()))
-                .collect(),
+            launchers: self.launchers.iter().map(|l| l.id.clone()).collect(),
             update: self.update.clone(),
         }
     }

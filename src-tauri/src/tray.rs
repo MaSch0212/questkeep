@@ -1,8 +1,8 @@
 //! System tray icon and what it opens: on Windows a custom popup (`tray_popup`) with cover tiles,
-//! elsewhere a native menu. Both list recently played and favorite games and open store clients;
+//! elsewhere a native menu. Both list recently played and favorite games and open store launchers;
 //! their content is refreshed (debounced, off the UI thread) when the library changes.
 //!
-//! The selection logic is in `questkeep_core::tray` and `questkeep_core::platform`; this module
+//! The selection logic is in `questkeep_core::tray` and the providers' launchers; this module
 //! only turns it into Tauri menu items, so it has no unit tests of its own (creating a tray icon
 //! needs a real desktop session).
 
@@ -12,7 +12,6 @@ use std::time::Duration;
 
 use questkeep_core::events::CoreEvent;
 use questkeep_core::images::load_icon_rgba;
-use questkeep_core::platform::{self, StoreClient};
 use questkeep_core::tray::{TrayGame, TrayGames, menu_label};
 use tauri::image::Image;
 use tauri::menu::{IconMenuItem, IsMenuItem, Menu, MenuBuilder, MenuItem, Submenu, SubmenuBuilder};
@@ -31,7 +30,7 @@ const ID_OPEN: &str = "open";
 const ID_EXIT: &str = "exit";
 const ID_UPDATE: &str = "update";
 const GAME_PREFIX: &str = "game:";
-const URI_PREFIX: &str = "uri:";
+const LAUNCHER_PREFIX: &str = "launcher:";
 
 /// Windows shows the custom popup; other platforms the native menu.
 const USE_POPUP: bool = cfg!(windows);
@@ -47,8 +46,18 @@ static TRIGGER: Mutex<Option<Sender<Trigger>>> = Mutex::new(None);
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 struct MenuModel {
     games: TrayGames,
-    clients: Vec<StoreClient>,
+    launchers: Vec<TrayLauncher>,
     update: Option<String>,
+}
+
+/// A store whose own launcher is installed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TrayLauncher {
+    /// Provider id, for `Library::open_launcher`.
+    pub id: String,
+    pub name: String,
+    /// The store's logo as SVG markup (`currentColor` is the drawing color).
+    pub icon: String,
 }
 
 /// Why the menu is rebuilt.
@@ -56,7 +65,7 @@ struct MenuModel {
 enum Trigger {
     /// Games changed.
     Games,
-    /// A store scan finished: installed store clients may have changed as well.
+    /// A store scan finished: installed launchers may have changed as well.
     Scan,
     /// An app update was found.
     Update,
@@ -133,11 +142,11 @@ pub fn create(app: &AppHandle, state: &Arc<AppState>) -> tauri::Result<()> {
 /// Sleeps on the channel (no timers, no polling) until the library changed, waits for the burst to
 /// settle, and rebuilds the menu once if its content differs.
 fn refresh_loop(app: &AppHandle, state: &AppState, rx: &Receiver<Trigger>) {
-    let mut clients: Option<Vec<StoreClient>> = None;
+    let mut launchers: Option<Vec<TrayLauncher>> = None;
     let mut shown: Option<MenuModel> = None;
     let mut first = true;
     loop {
-        let mut rescan = clients.is_none();
+        let mut rescan = launchers.is_none();
         if !first {
             match rx.recv() {
                 Ok(trigger) => rescan |= trigger == Trigger::Scan,
@@ -164,11 +173,22 @@ fn refresh_loop(app: &AppHandle, state: &AppState, rx: &Receiver<Trigger>) {
             state.metadata.enqueue_icons(missing);
         }
         if rescan {
-            clients = Some(platform::installed_store_clients());
+            launchers = Some(
+                state
+                    .library
+                    .launcher_infos()
+                    .into_iter()
+                    .map(|info| TrayLauncher {
+                        id: info.id,
+                        name: info.name,
+                        icon: info.icon,
+                    })
+                    .collect(),
+            );
         }
         let model = MenuModel {
             games,
-            clients: clients.clone().unwrap_or_default(),
+            launchers: launchers.clone().unwrap_or_default(),
             update: UPDATE
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
@@ -246,10 +266,10 @@ fn favorites_submenu(app: &AppHandle, favorites: &[TrayGame]) -> tauri::Result<S
     builder.build()
 }
 
-fn clients_submenu(app: &AppHandle, clients: &[StoreClient]) -> tauri::Result<Submenu<Wry>> {
-    let mut builder = SubmenuBuilder::new(app, "Store clients");
-    for client in clients {
-        builder = builder.text(format!("{URI_PREFIX}{}", client.uri), client.name);
+fn launchers_submenu(app: &AppHandle, launchers: &[TrayLauncher]) -> tauri::Result<Submenu<Wry>> {
+    let mut builder = SubmenuBuilder::new(app, "Launchers");
+    for launcher in launchers {
+        builder = builder.text(format!("{LAUNCHER_PREFIX}{}", launcher.id), &launcher.name);
     }
     builder.build()
 }
@@ -271,8 +291,8 @@ fn build_menu(app: &AppHandle, model: &MenuModel) -> tauri::Result<Menu<Wry>> {
         builder = builder.text(ID_UPDATE, format!("Update to {version}…"));
     }
     builder = builder.text(ID_OPEN, "Open Questkeep");
-    if !model.clients.is_empty() {
-        builder = builder.item(&clients_submenu(app, &model.clients)?);
+    if !model.launchers.is_empty() {
+        builder = builder.item(&launchers_submenu(app, &model.launchers)?);
     }
     builder.separator().text(ID_EXIT, "Exit").build()
 }
@@ -315,13 +335,13 @@ fn show_popup(app: &AppHandle, rect: &tauri::Rect) {
         .unwrap_or_default();
     let data = PopupData {
         games: model.games,
-        clients: model.clients,
+        launchers: model.launchers,
         update: model.update,
     };
     let app = app.clone();
     tray_popup::show(anchor, data, move |action| match action {
         Action::Launch(id) => launch(&app, id),
-        Action::OpenUri(uri) => open_client(uri),
+        Action::OpenLauncher(id) => open_launcher(&app, id),
         Action::OpenWindow => window::show_main_window(&app),
         Action::ShowUpdate => crate::updates::show(&app),
         Action::Exit => exit(&app),
@@ -353,8 +373,8 @@ fn on_menu_event(app: &AppHandle, id: &str) {
                 .and_then(|id| Uuid::parse_str(id).ok())
             {
                 launch(app, game);
-            } else if let Some(uri) = other.strip_prefix(URI_PREFIX) {
-                open_client(uri.to_string());
+            } else if let Some(id) = other.strip_prefix(LAUNCHER_PREFIX) {
+                open_launcher(app, id.to_string());
             }
         }
     }
@@ -382,10 +402,15 @@ fn launch(app: &AppHandle, id: Uuid) {
     });
 }
 
-fn open_client(uri: String) {
+/// Opens a store's launcher like the `open_launcher` command; a failure is logged.
+fn open_launcher(app: &AppHandle, id: String) {
+    let Some(state) = app.try_state::<Arc<AppState>>() else {
+        return;
+    };
+    let state = Arc::clone(&state);
     std::thread::spawn(move || {
-        if let Err(err) = platform::open_uri(&uri) {
-            tracing::warn!(%err, %uri, "could not open the store client");
+        if let Err(err) = state.library.open_launcher(&id) {
+            tracing::warn!(%err, %id, "could not open the launcher");
         }
     });
 }
