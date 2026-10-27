@@ -316,8 +316,7 @@ impl Library {
     /// The stores whose own launcher is installed, with their names and logos (the tray lists
     /// them). Cheap file and registry checks per store.
     pub fn launcher_infos(&self) -> Vec<ProviderInfo> {
-        self.providers
-            .infos()
+        self.provider_infos()
             .into_iter()
             .filter(|info| {
                 self.providers
@@ -516,7 +515,9 @@ impl Library {
     }
 
     pub fn provider_infos(&self) -> Vec<ProviderInfo> {
-        self.providers.infos()
+        let settings = self.settings();
+        self.providers
+            .infos(|id| settings.provider_config(id).clone())
     }
 
     fn account_provider(
@@ -608,6 +609,12 @@ impl Library {
             .ok_or_else(|| CoreError::UnknownProvider(provider_id.to_string()))?;
         let settings = self.settings();
         let config = settings.provider_config(provider_id);
+        if provider.can_scan() && !provider.is_installed() && !provider.has_owned_source(config) {
+            return Err(CoreError::Invalid(format!(
+                "{} isn't installed on this PC. Sign in under Settings → Stores and accounts to sync the games you own.",
+                provider.name()
+            )));
+        }
         provider.configure(config);
         let owned = if provider.can_scan_owned() {
             match provider.scan_owned(config) {
@@ -699,11 +706,11 @@ impl Library {
 
     /// Scans every provider that supports scanning; failures are logged, not fatal.
     pub fn scan_all(&self) -> Vec<(String, Result<ScanSummary>)> {
+        // Stores whose client is missing are skipped unless an account reads their owned games.
         let scannable: Vec<_> = self
-            .providers
-            .infos()
+            .provider_infos()
             .into_iter()
-            .filter(|p| p.can_scan)
+            .filter(|p| p.syncable)
             .collect();
         // Lets the UI list the stores still waiting, so the sync isn't "done" between two scans.
         self.events.publish(CoreEvent::ScansQueued {
@@ -936,6 +943,12 @@ impl Library {
             .providers
             .get(provider_id)
             .ok_or_else(|| CoreError::UnknownProvider(provider_id.to_string()))?;
+        if !provider.is_installed() {
+            return Err(CoreError::Invalid(format!(
+                "{} isn't installed on this PC.",
+                provider.name()
+            )));
+        }
         let before = self.installed_ids(provider_id);
         provider
             .run_add_game_option(option_id)
@@ -1044,6 +1057,9 @@ mod tests {
 
     struct FakeStore(Vec<ImportedGame>);
     impl LibraryProvider for FakeStore {
+        fn is_installed(&self) -> bool {
+            true
+        }
         fn id(&self) -> &str {
             "fake"
         }
@@ -1164,6 +1180,9 @@ mod tests {
 
     struct TaggingStore(std::sync::Mutex<Option<HashMap<String, Vec<String>>>>);
     impl LibraryProvider for TaggingStore {
+        fn is_installed(&self) -> bool {
+            true
+        }
         fn id(&self) -> &str {
             "tags"
         }
@@ -1328,6 +1347,9 @@ mod tests {
     /// Launcher whose "new instance" dialog adds a game once it was opened.
     struct DialogStore(Mutex<Vec<ImportedGame>>);
     impl LibraryProvider for DialogStore {
+        fn is_installed(&self) -> bool {
+            true
+        }
         fn id(&self) -> &str {
             "dialog"
         }
@@ -1394,6 +1416,9 @@ mod tests {
     /// Store whose client is missing but whose account lists owned games when configured.
     struct AccountStore;
     impl LibraryProvider for AccountStore {
+        fn is_installed(&self) -> bool {
+            true
+        }
         fn id(&self) -> &str {
             "acct"
         }
@@ -1511,6 +1536,9 @@ mod tests {
     }
     struct SignInProvider(Arc<SignInStore>);
     impl LibraryProvider for SignInProvider {
+        fn is_installed(&self) -> bool {
+            true
+        }
         fn id(&self) -> &str {
             "acct"
         }
@@ -1538,6 +1566,67 @@ mod tests {
         fn account(&self) -> Option<&dyn crate::auth::AccountAuth> {
             Some(self.0.as_ref())
         }
+    }
+
+    /// A store whose client isn't installed; its account still reads owned games.
+    struct ClientMissing(Arc<SignInStore>);
+    impl LibraryProvider for ClientMissing {
+        fn id(&self) -> &str {
+            "acct"
+        }
+        fn name(&self) -> &str {
+            "Account"
+        }
+        fn icon_svg(&self) -> &'static str {
+            "<svg/>"
+        }
+        fn scan_installed(&self) -> Result<Vec<ImportedGame>, ProviderError> {
+            Err(ProviderError::NotFound("client not installed".into()))
+        }
+        fn can_scan_owned(&self) -> bool {
+            true
+        }
+        fn scan_owned(&self, _: &serde_json::Value) -> Result<Vec<ImportedGame>, ProviderError> {
+            let mut owned = ImportedGame::installed("2", "Owned");
+            owned.installed = false;
+            Ok(vec![owned])
+        }
+        fn account(&self) -> Option<&dyn crate::auth::AccountAuth> {
+            Some(self.0.as_ref())
+        }
+        fn add_game_options(&self) -> Vec<crate::providers::AddGameOption> {
+            vec![crate::providers::AddGameOption {
+                id: "new".into(),
+                label: "New thing".into(),
+            }]
+        }
+    }
+
+    #[test]
+    fn stores_without_their_client_only_sync_when_signed_in() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Arc::new(SignInStore {
+            signed_in: false.into(),
+        });
+        let mut providers = ProviderRegistry::new();
+        providers.register(Arc::new(ClientMissing(store)));
+        let (lib, _) = library(tmp.path(), providers);
+
+        let info = |lib: &Library| lib.provider_infos().remove(0);
+        assert!(!info(&lib).installed);
+        assert!(!info(&lib).syncable);
+        assert!(info(&lib).add_game_options.is_empty());
+        assert!(lib.scan_all().is_empty(), "skipped by Sync all");
+        let err = lib.scan("acct").unwrap_err().to_string();
+        assert!(err.contains("isn't installed"), "{err}");
+        assert!(lib.run_add_game_option("acct", "new").is_err());
+        assert!(lib.launchers().is_empty());
+
+        lib.sign_in_with_code("acct", "good-code-1234").unwrap();
+        assert!(info(&lib).syncable);
+        assert!(!info(&lib).installed);
+        assert_eq!(lib.scan_all().len(), 1);
+        assert_eq!(lib.database().count_games().unwrap(), 1, "the owned game");
     }
 
     #[test]

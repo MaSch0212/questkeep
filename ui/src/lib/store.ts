@@ -357,6 +357,11 @@ function createAppStore() {
     }
   }
 
+  /** Stores and what they can do; signing in or out changes which ones can sync. */
+  async function loadProviders() {
+    setProviders(await api.listProviders());
+  }
+
   async function loadCategories() {
     try {
       setCategories((await api.listCategories()) ?? []);
@@ -567,7 +572,7 @@ function createAppStore() {
       listen("show-update", () => void showUpdateRequest()).then(keep),
     ]);
     const loads = Promise.allSettled([
-      api.listProviders().then(setProviders),
+      loadProviders(),
       api.appInfo().then(setAppInfo),
       api.runningGames().then((ids) => setRunning(new Set(ids))),
       // The list needs the open view first.
@@ -640,6 +645,7 @@ function createAppStore() {
     toasts,
     duplicatesOpen,
     setDuplicatesOpen,
+    loadProviders,
     update,
     setUpdate,
     updateOpen,

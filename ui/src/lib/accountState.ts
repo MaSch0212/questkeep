@@ -42,6 +42,10 @@ export interface StoreRow {
   id: string;
   name: string;
   canScan: boolean;
+  /** The store's client is on this PC. */
+  installed: boolean;
+  /** Syncing does something (client installed, or signed in). */
+  syncable: boolean;
   account: AccountStatus | null;
 }
 
@@ -56,12 +60,21 @@ export function storeRows(providers: readonly ProviderInfo[], accounts: readonly
       id: p.id,
       name: p.name,
       canScan: p.canScan,
+      installed: p.installed,
+      syncable: p.syncable,
       account: accounts.find((a) => a.provider === p.id) ?? null,
     }))
     .filter((row) => row.canScan || row.account !== null);
   for (const account of accounts) {
     if (!rows.some((r) => r.id === account.provider)) {
-      rows.push({ id: account.provider, name: account.name, canScan: false, account });
+      rows.push({
+        id: account.provider,
+        name: account.name,
+        canScan: false,
+        installed: false,
+        syncable: false,
+        account,
+      });
     }
   }
   return rows;

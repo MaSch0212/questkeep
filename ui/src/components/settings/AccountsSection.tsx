@@ -64,6 +64,18 @@ async function syncStore(id: string) {
   }
 }
 
+/** The line under a store's name: its account, or that its client is missing. */
+function storeDetail(entry: StoreRow, accountDetail: string | null): string {
+  if (!entry.installed && entry.canScan) {
+    return entry.account === null
+      ? "Not installed on this PC"
+      : entry.account.signedIn || entry.syncable
+        ? `Not installed on this PC · ${accountDetail ?? ""}`
+        : "Not installed on this PC. Sign in to sync the games you own.";
+  }
+  return accountDetail ?? "Imports the games installed on this PC";
+}
+
 /** Whether the row has anything below its head: options, sign-out, key or code sign-in. */
 function expandable(entry: StoreRow): boolean {
   return (
@@ -106,6 +118,7 @@ export function AccountsSection(props: { model: SettingsModel }) {
         store.pushToast("info", `Signed in to ${account.name}. Importing your library…`);
         store.scheduleRefresh();
         await refresh();
+        void store.loadProviders();
       }
     } catch (error) {
       store.pushToast("error", errorMessage(error));
@@ -124,6 +137,7 @@ export function AccountsSection(props: { model: SettingsModel }) {
       patch(account.provider, { code: "", codeOpen: false });
       store.scheduleRefresh();
       await refresh();
+      void store.loadProviders();
     } catch (error) {
       store.pushToast("error", errorMessage(error));
     } finally {
@@ -137,6 +151,7 @@ export function AccountsSection(props: { model: SettingsModel }) {
       await api.signOut(account.provider);
       store.pushToast("info", `Signed out of ${account.name}`);
       await refresh();
+      void store.loadProviders();
     } catch (error) {
       store.pushToast("error", errorMessage(error));
     }
@@ -212,9 +227,7 @@ export function AccountsSection(props: { model: SettingsModel }) {
                   <div class="account__info">
                     <span class="account__name">{entry.name}</span>
                     <span class="muted account__detail">
-                      {entry.account === null
-                        ? "Imports the games installed on this PC"
-                        : state(entry.account).detail}
+                      {storeDetail(entry, entry.account && state(entry.account).detail)}
                     </span>
                   </div>
                   <Show when={entry.account}>
@@ -236,7 +249,7 @@ export function AccountsSection(props: { model: SettingsModel }) {
                       </span>
                     )}
                   </Show>
-                  <Show when={entry.canScan}>
+                  <Show when={entry.syncable}>
                     <button
                       type="button"
                       class="icon-btn"

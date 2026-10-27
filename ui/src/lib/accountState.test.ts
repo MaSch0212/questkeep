@@ -42,13 +42,15 @@ describe("accountState", () => {
   });
 });
 
-const provider = (id: string, canScan = true) => ({
+const provider = (id: string, canScan = true, installed = true) => ({
   id,
   name: id.toUpperCase(),
   icon: "",
   canScan,
   canScanOwned: false,
   canUninstall: false,
+  installed,
+  syncable: canScan && installed,
   addGameOptions: [],
 });
 

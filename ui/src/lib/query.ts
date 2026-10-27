@@ -37,17 +37,21 @@ export interface SourceEntry {
   canScan: boolean;
 }
 
-/** Providers first (in their order), then any other source seen in the library, e.g. "fake". */
+/**
+ * Stores that are on this PC or synced through an account (in provider order), then any other
+ * source seen in the library, e.g. "fake" or a store whose client was uninstalled.
+ */
 export function mergeSources(
   providers: readonly ProviderInfo[],
   seen: ReadonlySet<string>,
 ): SourceEntry[] {
-  const entries: SourceEntry[] = providers.map((p) => ({
+  const shown = providers.filter((p) => p.installed || p.syncable || seen.has(p.id));
+  const entries: SourceEntry[] = shown.map((p) => ({
     id: p.id,
     name: p.name,
     canScan: p.canScan,
   }));
-  const known = new Set(providers.map((p) => p.id));
+  const known = new Set(shown.map((p) => p.id));
   for (const id of [...seen].toSorted()) {
     if (!known.has(id)) {
       entries.push({ id, name: id.charAt(0).toUpperCase() + id.slice(1), canScan: false });

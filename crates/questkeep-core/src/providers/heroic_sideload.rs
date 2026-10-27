@@ -62,6 +62,10 @@ impl LibraryProvider for HeroicSideloadProvider {
         self.enabled
     }
 
+    fn is_installed(&self) -> bool {
+        self.enabled && self.paths.config_dirs.iter().any(|d| d.is_dir())
+    }
+
     fn scan_installed(&self) -> Result<Vec<ImportedGame>, ProviderError> {
         if !self.enabled {
             return Err(ProviderError::NotFound(

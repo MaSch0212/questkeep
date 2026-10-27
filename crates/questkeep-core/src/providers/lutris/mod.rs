@@ -405,6 +405,10 @@ impl LibraryProvider for LutrisProvider {
         self.enabled
     }
 
+    fn is_installed(&self) -> bool {
+        self.enabled && self.db_files().iter().any(|db| db.is_file())
+    }
+
     fn scan_installed(&self) -> Result<Vec<ImportedGame>, ProviderError> {
         if !self.enabled {
             return Err(ProviderError::NotFound(

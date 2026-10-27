@@ -10,6 +10,14 @@ export type ProviderInfo = { id: string, name: string,
  */
 icon: string, canScan: boolean, canScanOwned: boolean, canUninstall: boolean, 
 /**
+ * The store's client is on this PC (see [`LibraryProvider::is_installed`]).
+ */
+installed: boolean, 
+/**
+ * Syncing does something: the client is installed or owned games can be read without it.
+ */
+syncable: boolean, 
+/**
  * Extra ways to add games (see [`LibraryProvider::add_game_options`]).
  */
 addGameOptions: Array<AddGameOption>, };

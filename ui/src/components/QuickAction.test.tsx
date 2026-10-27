@@ -123,6 +123,8 @@ describe("store banner and icon", () => {
         canScan: true,
         canScanOwned: true,
         canUninstall: true,
+        installed: true,
+        syncable: true,
         addGameOptions: [],
       },
     ]);

@@ -63,7 +63,7 @@ const syncEntries = (): MenuEntry[] => [
   { kind: "separator" },
   ...store
     .providers()
-    .filter((p) => p.canScan)
+    .filter((p) => p.syncable)
     .map((p): MenuEntry => ({
       label: p.name,
       icon: () => <SourceIcon source={p.id} />,

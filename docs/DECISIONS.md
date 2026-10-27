@@ -580,3 +580,7 @@ Short log of choices made while building. Newest at the bottom of each section.
 - **Update check after start**: one check 5 s after start (not periodic), remembered in the
   shell; the title bar and tray show an "Update" entry. The tray entry opens the window's update
   dialog instead of installing right away, so the restart is always confirmed in one place.
+- **Stores need their client, or a sign-in**: a provider counts as installed when its launcher is
+  found (`is_installed`, default `launcher().is_some()`). Sync skips stores that are neither
+  installed nor signed in (Steam: or a Web API key); their add-game options are hidden. Settings
+  still lists every store, marked "Not installed on this PC", so a sign-in stays reachable.

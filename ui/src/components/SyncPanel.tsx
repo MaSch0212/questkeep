@@ -24,7 +24,7 @@ export async function syncStore(id: string) {
   }
 }
 
-const stores = () => store.providers().filter((p) => p.canScan);
+const stores = () => store.providers().filter((p) => p.syncable);
 const entry = (id: string) => store.syncState().entries.find((e) => e.provider === id);
 
 /** Every store that can sync, always listed with its status and its own sync button. */

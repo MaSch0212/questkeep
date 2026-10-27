@@ -91,6 +91,12 @@ impl LibraryProvider for SteamProvider {
     /// Owned games through the Steam Web API: with the store sign-in when signed in, else with
     /// `config` = `{ "apiKey": string, "steamId"?: string }` (without a `steamId` the most
     /// recent login of the local Steam client is used). A failing sign-in falls back to the key.
+    /// A Web API key reads owned games as well as a sign-in does.
+    fn has_owned_source(&self, config: &serde_json::Value) -> bool {
+        config_text(config, "apiKey").is_some()
+            || self.account().is_some_and(|a| a.status().signed_in)
+    }
+
     fn scan_owned(&self, config: &serde_json::Value) -> Result<Vec<ImportedGame>, ProviderError> {
         if let Some(account) = self.account.as_deref().filter(|a| a.is_signed_in()) {
             match Self::owned_with_session(account) {

@@ -75,9 +75,46 @@ function renderAccounts() {
   });
 }
 
+const info = (id: string, name: string, installed: boolean, syncable: boolean) => ({
+  id,
+  name,
+  icon: "<svg></svg>",
+  canScan: true,
+  canScanOwned: true,
+  canUninstall: false,
+  installed,
+  syncable,
+  addGameOptions: [],
+});
+
 describe("AccountsSection", () => {
   beforeEach(() => {
     vi.mocked(api.getSettings).mockResolvedValue(makeSettings());
+  });
+
+  it("lists stores that aren't installed, and only offers Sync where it does something", async () => {
+    vi.mocked(api.listProviders).mockResolvedValue([
+      info("prism", "Prism Launcher", false, false),
+      info("gog", "GOG", false, true),
+      info("epic", "Epic Games", false, false),
+    ]);
+    await store.loadProviders();
+    vi.mocked(api.accountStatus).mockResolvedValue([
+      gog({ signedIn: true }),
+      epic({ signedIn: false }),
+    ]);
+    renderAccounts();
+    const prism = await screen.findByRole("group", { name: "Prism Launcher" });
+    expect(prism).toHaveTextContent("Not installed on this PC");
+    expect(screen.queryByRole("button", { name: "Sync Prism Launcher" })).toBeNull();
+    expect(screen.getByRole("group", { name: "GOG" })).toHaveTextContent(
+      "Not installed on this PC · Signed in as",
+    );
+    expect(screen.getByRole("button", { name: "Sync GOG" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Epic Games" })).toHaveTextContent(
+      "Not installed on this PC. Sign in to sync the games you own.",
+    );
+    expect(screen.queryByRole("button", { name: "Sync Epic Games" })).toBeNull();
   });
 
   it("renders each store's status", async () => {

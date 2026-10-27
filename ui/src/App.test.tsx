@@ -51,6 +51,8 @@ beforeEach(() => {
       canScan: false,
       canScanOwned: false,
       canUninstall: false,
+      installed: true,
+      syncable: false,
       addGameOptions: [],
     },
     {
@@ -60,6 +62,8 @@ beforeEach(() => {
       canScan: true,
       canScanOwned: true,
       canUninstall: true,
+      installed: true,
+      syncable: true,
       addGameOptions: [],
     },
   ]);

@@ -148,6 +148,16 @@ pub trait LibraryProvider: Send + Sync {
     fn launcher(&self) -> Option<PlayAction> {
         None
     }
+    /// Whether the store's client is on this PC. Stores that aren't installed are not synced
+    /// (unless [`has_owned_source`](Self::has_owned_source)) and offer no add-game options.
+    fn is_installed(&self) -> bool {
+        self.launcher().is_some()
+    }
+    /// Whether owned games can be read without the client: a signed-in account (or, for Steam, a
+    /// Web API key in `config`).
+    fn has_owned_source(&self, _config: &serde_json::Value) -> bool {
+        self.account().is_some_and(|a| a.status().signed_in)
+    }
     /// Extra ways to add games that this provider offers next to "Add game", e.g. the launcher's
     /// own "new instance" dialog. Empty by default.
     fn add_game_options(&self) -> Vec<AddGameOption> {
@@ -191,6 +201,10 @@ pub struct ProviderInfo {
     pub can_scan: bool,
     pub can_scan_owned: bool,
     pub can_uninstall: bool,
+    /// The store's client is on this PC (see [`LibraryProvider::is_installed`]).
+    pub installed: bool,
+    /// Syncing does something: the client is installed or owned games can be read without it.
+    pub syncable: bool,
     /// Extra ways to add games (see [`LibraryProvider::add_game_options`]).
     pub add_game_options: Vec<AddGameOption>,
 }
@@ -285,17 +299,28 @@ impl ProviderRegistry {
         self.providers.values()
     }
 
-    pub fn infos(&self) -> Vec<ProviderInfo> {
+    /// Every provider's info; `config` gives each provider's settings section (for
+    /// [`LibraryProvider::has_owned_source`]).
+    pub fn infos(&self, config: impl Fn(&str) -> serde_json::Value) -> Vec<ProviderInfo> {
         self.providers
             .values()
-            .map(|p| ProviderInfo {
-                id: p.id().to_string(),
-                name: p.name().to_string(),
-                icon: p.icon_svg().to_string(),
-                can_scan: p.can_scan(),
-                can_scan_owned: p.can_scan_owned(),
-                can_uninstall: p.can_uninstall(),
-                add_game_options: p.add_game_options(),
+            .map(|p| {
+                let installed = p.is_installed();
+                ProviderInfo {
+                    id: p.id().to_string(),
+                    name: p.name().to_string(),
+                    icon: p.icon_svg().to_string(),
+                    can_scan: p.can_scan(),
+                    can_scan_owned: p.can_scan_owned(),
+                    can_uninstall: p.can_uninstall(),
+                    installed,
+                    syncable: p.can_scan() && (installed || p.has_owned_source(&config(p.id()))),
+                    add_game_options: if installed {
+                        p.add_game_options()
+                    } else {
+                        Vec::new()
+                    },
+                }
             })
             .collect()
     }
@@ -388,7 +413,7 @@ mod tests {
         assert_eq!(registry.get("fake").unwrap().name(), "Fake Store");
         assert!(registry.get("nope").is_none());
         assert_eq!(
-            registry.infos(),
+            registry.infos(|_| serde_json::Value::Null),
             vec![ProviderInfo {
                 id: "fake".into(),
                 name: "Fake Store".into(),
@@ -396,6 +421,8 @@ mod tests {
                 can_scan: true,
                 can_scan_owned: false,
                 can_uninstall: false,
+                installed: false,
+                syncable: false,
                 add_game_options: Vec::new(),
             }]
         );

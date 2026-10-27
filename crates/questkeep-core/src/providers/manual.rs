@@ -23,6 +23,11 @@ impl LibraryProvider for ManualProvider {
         false
     }
 
+    /// Games added by hand need no store client.
+    fn is_installed(&self) -> bool {
+        true
+    }
+
     fn scan_installed(&self) -> Result<Vec<ImportedGame>, ProviderError> {
         Err(ProviderError::Unsupported)
     }

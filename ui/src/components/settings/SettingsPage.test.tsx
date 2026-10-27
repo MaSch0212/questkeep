@@ -260,6 +260,8 @@ describe("GOG Galaxy launch option", () => {
         canScan: true,
         canScanOwned: false,
         canUninstall: true,
+        installed: true,
+        syncable: true,
         addGameOptions: [],
       },
     ]);
@@ -299,6 +301,8 @@ describe("GOG Galaxy launch option", () => {
         canScan: true,
         canScanOwned: true,
         canUninstall: true,
+        installed: true,
+        syncable: true,
         addGameOptions: [],
       },
     ]);
@@ -326,6 +330,8 @@ describe("GOG Galaxy launch option", () => {
         canScan: true,
         canScanOwned: true,
         canUninstall: true,
+        installed: true,
+        syncable: true,
         addGameOptions: [],
       },
     ]);

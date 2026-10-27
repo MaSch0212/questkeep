@@ -89,6 +89,8 @@ describe("DetailsView", () => {
         canScan: true,
         canScanOwned: true,
         canUninstall: true,
+        installed: true,
+        syncable: true,
         addGameOptions: [],
       },
     ]);

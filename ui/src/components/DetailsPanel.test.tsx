@@ -28,6 +28,8 @@ async function loadProviders(canUninstall: boolean) {
       canScan: true,
       canScanOwned: true,
       canUninstall,
+      installed: true,
+      syncable: true,
       addGameOptions: [],
     },
   ]);

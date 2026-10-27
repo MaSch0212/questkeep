@@ -9,6 +9,8 @@ const provider = (id: string, options: { id: string; label: string }[]): Provide
   canScan: true,
   canScanOwned: false,
   canUninstall: false,
+  installed: true,
+  syncable: true,
   addGameOptions: options,
 });
 
