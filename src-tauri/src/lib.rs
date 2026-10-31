@@ -4,8 +4,6 @@ mod autostart;
 mod commands;
 mod signin;
 mod tray;
-#[cfg(windows)]
-mod tray_popup;
 mod tray_theme;
 mod updates;
 mod window;
@@ -156,14 +154,14 @@ fn build_state(app: &tauri::AppHandle) -> Result<(AppState, Option<WorkerGuard>)
     });
 
     let keyring: Arc<KeyringTokenStore> = Arc::new(KeyringTokenStore::new());
-    let providers = ProviderRegistry::with_builtin(
+    let providers = ProviderRegistry::with_stores(questkeep_stores::builtin(
         keyring.clone(),
         Some(&paths.cache_dir()),
         Some(Arc::new(signin::ShellWebSession::new(
             app.clone(),
             paths.webview_dir(),
         ))),
-    );
+    ));
     let library = Library::open(paths, providers.clone(), events.clone(), keyring)
         .map_err(|e| e.to_string())?;
     match library.database().recover_open_sessions() {

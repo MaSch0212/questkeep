@@ -74,7 +74,8 @@ impl Library {
         events: EventBus,
         secrets: Arc<dyn TokenStore>,
     ) -> Self {
-        let settings = SettingsStore::new(paths.settings_file(), secrets);
+        let settings =
+            SettingsStore::new(paths.settings_file(), secrets, providers.secret_settings());
         let loaded = settings.load();
         Self {
             images: ImageCache::new(paths.clone()),
@@ -577,13 +578,13 @@ impl Library {
             .collect()
     }
 
-    /// The page the in-app login window opens for a provider.
-    pub fn login_url(&self, provider_id: &str) -> Result<String> {
+    /// The page the in-app login window opens for a provider, and how that window behaves.
+    pub fn login(&self, provider_id: &str) -> Result<(String, crate::auth::LoginWindow)> {
         let provider = self.account_provider(provider_id)?;
-        Ok(provider
-            .account()
-            .map(|a| a.login_url())
-            .unwrap_or_default())
+        let account = provider.account().ok_or_else(|| {
+            CoreError::Invalid(format!("{} has no account sign-in.", provider.name()))
+        })?;
+        Ok((account.login_url(), account.login_window()))
     }
 
     /// Completes a sign-in with a code (or, for GOG, the redirect URL) captured by the login
@@ -1559,10 +1560,20 @@ mod tests {
                 display_name: None,
                 supports_code_sign_in: true,
                 code_url: None,
+                code_hint: None,
             }
         }
         fn login_url(&self) -> String {
             "https://login.test/".into()
+        }
+        fn login_window(&self) -> crate::auth::LoginWindow {
+            crate::auth::LoginWindow {
+                title: "Sign in to Account",
+                user_agent: None,
+                script: None,
+                web_session: None,
+                capture: |_| None,
+            }
         }
         fn sign_in_with_code(&self, input: &str) -> Result<(), crate::auth::AuthError> {
             if input == "good-code-1234" {
@@ -1688,10 +1699,10 @@ mod tests {
         let statuses = lib.account_statuses();
         assert_eq!(statuses.len(), 1, "only providers with an account");
         assert!(!statuses[0].signed_in);
-        assert_eq!(lib.login_url("acct").unwrap(), "https://login.test/");
-        assert!(lib.login_url("fake").is_err());
+        assert_eq!(lib.login("acct").unwrap().0, "https://login.test/");
+        assert!(lib.login("fake").is_err());
         assert!(matches!(
-            lib.login_url("nope"),
+            lib.login("nope"),
             Err(CoreError::UnknownProvider(_))
         ));
 

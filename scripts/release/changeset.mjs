@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url";
 import {
   BUMPS,
   currentVersionFromTags,
+  localCargoPackages,
   nextVersion,
   parseChangeset,
   parseSemver,
@@ -79,7 +80,8 @@ function writeVersion(version) {
     // A literal version in a crate manifest is updated too; inherited ones are left alone.
     ["src-tauri/Cargo.toml", (t) => setTomlVersion(t, "package", version)],
     ["crates/questkeep-core/Cargo.toml", (t) => setTomlVersion(t, "package", version)],
-    ["Cargo.lock", (t) => setCargoLockVersions(t, ["questkeep", "questkeep-core"], version)],
+    // Every workspace crate (core, store API, stores, ...) inherits the workspace version.
+    ["Cargo.lock", (t) => setCargoLockVersions(t, localCargoPackages(t), version)],
   ];
   for (const [rel, edit] of edits) {
     const before = readRel(rel);

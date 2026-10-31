@@ -19,4 +19,9 @@ supportsCodeSignIn: boolean,
 /**
  * Page the user opens in their normal browser to obtain the code.
  */
-codeUrl: string | null, };
+codeUrl: string | null, 
+/**
+ * What to copy from the store's page after signing in there; `None` for the code or the
+ * address of the final page.
+ */
+codeHint: string | null, };

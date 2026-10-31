@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/questkeep-core", "src-tauri"]
+members = ["crates/questkeep-*", "crates/stores/*", "src-tauri"]
 
 [workspace.package]
 version = "0.3.0"

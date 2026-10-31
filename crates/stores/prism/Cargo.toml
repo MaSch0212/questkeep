@@ -1,0 +1,20 @@
+[package]
+name = "questkeep-store-prism"
+description = "Questkeep store plugin: Prism Launcher"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+questkeep-store-api = { path = "../../questkeep-store-api" }
+chrono = { version = "0.4.45", features = ["serde"] }
+dirs = "7.0.0"
+tracing = "0.1.44"
+
+[dev-dependencies]
+questkeep-store-api = { path = "../../questkeep-store-api", features = ["testing"] }
+tempfile = "3.27.0"
+
+[lints]
+workspace = true

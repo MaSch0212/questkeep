@@ -24,3 +24,12 @@ pub enum CoreError {
 }
 
 pub type Result<T, E = CoreError> = std::result::Result<T, E>;
+
+impl From<crate::auth::AuthError> for CoreError {
+    fn from(err: crate::auth::AuthError) -> Self {
+        match err {
+            crate::auth::AuthError::Network(m) => CoreError::Network(m),
+            other => CoreError::Invalid(other.to_string()),
+        }
+    }
+}

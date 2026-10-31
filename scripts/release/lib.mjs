@@ -122,6 +122,16 @@ export function setJsonVersion(text, version) {
   return text.replace(/^( {0,4}"version"\s*:\s*)"[^"]*"/m, `$1"${version}"`);
 }
 
+/** Names of the workspace's own packages in a Cargo.lock: the ones without a `source`. */
+export function localCargoPackages(text) {
+  return text
+    .split(/\[\[package\]\]\r?\n/)
+    .slice(1)
+    .filter((entry) => !/^source = /m.test(entry))
+    .map((entry) => /^name = "([^"]+)"/m.exec(entry)?.[1])
+    .filter((name) => name !== undefined);
+}
+
 /** Sets the version of the named `[[package]]` entries in a Cargo.lock text. */
 export function setCargoLockVersions(text, names, version) {
   return text.replace(

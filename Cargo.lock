@@ -3236,11 +3236,10 @@ checksum = "d55d956fa96f5ec02be2e13af0e20391a5aa83d6a074e3ad368959d0fab299ea"
 name = "questkeep"
 version = "0.3.0"
 dependencies = [
- "accesskit",
- "accesskit_windows",
  "chrono",
- "image",
  "questkeep-core",
+ "questkeep-stores",
+ "questkeep-tray-popup",
  "serde",
  "serde_json",
  "tauri",
@@ -3250,13 +3249,10 @@ dependencies = [
  "tauri-plugin-opener",
  "tauri-plugin-single-instance",
  "tauri-plugin-updater",
- "tempfile",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
  "uuid",
- "windows",
- "windows-numerics",
  "windows-sys 0.61.2",
 ]
 
@@ -3264,15 +3260,14 @@ dependencies = [
 name = "questkeep-core"
 version = "0.3.0"
 dependencies = [
- "base64 0.22.1",
  "chrono",
  "dirs 7.0.0",
  "image",
- "keyring",
+ "questkeep-imaging",
+ "questkeep-store-api",
  "rusqlite",
  "serde",
  "serde_json",
- "sha2",
  "sysinfo",
  "tempfile",
  "thiserror 2.0.21",
@@ -3281,7 +3276,214 @@ dependencies = [
  "ureq",
  "uuid",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "questkeep-imaging"
+version = "0.3.0"
+dependencies = [
+ "image",
+ "tempfile",
+]
+
+[[package]]
+name = "questkeep-store-amazon"
+version = "0.3.0"
+dependencies = [
+ "base64 0.22.1",
+ "dirs 7.0.0",
+ "questkeep-store-api",
+ "questkeep-store-heroic",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "tracing",
+ "uuid",
  "winreg",
+]
+
+[[package]]
+name = "questkeep-store-api"
+version = "0.3.0"
+dependencies = [
+ "chrono",
+ "keyring",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tracing",
+ "ts-rs",
+ "ureq",
+ "uuid",
+ "windows-sys 0.61.2",
+ "winreg",
+]
+
+[[package]]
+name = "questkeep-store-battlenet"
+version = "0.3.0"
+dependencies = [
+ "chrono",
+ "questkeep-store-api",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tracing",
+]
+
+[[package]]
+name = "questkeep-store-ea"
+version = "0.3.0"
+dependencies = [
+ "questkeep-store-api",
+ "serde_json",
+ "tempfile",
+ "tracing",
+]
+
+[[package]]
+name = "questkeep-store-epic"
+version = "0.3.0"
+dependencies = [
+ "questkeep-store-api",
+ "questkeep-store-heroic",
+ "questkeep-store-lutris",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tracing",
+]
+
+[[package]]
+name = "questkeep-store-gog"
+version = "0.3.0"
+dependencies = [
+ "chrono",
+ "questkeep-store-api",
+ "questkeep-store-heroic",
+ "questkeep-store-lutris",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tracing",
+ "ureq",
+ "winreg",
+]
+
+[[package]]
+name = "questkeep-store-heroic"
+version = "0.3.0"
+dependencies = [
+ "dirs 7.0.0",
+ "questkeep-store-api",
+ "serde_json",
+ "tempfile",
+ "tracing",
+]
+
+[[package]]
+name = "questkeep-store-lutris"
+version = "0.3.0"
+dependencies = [
+ "chrono",
+ "dirs 7.0.0",
+ "questkeep-store-api",
+ "rusqlite",
+ "serde_json",
+ "tempfile",
+ "tracing",
+]
+
+[[package]]
+name = "questkeep-store-prism"
+version = "0.3.0"
+dependencies = [
+ "chrono",
+ "dirs 7.0.0",
+ "questkeep-store-api",
+ "tempfile",
+ "tracing",
+]
+
+[[package]]
+name = "questkeep-store-steam"
+version = "0.3.0"
+dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "dirs 7.0.0",
+ "image",
+ "questkeep-store-api",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tracing",
+ "ureq",
+ "winreg",
+]
+
+[[package]]
+name = "questkeep-store-ubisoft"
+version = "0.3.0"
+dependencies = [
+ "dirs 7.0.0",
+ "questkeep-store-api",
+ "serde_json",
+ "tempfile",
+ "tracing",
+ "winreg",
+]
+
+[[package]]
+name = "questkeep-store-xbox"
+version = "0.3.0"
+dependencies = [
+ "chrono",
+ "questkeep-store-api",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tracing",
+]
+
+[[package]]
+name = "questkeep-stores"
+version = "0.3.0"
+dependencies = [
+ "questkeep-store-amazon",
+ "questkeep-store-api",
+ "questkeep-store-battlenet",
+ "questkeep-store-ea",
+ "questkeep-store-epic",
+ "questkeep-store-gog",
+ "questkeep-store-heroic",
+ "questkeep-store-lutris",
+ "questkeep-store-prism",
+ "questkeep-store-steam",
+ "questkeep-store-ubisoft",
+ "questkeep-store-xbox",
+ "serde_json",
+]
+
+[[package]]
+name = "questkeep-tray-popup"
+version = "0.3.0"
+dependencies = [
+ "accesskit",
+ "accesskit_windows",
+ "image",
+ "questkeep-imaging",
+ "tempfile",
+ "tracing",
+ "uuid",
+ "windows",
+ "windows-numerics",
 ]
 
 [[package]]

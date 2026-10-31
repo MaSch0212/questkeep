@@ -1,0 +1,17 @@
+[package]
+name = "questkeep-imaging"
+description = "Icon decoding and scaling shared by the Questkeep core and tray popup"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+# Decoding and resizing of icons only; PNG/JPEG/ICO cover everything the sources deliver.
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "ico"] }
+
+[dev-dependencies]
+tempfile = "3.27.0"
+
+[lints]
+workspace = true

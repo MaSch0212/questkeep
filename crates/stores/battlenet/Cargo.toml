@@ -1,0 +1,21 @@
+[package]
+name = "questkeep-store-battlenet"
+description = "Questkeep store plugin: Battle.net"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+questkeep-store-api = { path = "../../questkeep-store-api" }
+chrono = { version = "0.4.45", features = ["serde"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+tracing = "0.1.44"
+
+[dev-dependencies]
+questkeep-store-api = { path = "../../questkeep-store-api", features = ["testing"] }
+tempfile = "3.27.0"
+
+[lints]
+workspace = true

@@ -15,6 +15,7 @@ tauri-build = { version = "2.7.3", features = [] }
 
 [dependencies]
 questkeep-core = { path = "../crates/questkeep-core" }
+questkeep-stores = { path = "../crates/questkeep-stores" }
 tauri = { version = "2.12.4", features = ["protocol-asset", "tray-icon", "image-png"] }
 tauri-plugin-autostart = "2.7.0"
 tauri-plugin-single-instance = "2.5.4"
@@ -31,32 +32,7 @@ uuid = "1.28.0"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_Registry"] }
-# The tray popup (Win32 window + Direct2D/DirectWrite); versions are the ones Tauri already locks.
-windows = { version = "0.62.2", features = [
-  "Win32_Foundation",
-  "Win32_Graphics_Direct2D",
-  "Win32_Graphics_Direct2D_Common",
-  "Win32_Graphics_DirectWrite",
-  "Win32_Graphics_Dwm",
-  "Win32_Graphics_Dxgi_Common",
-  "Win32_Graphics_Gdi",
-  "Win32_Graphics_Imaging",
-  "Win32_System_Com",
-  "Win32_System_LibraryLoader",
-  "Win32_UI_Accessibility",
-  "Win32_UI_HiDpi",
-  "Win32_UI_Input_KeyboardAndMouse",
-  "Win32_UI_Shell",
-  "Win32_UI_WindowsAndMessaging",
-] }
-windows-numerics = "0.3.1"
-# Screen-reader support for the tray popup (UI Automation).
-accesskit = "0.25.1"
-accesskit_windows = "0.35.1"
-
-[dev-dependencies]
-image = { version = "0.25.10", default-features = false, features = ["png"] }
-tempfile = "3.27.0"
+questkeep-tray-popup = { path = "../crates/questkeep-tray-popup" }
 
 [lints]
 workspace = true

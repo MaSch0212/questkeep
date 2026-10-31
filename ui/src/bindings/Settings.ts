@@ -16,7 +16,8 @@ downloadCovers: boolean,
 fetchMetadata: boolean, 
 /**
  * Per-provider configuration keyed by provider id, e.g. `steam: { apiKey, steamId }`.
- * Passed to the provider as-is. `steam.apiKey` lives in the keyring, not in the file.
+ * Passed to the provider as-is. Secret fields a store declares (`steam.apiKey`) live in the
+ * keyring, not in the file.
  */
 providers: Record<string, Record<string, unknown>>, 
 /**

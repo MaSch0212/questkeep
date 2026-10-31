@@ -1,0 +1,28 @@
+[package]
+name = "questkeep-stores"
+description = "The store plugins built into Questkeep"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+questkeep-store-api = { path = "../questkeep-store-api" }
+questkeep-store-amazon = { path = "../stores/amazon" }
+questkeep-store-battlenet = { path = "../stores/battlenet" }
+questkeep-store-ea = { path = "../stores/ea" }
+questkeep-store-epic = { path = "../stores/epic" }
+questkeep-store-gog = { path = "../stores/gog" }
+questkeep-store-heroic = { path = "../stores/heroic" }
+questkeep-store-lutris = { path = "../stores/lutris" }
+questkeep-store-prism = { path = "../stores/prism" }
+questkeep-store-steam = { path = "../stores/steam" }
+questkeep-store-ubisoft = { path = "../stores/ubisoft" }
+questkeep-store-xbox = { path = "../stores/xbox" }
+
+[dev-dependencies]
+questkeep-store-api = { path = "../questkeep-store-api", features = ["testing"] }
+serde_json = "1.0.154"
+
+[lints]
+workspace = true

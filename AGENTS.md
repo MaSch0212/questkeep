@@ -14,7 +14,7 @@ Guide for humans and coding agents working on Questkeep.
 | Update the Rust lockfile (2-day min age) | `pnpm deps:rust` |
 | Add a changeset (every user-visible PR) | `pnpm changeset add <major\|minor\|patch> "summary"` |
 | Show version, pending changesets, next version | `pnpm changeset status` |
-| List installed Steam games (dev tool) | `cargo run -p questkeep-core --example scan_steam` |
+| List installed Steam games (dev tool) | `cargo run -p questkeep-store-steam --example scan_steam` |
 | Check executable icon extraction on real games (dev tool) | `cargo run -p questkeep-core --example exe_icons -- <out dir> <exe>...` |
 | Regenerate app icons from `assets/logo.svg` | `node scripts/make-icon.mjs && pnpm tauri icon assets/icon.svg -o src-tauri/icons` (tray glyphs: run `pnpm tauri icon assets/tray-dark.svg -o target/tray-dark`, same for `tray-light`, and copy `32x32.png`/`64x64.png` to `src-tauri/icons/tray-*.png`/`tray-*@2x.png`) |
 
@@ -57,7 +57,20 @@ APIs (`CopyFromScreen`): they steal focus or capture the user's screen.
 ## Module map
 
 ```
-crates/questkeep-core/src/     all logic; no Tauri/UI dependency
+crates/questkeep-store-api/    the store plugin interface: LibraryProvider (+ scan_categories, settings),
+                               ImportedGame/PlayAction, auth/ (keyring TokenStore, AccountSession,
+                               Http, AccountStatus, LoginWindow, WebSession + WebAccount for website
+                               sign-ins), settings.rs (StoreSettings: options, credentials),
+                               platform/ (registry, uninstall entries, appx), sqlite (foreign DBs)
+crates/stores/<id>/            one crate per store (questkeep-store-<id>): steam, epic, gog, xbox,
+                               ubisoft, amazon, battlenet, ea, prism, lutris, heroic (shared Heroic
+                               helpers + sideloaded games); icon.svg, login/session scripts,
+                               fixtures/ next to src/
+crates/questkeep-stores/       the built-in store list (`builtin`); only the app depends on it
+crates/questkeep-imaging/      icon decoding and scaling (core and tray popup)
+crates/questkeep-tray-popup/   Windows tray popup (Win32 + Direct2D: layout, render, window, a11y);
+                               own input types, no core dependency
+crates/questkeep-core/src/     all app logic; sees stores only through the store API
   library.rs                   facade used by the shell (manual add, update, scan, covers, seed)
   model/                       Game, PlayAction, queries, categories, library views (grouping),
                                sync times, sorting names (ts-rs exported)
@@ -65,20 +78,16 @@ crates/questkeep-core/src/     all logic; no Tauri/UI dependency
                                (saved views, their sections, last sync times), categories.rs
                                (n:m game categories, store imports), combine.rs (one entry for a
                                game in several stores, duplicate detection)
-  providers/                   LibraryProvider trait (+ scan_categories) + registry; manual, steam/, epic/, gog/, xbox/,
-                               ubisoft/, amazon/, battlenet, ea, prism, heroic (Linux helpers), lutris/,
-                               sqlite (foreign DBs), icons/ (one SVG logo per provider)
-  auth/                        store account sign-in: keyring TokenStore, AccountSession, Http, AccountStatus,
-                               WebSession + WebAccount (website sign-ins: Steam, Battle.net, EA;
-                               the session is driven by src-tauri/signin.rs)
+  providers/                   ProviderRegistry (+ ProviderInfo for the UI) and the manual provider
   launcher/                    launch + tracker threads (mod.rs), process matching (process.rs)
   images/                      cover/background cache (mod.rs) + cover and metadata fetchers (fetcher.rs)
   events.rs                    EventBus + CoreEvent
-  platform/                    registry, Steam paths, URI opening, argument handling (cfg-gated)
+  platform/                    executable icons, URI opening, processes, argument handling (cfg-gated)
   settings.rs, paths.rs, seed.rs, error.rs
 src-tauri/src/                 thin shell: commands.rs (one wrapper per command), lib.rs (setup)
-  signin.rs                    store login windows and the hidden store-session window
-  tray.rs, tray_popup/          tray icon; Windows tray popup (Win32 + Direct2D: layout, render, window)
+  signin.rs                    store login windows and the hidden store-session window, both
+                               driven by the store's LoginWindow description
+  tray.rs                      tray icon and native menu; hands the popup its data
   updates.rs                   update check after start, the found update, installing it
                                (debug builds: QUESTKEEP_FAKE_UPDATE=<version> pretends one exists)
 ui/src/
@@ -103,8 +112,10 @@ ui/src/
   `// Logic derived from Playnite (MIT), see THIRD_PARTY_NOTICES.md`. Reference sources
   (read-only): `E:\other\Playnite`, `E:\other\PlayniteExtensions`.
 - **Schema changes:** append a step to `db/migrations.rs`; never edit a released step.
-- **New provider:** implement `LibraryProvider` (+ `cover_candidates` if possible), register it in
-  `ProviderRegistry::with_builtin`. No UI or DB changes needed.
+- **New store:** add a crate under `crates/stores/<id>` that implements `LibraryProvider` from
+  `questkeep-store-api` (+ `cover_candidates` if possible; an account with its `LoginWindow`;
+  `settings` for options or credentials) and list it in `questkeep_stores::builtin`. No core, shell,
+  UI or DB changes needed: everything store-specific stays in its crate.
 - **Command contract:** change Rust types, run `cargo test` to regenerate `ui/src/bindings`, commit
   both. Commands stay thin; logic goes into core with tests.
 - **UI:** no literal colors/sizes outside `theme.css`; labeled buttons; keyboard paths for every

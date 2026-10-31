@@ -16,7 +16,7 @@ impl LibraryProvider for ManualProvider {
     }
 
     fn icon_svg(&self) -> &'static str {
-        crate::providers::icons::MANUAL
+        include_str!("manual.svg")
     }
 
     fn can_scan(&self) -> bool {

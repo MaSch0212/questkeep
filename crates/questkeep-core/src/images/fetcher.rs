@@ -19,7 +19,6 @@ use std::time::{Duration, Instant};
 use chrono::Utc;
 use uuid::Uuid;
 
-use super::icons::{SquareFrom, icon_png_from_bytes, icon_png_from_rgba};
 use super::igdb::{CHECKED_KEY as IGDB_CHECKED_KEY, Igdb, IgdbLookup, release_year};
 use super::steamgriddb::{Lookup, SteamGridDb, checked_key};
 use super::{ImageCache, ImageKind, MAX_IMAGE_BYTES};
@@ -28,6 +27,7 @@ use crate::events::{CoreEvent, EventBus, WorkQueue};
 use crate::model::{ActionKind, Game, GameMetadata};
 use crate::providers::{ImageCandidate, LibraryProvider, ProviderRegistry};
 use crate::seed::is_fake_source;
+use questkeep_imaging::{SquareFrom, icon_png_from_bytes, icon_png_from_rgba};
 
 /// Shortest time between two progress events of one queue (the first and the last are always
 /// sent).
@@ -340,13 +340,7 @@ fn steamgriddb_lookup(
 /// Icon size requested from Windows for executables; the stored icon is scaled down from it.
 const EXECUTABLE_ICON_SIZE: u32 = 48;
 
-pub(crate) fn http_agent() -> ureq::Agent {
-    ureq::Agent::config_builder()
-        .timeout_global(Some(Duration::from_secs(20)))
-        .user_agent(concat!("Questkeep/", env!("CARGO_PKG_VERSION")))
-        .build()
-        .into()
-}
+pub(crate) use questkeep_store_api::http_agent;
 
 /// Loads the first candidate that yields a valid image.
 fn first_image(

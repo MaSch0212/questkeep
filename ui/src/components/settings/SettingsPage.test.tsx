@@ -4,8 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Settings } from "../../bindings/Settings";
 import * as api from "../../lib/api";
 import { store } from "../../lib/store";
-import { withSteamSettings } from "../../lib/steamSettings";
 import { SettingsPage } from "./SettingsPage";
+import { makeProvider, optionSettings, STEAM_SETTINGS } from "../../test-utils";
 
 vi.mock("../../lib/api");
 vi.mock("@tauri-apps/api/core", () => ({
@@ -64,19 +64,12 @@ beforeEach(() => {
   vi.mocked(api.accountStatus).mockResolvedValue([]);
 });
 
-describe("withSteamSettings", () => {
-  it("keeps other providers and unknown keys, and drops empty values", () => {
-    const next = withSteamSettings(makeSettings(), "  NEW  ", "");
-    expect(next.providers).toEqual({
-      epic: { token: "keep-me" },
-      steam: { apiKey: "NEW", extraFlag: 7 },
-    });
-    expect(withSteamSettings(makeSettings(), "", "").providers.steam).toEqual({ extraFlag: 7 });
-  });
-});
-
-/** Opens the Steam key form in the Accounts section (a key is saved, so it says "Change key"). */
+/** Opens the Steam key form in the Accounts section (a key is saved, so it says "Change"). */
 async function openSteamKey() {
+  vi.mocked(api.listProviders).mockResolvedValue([
+    makeProvider({ id: "steam", name: "Steam", settings: STEAM_SETTINGS }),
+  ]);
+  await store.loadProviders();
   vi.mocked(api.accountStatus).mockResolvedValue([
     {
       provider: "steam",
@@ -85,12 +78,13 @@ async function openSteamKey() {
       displayName: null,
       supportsCodeSignIn: false,
       codeUrl: null,
+      codeHint: null,
     },
   ]);
   render(() => <SettingsPage />);
   expect(await screen.findByText("Using a Steam Web API key")).toBeInTheDocument();
   await fireEvent.click(await screen.findByRole("button", { name: "Steam settings" }));
-  await fireEvent.click(screen.getByRole("button", { name: /Change key/ }));
+  await fireEvent.click(screen.getByRole("button", { name: "Change Steam key" }));
 }
 
 describe("SettingsPage", () => {
@@ -222,7 +216,7 @@ describe("SettingsPage", () => {
     const input = screen.getByLabelText("Steam Web API key");
     await waitFor(() => expect(input).toHaveValue("OLDKEY"));
     expect(input).toHaveAttribute("type", "password");
-    await fireEvent.click(screen.getByRole("button", { name: "Show API key" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Show Steam Web API key" }));
     expect(input).toHaveAttribute("type", "text");
     expect(screen.getAllByText(/credential store/).length).toBeGreaterThan(0);
     expect(screen.getByText(/last signed in to the Steam client/)).toBeInTheDocument();
@@ -291,6 +285,7 @@ describe("GOG Galaxy launch option", () => {
         installed: true,
         syncable: true,
         addGameOptions: [],
+        settings: optionSettings("launchThroughGalaxy", "Launch GOG games through GOG Galaxy"),
       },
     ]);
     await store.init();
@@ -332,6 +327,10 @@ describe("GOG Galaxy launch option", () => {
         installed: true,
         syncable: true,
         addGameOptions: [],
+        settings: optionSettings(
+          "hideGamePass",
+          "Don't import Game Pass games from my Xbox account",
+        ),
       },
     ]);
     await store.init();
@@ -361,6 +360,10 @@ describe("GOG Galaxy launch option", () => {
         installed: true,
         syncable: true,
         addGameOptions: [],
+        settings: optionSettings(
+          "importCatalogue",
+          "Import Ubisoft Connect games that are not installed",
+        ),
       },
     ]);
     await store.init();

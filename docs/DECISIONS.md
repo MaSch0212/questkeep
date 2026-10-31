@@ -267,7 +267,7 @@ Short log of choices made while building. Newest at the bottom of each section.
   `<data>/cache/epic-catalog` (public token) and `epic-catalog-account` (signed in; the two tokens
   may see different items, so one's "unknown" must not hide an item from the other). Items stay
   fresh for 7 days, "unknown item" for 1 day; corrupt, expired or future-dated files are misses;
-  writes are temp file + rename and I/O errors are only logged. `ProviderRegistry::with_builtin`
+  writes are temp file + rename and I/O errors are only logged. `questkeep_stores::builtin`
   takes the cache dir (`DataPaths::cache_dir`).
 - **No Epic genres.** Checked live 2026-10-25: `bulk/items` has only structural categories
   (`games`, `applications`, `addons`, ...) across 120+ namespaces and no genre attributes; the
@@ -494,13 +494,13 @@ Short log of choices made while building. Newest at the bottom of each section.
   show icons only at 16-20 px (scaled with nearest neighbor, so they alias) and cannot show cover
   art. A webview popup would cost 100+ MB and a cold start per opening, so the popup is plain Win32
   + Direct2D (`windows` crate, already in the lockfile through Tauri): instant, and nothing exists
-  while it is closed. It is the third place with `unsafe` code (`tray_popup/{render,window}.rs`, scoped
-  `allow`); layout and navigation are pure Rust with tests. Its colors mirror `theme.css` (dark
+  while it is closed. It is the third place with `unsafe` code
+  (`questkeep-tray-popup/src/{render,window}.rs`, scoped `allow`); layout and navigation are pure Rust with tests. Its colors mirror `theme.css` (dark
   only, like the app). No acrylic backdrop. Linux keeps the native menu (AppIndicator menus cannot be replaced there).
 - **Tray popup accessibility through AccessKit** (MIT/Apache, `accesskit_windows` -> UI
   Automation), not a hand-written UIA provider: the tree is built from the same `Layout` the
-  renderer draws (`tray_popup/a11y.rs`, platform independent), so a later Linux popup could expose
-  it through `accesskit_unix` (AT-SPI) unchanged. Considered and rejected: a webview popup (best
+  renderer draws (`questkeep-tray-popup/src/a11y.rs`, platform independent), so a later Linux
+  popup could expose it through `accesskit_unix` (AT-SPI) unchanged. Considered and rejected: a webview popup (best
   accessibility, but 100+ MB and a cold start per opening), egui (GPU context, restyling) and Slint
   (licence needs attribution). A Linux popup is blocked less by drawing than by the tray: the
   AppIndicator backend reports no clicks (tray-icon's KSNI backend would) and Wayland apps cannot
@@ -522,7 +522,7 @@ Short log of choices made while building. Newest at the bottom of each section.
   resize edges stay. Its caption buttons are out of the tab order like native ones (Win+Up/Down,
   Alt+F4 remain the keyboard paths). Windows 11 Snap Layouts on hover over maximize is lost for now.
 - **Each provider ships its own logo** (`LibraryProvider::icon_svg`, files in
-  `providers/icons/`, sent as `ProviderInfo.icon`) instead of the UI mapping ids to an icon
+  `crates/stores/<id>/icon.svg`, sent as `ProviderInfo.icon`) instead of the UI mapping ids to an icon
   package: a new provider brings its logo with it. The markup is compiled in, so the UI inserts it
   with `innerHTML`; sources without a provider fall back to a generic glyph.
 - **Providers can offer extra ways to add games** (`add_game_options`, a split "Add game" button).
@@ -603,6 +603,11 @@ Short log of choices made while building. Newest at the bottom of each section.
 - **The page open last lives in the database**: the start page's "The page I had open last" reads
   an `app_state` row, not `settings.json`. The settings page saves the whole settings object, so a
   value written behind its back would be overwritten. Settings never counts as a last page.
+- **Stores are crates behind one interface**: each store is its own crate (`crates/stores/<id>`)
+  implementing `questkeep-store-api`; the store describes its login window (`LoginWindow`) and
+  its settings (`StoreSettings`) instead of the shell and UI matching on store ids. Store builds
+  no longer recompile the core, and adding a store touches one crate plus the built-in list. The
+  keyring names of secret settings stay `setting:<store>.<key>`, so saved keys carry over.
 - **Daily playtime spreads credited time**: the start page's per-day bars split a session's
   `duration_seconds` (which skips system sleep) over the days in proportion to its wall-clock span,
   so the week matches the playtime shown elsewhere without storing time per day.

@@ -391,15 +391,15 @@ pub async fn sign_in(
     state: State<'_, Arc<AppState>>,
     provider: String,
 ) -> CmdResult<bool> {
-    let (login_url, profile) = {
+    let ((login_url, window), profile) = {
         let provider = provider.clone();
         blocking(state.clone(), move |s| {
             let profile = s.library.paths().webview_dir().join(&provider);
-            Ok((s.library.login_url(&provider)?, profile))
+            Ok((s.library.login(&provider)?, profile))
         })
         .await?
     };
-    match crate::signin::run(&app, &provider, &login_url, profile).await? {
+    match crate::signin::run(&app, &provider, &login_url, window, profile).await? {
         crate::signin::Outcome::Closed => Ok(false),
         crate::signin::Outcome::Code(code) => {
             blocking(state, move |s| {

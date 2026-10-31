@@ -7,6 +7,7 @@ import {
   currentVersionFromTags,
   highestBump,
   nextVersion,
+  localCargoPackages,
   parseChangeset,
   parseSemver,
   renderNotes,
@@ -125,6 +126,16 @@ test("setCargoLockVersions touches only the listed packages", () => {
   assert.match(out, /name = "questkeep"\nversion = "0.2.0"/);
   assert.match(out, /name = "questkeep-core"\nversion = "0.2.0"/);
   assert.match(out, /name = "serde"\nversion = "0.1.0"/);
+});
+
+test("localCargoPackages lists the packages built from this repository", () => {
+  const lock = [
+    "version = 4\n",
+    '[[package]]\nname = "questkeep-store-steam"\nversion = "0.1.0"\ndependencies = [\n "serde",\n]\n',
+    '[[package]]\nname = "serde"\nversion = "1.0.0"\nsource = "registry+https://github.com/rust-lang/crates.io-index"\n',
+    '[[package]]\nname = "questkeep"\nversion = "0.1.0"\n',
+  ].join("\n");
+  assert.deepEqual(localCargoPackages(lock), ["questkeep-store-steam", "questkeep"]);
 });
 
 test("updaterPlatform and buildLatestJson", () => {

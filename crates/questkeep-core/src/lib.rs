@@ -2,7 +2,8 @@
 //!
 //! This crate has no dependency on Tauri or any UI so it can be unit-tested headless.
 
-pub mod auth;
+/// Store account sign-in, from the store plugin interface.
+pub use questkeep_store_api::auth;
 pub mod db;
 pub mod error;
 pub mod events;

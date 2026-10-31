@@ -9,6 +9,7 @@ import { AccountsSection } from "./AccountsSection";
 import { ArtworkSection } from "./ArtworkSection";
 import { UpdatesSection } from "./UpdatesSection";
 import { createSettingsModel } from "./useSettings";
+import { makeProvider, STEAM_SETTINGS } from "../../test-utils";
 
 vi.mock("../../lib/api");
 vi.mock("@tauri-apps/api/core", () => ({
@@ -30,6 +31,7 @@ const gog = (over: Partial<AccountStatus> = {}): AccountStatus => ({
   displayName: null,
   supportsCodeSignIn: true,
   codeUrl: "https://auth.gog.com/code",
+  codeHint: null,
   ...over,
 });
 const epic = (over: Partial<AccountStatus> = {}): AccountStatus => ({
@@ -39,6 +41,7 @@ const epic = (over: Partial<AccountStatus> = {}): AccountStatus => ({
   displayName: "Ada",
   supportsCodeSignIn: false,
   codeUrl: null,
+  codeHint: null,
   ...over,
 });
 
@@ -49,6 +52,7 @@ const xbox = (over: Partial<AccountStatus> = {}): AccountStatus => ({
   displayName: null,
   supportsCodeSignIn: true,
   codeUrl: "https://login.live.com/oauth20_authorize.srf?client_id=1",
+  codeHint: "The browser ends on a blank page. Copy the whole address from its address bar.",
   ...over,
 });
 
@@ -64,6 +68,7 @@ const steam = (over: Partial<AccountStatus> = {}): AccountStatus => ({
   displayName: null,
   supportsCodeSignIn: false,
   codeUrl: null,
+  codeHint: null,
   ...over,
 });
 
@@ -85,6 +90,7 @@ const info = (id: string, name: string, installed: boolean, syncable: boolean) =
   installed,
   syncable,
   addGameOptions: [],
+  settings: { options: [], credentials: null },
 });
 
 describe("AccountsSection", () => {
@@ -254,6 +260,10 @@ describe("AccountsSection", () => {
   });
 
   it("offers Steam either a sign-in or a Web API key", async () => {
+    vi.mocked(api.listProviders).mockResolvedValue([
+      makeProvider({ id: "steam", name: "Steam", settings: STEAM_SETTINGS }),
+    ]);
+    await store.loadProviders();
     vi.mocked(api.accountStatus).mockResolvedValue([steam()]);
     vi.mocked(api.getSettings).mockResolvedValue(
       makeSettings({ providers: { epic: { token: "keep-me" } } }),
@@ -282,7 +292,7 @@ describe("AccountsSection", () => {
     expect(screen.getByText("1 of 1 account connected")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Sign in to Steam" })).toBeNull();
     expect(screen.queryByRole("button", { name: /Use a Steam Web API key instead/ })).toBeNull();
-    await fireEvent.click(screen.getByRole("button", { name: "Remove key" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Remove Steam key" }));
     await waitFor(() => expect(toasts()).toContain("Steam key removed"));
     expect(await screen.findByRole("button", { name: "Sign in to Steam" })).toBeInTheDocument();
   });

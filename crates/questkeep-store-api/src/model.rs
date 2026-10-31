@@ -1,0 +1,129 @@
+//! What stores report: games, how to start them, their metadata. Plain serde data shared with the
+//! UI through ts-rs.
+
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use ts_rs::TS;
+
+/// Store metadata for one game, as returned by a provider.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct GameMetadata {
+    /// Plain text (providers strip HTML).
+    pub description: Option<String>,
+    /// `YYYY-MM-DD`, `YYYY-MM` or `YYYY`.
+    pub release_date: Option<String>,
+    pub developers: Vec<String>,
+    pub publishers: Vec<String>,
+    pub genres: Vec<String>,
+}
+
+/// How a game is started.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "lowercase")]
+#[ts(export)]
+pub enum ActionKind {
+    /// Start an executable.
+    File,
+    /// Open a URI with the system handler (e.g. `steam://rungameid/440`).
+    Uri,
+}
+
+/// How the launcher decides that a game is still running.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum TrackingMode {
+    /// Process tree for `file` actions, install directory for `uri` actions.
+    #[default]
+    Default,
+    /// The started process and all of its descendants.
+    Process,
+    /// Only the started process.
+    OriginalProcess,
+    /// Any process whose executable lives under `tracking_path` (or the install dir).
+    Directory,
+    /// Any process whose executable file name equals `tracking_path`.
+    Name,
+}
+
+/// The single play action of a game. Stored as JSON so it can grow into a list later.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct PlayAction {
+    pub kind: ActionKind,
+    /// Executable path for `file`, URI for `uri`.
+    pub target: String,
+    /// Command-line arguments as typed by the user.
+    #[serde(default)]
+    pub args: Option<String>,
+    #[serde(default)]
+    pub working_dir: Option<String>,
+    #[serde(default)]
+    pub tracking: TrackingMode,
+    #[serde(default)]
+    pub tracking_path: Option<String>,
+}
+
+impl PlayAction {
+    pub fn file(target: impl Into<String>) -> Self {
+        Self {
+            kind: ActionKind::File,
+            target: target.into(),
+            args: None,
+            working_dir: None,
+            tracking: TrackingMode::Default,
+            tracking_path: None,
+        }
+    }
+
+    pub fn uri(target: impl Into<String>) -> Self {
+        Self {
+            kind: ActionKind::Uri,
+            ..Self::file(target)
+        }
+    }
+}
+
+/// A game as reported by a library provider scan. Plain data so providers can later run as
+/// sandboxed plugins.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct ImportedGame {
+    pub source_game_id: String,
+    pub name: String,
+    /// `false` for games that are owned but not installed (from `scan_owned`).
+    #[serde(default = "default_true")]
+    pub installed: bool,
+    pub install_dir: Option<String>,
+    pub play_action: Option<PlayAction>,
+    /// Playtime known to the store. Merged as the maximum with Questkeep's own tracking.
+    #[serde(default)]
+    #[ts(type = "number | null")]
+    pub playtime_seconds: Option<u64>,
+    /// Last played according to the store. Merged as the later of both values.
+    #[serde(default)]
+    pub last_played: Option<DateTime<Utc>>,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+impl ImportedGame {
+    /// An installed game with the required fields; everything else empty.
+    pub fn installed(source_game_id: impl Into<String>, name: impl Into<String>) -> Self {
+        Self {
+            source_game_id: source_game_id.into(),
+            name: name.into(),
+            installed: true,
+            install_dir: None,
+            play_action: None,
+            playtime_seconds: None,
+            last_played: None,
+        }
+    }
+}

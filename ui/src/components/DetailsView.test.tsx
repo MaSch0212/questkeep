@@ -92,6 +92,7 @@ describe("DetailsView", () => {
         installed: true,
         syncable: true,
         addGameOptions: [],
+        settings: { options: [], credentials: null },
       },
     ]);
     render(() => <DetailsView />);

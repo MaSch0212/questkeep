@@ -1,8 +1,10 @@
 import type { AccountStatus } from "../bindings/AccountStatus";
 import type { ProviderInfo } from "../bindings/ProviderInfo";
+import type { StoreCredentials } from "../bindings/StoreCredentials";
+import type { StoreSettings } from "../bindings/StoreSettings";
 
-/** How a store account is connected: signed in, Steam's Web API key, or not at all. */
-export type AccountConnection = "signedIn" | "apiKey" | "none";
+/** How a store account is connected: signed in, saved credentials (Steam's Web API key), or not at all. */
+export type AccountConnection = "signedIn" | "credentials" | "none";
 
 export interface AccountState {
   connection: AccountConnection;
@@ -12,8 +14,11 @@ export interface AccountState {
   detail: string;
 }
 
-/** What a row of the accounts list shows. `apiKeySaved` only matters for Steam. */
-export function accountState(account: AccountStatus, apiKeySaved: boolean): AccountState {
+/** What a row of the accounts list shows. `saved` are the store's credentials when they are saved. */
+export function accountState(
+  account: AccountStatus,
+  saved: StoreCredentials | null = null,
+): AccountState {
   if (account.signedIn) {
     return {
       connection: "signedIn",
@@ -21,12 +26,8 @@ export function accountState(account: AccountStatus, apiKeySaved: boolean): Acco
       detail: `Signed in as ${account.displayName ?? "your account"}`,
     };
   }
-  if (account.provider === "steam" && apiKeySaved) {
-    return {
-      connection: "apiKey",
-      badge: "API key",
-      detail: "Using a Steam Web API key",
-    };
+  if (saved !== null) {
+    return { connection: "credentials", badge: saved.badge, detail: saved.detail };
   }
   return { connection: "none", badge: "Not signed in", detail: "Owned games are not imported" };
 }
@@ -47,6 +48,8 @@ export interface StoreRow {
   /** Syncing does something (client installed, or signed in). */
   syncable: boolean;
   account: AccountStatus | null;
+  /** The store's own settings. */
+  settings: StoreSettings;
 }
 
 /**
@@ -63,6 +66,7 @@ export function storeRows(providers: readonly ProviderInfo[], accounts: readonly
       installed: p.installed,
       syncable: p.syncable,
       account: accounts.find((a) => a.provider === p.id) ?? null,
+      settings: p.settings,
     }))
     .filter((row) => row.canScan || row.account !== null);
   for (const account of accounts) {
@@ -74,6 +78,7 @@ export function storeRows(providers: readonly ProviderInfo[], accounts: readonly
         installed: false,
         syncable: false,
         account,
+        settings: { options: [], credentials: null },
       });
     }
   }

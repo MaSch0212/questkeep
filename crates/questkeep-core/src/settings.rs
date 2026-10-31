@@ -26,7 +26,8 @@ pub struct Settings {
     /// Download descriptions, genres, release dates and backgrounds from stores.
     pub fetch_metadata: bool,
     /// Per-provider configuration keyed by provider id, e.g. `steam: { apiKey, steamId }`.
-    /// Passed to the provider as-is. `steam.apiKey` lives in the keyring, not in the file.
+    /// Passed to the provider as-is. Secret fields a store declares (`steam.apiKey`) live in the
+    /// keyring, not in the file.
     #[ts(type = "Record<string, Record<string, unknown>>")]
     pub providers: BTreeMap<String, serde_json::Value>,
     /// Optional SteamGridDB API key. When set, SteamGridDB supplies covers and backgrounds that
@@ -104,12 +105,8 @@ struct SecretField {
     set: fn(&mut Settings, Option<String>),
 }
 
-const SECRETS: [SecretField; 4] = [
-    SecretField {
-        keyring_user: "setting:steam.apiKey",
-        get: steam_key,
-        set: set_steam_key,
-    },
+/// The app's own secrets; stores declare theirs ([`Secret::Provider`]).
+const APP_SECRETS: [SecretField; 3] = [
     SecretField {
         keyring_user: "setting:steamGridDbApiKey",
         get: |s| s.steamgriddb_api_key.clone(),
@@ -127,29 +124,58 @@ const SECRETS: [SecretField; 4] = [
     },
 ];
 
-fn steam_key(s: &Settings) -> Option<String> {
-    s.providers
-        .get("steam")
-        .and_then(|c| c.get("apiKey"))
-        .and_then(|v| v.as_str())
-        .map(str::to_string)
+/// A value kept in the keyring instead of the file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Secret {
+    /// One of [`APP_SECRETS`].
+    App(usize),
+    /// `providers.<provider>.<key>`, a secret field a store declared.
+    Provider { provider: String, key: String },
 }
 
-fn set_steam_key(s: &mut Settings, value: Option<String>) {
-    match value {
-        Some(v) => {
-            let section = s
-                .providers
-                .entry("steam".to_string())
-                .or_insert_with(|| serde_json::json!({}));
-            if let Some(map) = section.as_object_mut() {
-                map.insert("apiKey".into(), serde_json::Value::String(v));
-            }
+impl Secret {
+    fn keyring_user(&self) -> String {
+        match self {
+            Secret::App(i) => APP_SECRETS[*i].keyring_user.to_string(),
+            Secret::Provider { provider, key } => format!("setting:{provider}.{key}"),
         }
-        None => {
-            if let Some(map) = s.providers.get_mut("steam").and_then(|c| c.as_object_mut()) {
-                map.remove("apiKey");
-            }
+    }
+
+    fn get(&self, s: &Settings) -> Option<String> {
+        match self {
+            Secret::App(i) => (APP_SECRETS[*i].get)(s),
+            Secret::Provider { provider, key } => s
+                .providers
+                .get(provider)
+                .and_then(|c| c.get(key))
+                .and_then(|v| v.as_str())
+                .map(str::to_string),
+        }
+    }
+
+    fn set(&self, s: &mut Settings, value: Option<String>) {
+        match self {
+            Secret::App(i) => (APP_SECRETS[*i].set)(s, value),
+            Secret::Provider { provider, key } => match value {
+                Some(v) => {
+                    let section = s
+                        .providers
+                        .entry(provider.clone())
+                        .or_insert_with(|| serde_json::json!({}));
+                    if let Some(map) = section.as_object_mut() {
+                        map.insert(key.clone(), serde_json::Value::String(v));
+                    }
+                }
+                None => {
+                    if let Some(map) = s
+                        .providers
+                        .get_mut(provider)
+                        .and_then(|c| c.as_object_mut())
+                    {
+                        map.remove(key);
+                    }
+                }
+            },
         }
     }
 }
@@ -161,10 +187,10 @@ fn non_empty(value: Option<String>) -> Option<String> {
 }
 
 /// A copy without any secret values (what goes into the file).
-fn strip_secrets(settings: &Settings) -> Settings {
+fn strip_secrets(settings: &Settings, secrets: &[Secret]) -> Settings {
     let mut copy = settings.clone();
-    for field in &SECRETS {
-        (field.set)(&mut copy, None);
+    for secret in secrets {
+        secret.set(&mut copy, None);
     }
     copy
 }
@@ -174,6 +200,8 @@ fn strip_secrets(settings: &Settings) -> Settings {
 pub struct SettingsStore {
     path: PathBuf,
     secrets: Arc<dyn TokenStore>,
+    /// What is kept in `secrets` instead of the file.
+    fields: Arc<[Secret]>,
     /// Secret values as last loaded or saved, so frequent loads don't hit the keyring.
     cache: Arc<Mutex<Option<Vec<Option<String>>>>>,
 }
@@ -187,10 +215,24 @@ impl std::fmt::Debug for SettingsStore {
 }
 
 impl SettingsStore {
-    pub fn new(path: impl Into<PathBuf>, secrets: Arc<dyn TokenStore>) -> Self {
+    /// `provider_secrets` are the secret fields stores declare, as (provider id, key).
+    pub fn new(
+        path: impl Into<PathBuf>,
+        secrets: Arc<dyn TokenStore>,
+        provider_secrets: impl IntoIterator<Item = (String, String)>,
+    ) -> Self {
+        let fields = (0..APP_SECRETS.len())
+            .map(Secret::App)
+            .chain(
+                provider_secrets
+                    .into_iter()
+                    .map(|(provider, key)| Secret::Provider { provider, key }),
+            )
+            .collect();
         Self {
             path: path.into(),
             secrets,
+            fields,
             cache: Arc::new(Mutex::new(None)),
         }
     }
@@ -199,18 +241,19 @@ impl SettingsStore {
     /// fills the secrets in from the keyring.
     pub fn load(&self) -> Settings {
         let mut settings = self.read_file();
-        let plain: Vec<Option<String>> = SECRETS
+        let plain: Vec<Option<String>> = self
+            .fields
             .iter()
-            .map(|f| non_empty((f.get)(&settings)))
+            .map(|f| non_empty(f.get(&settings)))
             .collect();
         if plain.iter().any(Option::is_some) && !self.migrate_plain_secrets(&settings, &plain) {
             // No keyring: keep using the values from the file.
             return settings;
         }
-        settings = strip_secrets(&settings);
-        for (field, value) in SECRETS.iter().zip(self.secret_values()) {
+        settings = strip_secrets(&settings, &self.fields);
+        for (field, value) in self.fields.iter().zip(self.secret_values()) {
             if value.is_some() {
-                (field.set)(&mut settings, value);
+                field.set(&mut settings, value);
             }
         }
         settings
@@ -219,14 +262,16 @@ impl SettingsStore {
     /// Writes the secrets to the keyring and the rest to the file (atomically: temp file +
     /// rename). Fails instead of writing a secret to the file when the keyring is unavailable.
     pub fn save(&self, settings: &Settings) -> Result<()> {
-        let values: Vec<Option<String>> = SECRETS
+        let values: Vec<Option<String>> = self
+            .fields
             .iter()
-            .map(|f| non_empty((f.get)(settings)))
+            .map(|f| non_empty(f.get(settings)))
             .collect();
-        for (field, value) in SECRETS.iter().zip(&values) {
+        for (field, value) in self.fields.iter().zip(&values) {
+            let user = field.keyring_user();
             let result = match value {
-                Some(v) => self.secrets.save(field.keyring_user, v),
-                None => self.secrets.delete(field.keyring_user),
+                Some(v) => self.secrets.save(&user, v),
+                None => self.secrets.delete(&user),
             };
             result.map_err(|err| {
                 CoreError::Invalid(format!(
@@ -235,7 +280,7 @@ impl SettingsStore {
             })?;
         }
         *self.cache.lock().unwrap_or_else(PoisonError::into_inner) = Some(values);
-        self.write_file(&strip_secrets(settings))
+        self.write_file(&strip_secrets(settings, &self.fields))
     }
 
     fn read_file(&self) -> Settings {
@@ -267,9 +312,10 @@ impl SettingsStore {
         if let Some(values) = cache.as_ref() {
             return values.clone();
         }
-        let values: Vec<Option<String>> = SECRETS
+        let values: Vec<Option<String>> = self
+            .fields
             .iter()
-            .map(|field| match self.secrets.load(field.keyring_user) {
+            .map(|field| match self.secrets.load(&field.keyring_user()) {
                 Ok(value) => non_empty(value),
                 Err(err) => {
                     tracing::warn!(%err, "could not read an API key from the keyring");
@@ -285,9 +331,9 @@ impl SettingsStore {
     /// rewrites the file without them. Returns `false` if the keyring is unavailable; the file is
     /// then left as it is, so nothing is lost.
     fn migrate_plain_secrets(&self, settings: &Settings, plain: &[Option<String>]) -> bool {
-        for (field, value) in SECRETS.iter().zip(plain) {
+        for (field, value) in self.fields.iter().zip(plain) {
             if let Some(v) = value
-                && let Err(err) = self.secrets.save(field.keyring_user, v)
+                && let Err(err) = self.secrets.save(&field.keyring_user(), v)
             {
                 tracing::warn!(%err, "could not move an API key into the keyring; keeping it in settings.json");
                 return false;
@@ -297,7 +343,7 @@ impl SettingsStore {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .take();
-        match self.write_file(&strip_secrets(settings)) {
+        match self.write_file(&strip_secrets(settings, &self.fields)) {
             Ok(()) => tracing::info!("moved API keys from settings.json into the system keyring"),
             Err(err) => tracing::warn!(%err, "could not rewrite settings.json without API keys"),
         }
@@ -316,9 +362,16 @@ mod tests {
     use super::*;
     use crate::auth::{AuthError, MemoryTokenStore};
 
+    fn steam_key() -> [(String, String); 1] {
+        [("steam".into(), "apiKey".into())]
+    }
+
     fn store_at(path: PathBuf) -> (SettingsStore, Arc<MemoryTokenStore>) {
         let secrets = Arc::new(MemoryTokenStore::default());
-        (SettingsStore::new(path, secrets.clone()), secrets)
+        (
+            SettingsStore::new(path, secrets.clone(), steam_key()),
+            secrets,
+        )
     }
 
     #[test]
@@ -375,7 +428,7 @@ mod tests {
         }
         assert_eq!(store.load(), custom);
         // A fresh store (a new process) reads the secrets back from the keyring.
-        let reopened = SettingsStore::new(path, secrets.clone());
+        let reopened = SettingsStore::new(path, secrets.clone(), steam_key());
         assert_eq!(reopened.load(), custom);
         assert_eq!(custom.provider_config("steam")["steamId"], "1");
         assert!(custom.provider_config("gog").is_null());
@@ -474,7 +527,7 @@ mod tests {
     fn without_a_keyring_secrets_are_never_written_to_the_file() {
         let tmp = tempfile::tempdir().unwrap();
         let path = tmp.path().join("settings.json");
-        let store = SettingsStore::new(path.clone(), Arc::new(NoKeyring));
+        let store = SettingsStore::new(path.clone(), Arc::new(NoKeyring), steam_key());
         let with_key = Settings {
             steamgriddb_api_key: Some("SECRET".into()),
             ..Settings::default()

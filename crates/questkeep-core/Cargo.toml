@@ -7,16 +7,13 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-# PKCE (Amazon sign-in) and reading JWT expiry (Steam web session); versions already locked.
-base64 = "0.22.1"
+questkeep-imaging = { path = "../questkeep-imaging" }
+questkeep-store-api = { path = "../questkeep-store-api" }
 chrono = { version = "0.4.45", features = ["serde"] }
 dirs = "7.0.0"
-# Decoding and resizing of icons only; PNG/JPEG/ICO cover everything the sources deliver.
-image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "ico"] }
 rusqlite = { version = "0.40.2", features = ["bundled", "chrono", "serde_json"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
-sha2 = "0.10.9"
 sysinfo = "0.39.6"
 thiserror = "2.0.21"
 tracing = "0.1.44"
@@ -25,21 +22,12 @@ ureq = "3.4.2"
 uuid = { version = "1.28.0", features = ["v4", "serde"] }
 
 [target.'cfg(windows)'.dependencies]
-winreg = "0.56.0"
-# Executable icons (USER32 + GDI), foreground checks and key presses (Prism Launcher); the version
-# is the one already locked.
-windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_ProcessStatus", "Win32_System_Threading", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_WindowsAndMessaging"] }
-keyring = { version = "3.6.3", features = ["windows-native"] }
-
-# Linux uses the Secret Service (libdbus; sign-in tokens never fall back to plain files). The
-# pure-Rust crypto feature avoids an OpenSSL dependency.
-[target.'cfg(target_os = "linux")'.dependencies]
-keyring = { version = "3.6.3", features = ["sync-secret-service", "crypto-rust"] }
-
-[target.'cfg(target_os = "macos")'.dependencies]
-keyring = { version = "3.6.3", features = ["apple-native"] }
+# Executable icons (USER32 + GDI) and process checks; the version is the one already locked.
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_ProcessStatus", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
 
 [dev-dependencies]
+image = { version = "0.25.10", default-features = false, features = ["png"] }
+questkeep-store-api = { path = "../questkeep-store-api", features = ["testing"] }
 tempfile = "3.27.0"
 
 [lints]

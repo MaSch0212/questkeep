@@ -55,6 +55,7 @@ beforeEach(() => {
       installed: true,
       syncable: false,
       addGameOptions: [],
+      settings: { options: [], credentials: null },
     },
     {
       id: "steam",
@@ -66,6 +67,7 @@ beforeEach(() => {
       installed: true,
       syncable: true,
       addGameOptions: [],
+      settings: { options: [], credentials: null },
     },
   ]);
   vi.mocked(api.appInfo).mockResolvedValue({

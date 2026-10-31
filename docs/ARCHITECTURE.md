@@ -1,7 +1,11 @@
 # Architecture
 
 Questkeep is a Tauri 2 app. All logic lives in the `questkeep-core` crate, which has no
-dependency on Tauri or any UI. `src-tauri` is a thin shell that exposes typed commands and
+dependency on Tauri or any UI. Stores are plugins: each is a crate under `crates/stores/<id>`
+that implements the interface of `questkeep-store-api`; the core only sees that interface, and
+the app hands it the built-in list (`questkeep-stores`). `questkeep-imaging` (icon decoding)
+and `questkeep-tray-popup` (the Windows tray popup, no core dependency) are separate crates too,
+so a change in one store or in the popup rebuilds only that crate and the app. `src-tauri` is a thin shell that exposes typed commands and
 forwards core events to the webview. The SolidJS UI in `ui/` talks to the core only through
 those commands and events.
 
@@ -28,13 +32,13 @@ those commands and events.
 | `error` | `CoreError` (`thiserror`), serialized to the UI as a readable message. |
 | `model/` | `Game`, `PlayAction`, `ActionKind`, `TrackingMode`, `ImportedGame`, `NewManualGame`, `GameUpdate`, `GameQuery`, `SortField`. All `serde` + `ts-rs`. |
 | `db/` | `Database` (rusqlite connection behind a mutex), ordered migrations with `schema_version`, `games` repository (CRUD, query, upsert of imported games), `sessions` repository. |
-| `providers/` | `LibraryProvider` trait, `ProviderRegistry`, `steam` (VDF/ACF parser, library discovery, tool filter), `manual` helpers, `epic`/`gog` (Windows launchers; Heroic/Legendary on Linux through the shared `heroic` module), `xbox` (installed games from AppX manifests; Store catalog lookups in `catalog.rs` give portrait covers, backgrounds and metadata; optional account in `account.rs`), `lutris` (Linux, reads `pga.db`). |
-| `auth/` | Store account sign-in. `TokenStore` (`KeyringTokenStore` = system keyring, `MemoryTokenStore` for tests), `AccountSession` (lazy token load, refresh within 60 s of expiry or after a 401 with one retry, sign-out when the store rejects the refresh token), the injectable `Http` trait (`UreqHttp` redacts request secrets from errors), `AccountAuth` (what a provider exposes: status, login URL, code sign-in, sign-out) and `AccountStatus` (UI contract). GOG (`providers/gog/account.rs`) Epic (`providers/epic/account.rs` + `web.rs`) and Xbox (`providers/xbox/account.rs`: Microsoft account, then Xbox user token and XSTS per scan, title history and playtime) implement it. |
+| `providers/` | `ProviderRegistry` (stores by id, `ProviderInfo` for the UI, the secret setting fields stores declare) and the manual provider. The stores themselves live in `crates/stores/*`: `steam` (VDF/ACF parser, library discovery, tool filter), `epic`/`gog` (Windows launchers; Heroic/Legendary on Linux through the shared `heroic` crate), `xbox` (installed games from AppX manifests; Store catalog lookups give portrait covers, backgrounds and metadata; optional account), `lutris` (Linux, reads `pga.db`), and more. |
+| `auth` (store API) | Store account sign-in, in `questkeep-store-api` and re-exported by the core. `TokenStore` (`KeyringTokenStore` = system keyring, `MemoryTokenStore` for tests), `AccountSession` (lazy token load, refresh within 60 s of expiry or after a 401 with one retry, sign-out when the store rejects the refresh token), the injectable `Http` trait (`UreqHttp` redacts request secrets from errors), `AccountAuth` (what a store exposes: status, login URL and `LoginWindow`, code sign-in, sign-out) and `AccountStatus` (UI contract). `LoginWindow` describes the in-app login window (title, user agent, page scripts, which navigation carries the code, a website session to keep); the shell draws it without knowing the store. |
 | `launcher/` | Starts games (`file` spawn or `uri` open), tracks sessions on a background thread per game, writes playtime. `ProcessProbe` trait keeps tracking testable. |
 | `images/` | Image cache under `images/covers`, `images/backgrounds` and `images/icons`. `CoverFetcher` (4 workers) tries each provider's cover candidates, local files before CDN URLs. `MetadataFetcher` (1 worker, at least 1.5 s between store requests) stores store metadata, a background and the tray icon per game (see "Game icons" below). `SteamGridDb` (`images/steamgriddb.rs`) is a fallback source for covers and backgrounds when a user API key is set: used when the provider has no image (or only low-quality ones, see `covers_are_low_quality`), and for manual games. Global limiter of 2 requests/s, "nothing found" remembered in `games.extra`, key shared via `Library::artwork()` and updated by `save_settings`. |
-| `settings` | Small `settings.json` (serde, defaults on missing/corrupt file), including a per-provider config map (`providers.steam = { apiKey, steamId }`). |
+| `settings` | Small `settings.json` (serde, defaults on missing/corrupt file), including a per-provider config map (`providers.steam = { apiKey, steamId }`). Stores declare their settings (`StoreSettings`: switches and a credentials form), which the UI draws; secret fields go to the keyring as `setting:<store>.<key>`. |
 | `events` | `EventBus` with serializable `CoreEvent` enum; subscribers are callbacks. Plugin hooks attach here later. |
-| `platform/` | OS-specific bits: Steam install dirs (registry on Windows, XDG paths on Linux), opening URIs, process snapshots, installed store clients (`installed_store_clients`: Steam, Epic, GOG Galaxy, Xbox). Stubs on other targets. |
+| `platform/` | OS-specific bits of the core: executable icons, opening URIs, process snapshots. Store-facing helpers (registry values, uninstall entries, AppX packages, starting a launcher in front) are in `questkeep-store-api`'s `platform`. Stubs on other targets. |
 | `tray` | Pure logic for the tray and window lifecycle: which games the tray menu lists (`tray_games`), close/minimize decisions, when an exit request is ignored, `--minimized` argument parsing. No Tauri dependency, fully unit-tested. |
 | `library` | `Library` facade used by the shell: wires db, providers, images, events. |
 | `seed` | Dev-only fake library generator (5,000 games) for performance checks. |
@@ -119,7 +123,7 @@ for this; the store asks for confirmation and the next scan marks the game as no
   model and skips the rebuild when it is unchanged; menus are applied on the main thread (Linux) or
   the model is stored for the next popup (Windows). Idle cost is zero: no timers, no polling (the
   launcher only polls while a game runs).
-- **Tray popup** (`src-tauri/src/tray_popup/`, Windows only). A borderless Win32 window drawn with
+- **Tray popup** (`crates/questkeep-tray-popup`, Windows only). A borderless Win32 window drawn with
   Direct2D/DirectWrite, created on its own thread (own message loop) when opened and destroyed when
   it closes (Escape, losing activation, or after a choice; the action runs afterwards). Recent
   games are cover tiles (up to 8), favorites are rows with icons (scrolling past 6), then store
@@ -216,10 +220,10 @@ memory; Epic's is longer than the Windows credential limit). The login window is
 webview on the store's own login page; the shell cancels the redirect that carries the one-time
 code and passes the code to `Library::sign_in_with_code`, which exchanges it, saves the tokens and
 scans the provider. Providers get their `AccountSession` by constructor injection
-(`ProviderRegistry::with_builtin(Arc<dyn TokenStore>)`); signed out, `scan_owned` returns
+(`questkeep_stores::builtin(Arc<dyn TokenStore>, ...)`); signed out, `scan_owned` returns
 `NotConfigured` so `Library::scan` silently stays installed-only. Epic metadata then returns an
 error so it is retried after sign-in, but Epic covers, backgrounds and icons of installed games
-still work: `providers/epic/public.rs` looks them up by the manifest's namespace and catalog item
+still work: `crates/stores/epic/src/public.rs` looks them up by the manifest's namespace and catalog item
 id with an in-memory app-only token (`client_credentials`); a signed-in account is tried first.
 
 Payload types are generated into `ui/src/bindings/` by `ts-rs` during `cargo test`. The check

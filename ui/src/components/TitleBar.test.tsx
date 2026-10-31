@@ -25,6 +25,7 @@ function provider(id: string, name: string, canScan = true): ProviderInfo {
     installed: true,
     syncable: canScan,
     addGameOptions: id === "prism" ? [{ id: "new-instance", label: "New Minecraft instance" }] : [],
+    settings: { options: [], credentials: null },
   };
 }
 

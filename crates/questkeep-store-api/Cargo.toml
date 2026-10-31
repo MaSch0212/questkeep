@@ -1,0 +1,39 @@
+[package]
+name = "questkeep-store-api"
+description = "The plugin interface of Questkeep stores: the provider trait, what stores report, account sign-in and OS helpers"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+# Scripted HTTP for the tests of store crates.
+testing = []
+
+[dependencies]
+chrono = { version = "0.4.45", features = ["serde"] }
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+thiserror = "2.0.21"
+tracing = "0.1.44"
+ts-rs = { version = "12.0.1", features = ["serde-json-impl", "no-serde-warnings", "chrono-impl"] }
+ureq = "3.4.2"
+uuid = { version = "1.28.0", features = ["v4"] }
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.56.0"
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_ProcessStatus", "Win32_System_Threading", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_WindowsAndMessaging"] }
+keyring = { version = "3.6.3", features = ["windows-native"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3.6.3", features = ["sync-secret-service", "crypto-rust"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3.6.3", features = ["apple-native"] }
+
+[dev-dependencies]
+tempfile = "3.27.0"
+
+[lints]
+workspace = true

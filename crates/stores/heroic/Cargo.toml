@@ -1,0 +1,20 @@
+[package]
+name = "questkeep-store-heroic"
+description = "Questkeep store plugin: Heroic Games Launcher helpers and sideloaded games"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+questkeep-store-api = { path = "../../questkeep-store-api" }
+dirs = "7.0.0"
+serde_json = "1.0.154"
+tracing = "0.1.44"
+
+[dev-dependencies]
+questkeep-store-api = { path = "../../questkeep-store-api", features = ["testing"] }
+tempfile = "3.27.0"
+
+[lints]
+workspace = true

@@ -1,18 +1,24 @@
 import { createSignal, onMount } from "solid-js";
 import type { Settings } from "../../bindings/Settings";
+import type { StoreCredentials } from "../../bindings/StoreCredentials";
 import * as api from "../../lib/api";
 import { errorMessage } from "../../lib/errors";
 import { scanSummaryText } from "../../lib/query";
-import { withProviderOption } from "../../lib/providerSettings";
-import { textOf, withSteamSettings } from "../../lib/steamSettings";
+import {
+  credentialsSaved,
+  providerText,
+  withCredentials,
+  withProviderOption,
+} from "../../lib/providerSettings";
 import { store } from "../../lib/store";
 
 /** Loaded settings plus the actions that persist them. Shared by all settings sections. */
 export function createSettingsModel() {
   const [settings, setSettings] = createSignal<Settings | null>(null);
-  const [apiKey, setApiKey] = createSignal("");
-  const [steamId, setSteamId] = createSignal("");
-  const [savingSteam, setSavingSteam] = createSignal(false);
+  /** Typed but not yet saved credential values: provider id → field key → value. */
+  const [drafts, setDrafts] = createSignal<Record<string, Record<string, string>>>({});
+  /** The provider whose credentials are being saved. */
+  const [savingCredentials, setSavingCredentials] = createSignal<string | null>(null);
   const [gridDbKey, setGridDbKey] = createSignal("");
   const [savingGridDb, setSavingGridDb] = createSignal(false);
   const [igdbClientId, setIgdbClientId] = createSignal("");
@@ -24,8 +30,6 @@ export function createSettingsModel() {
       .getSettings()
       .then((loaded) => {
         setSettings(loaded);
-        setApiKey(textOf(loaded.providers.steam?.apiKey));
-        setSteamId(textOf(loaded.providers.steam?.steamId));
         setGridDbKey(loaded.steamGridDbApiKey ?? "");
         setIgdbClientId(loaded.igdbClientId ?? "");
         setIgdbClientSecret(loaded.igdbClientSecret ?? "");
@@ -52,35 +56,48 @@ export function createSettingsModel() {
     await update({ [key]: value });
   }
 
-  async function saveSteam() {
+  /** A credential field as typed, or as saved while untouched. */
+  function credentialDraft(providerId: string, key: string): string {
+    return drafts()[providerId]?.[key] ?? providerText(settings(), providerId, key);
+  }
+
+  function setCredentialDraft(providerId: string, key: string, value: string) {
+    setDrafts((all) => ({ ...all, [providerId]: { ...all[providerId], [key]: value } }));
+  }
+
+  /** Saves a store's credential form; new credentials sync the store right away. */
+  async function saveCredentials(
+    providerId: string,
+    storeName: string,
+    credentials: StoreCredentials,
+  ) {
     const previous = settings();
-    if (!previous || savingSteam()) return;
-    const next = withSteamSettings(previous, apiKey(), steamId());
-    const keyChanged =
-      textOf(previous.providers.steam?.apiKey) !== textOf(next.providers.steam?.apiKey);
-    const idChanged =
-      textOf(previous.providers.steam?.steamId) !== textOf(next.providers.steam?.steamId);
-    setSavingSteam(true);
+    if (!previous || savingCredentials() !== null) return;
+    const values = Object.fromEntries(
+      credentials.fields.map((f) => [f.key, credentialDraft(providerId, f.key)]),
+    );
+    const next = withCredentials(previous, providerId, values);
+    const changed = credentials.fields.some(
+      (f) => providerText(previous, providerId, f.key) !== providerText(next, providerId, f.key),
+    );
+    const saved = credentialsSaved(next, providerId, credentials);
+    setSavingCredentials(providerId);
     try {
       await api.saveSettings(next);
       setSettings(next);
-      setApiKey(textOf(next.providers.steam?.apiKey));
-      setSteamId(textOf(next.providers.steam?.steamId));
-      store.pushToast(
-        "info",
-        textOf(next.providers.steam?.apiKey) === "" ? "Steam key removed" : "Steam key saved",
-      );
+      setDrafts(({ [providerId]: _saved, ...rest }) => rest);
+      store.pushToast("info", `${credentials.noun} ${saved ? "saved" : "removed"}`);
     } catch (error) {
       store.pushToast("error", errorMessage(error));
-      setSavingSteam(false);
+      setSavingCredentials(null);
       return;
     }
-    setSavingSteam(false);
-    // A new key or account can reveal owned games that were not visible before.
-    if ((keyChanged || idChanged) && textOf(next.providers.steam?.apiKey) !== "") {
+    setSavingCredentials(null);
+    // New credentials can reveal owned games that were not visible before.
+    if (changed && saved) {
       try {
-        const summary = await api.scanLibrary("steam");
-        store.pushToast("info", `Steam: ${scanSummaryText(summary)}`);
+        const summary = await api.scanLibrary(providerId);
+        store.pushToast("info", `${storeName}: ${scanSummaryText(summary)}`);
         store.scheduleRefresh();
       } catch (error) {
         store.pushToast("error", errorMessage(error));
@@ -88,14 +105,14 @@ export function createSettingsModel() {
     }
   }
 
-  /** Whether a Steam Web API key is saved (not just typed). */
-  const steamKeySaved = () => textOf(settings()?.providers.steam?.apiKey) !== "";
-
-  /** Forgets the Steam Web API key and SteamID. */
-  async function removeSteamKey() {
-    setApiKey("");
-    setSteamId("");
-    await saveSteam();
+  /** Forgets a store's credentials. */
+  async function removeCredentials(
+    providerId: string,
+    storeName: string,
+    credentials: StoreCredentials,
+  ) {
+    for (const field of credentials.fields) setCredentialDraft(providerId, field.key, "");
+    await saveCredentials(providerId, storeName, credentials);
   }
 
   /**
@@ -169,11 +186,9 @@ export function createSettingsModel() {
 
   return {
     settings,
-    apiKey,
-    setApiKey,
-    steamId,
-    setSteamId,
-    savingSteam,
+    credentialDraft,
+    setCredentialDraft,
+    savingCredentials,
     gridDbKey,
     setGridDbKey,
     savingGridDb,
@@ -185,9 +200,8 @@ export function createSettingsModel() {
     toggle,
     update,
     setProviderOption,
-    saveSteam,
-    steamKeySaved,
-    removeSteamKey,
+    saveCredentials,
+    removeCredentials,
     saveGridDb,
     saveIgdb,
   };

@@ -12,6 +12,7 @@ const provider = (id: string, options: { id: string; label: string }[]): Provide
   installed: true,
   syncable: true,
   addGameOptions: options,
+  settings: { options: [], credentials: null },
 });
 
 describe("addGameMenuItems", () => {

@@ -1,6 +1,7 @@
-//! System tray icon and what it opens: on Windows a custom popup (`tray_popup`) with cover tiles,
-//! elsewhere a native menu. Both list recently played and favorite games and open store launchers;
-//! their content is refreshed (debounced, off the UI thread) when the library changes.
+//! System tray icon and what it opens: on Windows a custom popup with cover tiles (the
+//! `questkeep-tray-popup` crate), elsewhere a native menu. Both list recently played and favorite
+//! games and open store launchers; their content is refreshed (debounced, off the UI thread) when
+//! the library changes.
 //!
 //! The selection logic is in `questkeep_core::tray` and the providers' launchers; this module
 //! only turns it into Tauri menu items, so it has no unit tests of its own (creating a tray icon
@@ -319,7 +320,9 @@ fn on_tray_event(app: &AppHandle, event: &TrayIconEvent) {
 
 #[cfg(windows)]
 fn show_popup(app: &AppHandle, rect: &tauri::Rect) {
-    use crate::tray_popup::{self, Action, PopupData, ScreenRect};
+    use questkeep_tray_popup::{
+        Action, PopupData, PopupGame, PopupGames, PopupLauncher, ScreenRect,
+    };
 
     let position = rect.position.to_physical::<i32>(1.0);
     let size = rect.size.to_physical::<i32>(1.0);
@@ -334,13 +337,30 @@ fn show_popup(app: &AppHandle, rect: &tauri::Rect) {
         .unwrap_or_else(PoisonError::into_inner)
         .clone()
         .unwrap_or_default();
+    let game = |g: questkeep_core::tray::TrayGame| PopupGame {
+        id: g.id,
+        name: g.name,
+        icon: g.icon,
+        cover: g.cover,
+    };
     let data = PopupData {
-        games: model.games,
-        launchers: model.launchers,
+        games: PopupGames {
+            recent: model.games.recent.into_iter().map(game).collect(),
+            favorites: model.games.favorites.into_iter().map(game).collect(),
+        },
+        launchers: model
+            .launchers
+            .into_iter()
+            .map(|l| PopupLauncher {
+                id: l.id,
+                name: l.name,
+                icon: l.icon,
+            })
+            .collect(),
         update: model.update,
     };
     let app = app.clone();
-    tray_popup::show(anchor, data, move |action| match action {
+    questkeep_tray_popup::show(anchor, data, move |action| match action {
         Action::Launch(id) => launch(&app, id),
         Action::OpenLauncher(id) => open_launcher(&app, id),
         Action::OpenWindow => window::show_main_window(&app),

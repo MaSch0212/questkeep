@@ -8,14 +8,15 @@ import { createSignal, For, onMount, Show } from "solid-js";
 import { createStore } from "solid-js/store";
 import type { AccountStatus } from "../../bindings/AccountStatus";
 import { accountState, connectedSummary, storeRows, type StoreRow } from "../../lib/accountState";
+import { credentialsSaved } from "../../lib/providerSettings";
 import * as api from "../../lib/api";
 import { errorMessage } from "../../lib/errors";
 import { store } from "../../lib/store";
 import { isProviderSyncing } from "../../lib/syncStatus";
 import { SourceIcon } from "../SourceIcon";
+import { CredentialsForm } from "./CredentialsForm";
 import { openLink } from "./openLink";
-import { SteamKeyForm } from "./SteamKeyForm";
-import { StoreOptions, hasStoreOptions } from "./StoreOptions";
+import { StoreOptions } from "./StoreOptions";
 import type { SettingsModel } from "./useSettings";
 
 interface RowState {
@@ -24,7 +25,7 @@ interface RowState {
   /** The row shows its settings and account actions. */
   open: boolean;
   codeOpen: boolean;
-  /** Steam only: the API key form is open. */
+  /** The store's credentials form is open. */
   keyOpen: boolean;
   code: string;
   submitting: boolean;
@@ -39,20 +40,6 @@ const initialRow = (): RowState => ({
   code: "",
   submitting: false,
 });
-
-/** What to copy after signing in on the store's page, per store. */
-export function codeHint(provider: string): string {
-  switch (provider) {
-    case "epic":
-      return "Copy the authorizationCode value from the page that follows.";
-    case "xbox":
-      return "The browser ends on a blank page. Copy the whole address from its address bar.";
-    case "amazon":
-      return "Amazon then shows its front page. Copy the whole address from the address bar.";
-    default:
-      return "Copy the code, or the whole address of the final page.";
-  }
-}
 
 /** Progress, the result and failures arrive as scan events and end up in the sync summary. */
 async function syncStore(id: string) {
@@ -76,18 +63,18 @@ function storeDetail(entry: StoreRow, accountDetail: string | null): string {
   return accountDetail ?? "Imports the games installed on this PC";
 }
 
-/** Whether the row has anything below its head: options, sign-out, key or code sign-in. */
+/** Whether the row has anything below its head: options, sign-out, credentials or code sign-in. */
 function expandable(entry: StoreRow): boolean {
   return (
-    hasStoreOptions(entry.id) ||
+    entry.settings.options.length > 0 ||
     (entry.account !== null &&
       (entry.account.signedIn ||
         entry.account.supportsCodeSignIn ||
-        entry.account.provider === "steam"))
+        entry.settings.credentials !== null))
   );
 }
 
-/** Every store in one place: its sign-in (or Steam's API key), its options and a sync button. */
+/** Every store in one place: its sign-in (or its credentials), its options and a sync button. */
 export function AccountsSection(props: { model: SettingsModel }) {
   const [accounts, setAccounts] = createSignal<AccountStatus[] | null>(null);
   const [rows, setRows] = createStore<Record<string, RowState>>({});
@@ -104,8 +91,15 @@ export function AccountsSection(props: { model: SettingsModel }) {
 
   onMount(() => void refresh());
 
-  const state = (account: AccountStatus) =>
-    accountState(account, account.provider === "steam" && props.model.steamKeySaved());
+  /** The store's credentials when they are saved. */
+  const savedCredentials = (entry: StoreRow) => {
+    const credentials = entry.settings.credentials;
+    return credentials !== null && credentialsSaved(props.model.settings(), entry.id, credentials)
+      ? credentials
+      : null;
+  };
+  const state = (entry: StoreRow, account: AccountStatus) =>
+    accountState(account, savedCredentials(entry));
 
   function patch(provider: string, change: Partial<RowState>) {
     setRows(provider, { ...row(provider), ...change });
@@ -159,7 +153,7 @@ export function AccountsSection(props: { model: SettingsModel }) {
 
   const stores = () => storeRows(store.providers(), accounts() ?? []);
   const connection = (entry: StoreRow) =>
-    entry.account === null ? null : state(entry.account).connection;
+    entry.account === null ? null : state(entry, entry.account).connection;
 
   return (
     <div class="form">
@@ -173,7 +167,7 @@ export function AccountsSection(props: { model: SettingsModel }) {
         <Show when={stores().length > 0} fallback={<p class="muted">No stores available.</p>}>
           <p class="account-summary">
             {connectedSummary(
-              stores().flatMap((r) => (r.account === null ? [] : [state(r.account)])),
+              stores().flatMap((r) => (r.account === null ? [] : [state(r, r.account)])),
             )}
           </p>
         </Show>
@@ -227,7 +221,7 @@ export function AccountsSection(props: { model: SettingsModel }) {
                   <div class="account__info">
                     <span class="account__name">{entry.name}</span>
                     <span class="muted account__detail">
-                      {storeDetail(entry, entry.account && state(entry.account).detail)}
+                      {storeDetail(entry, entry.account && state(entry, entry.account).detail)}
                     </span>
                   </div>
                   <Show when={entry.account}>
@@ -235,17 +229,17 @@ export function AccountsSection(props: { model: SettingsModel }) {
                       <span
                         class="account__badge"
                         classList={{
-                          "account__badge--on": state(account()).connection !== "none",
+                          "account__badge--on": state(entry, account()).connection !== "none",
                         }}
                         role="status"
                       >
-                        <Show when={state(account()).connection === "signedIn"}>
+                        <Show when={state(entry, account()).connection === "signedIn"}>
                           <Check class="icon" aria-hidden="true" />
                         </Show>
-                        <Show when={state(account()).connection === "apiKey"}>
+                        <Show when={state(entry, account()).connection === "credentials"}>
                           <KeyRound class="icon" aria-hidden="true" />
                         </Show>
-                        {state(account()).badge}
+                        {state(entry, account()).badge}
                       </span>
                     )}
                   </Show>
@@ -286,50 +280,68 @@ export function AccountsSection(props: { model: SettingsModel }) {
                     <Show when={entry.account}>
                       {(account) => (
                         <>
-                          <Show when={account().provider === "steam"}>
-                            <Show when={state(account()).connection === "apiKey"}>
-                              <p class="field__hint">Remove the key to sign in to Steam instead.</p>
-                            </Show>
-                            <Show when={account().signedIn && props.model.steamKeySaved()}>
-                              <p class="field__hint">
-                                A Steam Web API key is also saved; it is not needed while you are
-                                signed in.{" "}
-                                <button
-                                  type="button"
-                                  class="link-btn"
-                                  disabled={props.model.savingSteam()}
-                                  onClick={() => void props.model.removeSteamKey()}
-                                >
-                                  Remove key
-                                </button>
-                              </p>
-                            </Show>
-                            <Show when={!account().signedIn}>
-                              <button
-                                type="button"
-                                class="link-btn account__disclosure"
-                                aria-expanded={row(account().provider).keyOpen}
-                                onClick={() =>
-                                  patch(account().provider, {
-                                    keyOpen: !row(account().provider).keyOpen,
-                                  })
-                                }
-                              >
-                                <ChevronRight
-                                  class="icon account__chevron"
-                                  classList={{
-                                    "account__chevron--open": row(account().provider).keyOpen,
-                                  }}
-                                  aria-hidden="true"
-                                />{" "}
-                                {state(account()).connection === "apiKey"
-                                  ? "Change key"
-                                  : "Use a Steam Web API key instead"}
-                              </button>
-                              <Show when={row(account().provider).keyOpen}>
-                                <SteamKeyForm model={props.model} />
-                              </Show>
-                            </Show>
+                          <Show when={entry.settings.credentials}>
+                            {(credentials) => (
+                              <>
+                                <Show when={state(entry, account()).connection === "credentials"}>
+                                  <p class="field__hint">
+                                    Remove the {credentials().noun} to sign in to {entry.name}{" "}
+                                    instead.
+                                  </p>
+                                </Show>
+                                <Show when={account().signedIn && savedCredentials(entry)}>
+                                  <p class="field__hint">
+                                    A {credentials().noun} is also saved; it is not needed while you
+                                    are signed in.{" "}
+                                    <button
+                                      type="button"
+                                      class="link-btn"
+                                      disabled={props.model.savingCredentials() === entry.id}
+                                      onClick={() =>
+                                        void props.model.removeCredentials(
+                                          entry.id,
+                                          entry.name,
+                                          credentials(),
+                                        )
+                                      }
+                                    >
+                                      Remove {credentials().noun}
+                                    </button>
+                                  </p>
+                                </Show>
+                                <Show when={!account().signedIn}>
+                                  <button
+                                    type="button"
+                                    class="link-btn account__disclosure"
+                                    aria-expanded={row(account().provider).keyOpen}
+                                    onClick={() =>
+                                      patch(account().provider, {
+                                        keyOpen: !row(account().provider).keyOpen,
+                                      })
+                                    }
+                                  >
+                                    <ChevronRight
+                                      class="icon account__chevron"
+                                      classList={{
+                                        "account__chevron--open": row(account().provider).keyOpen,
+                                      }}
+                                      aria-hidden="true"
+                                    />{" "}
+                                    {state(entry, account()).connection === "credentials"
+                                      ? `Change ${credentials().noun}`
+                                      : credentials().offer}
+                                  </button>
+                                  <Show when={row(account().provider).keyOpen}>
+                                    <CredentialsForm
+                                      providerId={entry.id}
+                                      storeName={entry.name}
+                                      credentials={credentials()}
+                                      model={props.model}
+                                    />
+                                  </Show>
+                                </Show>
+                              </>
+                            )}
                           </Show>
                           <Show when={!account().signedIn && account().supportsCodeSignIn}>
                             <button
@@ -361,7 +373,10 @@ export function AccountsSection(props: { model: SettingsModel }) {
                               >
                                 <ol class="account__steps">
                                   <li>Open the sign-in page in your normal browser and sign in.</li>
-                                  <li>{codeHint(account().provider)}</li>
+                                  <li>
+                                    {account().codeHint ??
+                                      "Copy the code, or the whole address of the final page."}
+                                  </li>
                                   <li>Paste it below and submit.</li>
                                 </ol>
                                 <Show when={account().codeUrl}>
@@ -413,7 +428,11 @@ export function AccountsSection(props: { model: SettingsModel }) {
                         </>
                       )}
                     </Show>
-                    <StoreOptions providerId={entry.id} model={props.model} />
+                    <StoreOptions
+                      providerId={entry.id}
+                      options={entry.settings.options}
+                      model={props.model}
+                    />
                     {/* Ending the account comes last, away from the head. */}
                     <Show when={entry.account}>
                       {(account) => (
@@ -454,17 +473,30 @@ export function AccountsSection(props: { model: SettingsModel }) {
                               </Show>
                             </div>
                           </Show>
-                          <Show when={state(account()).connection === "apiKey"}>
-                            <div class="account__actions">
-                              <button
-                                type="button"
-                                class="btn btn--danger"
-                                disabled={props.model.savingSteam()}
-                                onClick={() => void props.model.removeSteamKey()}
-                              >
-                                Remove key
-                              </button>
-                            </div>
+                          <Show
+                            when={
+                              state(entry, account()).connection === "credentials" &&
+                              entry.settings.credentials
+                            }
+                          >
+                            {(credentials) => (
+                              <div class="account__actions">
+                                <button
+                                  type="button"
+                                  class="btn btn--danger"
+                                  disabled={props.model.savingCredentials() === entry.id}
+                                  onClick={() =>
+                                    void props.model.removeCredentials(
+                                      entry.id,
+                                      entry.name,
+                                      credentials(),
+                                    )
+                                  }
+                                >
+                                  Remove {credentials().noun}
+                                </button>
+                              </div>
+                            )}
                           </Show>
                         </>
                       )}

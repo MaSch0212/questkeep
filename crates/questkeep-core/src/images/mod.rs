@@ -2,7 +2,6 @@
 //! directory, e.g. `images/covers/<game id>.jpg` or `images/backgrounds/<game id>.jpg`.
 
 mod fetcher;
-mod icons;
 mod igdb;
 mod steamgriddb;
 
@@ -13,14 +12,13 @@ use uuid::Uuid;
 use crate::error::{CoreError, Result};
 use crate::paths::DataPaths;
 
-pub(crate) use fetcher::http_agent;
 pub use fetcher::{CoverFetcher, CoverJob, MetadataFetcher, MetadataJob, image_extension};
-pub use icons::{
+pub(crate) use igdb::CHECKED_KEY as IGDB_CHECKED_KEY;
+pub use igdb::{Igdb, IgdbLookup};
+pub use questkeep_imaging::{
     ICON_SIZE, IconRgba, SquareFrom, icon_png_from_bytes, icon_png_from_rgba, load_icon_rgba,
     load_image_filled, scale_icon,
 };
-pub(crate) use igdb::CHECKED_KEY as IGDB_CHECKED_KEY;
-pub use igdb::{Igdb, IgdbLookup};
 pub(crate) use steamgriddb::checked_key;
 pub use steamgriddb::{Lookup, SteamGridDb};
 
