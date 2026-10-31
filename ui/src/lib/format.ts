@@ -77,3 +77,16 @@ export function formatAgo(iso: string | null, now: Date = new Date()): string {
   if (minutes < 12 * 60) return `${Math.floor(minutes / 60)} h ago`;
   return formatRelativeDate(iso, now);
 }
+
+/** "158.7 GB", "512 MB", "12 KB" (1024-based, like Explorer). */
+export function formatSize(bytes: number): string {
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  const digits = unit >= 3 ? 1 : 0;
+  return `${value.toFixed(digits)} ${units[unit]}`;
+}

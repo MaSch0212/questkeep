@@ -41,6 +41,9 @@
   --qk-color-warn-hover: #3a2d1f;
   --qk-color-play: #2f6d4f;
   --qk-color-play-hover: #3a8462;
+  --qk-color-ttb-main: #2bb3a3;
+  --qk-color-ttb-extra: #4f7dea;
+  --qk-color-ttb-complete: #3f9e4f;
   /* Game cards */
   --qk-color-tile-outline: #ffffff14;
   --qk-color-tile-date-bg: #0b0d12e0;
@@ -206,6 +209,13 @@
   --qk-field-order-label-width: 140px;
   --qk-status-count-width: 72px;
   --qk-disabled-opacity: 0.4;
+  --qk-score-ring-size: 52px;
+  --qk-ttb-bar-height: 10px;
+  --qk-progress-height: 6px;
+  --qk-ach-icon-size: 36px;
+  --qk-activity-height: 64px;
+  --qk-news-thumb-width: 96px;
+  --qk-news-thumb-height: 54px;
   --qk-filters-label-width: 110px;
   --qk-nav-row-height: 32px;
   --qk-edit-row-height: 32px;

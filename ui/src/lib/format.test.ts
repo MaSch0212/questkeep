@@ -84,3 +84,12 @@ describe("formatAgo", () => {
     );
   });
 });
+
+describe("formatSize", () => {
+  it("uses 1024-based units", async () => {
+    const { formatSize } = await import("./format");
+    expect(formatSize(158.7 * 1024 ** 3)).toBe("158.7 GB");
+    expect(formatSize(512 * 1024 ** 2)).toBe("512 MB");
+    expect(formatSize(100)).toBe("100 B");
+  });
+});

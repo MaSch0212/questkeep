@@ -16,8 +16,8 @@ import X from "lucide-solid/icons/x";
 import {
   createEffect,
   createMemo,
+  createResource,
   createSignal,
-  createUniqueId,
   For,
   on,
   onCleanup,
@@ -26,6 +26,7 @@ import {
 } from "solid-js";
 import type { Game } from "../bindings/Game";
 import type { GameCopy } from "../bindings/GameCopy";
+import type { ListField } from "../bindings/ListField";
 import {
   combineGames,
   installGame,
@@ -45,12 +46,25 @@ import {
   formatPlaytime,
   formatRelativeDate,
   formatReleaseDate,
+  formatSize,
   releaseYear,
 } from "../lib/format";
+import { gameAchievements, gameActivity, gameNews, gamePlayerCount } from "../lib/api";
 import { store } from "../lib/store";
 import { CategoryEditor } from "./CategoryEditor";
 import { CombinePicker } from "./CombinePicker";
 import { CompletionPicker } from "./CompletionPicker";
+import { GameLinks } from "./GameLinks";
+import {
+  AchievementsCard,
+  ActivityCard,
+  Card,
+  FilterChip,
+  FilterValues,
+  NewsCard,
+  ScoresCard,
+  TimeToBeatCard,
+} from "./GameSections";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { Cover } from "./Cover";
 import { EditGameDialog } from "./EditGameDialog";
@@ -63,6 +77,60 @@ const DESCRIPTION_CLAMP_LINES = 5;
 
 function isLongText(text: string): boolean {
   return text.length > DESCRIPTION_CLAMP_CHARS || text.split("\n").length > DESCRIPTION_CLAMP_LINES;
+}
+
+/** A labeled row of filter chips; long rows show `limit` chips and a "+N" toggle. */
+function ChipGroup(props: {
+  label: string;
+  field: ListField;
+  values: string[];
+  plain?: boolean;
+  limit?: number;
+}) {
+  const [all, setAll] = createSignal(false);
+  const shown = () =>
+    props.limit !== undefined && !all() ? props.values.slice(0, props.limit) : props.values;
+  const rest = () => props.values.length - shown().length;
+  return (
+    <Show when={props.values.length > 0}>
+      <div class="chip-group">
+        <h4 class="details-card__subtitle">{props.label}</h4>
+        <ul class="chips" aria-label={props.label}>
+          <For each={shown()}>
+            {(value) => (
+              <li>
+                <FilterChip field={props.field} value={value} plain={props.plain} />
+              </li>
+            )}
+          </For>
+          <Show when={rest() > 0 || all()}>
+            <li>
+              <button
+                type="button"
+                class="chip chip--plain chip--link"
+                aria-expanded={all()}
+                onClick={() => setAll((open) => !open)}
+              >
+                {all() ? "Fewer" : `+${rest()}`}
+              </button>
+            </li>
+          </Show>
+        </ul>
+      </div>
+    </Show>
+  );
+}
+
+/** A Details row whose values open Explore; hidden without values. */
+function Fact(props: { label: string; plural?: string; field: ListField; values: string[] }) {
+  return (
+    <Show when={props.values.length > 0}>
+      <dt>{props.values.length > 1 && props.plural ? props.plural : props.label}</dt>
+      <dd>
+        <FilterValues field={props.field} values={props.values} />
+      </dd>
+    </Show>
+  );
 }
 
 interface DetailsPanelProps {
@@ -112,10 +180,6 @@ export function DetailsPanel(props: DetailsPanelProps) {
   let moreButton: HTMLButtonElement | undefined;
   const copyButtons = new Map<string, HTMLButtonElement>();
 
-  const aboutId = createUniqueId();
-  const detailsId = createUniqueId();
-  const libraryId = createUniqueId();
-
   const running = () => store.isRunning(props.game.id);
   const copies = () => copiesOf(props.game);
   const combined = () => copies().length > 1;
@@ -134,6 +198,27 @@ export function DetailsPanel(props: DetailsPanelProps) {
   };
   const isPage = () => props.variant === "page";
   const heroUrl = () => (heroFailed() ? null : store.backgroundUrl(props.game));
+  const live = <T,>(load: (id: string) => Promise<T>) =>
+    createResource(
+      () => props.game.id,
+      (id) =>
+        Promise.resolve()
+          .then(() => load(id))
+          .catch(() => null),
+    )[0];
+  const players = live(gamePlayerCount);
+  const news = live(gameNews);
+  const achievements = live(gameAchievements);
+  // Reloaded when a session ends (playtime changes).
+  const [activity] = createResource(
+    () => [props.game.id, props.game.playtimeSeconds] as const,
+    ([id]) =>
+      Promise.resolve()
+        .then(() => gameActivity(id))
+        .catch(() => null),
+  );
+  const hasChips = () =>
+    props.game.genres.length + props.game.features.length + props.game.tags.length > 0;
   const released = () => formatReleaseDate(props.game.releaseDate);
   const description = () => props.game.description?.trim() ?? "";
   const subtitle = () =>
@@ -382,6 +467,17 @@ export function DetailsPanel(props: DetailsPanelProps) {
               </div>
 
               <dl class="details__stats">
+                <Show when={players()}>
+                  {(count) => (
+                    <div class="details__stat details__stat--players">
+                      <dt>Playing now</dt>
+                      <dd>
+                        <span class="players-dot" aria-hidden="true" />
+                        {count().toLocaleString()}
+                      </dd>
+                    </div>
+                  )}
+                </Show>
                 <div class="details__stat">
                   <dt>Last played</dt>
                   <dd>{formatRelativeDate(props.game.lastPlayed)}</dd>
@@ -396,7 +492,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
                     <CompletionPicker game={props.game} />
                   </dd>
                 </div>
-                <div class="details__stat">
+                <div class="details__stat details__stat--stores">
                   <dt>{combined() ? "Stores" : "Store"}</dt>
                   <dd class="details__stores">
                     <SourceIcons game={props.game} />
@@ -460,6 +556,8 @@ export function DetailsPanel(props: DetailsPanelProps) {
           </div>
         </div>
 
+        <GameLinks links={props.game.links} />
+
         <Show when={error()}>
           <p class="error-text details__error" role="alert">
             {error()}
@@ -467,116 +565,151 @@ export function DetailsPanel(props: DetailsPanelProps) {
         </Show>
 
         <div class="details__cards">
-          <Show when={description() !== "" || props.game.genres.length > 0}>
-            <section class="details-card details-card--about" aria-labelledby={aboutId}>
-              <h3 id={aboutId} class="details-card__title">
-                About
-              </h3>
-              <Show when={description() !== ""}>
-                <div class="description">
-                  <p
-                    class="description__text"
-                    classList={{
-                      "description__text--clamped": isLongText(description()) && !descriptionOpen(),
-                    }}
-                  >
-                    {description()}
-                  </p>
-                  <Show when={isLongText(description())}>
-                    <button
-                      type="button"
-                      class="link-btn"
-                      aria-expanded={descriptionOpen()}
-                      onClick={() => setDescriptionOpen((open) => !open)}
+          <div class="details__col details__col--wide">
+            <Show when={description() !== "" || hasChips()}>
+              <Card title="About" order={1} class="details-card--about">
+                <Show when={description() !== ""}>
+                  <div class="description">
+                    <p
+                      class="description__text"
+                      classList={{
+                        "description__text--clamped":
+                          isLongText(description()) && !descriptionOpen(),
+                      }}
                     >
-                      {descriptionOpen() ? "Show less" : "Show more"}
-                    </button>
-                  </Show>
-                </div>
-              </Show>
-              <Show when={props.game.genres.length > 0}>
-                <ul class="chips" aria-label="Genres">
-                  <For each={props.game.genres}>{(genre) => <li class="chip">{genre}</li>}</For>
-                </ul>
-              </Show>
-            </section>
-          </Show>
-
-          <section class="details-card" aria-labelledby={detailsId}>
-            <h3 id={detailsId} class="details-card__title">
-              Details
-            </h3>
-            <dl class="facts">
-              <Show when={released()}>
-                {(text) => (
-                  <>
-                    <dt>Released</dt>
-                    <dd>{text()}</dd>
-                  </>
-                )}
-              </Show>
-              <Show when={props.game.developers.length > 0}>
-                <dt>{props.game.developers.length === 1 ? "Developer" : "Developers"}</dt>
-                <dd>{props.game.developers.join(", ")}</dd>
-              </Show>
-              <Show when={props.game.publishers.length > 0}>
-                <dt>{props.game.publishers.length === 1 ? "Publisher" : "Publishers"}</dt>
-                <dd>{props.game.publishers.join(", ")}</dd>
-              </Show>
-              <dt>Date added</dt>
-              <dd>{formatDate(props.game.dateAdded)}</dd>
-              <dt>Play count</dt>
-              <dd>{props.game.playCount}</dd>
-            </dl>
-          </section>
-
-          <section class="details-card" aria-labelledby={libraryId}>
-            <h3 id={libraryId} class="details-card__title">
-              Library
-            </h3>
-            <h4 class="details-card__subtitle">Categories</h4>
-            <CategoryEditor game={props.game} />
-            <h4 class="details-card__subtitle">{combined() ? "Stores" : "Store"}</h4>
-            <ul class="copies" aria-label="Stores">
-              <For each={copies()}>
-                {(copy, index) => (
-                  <li class="copies__row">
-                    <SourceIcon source={copy.source} />
-                    <span class="copies__name">{sourceName(copy.source)}</span>
-                    <span class="copies__state">{copyState(copy, index())}</span>
-                    <Show when={combined()}>
+                      {description()}
+                    </p>
+                    <Show when={isLongText(description())}>
                       <button
-                        ref={(el) => copyButtons.set(copy.id, el)}
                         type="button"
-                        class="icon-btn icon-btn--small"
-                        aria-label={`${sourceName(copy.source)} actions`}
-                        title="Store actions"
-                        aria-haspopup="menu"
-                        aria-expanded={copyMenu()?.copy.id === copy.id}
-                        onClick={(event) => {
-                          const rect = event.currentTarget.getBoundingClientRect();
-                          setCopyMenu(
-                            copyMenu()?.copy.id === copy.id
-                              ? null
-                              : { copy, anchor: { rect, align: "end" } },
-                          );
-                        }}
+                        class="link-btn"
+                        aria-expanded={descriptionOpen()}
+                        onClick={() => setDescriptionOpen((open) => !open)}
                       >
-                        <Ellipsis class="icon" aria-hidden="true" />
+                        {descriptionOpen() ? "Show less" : "Show more"}
                       </button>
                     </Show>
-                  </li>
-                )}
-              </For>
-            </ul>
-            <Show when={props.game.installDir}>
-              {(dir) => (
-                <p class="details__path" title={dir()}>
-                  {dir()}
-                </p>
-              )}
+                  </div>
+                </Show>
+                <ChipGroup label="Genres" field="genre" values={props.game.genres} />
+                <ChipGroup label="Features" field="feature" values={props.game.features} limit={10} />
+                <ChipGroup label="Tags" field="tag" values={props.game.tags} plain limit={12} />
+              </Card>
             </Show>
-          </section>
+            <NewsCard news={news()} />
+            <Card title="Details" order={7}>
+              <dl class="facts">
+                <Show when={released()}>
+                  {(text) => (
+                    <>
+                      <dt>Released</dt>
+                      <dd>{text()}</dd>
+                    </>
+                  )}
+                </Show>
+                <Fact
+                  label="Developer"
+                  plural="Developers"
+                  field="developer"
+                  values={props.game.developers}
+                />
+                <Fact
+                  label="Publisher"
+                  plural="Publishers"
+                  field="publisher"
+                  values={props.game.publishers}
+                />
+                <Fact label="Series" field="series" values={props.game.series} />
+                <Fact
+                  label="Platform"
+                  plural="Platforms"
+                  field="platform"
+                  values={props.game.platforms}
+                />
+                <Fact
+                  label="Game mode"
+                  plural="Game modes"
+                  field="gameMode"
+                  values={props.game.gameModes}
+                />
+                <Fact
+                  label="Perspective"
+                  plural="Perspectives"
+                  field="perspective"
+                  values={props.game.perspectives}
+                />
+                <Fact label="Theme" plural="Themes" field="theme" values={props.game.themes} />
+                <Fact
+                  label="Age rating"
+                  plural="Age ratings"
+                  field="ageRating"
+                  values={props.game.ageRatings}
+                />
+                <Show when={props.game.installSize}>
+                  {(size) => (
+                    <>
+                      <dt>Install size</dt>
+                      <dd>{formatSize(size())}</dd>
+                    </>
+                  )}
+                </Show>
+                <dt>Date added</dt>
+                <dd>{formatDate(props.game.dateAdded)}</dd>
+                <dt>Play count</dt>
+                <dd>{props.game.playCount}</dd>
+              </dl>
+            </Card>
+          </div>
+          <div class="details__col details__col--side">
+            <ScoresCard game={props.game} />
+            <TimeToBeatCard game={props.game} />
+            <AchievementsCard achievements={achievements()} />
+            <ActivityCard activity={activity()} />
+            <Card title="Library" order={8}>
+              <h4 class="details-card__subtitle">Categories</h4>
+              <CategoryEditor game={props.game} />
+              <h4 class="details-card__subtitle">{combined() ? "Stores" : "Store"}</h4>
+              <ul class="copies" aria-label="Stores">
+                <For each={copies()}>
+                  {(copy, index) => (
+                    <li class="copies__row">
+                      <SourceIcon source={copy.source} />
+                      <span class="copies__name">{sourceName(copy.source)}</span>
+                      <span class="copies__state">{copyState(copy, index())}</span>
+                      <Show when={combined()}>
+                        <button
+                          ref={(el) => copyButtons.set(copy.id, el)}
+                          type="button"
+                          class="icon-btn icon-btn--small"
+                          aria-label={`${sourceName(copy.source)} actions`}
+                          title="Store actions"
+                          aria-haspopup="menu"
+                          aria-expanded={copyMenu()?.copy.id === copy.id}
+                          onClick={(event) => {
+                            const rect = event.currentTarget.getBoundingClientRect();
+                            setCopyMenu(
+                              copyMenu()?.copy.id === copy.id
+                                ? null
+                                : { copy, anchor: { rect, align: "end" } },
+                            );
+                          }}
+                        >
+                          <Ellipsis class="icon" aria-hidden="true" />
+                        </button>
+                      </Show>
+                    </li>
+                  )}
+                </For>
+              </ul>
+              <Show when={props.game.installDir}>
+                {(dir) => (
+                  <p class="details__path" title={dir()}>
+                    {dir()}
+                  </p>
+                )}
+              </Show>
+            </Card>
+          </div>
         </div>
       </div>
 

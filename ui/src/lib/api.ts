@@ -1,10 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { AccountStatus } from "../bindings/AccountStatus";
+import type { Achievements } from "../bindings/Achievements";
 import type { AppInfo } from "../bindings/AppInfo";
 import type { Category } from "../bindings/Category";
 import type { CompletionSettings } from "../bindings/CompletionSettings";
 import type { Game } from "../bindings/Game";
+import type { GameActivity } from "../bindings/GameActivity";
+import type { GameNews } from "../bindings/GameNews";
 import type { GameQuery } from "../bindings/GameQuery";
 import type { GameUpdate } from "../bindings/GameUpdate";
 import type { ListField } from "../bindings/ListField";
@@ -114,6 +117,13 @@ export const setCompletionSettings = (
 /** Sets (or with `null` clears) the completion status of games. */
 export const setCompletionStatus = (ids: string[], status: string | null) =>
   invoke<void>("set_completion_status", { ids, status });
+/** How many people play the game right now; `null` when no store can tell. */
+export const gamePlayerCount = (id: string) => invoke<number | null>("game_player_count", { id });
+export const gameNews = (id: string) => invoke<GameNews | null>("game_news", { id });
+export const gameAchievements = (id: string) =>
+  invoke<Achievements | null>("game_achievements", { id });
+/** Playtime per week for the last 12 weeks. */
+export const gameActivity = (id: string) => invoke<GameActivity>("game_activity", { id });
 export const runningGames = () => invoke<string[]>("running_games");
 export const appInfo = () => invoke<AppInfo>("app_info");
 /** Messages the app queued for the UI (each returned once), e.g. after a second start. */
