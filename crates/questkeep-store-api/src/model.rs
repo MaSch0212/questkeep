@@ -197,3 +197,59 @@ impl ImportedGame {
         }
     }
 }
+
+/// A news item about a game (game page).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct NewsItem {
+    pub title: String,
+    pub url: String,
+    /// Unix seconds.
+    #[ts(type = "number | null")]
+    pub date: Option<i64>,
+    /// Who wrote it, e.g. "Steam Community Announcements" or "PC Gamer".
+    pub source: String,
+    /// Plain text, markup removed, at most a few hundred characters.
+    pub snippet: String,
+    /// Image URL, when the item has one.
+    pub image: Option<String>,
+}
+
+/// The latest news of a game.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct GameNews {
+    /// Newest first.
+    pub items: Vec<NewsItem>,
+    /// The store's page with all news for the game.
+    pub all_url: Option<String>,
+}
+
+/// An achievement the user unlocked.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct Achievement {
+    pub name: String,
+    pub description: Option<String>,
+    /// Icon URL.
+    pub icon: Option<String>,
+    /// Unix seconds; `None` when the store doesn't say.
+    #[ts(type = "number | null")]
+    pub unlocked_at: Option<i64>,
+    /// Share of all players that have it (0-100), when known.
+    pub percent: Option<f32>,
+}
+
+/// The user's progress in a game's achievements.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct Achievements {
+    /// How many the game has.
+    pub total: u32,
+    /// The unlocked ones, most recent first.
+    pub unlocked: Vec<Achievement>,
+}

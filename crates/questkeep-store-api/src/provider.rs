@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::auth::AccountAuth;
-use crate::model::{GameMetadata, ImportedGame, PlayAction};
+use crate::model::{Achievements, GameMetadata, GameNews, ImportedGame, PlayAction};
 use crate::settings::StoreSettings;
 
 /// Errors a provider can report. Messages are shown to users.
@@ -91,6 +91,26 @@ pub trait LibraryProvider: Send + Sync {
     /// Store metadata (description, genres, ...). Called from a background thread with at most
     /// one request in flight per provider; `Ok(None)` means the store has no data for this game.
     fn metadata(&self, _source_game_id: &str) -> Result<Option<GameMetadata>, ProviderError> {
+        Ok(None)
+    }
+    /// How many people play the game right now. Called only while its game page is open;
+    /// `Ok(None)` (the default) when the store can't tell.
+    fn player_count(&self, _source_game_id: &str) -> Result<Option<u32>, ProviderError> {
+        Ok(None)
+    }
+    /// The game's latest news (a handful of items). Called only while its game page is open;
+    /// `Ok(None)` (the default) when the store has no news feed.
+    fn news(&self, _source_game_id: &str) -> Result<Option<GameNews>, ProviderError> {
+        Ok(None)
+    }
+    /// The signed-in user's achievements in the game, with the same `config` as
+    /// [`scan_owned`](Self::scan_owned). `Ok(None)` (the default) when the store has none for
+    /// it or no account or key is set up to read them.
+    fn achievements(
+        &self,
+        _config: &serde_json::Value,
+        _source_game_id: &str,
+    ) -> Result<Option<Achievements>, ProviderError> {
         Ok(None)
     }
     /// Applies the provider's settings (`providers.<id>` in settings.json, `Null` when unset).
