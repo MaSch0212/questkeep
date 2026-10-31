@@ -17,6 +17,7 @@ use serde::Deserialize;
 use super::ImageKind;
 use super::fetcher::{download, http_agent};
 use crate::error::{CoreError, Result};
+use crate::model::ImageOption;
 
 const API_BASE: &str = "https://www.steamgriddb.com/api/v2";
 /// Minimum time between two API requests, across all threads.
@@ -203,6 +204,44 @@ impl SteamGridDb {
         Ok(rank_images(parse_images(&body)?, sizes))
     }
 
+    /// Every suitable image for the picker, best first: grids (covers), heroes (backgrounds) or
+    /// icons.
+    pub fn image_options(&self, lookup: &Lookup<'_>, kind: ImageKind) -> Result<Vec<ImageOption>> {
+        let Some(game_id) = self.resolve_game(lookup)? else {
+            return Ok(Vec::new());
+        };
+        let (path, label) = match kind {
+            ImageKind::Cover => (
+                format!("/grids/game/{game_id}?dimensions=600x900,342x482,660x930&{SAFE_FILTERS}"),
+                "SteamGridDB · grid",
+            ),
+            ImageKind::Background => (
+                format!("/heroes/game/{game_id}?{SAFE_FILTERS}"),
+                "SteamGridDB · hero",
+            ),
+            ImageKind::Icon => (
+                format!("/icons/game/{game_id}?{SAFE_FILTERS}"),
+                "SteamGridDB · icon",
+            ),
+        };
+        let Some(body) = self.get(&path)? else {
+            return Ok(Vec::new());
+        };
+        let mut images = parse_images(&body)?;
+        images.retain(|i| !(i.nsfw || i.humor || i.epilepsy) && !i.url.is_empty());
+        images.sort_by_key(|i| std::cmp::Reverse((i.upvotes - i.downvotes, i.score)));
+        Ok(images
+            .into_iter()
+            .map(|i| ImageOption {
+                thumbnail: (!i.thumb.is_empty()).then_some(i.thumb),
+                url: i.url,
+                width: (i.width > 0).then_some(i.width),
+                height: (i.height > 0).then_some(i.height),
+                label: label.to_string(),
+            })
+            .collect())
+    }
+
     /// Looks the game up and downloads its best cover or background. `Ok(None)` means
     /// SteamGridDB has nothing suitable; errors are transient or key problems and should not be
     /// remembered as "checked".
@@ -269,6 +308,8 @@ pub(crate) struct SearchHit {
 #[derive(Debug, Clone, Default, Deserialize)]
 pub(crate) struct Image {
     pub url: String,
+    #[serde(default)]
+    pub thumb: String,
     #[serde(default)]
     pub score: i64,
     #[serde(default)]

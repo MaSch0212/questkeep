@@ -12,7 +12,7 @@ use super::Database;
 use crate::error::{CoreError, Result};
 use crate::model::{
     CompletionSettings, CompletionStatus, GameMetadata, ListField, MetadataField, MetadataPriority,
-    Resolved, SourceRecord, ValueCount, list_of, resolve, value_key,
+    Resolved, SourceRecord, UserEdits, ValueCount, list_of, resolve, value_key,
 };
 
 /// `app_state` key set when the shown values must be computed again for every entry.
@@ -99,7 +99,7 @@ impl Database {
         let conn = self.conn();
         let mut stmt = conn.prepare_cached(
             "SELECT s.source, s.data FROM metadata_sources s JOIN games g ON g.id = s.game_id \
-             WHERE s.data IS NOT NULL AND (g.id = ?1 OR g.merged_into = ?1) \
+             WHERE s.data IS NOT NULL AND s.source <> 'user' AND (g.id = ?1 OR g.merged_into = ?1) \
              ORDER BY g.copy_position, g.merged_into IS NOT NULL, g.date_added",
         )?;
         let rows = stmt.query_map(params![entry_id.to_string()], |r| {
@@ -114,6 +114,53 @@ impl Database {
             }
         }
         Ok(records)
+    }
+
+    /// The user's edits of a library entry. Edits of copies combined into it (made before they
+    /// were combined) count too, after the entry's own.
+    pub fn user_edits(&self, entry_id: Uuid) -> Result<UserEdits> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare_cached(
+            "SELECT s.data FROM metadata_sources s JOIN games g ON g.id = s.game_id \
+             WHERE s.data IS NOT NULL AND s.source = 'user' AND (g.id = ?1 OR g.merged_into = ?1) \
+             ORDER BY g.merged_into IS NOT NULL, g.copy_position, g.date_added",
+        )?;
+        let rows = stmt
+            .query_map(params![entry_id.to_string()], |r| r.get::<_, String>(0))?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        let mut merged = UserEdits::default();
+        for json in rows {
+            let edits: UserEdits = match serde_json::from_str(&json) {
+                Ok(edits) => edits,
+                Err(err) => {
+                    tracing::warn!(game = %entry_id, %err, "bad user metadata");
+                    continue;
+                }
+            };
+            merged.merge(edits);
+        }
+        Ok(merged)
+    }
+
+    /// Replaces the user's edits of a library entry (edits of its copies are folded in).
+    pub fn set_user_edits(&self, entry_id: Uuid, edits: &UserEdits) -> Result<()> {
+        let json = serde_json::to_string(edits)?;
+        let mut conn = self.conn();
+        let tx = conn.transaction()?;
+        tx.execute(
+            "DELETE FROM metadata_sources WHERE source = 'user' AND game_id IN \
+             (SELECT id FROM games WHERE id = ?1 OR merged_into = ?1)",
+            [entry_id.to_string()],
+        )?;
+        if !edits.is_empty() {
+            tx.execute(
+                "INSERT INTO metadata_sources (game_id, source, data, checked_at) \
+                 VALUES (?1, 'user', ?2, ?3)",
+                params![entry_id.to_string(), json, Utc::now()],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
     }
 
     /// The library entry a game row belongs to (itself, or the entry it is combined into).
@@ -139,7 +186,8 @@ impl Database {
         sources: &[String],
     ) -> Result<()> {
         let records = self.source_records(entry_id)?;
-        let resolved = resolve(&records, priority, sources);
+        let user = self.user_edits(entry_id)?;
+        let resolved = resolve(&records, Some(&user), priority, sources);
         let mut conn = self.conn();
         let tx = conn.transaction()?;
         store_resolved(&tx, entry_id, &resolved)?;
@@ -153,12 +201,12 @@ impl Database {
         let ids = self.entry_ids()?;
         let mut records_by_entry = Vec::with_capacity(ids.len());
         for id in &ids {
-            records_by_entry.push((*id, self.source_records(*id)?));
+            records_by_entry.push((*id, self.source_records(*id)?, self.user_edits(*id)?));
         }
         let mut conn = self.conn();
         let tx = conn.transaction()?;
-        for (id, records) in &records_by_entry {
-            store_resolved(&tx, *id, &resolve(records, priority, sources))?;
+        for (id, records, user) in &records_by_entry {
+            store_resolved(&tx, *id, &resolve(records, Some(user), priority, sources))?;
         }
         tx.execute("DELETE FROM app_state WHERE key = ?1", [RESOLVE_KEY])?;
         prune_values(&tx)?;

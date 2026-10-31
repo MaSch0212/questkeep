@@ -2,6 +2,7 @@
 
 mod category;
 mod completion;
+mod edit;
 mod game;
 mod metadata;
 mod query;
@@ -12,6 +13,7 @@ mod view;
 
 pub use category::*;
 pub use completion::*;
+pub use edit::*;
 pub use game::*;
 pub use metadata::*;
 pub use query::*;

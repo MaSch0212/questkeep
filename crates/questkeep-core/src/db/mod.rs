@@ -6,6 +6,7 @@ mod combine;
 mod games;
 mod metadata;
 pub mod migrations;
+mod profiles;
 mod sessions;
 mod start;
 mod views;
@@ -19,6 +20,7 @@ use crate::error::Result;
 
 pub use combine::{Combined, duplicate_key};
 pub use games::{DetectionDir, GameMissingMetadata, NewGameRecord};
+pub use profiles::ProfileRow;
 pub use sessions::OpenSession;
 pub use start::{playtime_by_day, playtime_by_week};
 

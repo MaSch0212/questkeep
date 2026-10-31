@@ -144,6 +144,12 @@ pub trait LibraryProvider: Send + Sync {
     fn icon_candidates(&self, _source_game_id: &str) -> Vec<ImageCandidate> {
         Vec::new()
     }
+    /// The game's launch with extra command line arguments, for launch profiles, or `None` when
+    /// the store can't pass arguments to the game (the default). Only asked for store URI
+    /// launches; an executable launch takes arguments directly.
+    fn launch_with_args(&self, _source_game_id: &str, _args: &str) -> Option<PlayAction> {
+        None
+    }
     /// The action that opens the store's own launcher (a store URI or the client's executable),
     /// or `None` when the launcher isn't installed on this PC or the provider has none. Must be
     /// cheap: the UI asks every time it shows the "Open launcher" menu.

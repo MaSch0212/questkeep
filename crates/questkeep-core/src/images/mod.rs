@@ -14,18 +14,33 @@ use crate::error::{CoreError, Result};
 use crate::paths::DataPaths;
 
 pub use fetcher::{CoverFetcher, CoverJob, MetadataFetcher, MetadataJob, image_extension};
+pub(crate) use fetcher::{download, http_agent};
 pub(crate) use igdb::CHECKED_KEY as IGDB_CHECKED_KEY;
 pub use igdb::{Igdb, IgdbLookup};
 pub use questkeep_imaging::{
     ICON_SIZE, IconRgba, SquareFrom, icon_png_from_bytes, icon_png_from_rgba, load_icon_rgba,
     load_image_filled, scale_icon,
 };
-pub(crate) use steamgriddb::checked_key;
 pub use steamgriddb::{Lookup, SteamGridDb};
+pub(crate) use steamgriddb::{checked_key, platform_name};
 
 /// `games.extra` key set when the game's icon was cropped from its cover, so a new cover can
 /// replace the icon too (store and executable icons stay).
 pub(crate) const ICON_FROM_COVER_KEY: &str = "iconFromCover";
+
+/// `games.extra` key set when the user picked this image themselves; fetchers then leave it alone.
+pub(crate) fn user_image_key(kind: ImageKind) -> &'static str {
+    match kind {
+        ImageKind::Cover => "userCover",
+        ImageKind::Background => "userBackground",
+        ImageKind::Icon => "userIcon",
+    }
+}
+
+/// Whether the user picked this image of the game themselves.
+pub(crate) fn is_user_image(game: &crate::model::Game, kind: ImageKind) -> bool {
+    game.extra.get(user_image_key(kind)).is_some()
+}
 
 /// Deletes the game's icon when it was made from the cover (the cover just changed); the tray
 /// then queues a new one. Returns whether an icon was dropped.

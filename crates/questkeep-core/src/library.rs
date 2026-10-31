@@ -30,6 +30,8 @@ use crate::seed::is_fake_source;
 use crate::settings::{Settings, SettingsStore};
 use crate::tray::{self, TrayGames};
 
+mod edit;
+
 /// A metadata source the user can put in order (settings).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -1297,6 +1299,13 @@ mod tests {
                 Ok(self.0.clone())
             }
         }
+    }
+
+    /// A library without stores in a temporary data dir.
+    pub(super) fn test_library() -> (tempfile::TempDir, Library) {
+        let tmp = tempfile::tempdir().unwrap();
+        let (lib, _) = library(tmp.path(), ProviderRegistry::default());
+        (tmp, lib)
     }
 
     fn library(tmp: &Path, providers: ProviderRegistry) -> (Library, Arc<Mutex<Vec<CoreEvent>>>) {

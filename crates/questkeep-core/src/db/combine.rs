@@ -63,6 +63,24 @@ fn move_user_data(tx: &Transaction<'_>, from: &str, to: &str) -> Result<()> {
         [from, to],
     )?;
     tx.execute("DELETE FROM game_categories WHERE game_id = ?1", [from])?;
+    // Own launch profiles and the chosen default (the entry's wins), and the user's metadata.
+    tx.execute(
+        "UPDATE launch_profiles SET entry_id = ?2 WHERE entry_id = ?1",
+        [from, to],
+    )?;
+    tx.execute(
+        "UPDATE games SET default_profile = (SELECT default_profile FROM games WHERE id = ?1) \
+         WHERE id = ?2 AND default_profile IS NULL",
+        [from, to],
+    )?;
+    tx.execute(
+        "UPDATE games SET default_profile = NULL WHERE id = ?1",
+        [from],
+    )?;
+    tx.execute(
+        "UPDATE OR IGNORE metadata_sources SET game_id = ?2 WHERE game_id = ?1 AND source = 'user'",
+        [from, to],
+    )?;
     Ok(())
 }
 
@@ -174,6 +192,11 @@ impl Database {
             entry.clone()
         };
         tx.execute("UPDATE games SET copy_position = 0 WHERE id = ?1", [&copy])?;
+        // Own profiles based on the copy go with it.
+        tx.execute(
+            "UPDATE launch_profiles SET entry_id = ?1 WHERE copy_id = ?1 AND entry_id IS NOT NULL",
+            [&copy],
+        )?;
         let rest: Vec<String> = copies.into_iter().filter(|id| *id != copy).collect();
         number_copies(&tx, &rest)?;
         for other in &rest {

@@ -20,7 +20,7 @@ use serde::Deserialize;
 use super::fetcher::http_agent;
 use super::steamgriddb::encode;
 use crate::error::{CoreError, Result};
-use crate::model::{GameLink, GameMetadata, Score, TimeToBeat};
+use crate::model::{GameLink, GameMetadata, ImageOption, Score, TimeToBeat};
 
 const TOKEN_URL: &str = "https://id.twitch.tv/oauth2/token";
 const GAMES_URL: &str = "https://api.igdb.com/v4/games";
@@ -295,6 +295,31 @@ impl Igdb {
         Ok((meta != GameMetadata::default()).then_some(meta))
     }
 
+    /// The game's cover (for covers) or artworks and screenshots (for backgrounds), for the image
+    /// picker. Icons: none.
+    pub fn image_options(
+        &self,
+        lookup: &IgdbLookup<'_>,
+        kind: super::ImageKind,
+    ) -> Result<Vec<ImageOption>> {
+        if search_text(lookup.name).is_empty() || kind == super::ImageKind::Icon {
+            return Ok(Vec::new());
+        }
+        let hits = parse_games(&self.query(&self.inner.games_url, &search_body(lookup.name))?)?;
+        let Some(id) = best_match(&hits, lookup).and_then(|g| g.id) else {
+            return Ok(Vec::new());
+        };
+        let body = format!(
+            "fields cover.image_id,cover.width,cover.height,artworks.image_id,artworks.width,\
+             artworks.height,screenshots.image_id,screenshots.width,screenshots.height; \
+             where id = {id};"
+        );
+        Ok(parse_images(
+            &self.query(&self.inner.games_url, &body)?,
+            kind,
+        ))
+    }
+
     /// The time-to-beat endpoint next to the games endpoint.
     fn ttb_url(&self) -> String {
         match self.inner.games_url.strip_suffix("/games") {
@@ -524,6 +549,69 @@ pub(crate) struct InvolvedCompany {
     pub publisher: bool,
     #[serde(default)]
     pub company: Option<Named>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct IgdbImage {
+    #[serde(default)]
+    image_id: String,
+    #[serde(default)]
+    width: Option<u32>,
+    #[serde(default)]
+    height: Option<u32>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct GameImages {
+    #[serde(default)]
+    cover: Option<IgdbImage>,
+    #[serde(default)]
+    artworks: Vec<IgdbImage>,
+    #[serde(default)]
+    screenshots: Vec<IgdbImage>,
+}
+
+fn igdb_image_url(size: &str, id: &str) -> String {
+    format!("https://images.igdb.com/igdb/image/upload/t_{size}/{id}.jpg")
+}
+
+/// The picker's images from an IGDB `games` reply with cover, artworks and screenshots.
+fn parse_images(body: &str, kind: super::ImageKind) -> Vec<ImageOption> {
+    let games: Vec<GameImages> = serde_json::from_str(body).unwrap_or_default();
+    let Some(game) = games.into_iter().next() else {
+        return Vec::new();
+    };
+    let option = |image: &IgdbImage, full: &str, thumb: &str, label: &str| ImageOption {
+        url: igdb_image_url(full, &image.image_id),
+        thumbnail: Some(igdb_image_url(thumb, &image.image_id)),
+        width: image.width,
+        height: image.height,
+        label: label.to_string(),
+    };
+    let valid = |image: &&IgdbImage| {
+        !image.image_id.is_empty() && image.image_id.chars().all(|c| c.is_ascii_alphanumeric())
+    };
+    match kind {
+        super::ImageKind::Cover => game
+            .cover
+            .iter()
+            .filter(valid)
+            .map(|c| option(c, "original", "cover_big", "IGDB · cover"))
+            .collect(),
+        super::ImageKind::Background => game
+            .artworks
+            .iter()
+            .filter(valid)
+            .map(|a| option(a, "1080p", "screenshot_med", "IGDB · artwork"))
+            .chain(
+                game.screenshots
+                    .iter()
+                    .filter(valid)
+                    .map(|s| option(s, "1080p", "screenshot_med", "IGDB · screenshot")),
+            )
+            .collect(),
+        super::ImageKind::Icon => Vec::new(),
+    }
 }
 
 pub(crate) fn parse_games(body: &str) -> Result<Vec<Game>> {
@@ -785,6 +873,24 @@ mod tests {
         assert!(body.starts_with("search \"Say Hi  there\"; fields name,summary,"));
         assert!(body.contains("involved_companies.company.name"));
         assert!(body.ends_with("limit 10;"));
+    }
+
+    #[test]
+    fn lists_cover_artworks_and_screenshots_for_the_picker() {
+        let body = r#"[{"id":1,"cover":{"image_id":"co1abc","width":600,"height":900},
+            "artworks":[{"image_id":"ar9","width":1920,"height":1080},{"image_id":"bad id"}],
+            "screenshots":[{"image_id":"sc2"}]}]"#;
+        let covers = parse_images(body, super::super::ImageKind::Cover);
+        assert_eq!(covers.len(), 1);
+        assert_eq!(
+            covers[0].url,
+            "https://images.igdb.com/igdb/image/upload/t_original/co1abc.jpg"
+        );
+        assert_eq!((covers[0].width, covers[0].height), (Some(600), Some(900)));
+        let backgrounds = parse_images(body, super::super::ImageKind::Background);
+        let labels: Vec<&str> = backgrounds.iter().map(|b| b.label.as_str()).collect();
+        assert_eq!(labels, ["IGDB · artwork", "IGDB · screenshot"]);
+        assert!(parse_images("nope", super::super::ImageKind::Cover).is_empty());
     }
 
     #[test]

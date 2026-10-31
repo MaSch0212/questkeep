@@ -575,7 +575,8 @@ impl Database {
                         obj.insert(USER_RENAMED.into(), serde_json::Value::Bool(true));
                     }
                     tx.execute(
-                        "UPDATE games SET name = ?2, sorting_name = ?3, search_key = ?4, extra = ?5 \
+                        "UPDATE games SET name = ?2, sorting_name = COALESCE(sorting_name_user, ?3), \
+                         search_key = ?4, extra = ?5 \
                          WHERE id = ?1",
                         params![
                             id.to_string(),
@@ -764,7 +765,7 @@ impl Database {
                         continue;
                     }
                     tx.execute(
-                        "UPDATE games SET name = ?2, sorting_name = ?3, search_key = ?4,                          installed = ?5, install_dir = ?6, play_action = ?7,                          playtime_seconds = ?8, last_played = ?9 WHERE id = ?1",
+                        "UPDATE games SET name = ?2, sorting_name = COALESCE(sorting_name_user, ?3), search_key = ?4,                          installed = ?5, install_dir = ?6, play_action = ?7,                          playtime_seconds = ?8, last_played = ?9 WHERE id = ?1",
                         params![
                             row.id,
                             name,

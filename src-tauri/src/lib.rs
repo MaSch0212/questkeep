@@ -6,6 +6,7 @@ mod signin;
 mod tray;
 mod tray_theme;
 mod updates;
+mod websearch;
 mod window;
 
 use std::sync::Arc;

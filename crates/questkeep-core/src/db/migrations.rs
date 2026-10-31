@@ -327,6 +327,25 @@ pub(crate) const MIGRATIONS: &[&str] = &[
         g.completion_status, g.user_score, g.notes
     FROM games g WHERE g.merged_into IS NULL;
     "#,
+    // 11: launch profiles and the user's own sorting name. A store copy's profile is implicit;
+    // it gets a row (id = the copy's id, no entry) only once the user renames it, gives it
+    // arguments or moves it. Own profiles belong to their entry. No default means "automatic",
+    // so existing games start exactly as before.
+    r#"
+    CREATE TABLE launch_profiles (
+        id       TEXT PRIMARY KEY NOT NULL,
+        entry_id TEXT REFERENCES games (id) ON DELETE CASCADE,
+        copy_id  TEXT REFERENCES games (id) ON DELETE CASCADE,
+        name     TEXT,
+        args     TEXT,
+        action   TEXT,
+        position INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX launch_profiles_entry ON launch_profiles (entry_id);
+    CREATE INDEX launch_profiles_copy ON launch_profiles (copy_id);
+    ALTER TABLE games ADD COLUMN default_profile TEXT;
+    ALTER TABLE games ADD COLUMN sorting_name_user TEXT;
+    "#,
 ];
 
 /// Latest schema version this build knows.

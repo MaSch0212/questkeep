@@ -1,0 +1,7 @@
+{"query":"hades cover","results":[
+{"image":"https://cdn2.steamgriddb.com/grid/abc123.png","thumbnail":"https://tse1.mm.bing.net/th?id=OIP.aaa&pid=Api","width":600,"height":900,"title":"Hades - SteamGridDB","url":"https://www.steamgriddb.com/grid/12345","source":"Bing"},
+{"image":"http://images.example.org/hades.jpg","thumbnail":"https://tse2.mm.bing.net/th?id=OIP.bbb&pid=Api","width":460,"height":215,"title":"Hades header","url":"https://store.steampowered.com/app/1145360/Hades/"},
+{"image":"https://i.imgur.com/xyz.jpg","thumbnail":"","width":10,"height":10,"title":"No thumb","url":"https://imgur.com/xyz"},
+{"image":"javascript:alert(1)","thumbnail":"https://tse3.mm.bing.net/th?id=OIP.ccc","width":1,"height":1,"title":"bad","url":"https://evil.example/"},
+{"image":"https://pics.example.net/p.webp","thumbnail":"https://tse4.mm.bing.net/th?id=OIP.ddd","width":"800","height":null,"title":"No page url","url":""}
+]}

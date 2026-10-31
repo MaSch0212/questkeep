@@ -7,7 +7,7 @@ use std::collections::{BTreeMap, HashSet};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use super::{GameLink, GameMetadata};
+use super::{GameLink, GameMetadata, UserEdits};
 
 /// Source id of metadata from IGDB.
 pub const IGDB_SOURCE: &str = "igdb";
@@ -123,7 +123,7 @@ impl MetadataField {
     }
 
     /// Copies this field from `from` into `into`.
-    fn copy(self, from: &GameMetadata, into: &mut GameMetadata) {
+    pub(crate) fn copy(self, from: &GameMetadata, into: &mut GameMetadata) {
         match self {
             Self::Description => into.description = from.description.clone(),
             Self::ReleaseDate => into.release_date = from.release_date.clone(),
@@ -260,10 +260,12 @@ pub struct Resolved {
 }
 
 /// Picks every field from the first source (in `priority` order) that has a value, and merges
-/// links from all sources (in the global order, first one wins per URL). List values are
-/// normalised (see [`normalize`]) and de-duplicated.
+/// links from all sources (in the global order, first one wins per URL). The user's edited
+/// fields win over every source, even when empty; their own links come first and the links they
+/// hid are left out. List values are normalised (see [`normalize`]) and de-duplicated.
 pub fn resolve(
     records: &[SourceRecord],
+    user: Option<&UserEdits>,
     priority: &MetadataPriority,
     sources: &[String],
 ) -> Resolved {
@@ -275,6 +277,12 @@ pub fn resolve(
             .unwrap_or(order.len())
     };
     for field in MetadataField::ALL {
+        if let Some(user) = user.filter(|u| u.is_edited(field)) {
+            field.copy(&user.meta, &mut out.data);
+            out.sources
+                .insert(field.key().to_string(), USER_SOURCE.to_string());
+            continue;
+        }
         let order = priority.order_for(Some(field), sources);
         let best = records
             .iter()
@@ -298,10 +306,15 @@ pub fn resolve(
     let order = priority.order_for(None, sources);
     let mut ordered: Vec<&SourceRecord> = records.iter().collect();
     ordered.sort_by_key(|r| rank(&order, &r.source));
-    let mut urls = HashSet::new();
-    out.data.links = ordered
+    let mut urls: HashSet<String> = user
         .iter()
-        .flat_map(|r| r.data.links.iter())
+        .flat_map(|u| u.hidden_links.iter())
+        .map(|u| url_key(u))
+        .collect();
+    out.data.links = user
+        .iter()
+        .flat_map(|u| u.meta.links.iter())
+        .chain(ordered.iter().flat_map(|r| r.data.links.iter()))
         .filter(|l| !l.url.trim().is_empty() && urls.insert(url_key(&l.url)))
         .cloned()
         .collect::<Vec<GameLink>>();
@@ -309,7 +322,7 @@ pub fn resolve(
 }
 
 /// A URL compared without scheme, `www.` and trailing slash.
-fn url_key(url: &str) -> String {
+pub fn url_key(url: &str) -> String {
     let lower = url.trim().to_lowercase();
     let rest = lower
         .strip_prefix("https://")
@@ -512,6 +525,7 @@ mod tests {
                 record("steam", steam),
                 record("igdb", igdb),
             ],
+            None,
             &MetadataPriority::default(),
             &sources(),
         );
@@ -540,6 +554,47 @@ mod tests {
             .map(|l| l.name.as_str())
             .collect();
         assert_eq!(urls, ["Official", "Steam", "Wiki"]);
+    }
+
+    #[test]
+    fn user_edits_win_even_when_empty_and_hide_links() {
+        let steam = GameMetadata {
+            description: Some("Steam text".into()),
+            tags: vec!["Roguelike".into()],
+            genres: vec!["Action".into()],
+            links: vec![
+                GameLink::new("Steam", "https://store.steampowered.com/app/1"),
+                GameLink::new("Wiki", "https://wiki.example/"),
+            ],
+            ..GameMetadata::default()
+        };
+        let user = UserEdits {
+            meta: GameMetadata {
+                description: Some("Mine".into()),
+                links: vec![GameLink::new("Mod page", "https://mods.example")],
+                ..GameMetadata::default()
+            },
+            edited: vec![MetadataField::Description, MetadataField::Tags],
+            hidden_links: vec!["http://www.wiki.example".into()],
+        };
+        let resolved = resolve(
+            &[record("steam", steam)],
+            Some(&user),
+            &MetadataPriority::default(),
+            &sources(),
+        );
+        assert_eq!(resolved.data.description.as_deref(), Some("Mine"));
+        assert!(resolved.data.tags.is_empty(), "cleared by the user");
+        assert_eq!(resolved.data.genres, ["Action"]);
+        assert_eq!(resolved.sources["tags"], "user");
+        assert_eq!(resolved.sources["genres"], "steam");
+        let names: Vec<&str> = resolved
+            .data
+            .links
+            .iter()
+            .map(|l| l.name.as_str())
+            .collect();
+        assert_eq!(names, ["Mod page", "Steam"]);
     }
 
     #[test]

@@ -213,7 +213,10 @@ fn process(shared: &Shared, job: &CoverJob) {
     let Ok(Some(game)) = shared.db.find_game(job.game_id) else {
         return;
     };
-    if (game.cover_path.is_some() && !job.force) || is_fake_source(&game.source) {
+    if (game.cover_path.is_some() && !job.force)
+        || is_fake_source(&game.source)
+        || super::is_user_image(&game, ImageKind::Cover)
+    {
         return;
     }
     let provider = job
@@ -278,6 +281,9 @@ fn process(shared: &Shared, job: &CoverJob) {
 /// Stores a downloaded image and updates the game row. The game may have been removed
 /// meanwhile, which is only logged.
 fn store(shared: &Shared, game: &Game, kind: ImageKind, ext: &str, bytes: &[u8]) -> bool {
+    if super::is_user_image(game, kind) {
+        return false;
+    }
     shared
         .images
         .store_image(kind, game.id, ext, bytes)
@@ -757,7 +763,7 @@ fn fetch_background(
     let Ok(Some(game)) = shared.db.find_game(game_id) else {
         return false;
     };
-    if game.background_path.is_some() {
+    if game.background_path.is_some() || super::is_user_image(&game, ImageKind::Background) {
         return false;
     }
     let candidates = provider.background_candidates(source_game_id);
@@ -805,7 +811,10 @@ fn fetch_icon(shared: &MetadataShared, id: Uuid) -> bool {
             .is_some_and(|p| shared.images.resolve(p).is_some())
     };
     // Fake games stay in the "attempted" set, so the tray doesn't queue them again this run.
-    if has_file(&game.icon_path) || is_fake_source(&game.source) {
+    if has_file(&game.icon_path)
+        || is_fake_source(&game.source)
+        || super::is_user_image(&game, ImageKind::Icon)
+    {
         return false;
     }
     let Some((png, from_cover)) = build_icon(shared, &game) else {
@@ -887,7 +896,7 @@ fn build_icon(shared: &MetadataShared, game: &Game) -> Option<(Vec<u8>, bool)> {
         .or_else(|| from_cover().map(|png| (png, true)))
 }
 
-fn load_file(path: &std::path::Path) -> Option<(&'static str, Vec<u8>)> {
+pub(crate) fn load_file(path: &std::path::Path) -> Option<(&'static str, Vec<u8>)> {
     let meta = std::fs::metadata(path).ok()?;
     if !meta.is_file() || meta.len() > MAX_IMAGE_BYTES {
         return None;
@@ -896,7 +905,7 @@ fn load_file(path: &std::path::Path) -> Option<(&'static str, Vec<u8>)> {
     image_extension(&bytes).map(|ext| (ext, bytes))
 }
 
-pub(super) fn download(http: &ureq::Agent, url: &str) -> Option<(&'static str, Vec<u8>)> {
+pub(crate) fn download(http: &ureq::Agent, url: &str) -> Option<(&'static str, Vec<u8>)> {
     let response = match http.get(url).call() {
         Ok(r) => r,
         Err(err) => {

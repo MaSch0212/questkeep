@@ -297,6 +297,25 @@ impl LibraryProvider for SteamProvider {
         candidates
     }
 
+    /// `steam://run/<id>//<args>/` starts the game with extra arguments (Steam asks once
+    /// whether to allow them).
+    fn launch_with_args(&self, app_id: &str, args: &str) -> Option<PlayAction> {
+        if !is_app_id(app_id) {
+            return None;
+        }
+        let encoded: String = args
+            .trim()
+            .bytes()
+            .map(|b| match b {
+                b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                    (b as char).to_string()
+                }
+                _ => format!("%{b:02X}"),
+            })
+            .collect();
+        Some(PlayAction::uri(format!("steam://run/{app_id}//{encoded}/")))
+    }
+
     /// The user's Steam collections (or, for old Steam, tags) of the first root that has any.
     fn scan_categories(
         &self,
@@ -735,6 +754,16 @@ mod tests {
                 .icon_candidates("123")
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn launch_with_args_uses_the_run_uri() {
+        let provider = SteamProvider::with_roots(Vec::new());
+        assert_eq!(
+            provider.launch_with_args("620", "-novid +fps_max 0"),
+            Some(PlayAction::uri("steam://run/620//-novid%20%2Bfps_max%200/"))
+        );
+        assert_eq!(provider.launch_with_args("not-an-id", "-x"), None);
     }
 
     #[test]
