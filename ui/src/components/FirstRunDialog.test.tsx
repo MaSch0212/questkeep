@@ -31,6 +31,7 @@ const SETTINGS: Settings = {
   detectExternalLaunches: true,
   showStartPage: true,
   startupPage: { kind: "start" },
+  sortPrefixes: { enabled: true, words: ["The", "A", "An"] },
   metadataPriority: { order: [], fields: {} },
   providers: {},
 };

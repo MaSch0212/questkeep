@@ -2,7 +2,11 @@ import { For, Show } from "solid-js";
 import type { StartupPage } from "../../bindings/StartupPage";
 import { allViews } from "../../lib/views";
 import { store } from "../../lib/store";
+import { ChipInput } from "../ChipInput";
 import type { SettingsModel } from "./useSettings";
+
+/** Common leading words offered while typing (English, German, French, Spanish). */
+const SUGGESTED_PREFIXES = ["The", "A", "An", "Der", "Die", "Das", "Le", "La", "Les", "El", "Los"];
 
 const OPTIONS = [
   { key: "scanOnStartup", label: "Scan stores when the app starts" },
@@ -98,6 +102,40 @@ export function GeneralSection(props: { model: SettingsModel }) {
                 The start page is turned off, so Questkeep opens the first view instead.
               </p>
             </Show>
+          </fieldset>
+          <fieldset class="fieldset settings-group">
+            <legend class="fieldset__legend">Sorting</legend>
+            <label class="check">
+              <input
+                type="checkbox"
+                checked={current().sortPrefixes.enabled}
+                onChange={(e) =>
+                  void props.model.update({
+                    sortPrefixes: { ...current().sortPrefixes, enabled: e.currentTarget.checked },
+                  })
+                }
+              />
+              <span>Ignore words at the start of names when sorting</span>
+            </label>
+            <div
+              class="settings-row"
+              classList={{ "check--disabled": !current().sortPrefixes.enabled }}
+            >
+              <label for="sort-prefixes">Words to ignore</label>
+              <ChipInput
+                id="sort-prefixes"
+                label="Words to ignore"
+                values={current().sortPrefixes.words}
+                suggestions={SUGGESTED_PREFIXES}
+                describedBy="sort-prefixes-hint"
+                onChange={(words) =>
+                  void props.model.update({ sortPrefixes: { ...current().sortPrefixes, words } })
+                }
+              />
+            </div>
+            <p class="field__hint" id="sort-prefixes-hint">
+              “The Witcher” sorts under W. Your own sorting names (Edit game) stay as they are.
+            </p>
           </fieldset>
           <For each={TRAY_OPTIONS}>
             {(option) => (

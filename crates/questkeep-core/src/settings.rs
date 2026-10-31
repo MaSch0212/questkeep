@@ -14,7 +14,7 @@ use ts_rs::TS;
 
 use crate::auth::TokenStore;
 use crate::error::{CoreError, Result};
-use crate::model::MetadataPriority;
+use crate::model::{DEFAULT_PREFIXES, MetadataPriority};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", default)]
@@ -57,6 +57,48 @@ pub struct Settings {
     pub startup_page: StartupPage,
     /// Which metadata source wins per field.
     pub metadata_priority: MetadataPriority,
+    /// Words ignored at the start of names when sorting.
+    pub sort_prefixes: SortPrefixes,
+}
+
+/// Words like "The" that sorting skips at the start of a name ("The Witcher" sorts under W).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", default)]
+#[ts(export)]
+pub struct SortPrefixes {
+    pub enabled: bool,
+    pub words: Vec<String>,
+}
+
+impl Default for SortPrefixes {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            words: DEFAULT_PREFIXES.iter().map(ToString::to_string).collect(),
+        }
+    }
+}
+
+impl SortPrefixes {
+    /// The words sorting skips right now: none while turned off; trimmed, without blanks or
+    /// repeats (case doesn't matter).
+    pub fn active(&self) -> Vec<String> {
+        if !self.enabled {
+            return Vec::new();
+        }
+        let mut words: Vec<String> = Vec::new();
+        for word in self
+            .words
+            .iter()
+            .map(|w| w.trim())
+            .filter(|w| !w.is_empty())
+        {
+            if !words.iter().any(|w| w.eq_ignore_ascii_case(word)) {
+                words.push(word.to_string());
+            }
+        }
+        words
+    }
 }
 
 /// The page Questkeep shows when it opens.
@@ -98,6 +140,7 @@ impl Default for Settings {
             show_start_page: true,
             startup_page: StartupPage::Start,
             metadata_priority: MetadataPriority::default(),
+            sort_prefixes: SortPrefixes::default(),
         }
     }
 }
@@ -409,6 +452,10 @@ mod tests {
             metadata_priority: crate::model::MetadataPriority {
                 order: vec!["steam".into()],
                 ..Default::default()
+            },
+            sort_prefixes: SortPrefixes {
+                enabled: false,
+                words: vec!["Der".into()],
             },
         };
         store.save(&custom).unwrap();

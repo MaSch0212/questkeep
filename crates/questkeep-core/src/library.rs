@@ -23,7 +23,7 @@ use crate::model::{
     GameActivity, GameNews, GameQuery, GameUpdate, HLTB_SOURCE, HiddenFilter, IGDB_SOURCE,
     ImportedGame, KindFilter, LibraryView, ListField, MANUAL_SOURCE, NewManualGame, NewView,
     PlayAction, ScanSummary, SectionOrder, SetupState, StartPage, SyncTimes, TriState, ValueCount,
-    ViewSection, ViewUiState, ViewUpdate, display_name_from_path,
+    ViewSection, ViewUiState, ViewUpdate, display_name_from_path, set_ignored_prefixes,
 };
 use crate::paths::DataPaths;
 use crate::providers::{LibraryProvider, ProviderError, ProviderInfo, ProviderRegistry};
@@ -97,6 +97,13 @@ impl Library {
         let settings =
             SettingsStore::new(paths.settings_file(), secrets, providers.secret_settings());
         let loaded = settings.load();
+        // Sorting names follow the ignored prefixes; catch up if they changed outside the app.
+        let prefixes = loaded.sort_prefixes.active();
+        if set_ignored_prefixes(prefixes.clone())
+            && let Err(err) = db.recompute_sorting_names(&prefixes)
+        {
+            tracing::warn!(%err, "could not recompute sorting names");
+        }
         let resolver = MetadataResolver::new(db.clone(), &providers, loaded.metadata_priority);
         if db.resolve_pending().unwrap_or(false) {
             match resolver.resolve_all() {
@@ -189,6 +196,13 @@ impl Library {
 
     pub fn save_settings(&self, settings: &Settings) -> Result<()> {
         self.settings.save(settings)?;
+        let prefixes = settings.sort_prefixes.active();
+        if set_ignored_prefixes(prefixes.clone()) {
+            let ids = self.db.recompute_sorting_names(&prefixes)?;
+            if !ids.is_empty() {
+                self.events.publish(CoreEvent::GamesChanged { ids });
+            }
+        }
         self.artwork
             .set_api_key(settings.steamgriddb_api_key.clone());
         self.igdb.set_credentials(

@@ -228,6 +228,38 @@ impl Database {
     }
 
     /// Ids of all library entries.
+    /// Recomputes every automatic sorting name with `prefixes` as the ignored leading words
+    /// (after they changed); names the user typed stay. Returns the entries whose sorting name
+    /// changed.
+    pub fn recompute_sorting_names(&self, prefixes: &[String]) -> Result<Vec<Uuid>> {
+        let mut conn = self.conn();
+        let tx = conn.transaction()?;
+        let rows: Vec<(String, String, String, Option<String>)> = tx
+            .prepare(
+                "SELECT COALESCE(merged_into, id), id, name, sorting_name FROM games                  WHERE sorting_name_user IS NULL",
+            )?
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?
+            .collect::<rusqlite::Result<_>>()?;
+        let mut changed = Vec::new();
+        for (entry, id, name, current) in rows {
+            let wanted = crate::model::sorting_name_with(&name, prefixes);
+            if current.as_deref() == Some(wanted.as_str()) {
+                continue;
+            }
+            tx.execute(
+                "UPDATE games SET sorting_name = ?2 WHERE id = ?1",
+                rusqlite::params![id, wanted],
+            )?;
+            if let Ok(entry) = Uuid::parse_str(&entry)
+                && !changed.contains(&entry)
+            {
+                changed.push(entry);
+            }
+        }
+        tx.commit()?;
+        Ok(changed)
+    }
+
     pub fn entry_ids(&self) -> Result<Vec<Uuid>> {
         let conn = self.conn();
         let mut stmt = conn.prepare_cached("SELECT id FROM games WHERE merged_into IS NULL")?;
@@ -533,6 +565,41 @@ mod tests {
     use super::*;
     use crate::db::NewGameRecord;
     use crate::model::{GameLink, GameQuery, Score};
+
+    #[test]
+    fn recomputes_automatic_sorting_names_only() {
+        use crate::model::ImportedGame;
+        let db = Database::open_in_memory().unwrap();
+        let now = chrono::Utc::now();
+        db.upsert_imported(
+            "steam",
+            &[
+                ImportedGame::installed("1", "Die Siedler"),
+                ImportedGame::installed("2", "Der Planer"),
+            ],
+            now,
+        )
+        .unwrap();
+        let games = db.list_games(&crate::model::GameQuery::default()).unwrap();
+        let planer = games.iter().find(|g| g.name == "Der Planer").unwrap().id;
+        db.set_user_sorting_name(planer, Some("Mein Planer"))
+            .unwrap();
+        let changed = db
+            .recompute_sorting_names(&["Die".to_string(), "Der".to_string()])
+            .unwrap();
+        assert_eq!(changed.len(), 1);
+        let sorted = db.list_games(&crate::model::GameQuery::default()).unwrap();
+        let by_name = |n: &str| {
+            sorted
+                .iter()
+                .find(|g| g.name == n)
+                .unwrap()
+                .sorting_name
+                .clone()
+        };
+        assert_eq!(by_name("Die Siedler"), "Siedler");
+        assert_eq!(by_name("Der Planer"), "Mein Planer");
+    }
 
     fn db_with(name: &str, source: &str) -> (Database, Uuid) {
         let db = Database::open_in_memory().unwrap();

@@ -1,22 +1,52 @@
 //! Sorting names and display names derived from paths.
 //!
-//! Logic derived from Playnite (MIT), see THIRD_PARTY_NOTICES.md: leading articles are removed
-//! and standalone numbers are zero-padded so "Game 10" sorts after "Game 9".
+//! Logic derived from Playnite (MIT), see THIRD_PARTY_NOTICES.md: leading words (articles by
+//! default, see the `sortPrefixes` setting) are removed and standalone numbers are zero-padded so
+//! "Game 10" sorts after "Game 9".
 
 use std::path::Path;
+use std::sync::{PoisonError, RwLock};
 
-const ARTICLES: [&str; 3] = ["the", "a", "an"];
+/// Words ignored at the start of names until the settings say otherwise.
+pub const DEFAULT_PREFIXES: [&str; 3] = ["The", "A", "An"];
 const NUMBER_WIDTH: usize = 2;
 
-/// Returns the key used to sort `name`: leading article removed, numbers padded to two digits.
-pub fn sorting_name(name: &str) -> String {
-    let trimmed = name.trim();
-    let without_article = strip_article(trimmed);
-    pad_numbers(without_article)
+/// The words ignored at the start of names, from the settings; `None` until they are set.
+static PREFIXES: RwLock<Option<Vec<String>>> = RwLock::new(None);
+
+/// Sets the words ignored at the start of names (the `sortPrefixes` setting). Returns whether
+/// they changed, i.e. whether stored sorting names need recomputing.
+pub fn set_ignored_prefixes(words: Vec<String>) -> bool {
+    let mut current = PREFIXES.write().unwrap_or_else(PoisonError::into_inner);
+    let changed = current
+        .as_ref()
+        .map_or_else(|| words != defaults(), |c| *c != words);
+    *current = Some(words);
+    changed
 }
 
-fn strip_article(name: &str) -> &str {
-    for article in ARTICLES {
+fn defaults() -> Vec<String> {
+    DEFAULT_PREFIXES.iter().map(ToString::to_string).collect()
+}
+
+/// Returns the key used to sort `name`: an ignored leading word removed, numbers padded to two
+/// digits.
+pub fn sorting_name(name: &str) -> String {
+    let current = PREFIXES.read().unwrap_or_else(PoisonError::into_inner);
+    match current.as_deref() {
+        Some(words) => sorting_name_with(name, words),
+        None => sorting_name_with(name, &defaults()),
+    }
+}
+
+/// [`sorting_name`] with an explicit list of ignored leading words.
+pub fn sorting_name_with(name: &str, prefixes: &[String]) -> String {
+    let trimmed = name.trim();
+    pad_numbers(strip_prefix(trimmed, prefixes))
+}
+
+fn strip_prefix<'a>(name: &'a str, prefixes: &[String]) -> &'a str {
+    for article in prefixes.iter().map(|p| p.trim()).filter(|p| !p.is_empty()) {
         if name.len() > article.len()
             && name.is_char_boundary(article.len())
             && name[..article.len()].eq_ignore_ascii_case(article)
@@ -114,6 +144,26 @@ fn prettify(raw: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ignores_the_configured_leading_words() {
+        let words = |list: &[&str]| list.iter().map(ToString::to_string).collect::<Vec<_>>();
+        assert_eq!(
+            sorting_name_with("Der Planer 4", &words(&["Der"])),
+            "Planer 04"
+        );
+        assert_eq!(
+            sorting_name_with("The Witcher", &words(&["Der"])),
+            "The Witcher"
+        );
+        assert_eq!(sorting_name_with("The Witcher", &[]), "The Witcher");
+        assert_eq!(
+            sorting_name_with("the witcher", &words(&[" The "])),
+            "witcher"
+        );
+        // A name that is only the word keeps it.
+        assert_eq!(sorting_name_with("The", &words(&["The"])), "The");
+    }
 
     #[test]
     fn strips_leading_articles() {

@@ -19,7 +19,9 @@ pub use edit::*;
 pub use game::*;
 pub use metadata::*;
 pub use query::*;
-pub use sorting::{display_name_from_path, sorting_name};
+pub use sorting::{
+    DEFAULT_PREFIXES, display_name_from_path, set_ignored_prefixes, sorting_name, sorting_name_with,
+};
 pub use start::*;
 pub use sync::SyncTimes;
 pub use view::*;

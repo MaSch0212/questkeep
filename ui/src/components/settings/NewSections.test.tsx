@@ -7,6 +7,7 @@ import * as api from "../../lib/api";
 import { store } from "../../lib/store";
 import { AccountsSection } from "./AccountsSection";
 import { ArtworkSection } from "./ArtworkSection";
+import { GeneralSection } from "./GeneralSection";
 import { UpdatesSection } from "./UpdatesSection";
 import { createSettingsModel } from "./useSettings";
 import { makeProvider, STEAM_SETTINGS } from "../../test-utils";
@@ -313,6 +314,7 @@ function makeSettings(overrides: Partial<Settings> = {}): Settings {
     detectExternalLaunches: true,
     showStartPage: true,
     startupPage: { kind: "start" },
+    sortPrefixes: { enabled: true, words: ["The", "A", "An"] },
     metadataPriority: { order: [], fields: {} },
     providers: { epic: { token: "keep-me" }, steam: { apiKey: "K" } },
     ...overrides,
@@ -397,5 +399,39 @@ describe("UpdatesSection", () => {
     render(() => <UpdatesSection />);
     await fireEvent.click(screen.getByRole("button", { name: "Check for updates" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("No network");
+  });
+});
+
+function GeneralHarness() {
+  const model = createSettingsModel();
+  return <GeneralSection model={model} />;
+}
+
+describe("GeneralSection sorting", () => {
+  beforeEach(() => {
+    vi.mocked(api.saveSettings).mockResolvedValue(undefined);
+  });
+
+  it("turns ignored leading words off and edits the list", async () => {
+    vi.mocked(api.getSettings).mockResolvedValue(makeSettings());
+    render(() => <GeneralHarness />);
+    await fireEvent.click(
+      await screen.findByRole("checkbox", {
+        name: "Ignore words at the start of names when sorting",
+      }),
+    );
+    await waitFor(() =>
+      expect(api.saveSettings).toHaveBeenCalledWith(
+        makeSettings({ sortPrefixes: { enabled: false, words: ["The", "A", "An"] } }),
+      ),
+    );
+    const input = screen.getByLabelText("Words to ignore");
+    await fireEvent.input(input, { target: { value: "Der" } });
+    await fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() =>
+      expect(api.saveSettings).toHaveBeenLastCalledWith(
+        makeSettings({ sortPrefixes: { enabled: false, words: ["The", "A", "An", "Der"] } }),
+      ),
+    );
   });
 });

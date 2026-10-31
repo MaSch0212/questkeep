@@ -102,6 +102,7 @@ const SETTINGS: Settings = {
   // Most tests are about the library; the start page has its own tests.
   startupPage: { kind: "view", id: "all" },
   providers: {},
+  sortPrefixes: { enabled: true, words: ["The", "A", "An"] },
   metadataPriority: { order: [], fields: {} },
 };
 
