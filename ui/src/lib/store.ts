@@ -28,6 +28,7 @@ import {
   type Drafts,
   type ViewState,
 } from "./views";
+import { IDLE_WORK, workLabel, type BackgroundWork } from "./backgroundWork";
 import {
   createSyncTracker,
   IDLE_SYNC,
@@ -87,6 +88,7 @@ function createAppStore() {
   const [coverVersions, setCoverVersions] = createStore<Record<string, number>>({});
   const [page, setPage] = createSignal<Page>("library");
   const [syncState, setSyncState] = createSignal<SyncState>(IDLE_SYNC);
+  const [backgroundWork, setBackgroundWork] = createSignal<BackgroundWork>(IDLE_WORK);
 
   const activeView = createMemo(() => findView(sections(), activeViewId()));
   const viewState = createMemo<ViewState>(() => {
@@ -530,6 +532,9 @@ function createAppStore() {
       case "categoriesChanged":
         void loadCategories();
         break;
+      case "backgroundWork":
+        setBackgroundWork((work) => ({ ...work, [event.queue]: event.pending }));
+        break;
     }
   }
 
@@ -619,6 +624,7 @@ function createAppStore() {
       libraryScroll.list = 0;
       libraryScroll.details = 0;
       syncTracker.reset();
+      setBackgroundWork(IDLE_WORK);
       setRunning(new Set<string>());
       setProviders([]);
       setAppInfo(null);
@@ -673,6 +679,8 @@ function createAppStore() {
       editCategories(() => api.separateCategorySource(id, source, name)),
     syncState,
     syncBusy: () => isSyncBusy(syncState()),
+    /** "Downloading …" while covers or details are queued, else null. */
+    backgroundWorkLabel: () => workLabel(backgroundWork()),
     page,
     showSettings: () => setPage("settings"),
     showLibrary: () => setPage("library"),

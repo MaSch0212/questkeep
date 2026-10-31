@@ -2322,6 +2322,16 @@ ul {
   display: flex;
   flex-direction: column;
 }
+.sync-panel__work {
+  display: flex;
+  align-items: center;
+  gap: var(--qk-space-2);
+  margin: var(--qk-space-1) 0 0;
+  padding: var(--qk-space-2) var(--qk-space-2) 0;
+  border-top: 1px solid var(--qk-color-border);
+  font-size: var(--qk-font-size-sm);
+  color: var(--qk-color-text-muted);
+}
 .sync-panel__row {
   display: flex;
   align-items: center;

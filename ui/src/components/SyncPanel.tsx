@@ -1,5 +1,5 @@
 import RefreshCw from "lucide-solid/icons/refresh-cw";
-import { For, onMount } from "solid-js";
+import { For, onMount, Show } from "solid-js";
 import * as api from "../lib/api";
 import { errorMessage } from "../lib/errors";
 import { store } from "../lib/store";
@@ -93,6 +93,13 @@ export function SyncPanel(props: {
           }}
         </For>
       </ul>
+      <Show when={store.backgroundWorkLabel()}>
+        {(label) => (
+          <p class="sync-panel__work" role="status">
+            <RefreshCw class="icon icon--spin" aria-hidden="true" /> {label()}
+          </p>
+        )}
+      </Show>
     </Popover>
   );
 }

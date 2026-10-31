@@ -24,10 +24,61 @@ use super::igdb::{CHECKED_KEY as IGDB_CHECKED_KEY, Igdb, IgdbLookup, release_yea
 use super::steamgriddb::{Lookup, SteamGridDb, checked_key};
 use super::{ImageCache, ImageKind, MAX_IMAGE_BYTES};
 use crate::db::Database;
-use crate::events::{CoreEvent, EventBus};
+use crate::events::{CoreEvent, EventBus, WorkQueue};
 use crate::model::{ActionKind, Game, GameMetadata};
 use crate::providers::{ImageCandidate, LibraryProvider, ProviderRegistry};
 use crate::seed::is_fake_source;
+
+/// Shortest time between two progress events of one queue (the first and the last are always
+/// sent).
+const PROGRESS_INTERVAL: Duration = Duration::from_millis(250);
+
+/// Counts the jobs waiting in or running on one queue and reports the count as
+/// [`CoreEvent::BackgroundWork`], so the UI can show that something is going on.
+struct PendingJobs {
+    queue: WorkQueue,
+    /// The count and when it was last published.
+    state: Mutex<(usize, Option<Instant>)>,
+}
+
+impl PendingJobs {
+    fn new(queue: WorkQueue) -> Self {
+        Self {
+            queue,
+            state: Mutex::new((0, None)),
+        }
+    }
+
+    fn added(&self, events: &EventBus, jobs: usize) {
+        if jobs > 0 {
+            self.update(events, |count| count + jobs);
+        }
+    }
+
+    fn finished(&self, events: &EventBus) {
+        self.update(events, |count| count.saturating_sub(1));
+    }
+
+    fn update(&self, events: &EventBus, change: impl FnOnce(usize) -> usize) {
+        let pending = {
+            let mut state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
+            let (before, last) = *state;
+            let now = change(before);
+            // New work shows at once, progress at most every interval, the end always.
+            let due =
+                now > before || now == 0 || last.is_none_or(|t| t.elapsed() >= PROGRESS_INTERVAL);
+            *state = (now, if due { Some(Instant::now()) } else { last });
+            due.then_some(now)
+        };
+        // Published outside the lock: subscribers may take a while.
+        if let Some(pending) = pending {
+            events.publish(CoreEvent::BackgroundWork {
+                queue: self.queue,
+                pending: u32::try_from(pending).unwrap_or(u32::MAX),
+            });
+        }
+    }
+}
 
 /// One game whose cover should be fetched.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -50,6 +101,7 @@ struct Shared {
     http: ureq::Agent,
     /// Games already attempted in this run, so failures aren't retried in a loop.
     attempted: Mutex<HashSet<Uuid>>,
+    pending: PendingJobs,
 }
 
 /// Owns the worker threads. Dropping it closes the queue; workers finish their current job and
@@ -77,6 +129,7 @@ impl CoverFetcher {
             artwork,
             http,
             attempted: Mutex::new(HashSet::new()),
+            pending: PendingJobs::new(WorkQueue::Covers),
         });
         let (sender, receiver) = mpsc::channel::<CoverJob>();
         let receiver = Arc::new(Mutex::new(receiver));
@@ -107,10 +160,18 @@ impl CoverFetcher {
             .attempted
             .lock()
             .unwrap_or_else(PoisonError::into_inner);
+        let jobs: Vec<CoverJob> = jobs
+            .into_iter()
+            .filter(|job| attempted.insert(job.game_id) || job.force)
+            .collect();
+        // Counted before sending, so a worker can't finish a job before it is counted.
+        self.shared.pending.added(&self.shared.events, jobs.len());
         let mut queued = 0;
         for job in jobs {
-            if (attempted.insert(job.game_id) || job.force) && sender.send(job).is_ok() {
+            if sender.send(job).is_ok() {
                 queued += 1;
+            } else {
+                self.shared.pending.finished(&self.shared.events);
             }
         }
         queued
@@ -142,6 +203,7 @@ fn worker(shared: &Shared, receiver: &Mutex<Receiver<CoverJob>>) {
             return; // queue closed
         };
         process(shared, &job);
+        shared.pending.finished(&shared.events);
     }
 }
 
@@ -321,6 +383,7 @@ struct MetadataShared {
     /// Games whose icon is queued or was already attempted in this run. A failed attempt for a
     /// game without a cover is forgotten, so it is retried once the cover exists.
     icons_seen: Mutex<HashSet<Uuid>>,
+    pending: PendingJobs,
 }
 
 /// Work of the metadata worker.
@@ -359,6 +422,7 @@ impl MetadataFetcher {
             interval,
             queued: Mutex::new(HashSet::new()),
             icons_seen: Mutex::new(HashSet::new()),
+            pending: PendingJobs::new(WorkQueue::Details),
         });
         let (sender, receiver) = mpsc::channel::<Job>();
         let worker_shared = shared.clone();
@@ -385,13 +449,12 @@ impl MetadataFetcher {
             .queued
             .lock()
             .unwrap_or_else(PoisonError::into_inner);
-        let mut count = 0;
-        for job in jobs {
-            if queued.insert(job.game_id) && sender.send(Job::Metadata(job)).is_ok() {
-                count += 1;
-            }
-        }
-        count
+        let jobs = jobs
+            .into_iter()
+            .filter(|job| queued.insert(job.game_id))
+            .map(Job::Metadata)
+            .collect();
+        self.send_all(sender, jobs)
     }
 
     /// Queues icon jobs for games that lack an icon, skipping games already queued or attempted
@@ -407,10 +470,25 @@ impl MetadataFetcher {
             .icons_seen
             .lock()
             .unwrap_or_else(PoisonError::into_inner);
+        let jobs = ids
+            .into_iter()
+            .filter(|id| seen.insert(*id))
+            .map(Job::Icon)
+            .collect();
+        self.send_all(sender, jobs)
+    }
+
+    /// Counts and sends jobs; returns how many were sent. Counted before sending, so the worker
+    /// can't finish a job before it is counted.
+    fn send_all(&self, sender: &Sender<Job>, jobs: Vec<Job>) -> usize {
+        let shared = &self.shared;
+        shared.pending.added(&shared.events, jobs.len());
         let mut count = 0;
-        for id in ids {
-            if seen.insert(id) && sender.send(Job::Icon(id)).is_ok() {
+        for job in jobs {
+            if sender.send(job).is_ok() {
                 count += 1;
+            } else {
+                shared.pending.finished(&shared.events);
             }
         }
         count
@@ -444,6 +522,7 @@ fn metadata_worker(shared: &MetadataShared, receiver: &Receiver<Job>) {
                 }
             }
         }
+        shared.pending.finished(&shared.events);
     }
 }
 
@@ -1157,6 +1236,45 @@ mod tests {
     }
 
     #[test]
+    fn pending_jobs_report_new_work_the_end_and_throttled_progress() {
+        let events = EventBus::new();
+        let (tx, rx) = mpsc::channel();
+        events.subscribe(move |event| {
+            if let CoreEvent::BackgroundWork { queue, pending } = event {
+                let _ = tx.send((*queue, *pending));
+            }
+        });
+        let pending = PendingJobs::new(WorkQueue::Covers);
+        pending.added(&events, 0);
+        pending.added(&events, 1);
+        pending.added(&events, 2);
+        pending.finished(&events);
+        pending.finished(&events);
+        pending.finished(&events);
+        pending.finished(&events);
+        let sent: Vec<_> = rx.try_iter().collect();
+        // Every addition (1, 3); 2 and 1 fall inside the throttle window, 0 (done) always; a
+        // stray extra `finished` stays at 0.
+        assert_eq!(
+            sent,
+            [
+                (WorkQueue::Covers, 1),
+                (WorkQueue::Covers, 3),
+                (WorkQueue::Covers, 0),
+                (WorkQueue::Covers, 0)
+            ]
+        );
+        // After the interval the next count goes out again.
+        pending.added(&events, 3);
+        pending.finished(&events);
+        std::thread::sleep(PROGRESS_INTERVAL);
+        pending.finished(&events);
+        pending.finished(&events);
+        let sent: Vec<u32> = rx.try_iter().map(|(_, n)| n).collect();
+        assert_eq!(sent, [3, 1, 0]);
+    }
+
+    #[test]
     fn a_deleted_icon_file_is_made_again() {
         let tmp = tempfile::tempdir().unwrap();
         let paths = DataPaths::new(tmp.path().join("data"));
@@ -1193,6 +1311,7 @@ mod tests {
             interval: Duration::ZERO,
             queued: Mutex::new(HashSet::new()),
             icons_seen: Mutex::new(HashSet::new()),
+            pending: PendingJobs::new(WorkQueue::Details),
         };
         assert!(fetch_icon(&shared, game.id));
         assert!(
@@ -1362,6 +1481,7 @@ mod tests {
             interval: Duration::ZERO,
             queued: Mutex::new(HashSet::new()),
             icons_seen: Mutex::new(HashSet::new()),
+            pending: PendingJobs::new(WorkQueue::Details),
         };
         let marked = || {
             db.get_game(game.id)

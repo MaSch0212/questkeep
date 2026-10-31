@@ -125,7 +125,8 @@ pub fn create(app: &AppHandle, state: &Arc<AppState>) -> tauri::Result<()> {
             | CoreEvent::ScansQueued { .. }
             | CoreEvent::ScanStarted { .. }
             | CoreEvent::ScanFailed { .. }
-            | CoreEvent::CategoriesChanged => return,
+            | CoreEvent::CategoriesChanged
+            | CoreEvent::BackgroundWork { .. } => return,
         };
         // The receiver only goes away at shutdown.
         let _ = tx.send(trigger);

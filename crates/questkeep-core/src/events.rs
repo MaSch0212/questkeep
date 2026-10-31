@@ -55,6 +55,23 @@ pub enum CoreEvent {
         id: Uuid,
         message: String,
     },
+    /// How many jobs a background queue still has. Sent when work is queued, while it runs (at
+    /// most a few times a second) and when the queue is empty (`pending` 0).
+    BackgroundWork {
+        queue: WorkQueue,
+        pending: u32,
+    },
+}
+
+/// A background download queue.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum WorkQueue {
+    /// Cover downloads.
+    Covers,
+    /// Store metadata, backgrounds and icons.
+    Details,
 }
 
 type Subscriber = Arc<dyn Fn(&CoreEvent) + Send + Sync>;

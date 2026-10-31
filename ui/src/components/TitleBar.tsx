@@ -71,6 +71,11 @@ const syncEntries = (): MenuEntry[] => [
     })),
 ];
 
+// Background downloads (covers, details, icons) show on the sync button too, as a sync does.
+const downloading = () => store.backgroundWorkLabel() !== null;
+const syncButtonLabel = () =>
+  store.syncBusy() ? syncLabel(store.syncState()) : (store.backgroundWorkLabel() ?? "Sync");
+
 type Open = "app" | "add" | "launch" | "sync" | null;
 
 /**
@@ -235,14 +240,14 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
           <Rocket class="icon" aria-hidden="true" />
         ))}
         <span class="titlebar__sync">
-          {toolButton("sync", store.syncBusy() ? syncLabel(store.syncState()) : "Sync", () => (
+          {toolButton("sync", syncButtonLabel(), () => (
             <RefreshCw
               class="icon"
-              classList={{ "icon--spin": store.syncBusy() }}
+              classList={{ "icon--spin": store.syncBusy() || downloading() }}
               aria-hidden="true"
             />
           ))}
-          <Show when={store.syncBusy()}>
+          <Show when={store.syncBusy() || downloading()}>
             <span class="titlebar__sync-dot" aria-hidden="true" />
           </Show>
         </span>
