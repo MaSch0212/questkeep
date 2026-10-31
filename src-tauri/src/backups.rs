@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use questkeep_core::events::CoreEvent;
+use questkeep_core::platform::BackgroundPriority;
 use tauri::{AppHandle, Manager};
 
 use crate::AppState;
@@ -52,6 +53,7 @@ pub fn backup_on_startup(state: Arc<AppState>) {
         .name("startup-backup".into())
         .spawn(move || {
             std::thread::sleep(STARTUP_DELAY);
+            let _priority = BackgroundPriority::begin();
             if let Some(Err(err)) = state.library.backup_if_due() {
                 tracing::warn!(%err, "automatic backup failed");
             }

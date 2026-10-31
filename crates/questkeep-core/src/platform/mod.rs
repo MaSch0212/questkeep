@@ -7,9 +7,25 @@ use std::process::Command;
 
 #[cfg(windows)]
 mod exe_icon;
+#[cfg(windows)]
+mod priority;
 mod processes;
 
 pub use processes::{ProcessRef, list_processes, open_process};
+
+#[cfg(windows)]
+pub use priority::BackgroundPriority;
+
+/// Lowers the current thread's priority until dropped (a no-op outside Windows).
+#[cfg(not(windows))]
+pub struct BackgroundPriority;
+
+#[cfg(not(windows))]
+impl BackgroundPriority {
+    pub fn begin() -> Self {
+        Self
+    }
+}
 
 /// The icon of an executable at about `size` px, as RGBA pixels. Windows only; elsewhere (and
 /// for files without an icon) `None`.

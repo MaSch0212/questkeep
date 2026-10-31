@@ -137,6 +137,13 @@ export function BackupsSection(props: { model: SettingsModel }) {
             >
               <DatabaseBackup class="icon" aria-hidden="true" /> Back up now
             </button>
+            <Show when={!store.backupRunning() && backups()[0]}>
+              {(last) => (
+                <span class="muted">
+                  Last backup {formatAgo(last().createdAt)}, {formatSize(last().size)}
+                </span>
+              )}
+            </Show>
             <Show when={store.backupRunning()}>
               <span role="status">{store.backgroundWorkLabel()}</span>
               <button type="button" class="btn" onClick={() => void api.cancelBackup()}>
