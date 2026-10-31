@@ -5,7 +5,7 @@ use rusqlite::{Connection, OptionalExtension};
 use crate::error::Result;
 
 /// Migration steps; index + 1 is the schema version the step produces.
-const MIGRATIONS: &[&str] = &[
+pub(crate) const MIGRATIONS: &[&str] = &[
     // 1: initial schema
     r#"
     CREATE TABLE games (

@@ -1,5 +1,6 @@
 //! SQLite persistence: connection handling, migrations and repositories.
 
+mod backup;
 mod categories;
 mod combine;
 mod games;
@@ -26,11 +27,17 @@ pub struct Database {
 }
 
 impl Database {
-    /// Opens (or creates) the database file and applies pending migrations.
+    /// Opens (or creates) the database file and applies pending migrations. An existing database
+    /// with an older schema is backed up first; if that fails, nothing is migrated.
     pub fn open(path: &Path) -> Result<Self> {
         let conn = Connection::open(path)?;
         conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.pragma_update(None, "synchronous", "NORMAL")?;
+        let version = migrations::current_version(&conn)?;
+        if version > 0 && version < migrations::LATEST_VERSION {
+            let backup = backup::backup_before_migration(&conn, path, version)?;
+            tracing::info!(version, backup = %backup.display(), "backed up database before migrating");
+        }
         Self::init(conn)
     }
 

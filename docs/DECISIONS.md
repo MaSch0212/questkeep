@@ -597,3 +597,6 @@ Short log of choices made while building. Newest at the bottom of each section.
   found (`is_installed`, default `launcher().is_some()`). Sync skips stores that are neither
   installed nor signed in (Steam: or a Web API key); their add-game options are hidden. Settings
   still lists every store, marked "Not installed on this PC", so a sign-in stays reachable.
+- **Backup before migrating**: `Database::open` copies an existing database with an older schema to
+  `backups/library-<UTC time>-schema<N>.sqlite` (`VACUUM INTO`, so WAL content is included) and
+  keeps the newest five. If the copy fails the app refuses to migrate rather than risk the data.
