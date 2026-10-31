@@ -1,4 +1,4 @@
-import { For, type Component } from "solid-js";
+import { For, onMount, type Component } from "solid-js";
 import { Dynamic } from "solid-js/web";
 import { store } from "../../lib/store";
 import { AboutSection } from "./AboutSection";
@@ -47,6 +47,11 @@ function jumpTo(id: string) {
 
 export function SettingsPage() {
   const model = createSettingsModel();
+
+  onMount(() => {
+    const section = store.takeSettingsSection();
+    if (section) document.getElementById(sectionDomId(section))?.scrollIntoView?.();
+  });
 
   return (
     <section class="settings" aria-label="Settings">

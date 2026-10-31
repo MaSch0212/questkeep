@@ -98,9 +98,7 @@ describe("MetadataSection", () => {
       "aria-pressed",
       "true",
     );
-    await fireEvent.click(
-      screen.getByRole("button", { name: "https://dev.twitch.tv/console/apps" }),
-    );
+    await fireEvent.click(screen.getByRole("button", { name: "dev.twitch.tv/console" }));
     expect(openUrl).toHaveBeenCalledWith("https://dev.twitch.tv/console/apps");
   });
 

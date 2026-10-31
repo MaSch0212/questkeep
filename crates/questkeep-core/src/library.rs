@@ -22,7 +22,8 @@ use crate::model::{
     Achievements, ActionKind, Category, CompletionSettings, Game, GameActivity, GameNews,
     GameQuery, GameUpdate, HLTB_SOURCE, HiddenFilter, IGDB_SOURCE, ImportedGame, LibraryView,
     ListField, MANUAL_SOURCE, NewManualGame, NewView, PlayAction, ScanSummary, SectionOrder,
-    StartPage, SyncTimes, TriState, ValueCount, ViewSection, ViewUpdate, display_name_from_path,
+    SetupState, StartPage, SyncTimes, TriState, ValueCount, ViewSection, ViewUpdate,
+    display_name_from_path,
 };
 use crate::paths::DataPaths;
 use crate::providers::{LibraryProvider, ProviderError, ProviderInfo, ProviderRegistry};
@@ -312,6 +313,37 @@ impl Library {
 
     pub fn set_last_page(&self, page: &str) -> Result<()> {
         self.db.set_last_page(page)
+    }
+
+    /// Whether the first-run setup or the "no IGDB key" hint should show. The hint waits until
+    /// the setup ended.
+    pub fn setup_state(&self) -> Result<SetupState> {
+        let show_setup = self.db.setup_pending()?;
+        let settings = self.settings();
+        let has_igdb = settings
+            .igdb_client_id
+            .is_some_and(|v| !v.trim().is_empty())
+            && settings
+                .igdb_client_secret
+                .is_some_and(|v| !v.trim().is_empty());
+        Ok(SetupState {
+            show_setup,
+            show_igdb_hint: !show_setup && !has_igdb && !self.db.igdb_hint_dismissed()?,
+        })
+    }
+
+    /// Ends the first-run setup (finished, skipped or the window closed).
+    pub fn finish_setup(&self) -> Result<()> {
+        self.db.finish_setup()
+    }
+
+    pub fn dismiss_igdb_hint(&self) -> Result<()> {
+        self.db.dismiss_igdb_hint()
+    }
+
+    /// Checks IGDB (Twitch) credentials without saving them.
+    pub fn test_igdb_credentials(&self, client_id: &str, client_secret: &str) -> Result<()> {
+        self.igdb.test_credentials(client_id, client_secret)
     }
 
     /// How many games each query matches, in order (the sidebar's view counts).
@@ -2079,6 +2111,36 @@ mod tests {
         lib.save_settings(&settings).unwrap();
         assert!(!lib.igdb().is_configured());
         assert!(lib.missing_metadata_jobs().unwrap().is_empty());
+    }
+
+    #[test]
+    fn the_igdb_hint_waits_for_setup_and_goes_away_with_a_key_or_dismissal() {
+        let (_tmp, lib) = test_library();
+        let hidden = SetupState {
+            show_setup: false,
+            show_igdb_hint: false,
+        };
+        assert_eq!(
+            lib.setup_state().unwrap(),
+            SetupState {
+                show_setup: true,
+                show_igdb_hint: false
+            }
+        );
+        lib.finish_setup().unwrap();
+        assert!(lib.setup_state().unwrap().show_igdb_hint);
+
+        let mut settings = lib.settings();
+        settings.igdb_client_id = Some("id".into());
+        settings.igdb_client_secret = Some("secret".into());
+        lib.save_settings(&settings).unwrap();
+        assert_eq!(lib.setup_state().unwrap(), hidden);
+
+        settings.igdb_client_secret = None;
+        lib.save_settings(&settings).unwrap();
+        assert!(lib.setup_state().unwrap().show_igdb_hint);
+        lib.dismiss_igdb_hint().unwrap();
+        assert_eq!(lib.setup_state().unwrap(), hidden);
     }
 
     #[test]

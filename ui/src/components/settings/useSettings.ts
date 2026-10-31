@@ -12,6 +12,9 @@ import {
 } from "../../lib/providerSettings";
 import { store } from "../../lib/store";
 
+/** A typed key, trimmed; empty means none. */
+const keyValue = (text: string) => (text.trim() === "" ? null : text.trim());
+
 /** Loaded settings plus the actions that persist them. Shared by all settings sections. */
 export function createSettingsModel() {
   const [settings, setSettings] = createSignal<Settings | null>(null);
@@ -173,6 +176,7 @@ export function createSettingsModel() {
       setSettings(next);
       setIgdbClientId(id);
       setIgdbClientSecret(secret);
+      void store.loadSetup();
       store.pushToast(
         "info",
         id === "" && secret === "" ? "IGDB credentials removed" : "IGDB credentials saved",
@@ -184,8 +188,32 @@ export function createSettingsModel() {
     }
   }
 
+  /**
+   * Saves the IGDB and SteamGridDB keys as typed in one go (first-run setup). Returns whether
+   * that worked; a failure is shown as a toast.
+   */
+  async function saveKeys(): Promise<boolean> {
+    const previous = settings();
+    if (!previous) return false;
+    const next: Settings = {
+      ...previous,
+      igdbClientId: keyValue(igdbClientId()),
+      igdbClientSecret: keyValue(igdbClientSecret()),
+      steamGridDbApiKey: keyValue(gridDbKey()),
+    };
+    try {
+      await api.saveSettings(next);
+      setSettings(next);
+      return true;
+    } catch (error) {
+      store.pushToast("error", errorMessage(error));
+      return false;
+    }
+  }
+
   return {
     settings,
+    saveKeys,
     credentialDraft,
     setCredentialDraft,
     savingCredentials,

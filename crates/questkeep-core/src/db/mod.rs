@@ -8,6 +8,7 @@ mod metadata;
 pub mod migrations;
 mod profiles;
 mod sessions;
+mod setup;
 mod start;
 mod views;
 

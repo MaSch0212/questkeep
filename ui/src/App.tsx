@@ -2,6 +2,8 @@ import { createSignal, onCleanup, onMount, Show } from "solid-js";
 import { DEFAULT_SPLIT_BREAKPOINT, isSplitWidth, readSplitBreakpoint } from "./lib/layoutMode";
 import { AddGameDialog } from "./components/AddGameDialog";
 import { DuplicatesDialog } from "./components/DuplicatesDialog";
+import { FirstRunDialog } from "./components/FirstRunDialog";
+import { IgdbHint } from "./components/IgdbHint";
 import { DetailsPanel } from "./components/DetailsPanel";
 import { UpdateDialog } from "./components/UpdateDialog";
 import { DetailsView } from "./components/DetailsView";
@@ -123,6 +125,9 @@ export function App() {
         <div hidden={store.page() !== "library"}>
           <TopBar keywordRef={(handle) => (keywordFilter = handle)} />
           <FilterPills />
+          <Show when={store.setup()?.showIgdbHint}>
+            <IgdbHint />
+          </Show>
         </div>
         <Show
           when={store.page() === "library"}
@@ -162,6 +167,9 @@ export function App() {
       </Show>
       <Show when={store.duplicatesOpen()}>
         <DuplicatesDialog onClose={() => store.setDuplicatesOpen(false)} />
+      </Show>
+      <Show when={store.setup()?.showSetup}>
+        <FirstRunDialog />
       </Show>
       <Toasts />
     </div>

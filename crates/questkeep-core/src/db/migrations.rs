@@ -370,6 +370,7 @@ pub fn migrate(conn: &mut Connection) -> Result<u32> {
             "The library database was created by a newer Questkeep (schema {version}, this build supports {LATEST_VERSION}). Please update Questkeep."
         )));
     }
+    let created = version == 0;
     for (index, sql) in MIGRATIONS.iter().enumerate().skip(version as usize) {
         let target = index as u32 + 1;
         let tx = conn.transaction()?;
@@ -379,6 +380,13 @@ pub fn migrate(conn: &mut Connection) -> Result<u32> {
         tx.commit()?;
         tracing::info!(version = target, "applied database migration");
         version = target;
+    }
+    if created {
+        // Marks the database as made by this install, so the first-run setup shows once.
+        conn.execute(
+            "INSERT OR REPLACE INTO app_state (key, value) VALUES (?1, '1')",
+            [super::setup::FRESH],
+        )?;
     }
     Ok(version)
 }
@@ -437,6 +445,14 @@ mod tests {
             .query_row("SELECT genres FROM games WHERE id = 'a'", [], |r| r.get(0))
             .unwrap();
         assert_eq!(genres, "[]");
+        let fresh: bool = conn
+            .query_row(
+                "SELECT EXISTS (SELECT 1 FROM app_state WHERE key = 'setup.fresh')",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(!fresh, "an upgraded database is not a new install");
     }
 
     #[test]

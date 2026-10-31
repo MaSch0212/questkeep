@@ -25,6 +25,7 @@ import type { ScanSummary } from "../bindings/ScanSummary";
 import type { LibraryView } from "../bindings/LibraryView";
 import type { NewView } from "../bindings/NewView";
 import type { SectionOrder } from "../bindings/SectionOrder";
+import type { SetupState } from "../bindings/SetupState";
 import type { StartPage } from "../bindings/StartPage";
 import type { Settings } from "../bindings/Settings";
 import type { SyncTimes } from "../bindings/SyncTimes";
@@ -54,6 +55,14 @@ export const startPage = () => invoke<StartPage>("start_page");
 /** The start page (`"home"`) or view id that was open when Questkeep last closed. */
 export const lastPage = () => invoke<string | null>("last_page");
 export const setLastPage = (page: string) => invoke<void>("set_last_page", { page });
+/** Whether the first-run setup or the "no IGDB key" hint should show. */
+export const setupState = () => invoke<SetupState>("setup_state");
+/** Ends the first-run setup (finished, skipped or closed). */
+export const finishSetup = () => invoke<void>("finish_setup");
+export const dismissIgdbHint = () => invoke<void>("dismiss_igdb_hint");
+/** Checks IGDB (Twitch) credentials without saving them; rejects with a readable message. */
+export const testIgdbCredentials = (clientId: string, clientSecret: string) =>
+  invoke<void>("test_igdb_credentials", { clientId, clientSecret });
 export const listCategories = () => invoke<Category[]>("list_categories");
 /** Creates a category, or returns the existing one with that name. */
 export const createCategory = (name: string) => invoke<Category>("create_category", { name });

@@ -13,6 +13,7 @@ import type { LibraryView } from "../bindings/LibraryView";
 import type { ListField } from "../bindings/ListField";
 import type { ProviderInfo } from "../bindings/ProviderInfo";
 import type { Settings } from "../bindings/Settings";
+import type { SetupState } from "../bindings/SetupState";
 import type { SortField } from "../bindings/SortField";
 import type { StartPage } from "../bindings/StartPage";
 import type { StartupPage } from "../bindings/StartupPage";
@@ -109,6 +110,10 @@ function createAppStore() {
   /** A newer app version (checked after start); the title bar offers it. */
   const [update, setUpdate] = createSignal<api.UpdateInfo | null>(null);
   const [updateOpen, setUpdateOpen] = createSignal(false);
+  /** Whether the first-run setup or the "no IGDB key" hint shows; null until loaded. */
+  const [setup, setSetup] = createSignal<SetupState | null>(null);
+  /** The settings section to scroll to when the settings page opens next. */
+  const [settingsSection, setSettingsSection] = createSignal<string | null>(null);
   const [coverVersions, setCoverVersions] = createStore<Record<string, number>>({});
   const [page, setPage] = createSignal<Page>("library");
   const [showStartPage, setShowStartPage] = createSignal(true);
@@ -731,6 +736,37 @@ function createAppStore() {
     setUpdate((await api.availableUpdate()) ?? null);
   }
 
+  /** Loads whether the first-run setup or the IGDB hint shows. */
+  async function loadSetup() {
+    setSetup((await api.setupState()) ?? null);
+  }
+
+  /** Ends the first-run setup (finished or skipped) and shows the IGDB hint if it now applies. */
+  async function endSetup() {
+    try {
+      await api.finishSetup();
+      await loadSetup();
+    } catch (error) {
+      pushToast("error", errorMessage(error));
+      setSetup(null);
+    }
+  }
+
+  async function dismissIgdbHint() {
+    setSetup((current) => current && { ...current, showIgdbHint: false });
+    try {
+      await api.dismissIgdbHint();
+    } catch (error) {
+      pushToast("error", errorMessage(error));
+    }
+  }
+
+  /** Opens the settings scrolled to one section. */
+  function showSettingsSection(section: string) {
+    setSettingsSection(section);
+    setPage("settings");
+  }
+
   /** Opens the update dialog when the tray asked for it. */
   async function showUpdateRequest() {
     try {
@@ -774,6 +810,7 @@ function createAppStore() {
       loadLaunchers(),
       loadCategories(),
       loadUpdate(),
+      loadSetup(),
     ]).then((results) => {
       for (const r of results)
         if (r.status === "rejected") pushToast("error", errorMessage(r.reason));
@@ -822,6 +859,8 @@ function createAppStore() {
       setAppInfo(null);
       setUpdate(null);
       setUpdateOpen(false);
+      setSetup(null);
+      setSettingsSection(null);
       setSeenSources(new Set<string>());
       setToasts([]);
     });
@@ -883,6 +922,16 @@ function createAppStore() {
     backgroundWorkLabel: () => workLabel(backgroundWork()),
     page,
     showSettings: () => setPage("settings"),
+    showSettingsSection,
+    takeSettingsSection: () => {
+      const section = settingsSection();
+      setSettingsSection(null);
+      return section;
+    },
+    setup,
+    loadSetup,
+    endSetup,
+    dismissIgdbHint,
     showHome,
     showStartPage,
     startData,

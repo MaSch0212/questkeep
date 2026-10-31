@@ -68,3 +68,14 @@ pub struct GameActivity {
     /// Play sessions that ran in these weeks.
     pub sessions: u32,
 }
+
+/// Whether the first-run setup or the "no IGDB key" hint should show.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct SetupState {
+    /// The database was created by this install and the setup was neither finished nor skipped.
+    pub show_setup: bool,
+    /// No IGDB credentials are set and the hint above the library was not dismissed.
+    pub show_igdb_hint: bool,
+}

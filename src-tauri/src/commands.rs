@@ -11,7 +11,7 @@ use questkeep_core::model::{
     Achievements, Category, CompletionSettings, Game, GameActivity, GameEditInfo, GameEdits,
     GameNews, GameQuery, GameUpdate, ImageOption, ImageSlot, ImageSource, LaunchProfiles,
     LibraryView, ListField, NewManualGame, NewView, ProfileInput, ScanSummary, SectionOrder,
-    StartPage, SyncTimes, ValueCount, ViewSection, ViewUpdate,
+    SetupState, StartPage, SyncTimes, ValueCount, ViewSection, ViewUpdate,
 };
 use questkeep_core::providers::ProviderInfo;
 use questkeep_core::settings::Settings;
@@ -633,6 +633,33 @@ pub async fn last_page(state: State<'_, Arc<AppState>>) -> CmdResult<Option<Stri
 #[tauri::command]
 pub async fn set_last_page(state: State<'_, Arc<AppState>>, page: String) -> CmdResult<()> {
     blocking(state, move |s| s.library.set_last_page(&page)).await
+}
+
+#[tauri::command]
+pub async fn setup_state(state: State<'_, Arc<AppState>>) -> CmdResult<SetupState> {
+    blocking(state, |s| s.library.setup_state()).await
+}
+
+#[tauri::command]
+pub async fn finish_setup(state: State<'_, Arc<AppState>>) -> CmdResult<()> {
+    blocking(state, |s| s.library.finish_setup()).await
+}
+
+#[tauri::command]
+pub async fn dismiss_igdb_hint(state: State<'_, Arc<AppState>>) -> CmdResult<()> {
+    blocking(state, |s| s.library.dismiss_igdb_hint()).await
+}
+
+#[tauri::command]
+pub async fn test_igdb_credentials(
+    state: State<'_, Arc<AppState>>,
+    client_id: String,
+    client_secret: String,
+) -> CmdResult<()> {
+    blocking(state, move |s| {
+        s.library.test_igdb_credentials(&client_id, &client_secret)
+    })
+    .await
 }
 
 #[tauri::command]

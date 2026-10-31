@@ -247,6 +247,10 @@
   --qk-category-picker-width: 280px;
   --qk-combine-picker-width: 340px;
   --qk-dialog-wide-width: 900px;
+  --qk-setup-width: 640px;
+  --qk-setup-content-height: 480px;
+  --qk-setup-dot-width: 28px;
+  --qk-setup-dot-height: 4px;
   --qk-duplicates-store-width: 110px;
   --qk-duplicates-playtime-width: 90px;
   --qk-duplicates-max-height: 60vh;

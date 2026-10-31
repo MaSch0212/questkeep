@@ -269,6 +269,32 @@ impl Igdb {
         Err(self.reject())
     }
 
+    /// Checks a Client ID and Secret without changing the ones in use: gets a Twitch token and
+    /// runs one tiny IGDB query. The error says in plain words what went wrong.
+    pub fn test_credentials(&self, client_id: &str, client_secret: &str) -> Result<()> {
+        let probe = Self::with_endpoints(
+            Some(client_id.to_string()),
+            Some(client_secret.to_string()),
+            Duration::ZERO,
+            self.inner.token_url.clone(),
+            self.inner.games_url.clone(),
+        );
+        if probe.credentials().is_none() {
+            return Err(CoreError::Invalid(
+                "Enter both the Client ID and the Client Secret.".into(),
+            ));
+        }
+        match probe.query(&probe.inner.games_url, "fields id; limit 1;") {
+            Ok(_) => Ok(()),
+            Err(CoreError::Invalid(_)) => Err(CoreError::Invalid(
+                "Twitch did not accept this Client ID and Secret. Check that both come from the \
+                 same application and that the secret is the newest one."
+                    .into(),
+            )),
+            Err(err) => Err(err),
+        }
+    }
+
     /// Searches IGDB for the game and returns the best match's metadata. `Ok(None)` means IGDB
     /// has no matching game (or none with any data); errors are transient or credential problems
     /// and should not be remembered as "checked".
@@ -1170,5 +1196,26 @@ mod tests {
             Err(CoreError::Network(_))
         ));
         assert!(igdb.is_configured());
+    }
+
+    #[test]
+    fn tests_keys_without_touching_the_ones_in_use() {
+        let server = serve(vec![(200, TOKEN), (200, "[{\"id\":1}]"), (403, "{}")]);
+        let igdb = client(&server.base);
+        igdb.test_credentials(" new-id ", "new-secret").unwrap();
+        let error = igdb.test_credentials("new-id", "wrong").unwrap_err();
+        assert!(error.to_string().contains("did not accept"), "{error}");
+        assert!(
+            igdb.is_configured(),
+            "a failed test does not reject the keys in use"
+        );
+        let requests = server.requests.lock().unwrap();
+        assert_eq!(
+            requests[0].body,
+            "client_id=new-id&client_secret=new-secret&grant_type=client_credentials"
+        );
+        assert_eq!(requests[1].body, "fields id; limit 1;");
+        drop(requests);
+        assert!(igdb.test_credentials("id", " ").is_err());
     }
 }
