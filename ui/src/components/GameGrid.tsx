@@ -104,7 +104,7 @@ export function GameGrid() {
       collapsed: store.collapsedGroups(),
     }),
   );
-  const { cursor, moveTo } = createSlotCursor(layout);
+  const { cursor, place, moveTo } = createSlotCursor(layout);
   // Primitive row indices: <For> keeps each row's DOM while it stays in the window.
   const rows = createMemo(() => {
     const { start, end } = visibleRowRange(layout(), scrollTop(), height(), OVERSCAN_ROWS);
@@ -150,9 +150,10 @@ export function GameGrid() {
   // Keep the selected tile in view (keyboard navigation, selection after search).
   createEffect(
     on(
-      () => [cursor(), layout()] as const,
-      ([slotIndex, current]) => {
-        const slot = current.slots[slotIndex];
+      place,
+      () => {
+        const current = layout();
+        const slot = current.slots[cursor()];
         if (!slot || !scroller) return;
         const target = scrollTopForRow(
           current,

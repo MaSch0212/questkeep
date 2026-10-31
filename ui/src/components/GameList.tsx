@@ -74,7 +74,7 @@ export function GameList(props: { compact?: boolean }) {
       collapsed: store.collapsedGroups(),
     }),
   );
-  const { cursor, moveTo } = createSlotCursor(layout);
+  const { cursor, place, moveTo } = createSlotCursor(layout);
   // Primitive row indices: <For> keeps each row's DOM while it stays in the window.
   const rows = createMemo(() => {
     const { start, end } = visibleRowRange(layout(), scrollTop(), height(), OVERSCAN_ROWS);
@@ -132,7 +132,7 @@ export function GameList(props: { compact?: boolean }) {
   // Keep the selected row in view (keyboard navigation, selection after search).
   createEffect(
     on(
-      () => [cursor(), layout()] as const,
+      place,
       () => {
         if (!scroller) return;
         const target = scrollToCursor(scroller.scrollTop);
