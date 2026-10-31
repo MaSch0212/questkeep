@@ -18,3 +18,10 @@ export function workLabel(work: BackgroundWork): string | null {
   if (covers === null && details === null) return null;
   return `Downloading ${[covers, details].filter((part) => part !== null).join(" and ")}…`;
 }
+
+/** "Backing up 42%…" while a backup runs, else null. */
+export function backupLabel(progress: { done: number; total: number } | null): string | null {
+  if (progress === null) return null;
+  if (progress.total === 0) return "Backing up…";
+  return `Backing up ${Math.floor((progress.done * 100) / progress.total)}%…`;
+}

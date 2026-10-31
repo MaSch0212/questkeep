@@ -41,7 +41,7 @@ import {
   type Drafts,
   type ViewState,
 } from "./views";
-import { IDLE_WORK, workLabel, type BackgroundWork } from "./backgroundWork";
+import { backupLabel, IDLE_WORK, workLabel, type BackgroundWork } from "./backgroundWork";
 import {
   createSyncTracker,
   IDLE_SYNC,
@@ -151,6 +151,14 @@ function createAppStore() {
   const [started, setStarted] = createSignal(false);
   const [syncState, setSyncState] = createSignal<SyncState>(IDLE_SYNC);
   const [backgroundWork, setBackgroundWork] = createSignal<BackgroundWork>(IDLE_WORK);
+  /** The running backup: files written of all (total 0 while it starts); null when none runs. */
+  const [backupProgress, setBackupProgress] = createSignal<{ done: number; total: number } | null>(
+    null,
+  );
+  /** Counts finished backups, so the backup list reloads. */
+  const [backupsChanged, setBackupsChanged] = createSignal(0);
+  /** A quit waits for the running backup: the quit dialog shows. */
+  const [quitDuringBackup, setQuitDuringBackup] = createSignal(false);
 
   // Explore's starting point; its changes are an ordinary draft on top.
   const [explore, setExplore] = createSignal<LibraryView>(exploreView());
@@ -865,6 +873,19 @@ function createAppStore() {
       case "backgroundWork":
         setBackgroundWork((work) => ({ ...work, [event.queue]: event.pending }));
         break;
+      case "backupProgress":
+        setBackupProgress({ done: event.done, total: event.total });
+        break;
+      case "backupFinished":
+        batch(() => {
+          setBackupProgress(null);
+          setBackupsChanged((n) => n + 1);
+        });
+        if (event.error !== null) pushToast("error", `Backup failed: ${event.error}`);
+        break;
+      case "quitDuringBackup":
+        setQuitDuringBackup(true);
+        break;
     }
   }
 
@@ -969,6 +990,12 @@ function createAppStore() {
     window.addEventListener("beforeunload", flushUi);
     void showNotices();
     void showUpdateRequest();
+    // A quit held back while the window did not exist yet (the app waited in the tray).
+    void Promise.resolve(api.quitPending())
+      .then((pending) => {
+        if (pending === true) setQuitDuringBackup(true);
+      })
+      .catch(() => {});
     return () => {
       disposed = true;
       for (const fn of unlisteners) fn();
@@ -1110,7 +1137,11 @@ function createAppStore() {
     syncState,
     syncBusy: () => isSyncBusy(syncState()),
     /** "Downloading …" while covers or details are queued, else null. */
-    backgroundWorkLabel: () => workLabel(backgroundWork()),
+    backgroundWorkLabel: () => backupLabel(backupProgress()) ?? workLabel(backgroundWork()),
+    backupRunning: () => backupProgress() !== null,
+    backupsChanged,
+    quitDuringBackup,
+    setQuitDuringBackup,
     page,
     showSettings: () => setPage("settings"),
     showSettingsSection,

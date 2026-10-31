@@ -150,6 +150,9 @@ async fn find(app: &AppHandle) -> CmdResult<Option<tauri_plugin_updater::Update>
 /// Downloads and installs the newest release, then restarts the app. Does nothing (and returns
 /// normally) when no newer release exists.
 pub async fn install(app: &AppHandle) -> CmdResult<()> {
+    if crate::backups::hold_quit(app, crate::backups::PendingQuit::Update) {
+        return Ok(());
+    }
     let Some(update) = find(app).await? else {
         return Ok(());
     };

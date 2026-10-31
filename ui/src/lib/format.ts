@@ -19,6 +19,13 @@ export function formatDate(iso: string | null): string {
   return Number.isNaN(date.getTime()) ? "Unknown" : date.toLocaleDateString();
 }
 
+/** Date and time of an ISO timestamp, in the local format ("Unknown" when unparseable). */
+export function formatDateTime(iso: string | null): string {
+  if (!iso) return "Unknown";
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? "Unknown" : date.toLocaleString();
+}
+
 const RELEASE_RE = /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/;
 
 /** Release year of a `YYYY[-MM[-DD]]` string, or null when absent or malformed. */

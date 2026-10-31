@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::auth::TokenStore;
+use crate::backup::BackupSettings;
 use crate::error::{CoreError, Result};
 use crate::model::{DEFAULT_PREFIXES, MetadataPriority};
 
@@ -59,6 +60,8 @@ pub struct Settings {
     pub metadata_priority: MetadataPriority,
     /// Words ignored at the start of names when sorting.
     pub sort_prefixes: SortPrefixes,
+    /// Automatic backups (kept from the current install when a backup is restored).
+    pub backups: BackupSettings,
 }
 
 /// Words like "The" that sorting skips at the start of a name ("The Witcher" sorts under W).
@@ -141,6 +144,7 @@ impl Default for Settings {
             startup_page: StartupPage::Start,
             metadata_priority: MetadataPriority::default(),
             sort_prefixes: SortPrefixes::default(),
+            backups: BackupSettings::default(),
         }
     }
 }
@@ -456,6 +460,12 @@ mod tests {
             sort_prefixes: SortPrefixes {
                 enabled: false,
                 words: vec!["Der".into()],
+            },
+            backups: BackupSettings {
+                enabled: false,
+                folder: Some("D:/Backups".into()),
+                frequency: crate::backup::BackupFrequency::Daily,
+                keep: 3,
             },
         };
         store.save(&custom).unwrap();

@@ -1,6 +1,7 @@
 //! Thin Tauri shell: exposes core functionality as commands and forwards core events to the UI.
 
 mod autostart;
+mod backups;
 mod commands;
 mod signin;
 mod tray;
@@ -291,6 +292,7 @@ pub fn run() {
             }
             app.manage(window::Lifecycle::default());
             app.manage(updates::Updates::default());
+            app.manage(backups::QuitGuard::default());
             let lifecycle = app.state::<window::Lifecycle>();
             // Hidden test runs (QUESTKEEP_HIDDEN=1) must not show anything, a tray icon included.
             if window::keep_hidden() {
@@ -310,12 +312,21 @@ pub fn run() {
                 window::create_main_window(app.handle())?;
             }
             autostart::sync_on_startup(app.handle(), settings.start_with_system);
+            backups::backup_on_startup(state.clone());
             spawn_startup_tasks(state);
             updates::check_on_startup(app.handle());
             Ok(())
         })
         .invoke_handler(main_window_only(tauri::generate_handler![
             commands::list_games,
+            commands::list_backups,
+            commands::backup_folder,
+            commands::backup_now,
+            commands::cancel_backup,
+            commands::restore_backup,
+            commands::quit_pending,
+            commands::finish_quit,
+            commands::cancel_quit,
             commands::list_values,
             commands::metadata_sources,
             commands::completion_settings,

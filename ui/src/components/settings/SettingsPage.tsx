@@ -4,6 +4,7 @@ import { store } from "../../lib/store";
 import { AboutSection } from "./AboutSection";
 import { AccountsSection } from "./AccountsSection";
 import { ArtworkSection } from "./ArtworkSection";
+import { BackupsSection } from "./BackupsSection";
 import { CategoriesSection } from "./CategoriesSection";
 import { CompletionSection } from "./CompletionSection";
 import { DeveloperSection } from "./DeveloperSection";
@@ -34,6 +35,7 @@ const SECTIONS: SectionDef[] = [
     visible: () => store.appInfo()?.devTools === true,
     component: DeveloperSection,
   },
+  { id: "backups", title: "Backups", component: BackupsSection },
   { id: "updates", title: "Updates", component: UpdatesSection },
   { id: "about", title: "About", component: AboutSection },
 ];

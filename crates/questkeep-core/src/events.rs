@@ -7,6 +7,7 @@ use serde::Serialize;
 use ts_rs::TS;
 use uuid::Uuid;
 
+use crate::backup::BackupInfo;
 use crate::model::ScanSummary;
 
 /// Something that happened in the core.
@@ -61,6 +62,18 @@ pub enum CoreEvent {
         queue: WorkQueue,
         pending: u32,
     },
+    /// A backup is being written: `done` of `total` files (`total` 0 while it starts).
+    BackupProgress {
+        done: u32,
+        total: u32,
+    },
+    /// A backup ended: the new archive, or why it failed (also when cancelled).
+    BackupFinished {
+        backup: Option<BackupInfo>,
+        error: Option<String>,
+    },
+    /// Quitting waits for a choice because a backup is running (the shell asks the UI).
+    QuitDuringBackup,
 }
 
 /// A background download queue.

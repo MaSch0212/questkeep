@@ -7,6 +7,7 @@ mod combine;
 mod games;
 mod metadata;
 pub mod migrations;
+pub use migrations::LATEST_VERSION;
 mod profiles;
 mod sessions;
 mod setup;
@@ -18,7 +19,7 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use rusqlite::Connection;
 
-use crate::error::Result;
+use crate::error::{CoreError, Result};
 
 pub use combine::{Combined, duplicate_key};
 pub use games::{DetectionDir, GameMissingMetadata, NewGameRecord};
@@ -60,6 +61,16 @@ impl Database {
         Ok(Self {
             conn: Mutex::new(conn),
         })
+    }
+
+    /// Writes a consistent copy of the database (WAL content included) to `path`, which must
+    /// not exist yet.
+    pub fn copy_to(&self, path: &std::path::Path) -> Result<()> {
+        let target = path.to_str().ok_or_else(|| {
+            CoreError::Invalid(format!("{} is not a valid path.", path.display()))
+        })?;
+        self.conn().execute("VACUUM INTO ?1", [target])?;
+        Ok(())
     }
 
     /// Locks the connection. A poisoned lock is recovered: SQLite rolls back any transaction that

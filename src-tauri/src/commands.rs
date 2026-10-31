@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use questkeep_core::auth::AccountStatus;
+use questkeep_core::backup::BackupInfo;
 use questkeep_core::library::MetadataSourceInfo;
 use questkeep_core::model::{
     Achievements, BulkChange, Category, CombinePlan, CompletionSettings, Game, GameActivity,
@@ -992,4 +993,62 @@ pub async fn set_default_launch_profile(
             .set_default_launch_profile(parse_id(&id)?, profile)
     })
     .await
+}
+
+/// The backups in the backup folder, newest first.
+#[tauri::command]
+pub async fn list_backups(state: State<'_, Arc<AppState>>) -> CmdResult<Vec<BackupInfo>> {
+    blocking(state, |s| Ok(s.library.backups())).await
+}
+
+/// The folder backups go to (the configured one or the default).
+#[tauri::command]
+pub fn backup_folder(state: State<'_, Arc<AppState>>) -> String {
+    state.library.backup_folder().to_string_lossy().into_owned()
+}
+
+/// Writes a backup now; progress and the result also arrive as core events.
+#[tauri::command]
+pub async fn backup_now(state: State<'_, Arc<AppState>>) -> CmdResult<BackupInfo> {
+    blocking(state, |s| s.library.run_backup()).await
+}
+
+/// Stops the running backup; its partial archive is deleted.
+#[tauri::command]
+pub fn cancel_backup(state: State<'_, Arc<AppState>>) {
+    state.library.cancel_backup();
+}
+
+/// Backs up the current library, stages `path` and restarts the app, which then swaps it in.
+#[tauri::command]
+pub async fn restore_backup(
+    app: tauri::AppHandle,
+    state: State<'_, Arc<AppState>>,
+    path: String,
+) -> CmdResult<()> {
+    blocking(state, move |s| {
+        s.library.restore_backup(&PathBuf::from(path))
+    })
+    .await?;
+    tracing::info!("restarting to restore a backup");
+    app.restart()
+}
+
+/// Whether a quit waits for the user because a backup runs (the UI asks after it loads).
+#[tauri::command]
+pub fn quit_pending(guard: State<'_, crate::backups::QuitGuard>) -> bool {
+    guard.is_pending()
+}
+
+/// Quits after the running backup: `wait` lets it finish, otherwise it is cancelled.
+#[tauri::command]
+pub async fn finish_quit(app: tauri::AppHandle, wait: bool) -> CmdResult<()> {
+    crate::backups::finish_quit(app, wait).await;
+    Ok(())
+}
+
+/// The user keeps the app open after all.
+#[tauri::command]
+pub fn cancel_quit(app: tauri::AppHandle) {
+    crate::backups::cancel_quit(&app);
 }

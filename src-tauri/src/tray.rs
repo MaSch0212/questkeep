@@ -127,7 +127,10 @@ pub fn create(app: &AppHandle, state: &Arc<AppState>) -> tauri::Result<()> {
             | CoreEvent::ScanStarted { .. }
             | CoreEvent::ScanFailed { .. }
             | CoreEvent::CategoriesChanged
-            | CoreEvent::BackgroundWork { .. } => return,
+            | CoreEvent::BackgroundWork { .. }
+            | CoreEvent::BackupProgress { .. }
+            | CoreEvent::BackupFinished { .. }
+            | CoreEvent::QuitDuringBackup => return,
         };
         // The receiver only goes away at shutdown.
         let _ = tx.send(trigger);
@@ -374,6 +377,9 @@ fn show_popup(_app: &AppHandle, _rect: &tauri::Rect) {}
 
 /// Tray "Exit": quits even though the app waits in the tray.
 pub(crate) fn exit(app: &AppHandle) {
+    if crate::backups::hold_quit(app, crate::backups::PendingQuit::Exit) {
+        return;
+    }
     if let Some(lifecycle) = app.try_state::<Lifecycle>() {
         lifecycle.request_quit();
     }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { IDLE_WORK, isWorkBusy, workLabel } from "./backgroundWork";
+import { backupLabel, IDLE_WORK, isWorkBusy, workLabel } from "./backgroundWork";
 
 describe("background work", () => {
   it("is idle without queued jobs", () => {
@@ -14,5 +14,13 @@ describe("background work", () => {
       "Downloading 1 cover and details of 87 games…",
     );
     expect(isWorkBusy({ covers: 0, details: 3 })).toBe(true);
+  });
+});
+
+describe("backup label", () => {
+  it("shows the share of files written", () => {
+    expect(backupLabel(null)).toBeNull();
+    expect(backupLabel({ done: 0, total: 0 })).toBe("Backing up…");
+    expect(backupLabel({ done: 1, total: 3 })).toBe("Backing up 33%…");
   });
 });

@@ -1,7 +1,7 @@
 //! `Library`: the facade the Tauri shell talks to. Wires database, providers, images and events.
 
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use chrono::{Local, TimeZone, Utc};
@@ -10,6 +10,7 @@ use ts_rs::TS;
 use uuid::Uuid;
 
 use crate::auth::{AccountStatus, TokenStore};
+use crate::backup::{self, BackupInfo, BackupRun};
 use crate::db::{Database, NewGameRecord, playtime_by_day, playtime_by_week};
 use crate::error::{CoreError, Result};
 use crate::events::{CoreEvent, EventBus};
@@ -70,6 +71,8 @@ pub struct Library {
     resolver: MetadataResolver,
     /// Player counts, news and achievements for the game page.
     live: LiveData,
+    /// Whether a backup runs, and how to cancel it.
+    backup_run: BackupRun,
 }
 
 impl Library {
@@ -82,6 +85,12 @@ impl Library {
         secrets: Arc<dyn TokenStore>,
     ) -> Result<Self> {
         paths.ensure_dirs()?;
+        // A restore chosen last time is swapped in before anything opens the files.
+        match backup::apply_pending_restore(&paths) {
+            Ok(true) => tracing::info!("restored a backup"),
+            Ok(false) => {}
+            Err(err) => tracing::error!(%err, "could not restore the backup"),
+        }
         let db = Arc::new(Database::open(&paths.database_file())?);
         Ok(Self::with_database(paths, db, providers, events, secrets))
     }
@@ -122,11 +131,94 @@ impl Library {
             db,
             providers,
             events,
+            backup_run: BackupRun::default(),
         }
     }
 
     pub fn database(&self) -> &Arc<Database> {
         &self.db
+    }
+
+    /// The backups in the backup folder, newest first.
+    pub fn backups(&self) -> Vec<BackupInfo> {
+        backup::list_backups(&self.settings().backups.folder(&self.paths))
+    }
+
+    /// The folder backups go to.
+    pub fn backup_folder(&self) -> PathBuf {
+        self.settings().backups.folder(&self.paths)
+    }
+
+    /// Writes a backup now (blocking), reporting progress and the result as events. Fails when
+    /// one is already running.
+    pub fn run_backup(&self) -> Result<BackupInfo> {
+        if !self.backup_run.start() {
+            return Err(CoreError::Invalid("A backup is already running.".into()));
+        }
+        let settings = self.settings().backups;
+        let events = &self.events;
+        events.publish(CoreEvent::BackupProgress { done: 0, total: 0 });
+        // At most one progress event per percent.
+        let last = std::sync::atomic::AtomicU32::new(u32::MAX);
+        let result = backup::create_backup(
+            &self.db,
+            &self.paths,
+            &settings.folder(&self.paths),
+            settings.keep,
+            self.backup_run.cancel_flag(),
+            &|done, total| {
+                let percent = done.saturating_mul(100) / total.max(1);
+                if last.swap(percent, std::sync::atomic::Ordering::Relaxed) != percent {
+                    events.publish(CoreEvent::BackupProgress { done, total });
+                }
+            },
+        );
+        self.backup_run.finish();
+        match &result {
+            Ok(info) => {
+                tracing::info!(path = %info.path, size = info.size, "backup written");
+                events.publish(CoreEvent::BackupFinished {
+                    backup: Some(info.clone()),
+                    error: None,
+                });
+            }
+            Err(err) => {
+                tracing::warn!(%err, "backup failed");
+                events.publish(CoreEvent::BackupFinished {
+                    backup: None,
+                    error: Some(err.to_string()),
+                });
+            }
+        }
+        result
+    }
+
+    /// Runs the automatic backup when it is due (see the backup settings).
+    pub fn backup_if_due(&self) -> Option<Result<BackupInfo>> {
+        let settings = self.settings().backups;
+        backup::is_due(&settings, &settings.folder(&self.paths), Utc::now())
+            .then(|| self.run_backup())
+    }
+
+    pub fn backup_running(&self) -> bool {
+        self.backup_run.is_running()
+    }
+
+    /// Stops a running backup; its partial archive is deleted.
+    pub fn cancel_backup(&self) {
+        self.backup_run.cancel();
+    }
+
+    /// Blocks until no backup runs.
+    pub fn wait_for_backup(&self) {
+        self.backup_run.wait();
+    }
+
+    /// Prepares restoring `path` at the next start, after backing up the current state. The
+    /// caller restarts the app.
+    pub fn restore_backup(&self, path: &Path) -> Result<()> {
+        self.run_backup()?;
+        backup::prepare_restore(path, &self.paths)
     }
 
     pub fn events(&self) -> &EventBus {

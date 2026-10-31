@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { AccountStatus } from "../bindings/AccountStatus";
 import type { Achievements } from "../bindings/Achievements";
+import type { BackupInfo } from "../bindings/BackupInfo";
 import type { BulkChange } from "../bindings/BulkChange";
 import type { CombinePlan } from "../bindings/CombinePlan";
 import type { AppInfo } from "../bindings/AppInfo";
@@ -92,6 +93,21 @@ export const listLaunchers = () => invoke<string[]>("list_launchers");
 export const openLauncher = (providerId: string) => invoke<void>("open_launcher", { providerId });
 /** Quits Questkeep, even when it would otherwise keep running in the tray. */
 export const exitApp = () => invoke<void>("exit_app");
+/** The backups in the backup folder, newest first. */
+export const listBackups = () => invoke<BackupInfo[]>("list_backups");
+/** The folder backups go to (the configured one or the default). */
+export const backupFolder = () => invoke<string>("backup_folder");
+/** Writes a backup now; progress also arrives as core events. */
+export const backupNow = () => invoke<BackupInfo>("backup_now");
+export const cancelBackup = () => invoke<void>("cancel_backup");
+/** Backs up the current library, then restarts Questkeep with `path` restored. */
+export const restoreBackup = (path: string) => invoke<void>("restore_backup", { path });
+/** Whether a quit waits for an answer because a backup runs. */
+export const quitPending = () => invoke<boolean>("quit_pending");
+/** Quits after the running backup (`wait`) or after cancelling it. */
+export const finishQuit = (wait: boolean) => invoke<void>("finish_quit", { wait });
+/** Keeps Questkeep open after a quit was held back. */
+export const cancelQuit = () => invoke<void>("cancel_quit");
 export const addManualGame = (input: NewManualGame) => invoke<Game>("add_manual_game", { input });
 export const updateGame = (id: string, update: GameUpdate) =>
   invoke<Game>("update_game", { id, update });

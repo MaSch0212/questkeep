@@ -7,6 +7,7 @@ import * as api from "../../lib/api";
 import { store } from "../../lib/store";
 import { AccountsSection } from "./AccountsSection";
 import { ArtworkSection } from "./ArtworkSection";
+import { BackupsSection } from "./BackupsSection";
 import { GeneralSection } from "./GeneralSection";
 import { UpdatesSection } from "./UpdatesSection";
 import { createSettingsModel } from "./useSettings";
@@ -315,6 +316,7 @@ function makeSettings(overrides: Partial<Settings> = {}): Settings {
     showStartPage: true,
     startupPage: { kind: "start" },
     sortPrefixes: { enabled: true, words: ["The", "A", "An"] },
+    backups: { enabled: true, folder: null, frequency: "weekly", keep: 5 },
     metadataPriority: { order: [], fields: {} },
     providers: { epic: { token: "keep-me" }, steam: { apiKey: "K" } },
     ...overrides,
@@ -433,5 +435,49 @@ describe("GeneralSection sorting", () => {
         makeSettings({ sortPrefixes: { enabled: false, words: ["The", "A", "An", "Der"] } }),
       ),
     );
+  });
+});
+
+function BackupsHarness() {
+  const model = createSettingsModel();
+  return <BackupsSection model={model} />;
+}
+
+describe("BackupsSection", () => {
+  const backup = {
+    path: "D:/backups/questkeep-backup-20261030T120000Z.zip",
+    createdAt: "2026-10-30T12:00:00Z",
+    size: 2_097_152,
+    appVersion: "0.9.0",
+  };
+
+  beforeEach(() => {
+    vi.mocked(api.saveSettings).mockResolvedValue(undefined);
+    vi.mocked(api.listBackups).mockResolvedValue([backup]);
+    vi.mocked(api.backupFolder).mockResolvedValue("D:/backups");
+  });
+
+  it("lists backups and saves the number to keep", async () => {
+    vi.mocked(api.getSettings).mockResolvedValue(makeSettings());
+    render(() => <BackupsHarness />);
+    expect(await screen.findByText(/2 MB · Questkeep 0.9.0/)).toBeInTheDocument();
+    expect(screen.getByText("D:/backups")).toBeInTheDocument();
+    expect(screen.getByText(/not included/)).toBeInTheDocument();
+    await fireEvent.change(screen.getByLabelText("Backups to keep"), { target: { value: "8" } });
+    await waitFor(() =>
+      expect(api.saveSettings).toHaveBeenCalledWith(
+        makeSettings({ backups: { enabled: true, folder: null, frequency: "weekly", keep: 8 } }),
+      ),
+    );
+  });
+
+  it("restores a backup only after confirming", async () => {
+    vi.mocked(api.getSettings).mockResolvedValue(makeSettings());
+    vi.mocked(api.restoreBackup).mockResolvedValue(undefined);
+    render(() => <BackupsHarness />);
+    await fireEvent.click(await screen.findByRole("button", { name: /Restore the backup from/ }));
+    expect(api.restoreBackup).not.toHaveBeenCalled();
+    await fireEvent.click(screen.getByRole("button", { name: "Restore and restart" }));
+    expect(api.restoreBackup).toHaveBeenCalledWith(backup.path);
   });
 });

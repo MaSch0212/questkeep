@@ -257,6 +257,8 @@ pub fn on_main_window_event(app: &AppHandle, event: &WindowEvent) {
             {
                 api.prevent_close();
                 hide_to_tray(app);
+            } else if crate::backups::hold_quit(app, crate::backups::PendingQuit::Exit) {
+                api.prevent_close();
             } else {
                 save_placement(app);
             }

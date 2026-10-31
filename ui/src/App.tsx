@@ -28,6 +28,7 @@ import { TitleBar } from "./components/TitleBar";
 import { Toasts } from "./components/Toasts";
 import { FilterPills } from "./components/FilterPills";
 import { TopBar } from "./components/TopBar";
+import { QuitDuringBackupDialog } from "./components/QuitDuringBackupDialog";
 import type { CommandBarHandle } from "./components/CommandBar";
 import type { KeywordFilterHandle } from "./components/KeywordFilter";
 import { store } from "./lib/store";
@@ -248,6 +249,9 @@ export function App() {
       </Show>
       <Show when={store.updateOpen() && store.update()}>
         {(update) => <UpdateDialog update={update()} onClose={() => store.setUpdateOpen(false)} />}
+      </Show>
+      <Show when={store.quitDuringBackup()}>
+        <QuitDuringBackupDialog />
       </Show>
       <Show when={store.duplicatesOpen()}>
         <DuplicatesDialog onClose={() => store.setDuplicatesOpen(false)} />
