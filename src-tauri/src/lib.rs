@@ -391,6 +391,8 @@ pub fn run() {
             commands::finish_setup,
             commands::dismiss_igdb_hint,
             commands::test_igdb_credentials,
+            commands::view_ui_states,
+            commands::set_view_ui_state,
             commands::list_categories,
             commands::create_category,
             commands::rename_category,

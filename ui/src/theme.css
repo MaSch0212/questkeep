@@ -114,6 +114,9 @@
   --qk-titlebar-icon-stroke: 1.5;
   --qk-topbar-height: 56px;
   --qk-details-width: 380px;
+  --qk-details-min-width: 320px;
+  --qk-splitter-hit-width: 8px;
+  --qk-splitter-line-width: 2px;
   /* Content width from which details sit beside the library instead of overlaying it. Read by
      lib/layoutMode.ts (media queries cannot use variables). */
   --qk-split-breakpoint: 1100px;
@@ -173,6 +176,7 @@
   --qk-icon-btn-small-size: 24px;
   --qk-compact-row-height: 32px;
   --qk-dview-list-width: 320px;
+  --qk-dview-list-min-width: 240px;
   /* Game page from 560px of content width (container queries in app.css can not read variables;
      the breakpoints 560px, 720px and 1000px live there). */
   --qk-details-page-cover-width: 150px;

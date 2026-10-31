@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -110,4 +112,23 @@ pub struct ViewUpdate {
 pub struct SectionOrder {
     pub id: String,
     pub views: Vec<String>,
+}
+
+/// What the library remembers about a view between restarts, apart from the view itself: the
+/// details panel, the last selected game and the collapsed groups. Missing fields take their
+/// defaults, so older stored states keep loading.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", default)]
+#[ts(export)]
+pub struct ViewUiState {
+    /// The details panel floats over the list instead of sitting beside it (grid and table).
+    pub panel_floating: bool,
+    /// Width of the details panel in pixels (grid and table); `None` is the default width.
+    pub panel_width: Option<u32>,
+    /// Width of the list in the details layout in pixels; `None` is the default width.
+    pub list_width: Option<u32>,
+    /// The library entry selected last.
+    pub selected: Option<String>,
+    /// Collapsed group keys per grouping field (`"source"`, `"category"`, ...).
+    pub collapsed: BTreeMap<String, Vec<String>>,
 }

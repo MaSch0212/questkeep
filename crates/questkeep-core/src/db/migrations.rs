@@ -346,6 +346,14 @@ pub(crate) const MIGRATIONS: &[&str] = &[
     ALTER TABLE games ADD COLUMN default_profile TEXT;
     ALTER TABLE games ADD COLUMN sorting_name_user TEXT;
     "#,
+    // 12: per-view UI state (details panel, last selection, collapsed groups) as JSON, kept
+    // apart from the view so it never marks a view "Unsaved".
+    r#"
+    CREATE TABLE view_ui_state (
+        view_id TEXT PRIMARY KEY NOT NULL REFERENCES views (id) ON DELETE CASCADE,
+        state   TEXT NOT NULL
+    );
+    "#,
 ];
 
 /// Latest schema version this build knows.

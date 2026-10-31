@@ -13,7 +13,6 @@ import RefreshCw from "lucide-solid/icons/refresh-cw";
 import Star from "lucide-solid/icons/star";
 import Trash from "lucide-solid/icons/trash";
 import Unlink from "lucide-solid/icons/unlink";
-import X from "lucide-solid/icons/x";
 import {
   createEffect,
   createMemo,
@@ -61,6 +60,7 @@ import { store } from "../lib/store";
 import { CategoryEditor } from "./CategoryEditor";
 import { CombinePicker } from "./CombinePicker";
 import { CompletionPicker } from "./CompletionPicker";
+import { PanelHeader, type PanelPin } from "./PanelHeader";
 import { GameLinks } from "./GameLinks";
 import {
   AchievementsCard,
@@ -149,6 +149,8 @@ interface DetailsPanelProps {
    * of the details view, which is always shown, so it has no close button.
    */
   variant?: "panel" | "page";
+  /** Panel only: docked, floating by choice, or floating because the window is narrow. */
+  pin?: PanelPin;
   onClose: () => void;
 }
 
@@ -439,17 +441,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
       aria-label="Game details"
     >
       <Show when={!isPage()}>
-        <div class="details__header">
-          <button
-            type="button"
-            class="icon-btn"
-            aria-label="Close details"
-            title="Close (Esc)"
-            onClick={props.onClose}
-          >
-            <X class="icon" aria-hidden="true" />
-          </button>
-        </div>
+        <PanelHeader pin={props.pin ?? null} onClose={props.onClose} />
       </Show>
 
       <div class="details__scroll">

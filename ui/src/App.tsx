@@ -1,5 +1,11 @@
 import { createSignal, onCleanup, onMount, Show } from "solid-js";
-import { DEFAULT_SPLIT_BREAKPOINT, isSplitWidth, readSplitBreakpoint } from "./lib/layoutMode";
+import {
+  DEFAULT_SPLIT_BREAKPOINT,
+  isSplitWidth,
+  readCssPx,
+  readSplitBreakpoint,
+} from "./lib/layoutMode";
+import { clampWidth } from "./lib/viewUi";
 import { AddGameDialog } from "./components/AddGameDialog";
 import { DuplicatesDialog } from "./components/DuplicatesDialog";
 import { FirstRunDialog } from "./components/FirstRunDialog";
@@ -7,6 +13,8 @@ import { IgdbHint } from "./components/IgdbHint";
 import { DetailsPanel } from "./components/DetailsPanel";
 import { UpdateDialog } from "./components/UpdateDialog";
 import { DetailsView } from "./components/DetailsView";
+import { EmptyDetails, type PanelPin } from "./components/PanelHeader";
+import { Splitter } from "./components/Splitter";
 import { GameGrid } from "./components/GameGrid";
 import { GameList } from "./components/GameList";
 import { HomePage } from "./components/HomePage";
@@ -19,6 +27,12 @@ import { TopBar } from "./components/TopBar";
 import type { CommandBarHandle } from "./components/CommandBar";
 import type { KeywordFilterHandle } from "./components/KeywordFilter";
 import { store } from "./lib/store";
+
+/** Grid and table views have the side panel; the details layout has its page instead. */
+const isPanelView = () => store.viewMode() !== "details";
+
+/** Fallbacks for the panel and list widths in theme.css (`--qk-details-width`, ...). */
+const DEFAULT_SIZES = { panel: 380, panelMin: 320, list: 320, listMin: 240 };
 
 /** A printable character typed without modifiers (space stays with the focused button). */
 function isTypeToFilter(event: KeyboardEvent): boolean {
@@ -54,14 +68,28 @@ export function App() {
   const [adding, setAdding] = createSignal(false);
   const [contentWidth, setContentWidth] = createSignal(0);
   const [breakpoint, setBreakpoint] = createSignal(DEFAULT_SPLIT_BREAKPOINT);
+  const [sizes, setSizes] = createSignal(DEFAULT_SIZES);
   let keywordFilter: KeywordFilterHandle | undefined;
   let commandBar: CommandBarHandle | undefined;
 
-  // Wide window: details sit beside the library; narrow: they overlay it as a flyout.
+  // Wide window: the panel can dock beside the library; narrow: it overlays it as a flyout.
   const split = () => isSplitWidth(contentWidth(), breakpoint());
+  const docked = () => isPanelView() && split() && !store.panelFloating();
+  /** Dock/unpin only makes sense where the window is wide enough to dock. */
+  const pin = (): PanelPin => (docked() ? "docked" : split() ? "floating" : null);
+  const panelWidth = () =>
+    clampWidth(store.panelWidth() ?? sizes().panel, sizes().panelMin, contentWidth());
+  const listWidth = () =>
+    clampWidth(store.listWidth() ?? sizes().list, sizes().listMin, contentWidth());
 
   function observeContent(element: HTMLElement) {
     setBreakpoint(readSplitBreakpoint(element));
+    setSizes({
+      panel: readCssPx(element, "--qk-details-width", DEFAULT_SIZES.panel),
+      panelMin: readCssPx(element, "--qk-details-min-width", DEFAULT_SIZES.panelMin),
+      list: readCssPx(element, "--qk-dview-list-width", DEFAULT_SIZES.list),
+      listMin: readCssPx(element, "--qk-dview-list-min-width", DEFAULT_SIZES.listMin),
+    });
     const observer = new ResizeObserver((entries) => {
       const rect = entries[0]?.contentRect;
       if (rect) setContentWidth(rect.width);
@@ -139,21 +167,52 @@ export function App() {
             </div>
           }
         >
-          <div class="app__content" ref={observeContent}>
-            <Show when={store.viewMode() !== "details"} fallback={<DetailsView />}>
+          <div
+            class="app__content"
+            ref={observeContent}
+            style={{ "--qk-panel-width": `${panelWidth()}px` }}
+          >
+            <Show
+              when={isPanelView()}
+              fallback={
+                <DetailsView
+                  listWidth={listWidth()}
+                  minListWidth={sizes().listMin}
+                  maxListWidth={Math.max(sizes().listMin, Math.floor(contentWidth() / 2))}
+                />
+              }
+            >
               <Show when={store.viewMode() === "list"} fallback={<GameGrid />}>
                 <GameList />
               </Show>
             </Show>
+            <Show when={docked()}>
+              <Splitter
+                label="Details panel width"
+                value={panelWidth()}
+                min={sizes().panelMin}
+                max={Math.max(sizes().panelMin, Math.floor(contentWidth() / 2))}
+                grows="left"
+                onChange={(width) => store.setPanelWidth(width)}
+              />
+              <Show when={store.selectedGame()} fallback={<EmptyDetails />}>
+                {(game) => (
+                  <DetailsPanel
+                    game={game()}
+                    split
+                    pin="docked"
+                    onClose={() => store.closeDetails()}
+                  />
+                )}
+              </Show>
+            </Show>
             <Show
               when={
-                store.viewMode() !== "details" && store.detailsOpen()
-                  ? store.selectedGame()
-                  : undefined
+                isPanelView() && !docked() && store.detailsOpen() ? store.selectedGame() : undefined
               }
             >
               {(game) => (
-                <DetailsPanel game={game()} split={split()} onClose={() => store.closeDetails()} />
+                <DetailsPanel game={game()} pin={pin()} onClose={() => store.closeDetails()} />
               )}
             </Show>
           </div>

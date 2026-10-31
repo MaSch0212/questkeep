@@ -2,12 +2,18 @@ import { createEffect, Show } from "solid-js";
 import { store } from "../lib/store";
 import { DetailsPanel } from "./DetailsPanel";
 import { GameList } from "./GameList";
+import { Splitter } from "./Splitter";
 
 /**
  * The "details" library view: a narrow, virtualized list on the left and the selected game's
- * full details page on the right. Something is always selected while the library has games.
+ * full details page on the right, with a splitter between them (width remembered per view).
+ * Something is always selected while the library has games.
  */
-export function DetailsView() {
+export function DetailsView(props: {
+  listWidth: number;
+  minListWidth: number;
+  maxListWidth: number;
+}) {
   // Nothing selected (first visit, or the selection was filtered out): show the first game.
   createEffect(() => {
     if (store.selectedIndex() >= 0) return;
@@ -17,9 +23,17 @@ export function DetailsView() {
 
   return (
     <div class="dview">
-      <div class="dview__list">
+      <div class="dview__list" style={{ width: `${props.listWidth}px` }}>
         <GameList compact />
       </div>
+      <Splitter
+        label="List width"
+        value={props.listWidth}
+        min={props.minListWidth}
+        max={props.maxListWidth}
+        grows="right"
+        onChange={(width) => store.setListWidth(width)}
+      />
       <div class="dview__page">
         <Show
           when={store.selectedGame()}

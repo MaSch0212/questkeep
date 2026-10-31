@@ -11,7 +11,7 @@ use questkeep_core::model::{
     Achievements, Category, CompletionSettings, Game, GameActivity, GameEditInfo, GameEdits,
     GameNews, GameQuery, GameUpdate, ImageOption, ImageSlot, ImageSource, LaunchProfiles,
     LibraryView, ListField, NewManualGame, NewView, ProfileInput, ScanSummary, SectionOrder,
-    SetupState, StartPage, SyncTimes, ValueCount, ViewSection, ViewUpdate,
+    SetupState, StartPage, SyncTimes, ValueCount, ViewSection, ViewUiState, ViewUpdate,
 };
 use questkeep_core::providers::ProviderInfo;
 use questkeep_core::settings::Settings;
@@ -633,6 +633,22 @@ pub async fn last_page(state: State<'_, Arc<AppState>>) -> CmdResult<Option<Stri
 #[tauri::command]
 pub async fn set_last_page(state: State<'_, Arc<AppState>>, page: String) -> CmdResult<()> {
     blocking(state, move |s| s.library.set_last_page(&page)).await
+}
+
+#[tauri::command]
+pub async fn view_ui_states(
+    state: State<'_, Arc<AppState>>,
+) -> CmdResult<BTreeMap<String, ViewUiState>> {
+    blocking(state, |s| s.library.view_ui_states()).await
+}
+
+#[tauri::command]
+pub async fn set_view_ui_state(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    ui: ViewUiState,
+) -> CmdResult<()> {
+    blocking(state, move |s| s.library.set_view_ui_state(&id, &ui)).await
 }
 
 #[tauri::command]

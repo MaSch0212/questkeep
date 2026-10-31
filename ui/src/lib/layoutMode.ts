@@ -12,3 +12,9 @@ export function readSplitBreakpoint(element: Element): number {
   const value = Number.parseFloat(raw);
   return Number.isFinite(value) && value > 0 ? value : DEFAULT_SPLIT_BREAKPOINT;
 }
+
+/** Reads a pixel value from a theme variable, falling back when it is missing or not a number. */
+export function readCssPx(element: Element, name: string, fallback: number): number {
+  const value = Number.parseFloat(getComputedStyle(element).getPropertyValue(name));
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}

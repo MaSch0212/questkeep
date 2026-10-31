@@ -46,7 +46,9 @@ describe("DetailsView", () => {
       }),
       makeGame({ id: "b", name: "Beta" }),
     ]);
-    const { container } = render(() => <DetailsView />);
+    const { container } = render(() => (
+      <DetailsView listWidth={320} minListWidth={240} maxListWidth={600} />
+    ));
     await waitFor(() => expect(store.selectedId()).toBe("a"));
     expect(page()).toHaveClass("details--page");
     expect(page().querySelector("h2")).toHaveTextContent("Alpha");
@@ -68,7 +70,7 @@ describe("DetailsView", () => {
   it("keeps an existing selection and switches with a click or the arrow keys", async () => {
     await load([makeGame({ id: "a", name: "Alpha" }), makeGame({ id: "b", name: "Beta" })]);
     store.selectGame("b");
-    render(() => <DetailsView />);
+    render(() => <DetailsView listWidth={320} minListWidth={240} maxListWidth={600} />);
     expect(page().querySelector("h2")).toHaveTextContent("Beta");
     await fireEvent.click(screen.getByRole("option", { name: "Alpha" }));
     expect(store.selectedId()).toBe("a");
@@ -95,7 +97,7 @@ describe("DetailsView", () => {
         settings: { options: [], credentials: null },
       },
     ]);
-    render(() => <DetailsView />);
+    render(() => <DetailsView listWidth={320} minListWidth={240} maxListWidth={600} />);
     await fireEvent.click(await screen.findByRole("button", { name: "Play" }));
     expect(api.launchGame).toHaveBeenCalledWith("g1", null, null);
     for (const name of ["Favorite", "Hidden", "Edit", "More actions"]) {
@@ -107,7 +109,7 @@ describe("DetailsView", () => {
     await load(
       Array.from({ length: 5000 }, (_, i) => makeGame({ id: `g${i}`, name: `Game ${i}` })),
     );
-    render(() => <DetailsView />);
+    render(() => <DetailsView listWidth={320} minListWidth={240} maxListWidth={600} />);
     const rows = screen.getAllByRole("option");
     expect(rows.length).toBeGreaterThan(5);
     expect(rows.length).toBeLessThan(40);
@@ -119,7 +121,7 @@ describe("DetailsView", () => {
 
   it("shows a hint when the library is empty", async () => {
     await load([]);
-    render(() => <DetailsView />);
+    render(() => <DetailsView listWidth={320} minListWidth={240} maxListWidth={600} />);
     expect(screen.getByText("Select a game to see its details.")).toBeInTheDocument();
   });
 });

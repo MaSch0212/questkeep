@@ -10,7 +10,7 @@ use super::Database;
 use crate::error::{CoreError, Result};
 use crate::model::{
     GameQuery, GroupBy, LibraryView, NewView, SectionOrder, SyncTimes, ViewLayout, ViewSection,
-    ViewUpdate,
+    ViewUiState, ViewUpdate,
 };
 
 /// Key of the "sync all" entry in `sync_times`; provider ids never contain a colon.
@@ -348,6 +348,40 @@ impl Database {
         }
         Ok(times)
     }
+
+    /// The remembered UI state of every view that has one. A state that can't be read (written
+    /// by a future version in an incompatible way) is left out, so the view starts fresh.
+    pub fn view_ui_states(&self) -> Result<BTreeMap<String, ViewUiState>> {
+        let conn = self.conn();
+        let rows: Vec<(String, String)> = conn
+            .prepare_cached("SELECT view_id, state FROM view_ui_state")?
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
+            .collect::<rusqlite::Result<_>>()?;
+        Ok(rows
+            .into_iter()
+            .filter_map(|(id, text)| Some((id, serde_json::from_str(&text).ok()?)))
+            .collect())
+    }
+
+    pub fn set_view_ui_state(&self, id: &str, state: &ViewUiState) -> Result<()> {
+        let text = serde_json::to_string(state)
+            .map_err(|err| CoreError::Invalid(format!("Could not store the view state: {err}")))?;
+        let conn = self.conn();
+        let exists: bool = conn.query_row(
+            "SELECT EXISTS (SELECT 1 FROM views WHERE id = ?1)",
+            [id],
+            |r| r.get(0),
+        )?;
+        if !exists {
+            return Err(not_found("view"));
+        }
+        conn.execute(
+            "INSERT INTO view_ui_state (view_id, state) VALUES (?1, ?2)
+             ON CONFLICT (view_id) DO UPDATE SET state = excluded.state",
+            params![id, text],
+        )?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -357,6 +391,61 @@ mod tests {
 
     fn db() -> Database {
         Database::open_in_memory().unwrap()
+    }
+
+    #[test]
+    fn remembers_ui_state_per_view_until_the_view_is_deleted() {
+        let db = db();
+        let view = db
+            .create_view(&NewView {
+                section_id: "library".into(),
+                name: "Mine".into(),
+                icon: "star".into(),
+                query: GameQuery::default(),
+                layout: ViewLayout::Grid,
+                group: GroupBy::None,
+            })
+            .unwrap();
+        let mut state = ViewUiState {
+            panel_floating: true,
+            panel_width: Some(420),
+            selected: Some("game-1".into()),
+            ..ViewUiState::default()
+        };
+        state
+            .collapsed
+            .insert("source".into(), vec!["steam".into()]);
+        db.set_view_ui_state(&view.id, &state).unwrap();
+        state.panel_width = Some(500);
+        db.set_view_ui_state(&view.id, &state).unwrap();
+        assert_eq!(db.view_ui_states().unwrap().get(&view.id), Some(&state));
+
+        // Unknown fields from later versions and missing ones are fine; garbage is skipped.
+        db.conn()
+            .execute(
+                "UPDATE view_ui_state SET state = '{\"panelWidth\":360,\"future\":1}'",
+                [],
+            )
+            .unwrap();
+        assert_eq!(
+            db.view_ui_states().unwrap()[&view.id],
+            ViewUiState {
+                panel_width: Some(360),
+                ..ViewUiState::default()
+            }
+        );
+        db.conn()
+            .execute("UPDATE view_ui_state SET state = 'nope'", [])
+            .unwrap();
+        assert!(db.view_ui_states().unwrap().is_empty());
+
+        assert!(db.set_view_ui_state("missing", &state).is_err());
+        db.delete_view(&view.id).unwrap();
+        let rows: i64 = db
+            .conn()
+            .query_row("SELECT COUNT(*) FROM view_ui_state", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(rows, 0);
     }
 
     fn ids(sections: &[ViewSection]) -> Vec<(String, Vec<String>)> {

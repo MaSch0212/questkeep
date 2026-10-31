@@ -22,7 +22,7 @@ use crate::model::{
     Achievements, ActionKind, Category, CompletionSettings, Game, GameActivity, GameNews,
     GameQuery, GameUpdate, HLTB_SOURCE, HiddenFilter, IGDB_SOURCE, ImportedGame, LibraryView,
     ListField, MANUAL_SOURCE, NewManualGame, NewView, PlayAction, ScanSummary, SectionOrder,
-    SetupState, StartPage, SyncTimes, TriState, ValueCount, ViewSection, ViewUpdate,
+    SetupState, StartPage, SyncTimes, TriState, ValueCount, ViewSection, ViewUiState, ViewUpdate,
     display_name_from_path,
 };
 use crate::paths::DataPaths;
@@ -313,6 +313,15 @@ impl Library {
 
     pub fn set_last_page(&self, page: &str) -> Result<()> {
         self.db.set_last_page(page)
+    }
+
+    /// What each view remembers between restarts (panel, selection, collapsed groups).
+    pub fn view_ui_states(&self) -> Result<BTreeMap<String, ViewUiState>> {
+        self.db.view_ui_states()
+    }
+
+    pub fn set_view_ui_state(&self, id: &str, state: &ViewUiState) -> Result<()> {
+        self.db.set_view_ui_state(id, state)
     }
 
     /// Whether the first-run setup or the "no IGDB key" hint should show. The hint waits until

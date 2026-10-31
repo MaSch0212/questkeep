@@ -273,6 +273,67 @@ describe("App", () => {
     await waitFor(() => expect(panel()).toHaveClass("details--split"));
   });
 
+  it("docks the panel when wide, also with nothing selected, and floats it on request", async () => {
+    vi.mocked(api.listGames).mockResolvedValue([makeGame({ id: "1", name: "Hades" })]);
+    vi.mocked(api.setViewUiState).mockResolvedValue(undefined);
+    const { container } = render(() => <App />);
+    await screen.findByRole("gridcell", { name: "Hades" });
+    resizeAll(1400);
+    expect(await screen.findByText("Select a game to see its details here.")).toBeInTheDocument();
+    expect(screen.getByRole("separator", { name: "Details panel width" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Close details" })).toBeNull();
+
+    // The splitter resizes with the keyboard, within min and half the width.
+    const splitter = screen.getByRole("separator", { name: "Details panel width" });
+    await fireEvent.keyDown(splitter, { key: "ArrowLeft" });
+    expect(store.panelWidth()).toBe(396);
+    await fireEvent.keyDown(splitter, { key: "End" });
+    expect(store.panelWidth()).toBe(700);
+
+    await fireEvent.click(screen.getByRole("button", { name: "Unpin panel" }));
+    expect(store.panelFloating()).toBe(true);
+    expect(container.querySelector(".details")).toBeNull();
+    await fireEvent.click(screen.getByRole("gridcell", { name: "Hades" }));
+    const panel = container.querySelector(".details");
+    expect(panel).not.toHaveClass("details--split");
+    await fireEvent.click(screen.getByRole("button", { name: "Dock panel" }));
+    expect(container.querySelector(".details")).toHaveClass("details--split");
+
+    // Remembered for the view, written once the changes settle.
+    await waitFor(() =>
+      expect(api.setViewUiState).toHaveBeenLastCalledWith(
+        "all",
+        expect.objectContaining({ panelFloating: false, panelWidth: 700, selected: "1" }),
+      ),
+    );
+  });
+
+  it("restores a view's remembered selection and collapsed groups", async () => {
+    vi.mocked(api.listGames).mockResolvedValue([
+      makeGame({ id: "1", name: "Hades" }),
+      makeGame({ id: "2", name: "Celeste" }),
+    ]);
+    vi.mocked(api.viewUiStates).mockResolvedValue({
+      all: {
+        panelFloating: false,
+        panelWidth: null,
+        listWidth: null,
+        selected: "2",
+        collapsed: { source: ["steam"] },
+      },
+    });
+    const { container } = render(() => <App />);
+    resizeAll(1400);
+    await waitFor(() =>
+      expect(container.querySelector(".details--split .details__title")).toHaveTextContent(
+        "Celeste",
+      ),
+    );
+    expect(store.selectedId()).toBe("2");
+    store.setGroupBy("source");
+    expect(store.collapsedGroups().has("steam")).toBe(true);
+  });
+
   describe("start page", () => {
     const hades = makeGame({ id: "1", name: "Hades" });
 

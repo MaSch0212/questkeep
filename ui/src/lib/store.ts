@@ -21,6 +21,7 @@ import type { SyncTimes } from "../bindings/SyncTimes";
 import type { ViewLayout } from "../bindings/ViewLayout";
 import type { ValueCount } from "../bindings/ValueCount";
 import type { ViewSection } from "../bindings/ViewSection";
+import type { ViewUiState } from "../bindings/ViewUiState";
 import * as api from "./api";
 import { errorMessage } from "./errors";
 import { groupGames } from "./grouping";
@@ -48,6 +49,7 @@ import {
 } from "./syncStatus";
 import { takeLegacyViewMode, type ViewMode } from "./viewMode";
 import { HOME_PAGE, startupTarget } from "./startPage";
+import { DEFAULT_VIEW_UI, collapsedKeys, createDebouncedSaver, toggleCollapsed } from "./viewUi";
 
 /** What "Save as new view" asks for. */
 export interface NewViewInput {
@@ -67,6 +69,8 @@ export interface Toast {
 }
 
 const REFRESH_DEBOUNCE_MS = 60;
+/** How long UI state (panel, selection, collapsed groups) waits before it is saved. */
+const UI_SAVE_DELAY_MS = 500;
 
 /** The result of a call, or null when it fails. */
 function optional<T>(call: () => Promise<T>): Promise<T | null> {
@@ -93,13 +97,18 @@ function createAppStore() {
   });
   // Values of list fields with game counts, loaded when a filter needs them.
   const [valueLists, setValueLists] = createSignal<Partial<Record<ListField, ValueCount[]>>>({});
-  // Collapsed groups per view id, until the app closes.
-  const [collapsed, setCollapsed] = createSignal<Readonly<Record<string, readonly string[]>>>({});
   // A game opened from the command bar that no view contains; its details show anyway.
   const [pinnedGame, setPinnedGame] = createSignal<Game | null>(null);
   const [games, setGames] = createSignal<Game[]>([]);
   const [loading, setLoading] = createSignal(false);
-  const [selectedId, setSelectedId] = createSignal<string | null>(null);
+  /** What each view remembers (panel, selection, collapsed groups); Explore's is never saved. */
+  const [viewUi, setViewUi] = createSignal<Readonly<Record<string, ViewUiState>>>({});
+  // Before any view is open (tests, startup) the selection lives under this key, never saved.
+  const NO_VIEW = "";
+  const uiOf = (id: string | null) => viewUi()[id ?? NO_VIEW] ?? DEFAULT_VIEW_UI;
+  const activeUi = createMemo(() => uiOf(activeViewId()));
+  /** The open view's selected game. */
+  const selectedId = () => activeUi().selected;
   const [detailsOpen, setDetailsOpen] = createSignal(false);
   const [running, setRunning] = createSignal<ReadonlySet<string>>(new Set());
   const [providers, setProviders] = createSignal<ProviderInfo[]>([]);
@@ -167,11 +176,18 @@ function createAppStore() {
     });
   });
   const collapsedGroups = createMemo<ReadonlySet<string>>(
-    () => new Set(collapsed()[activeViewId() ?? ""] ?? []),
+    () => new Set(collapsedKeys(activeUi(), groupBy())),
   );
 
   // Scroll offset of the library, kept while another page (settings) replaces it.
   const libraryScroll: Record<ViewMode, number> = { grid: 0, list: 0, details: 0 };
+  const uiSaver = createDebouncedSaver<ViewUiState>((id, state) => {
+    void Promise.resolve()
+      .then(() => api.setViewUiState(id, state))
+      .catch(() => undefined);
+  }, UI_SAVE_DELAY_MS);
+  /** Writes pending UI state before the page goes away (reload, update install). */
+  const flushUi = () => uiSaver.flush();
   let requestSeq = 0;
   let refreshTimer: ReturnType<typeof setTimeout> | undefined;
   let toastSeq = 0;
@@ -287,7 +303,10 @@ function createAppStore() {
     batch(() => {
       setPage("library");
       // Coming back from another page to the open view keeps its keyword filter.
-      if (id !== activeViewId()) setKeyword(null);
+      if (id !== activeViewId()) {
+        setKeyword(null);
+        setDetailsOpen(false);
+      }
       setActiveViewId(id);
       setPinnedGame(null);
     });
@@ -319,7 +338,7 @@ function createAppStore() {
     batch(() => {
       setExplore(exploreView(preset));
       setDrafts((current) => withoutDraft(current, EXPLORE_ID));
-      setCollapsed((current) => ({ ...current, [EXPLORE_ID]: [] }));
+      setViewUi((current) => ({ ...current, [EXPLORE_ID]: DEFAULT_VIEW_UI }));
       setActiveViewId(null);
       selectView(EXPLORE_ID);
     });
@@ -574,14 +593,28 @@ function createAppStore() {
     }
   }
 
+  /** Changes what a view remembers; saved shortly after (never for Explore). */
+  function updateUi(id: string | null, change: (state: ViewUiState) => ViewUiState) {
+    const key = id ?? NO_VIEW;
+    const next = change(uiOf(key));
+    setViewUi((current) => ({ ...current, [key]: next }));
+    if (key !== EXPLORE_ID && key !== NO_VIEW) uiSaver.schedule(key, next);
+  }
+
+  /** Selects a game in the open view (remembered per view). */
+  function setSelectedId(id: string | null) {
+    if (selectedId() === id) return;
+    updateUi(activeViewId(), (state) => ({ ...state, selected: id }));
+  }
+
   function toggleGroup(key: string) {
-    const view = activeViewId();
-    if (view === null) return;
-    setCollapsed((current) => {
-      const keys = current[view] ?? [];
-      const next = keys.includes(key) ? keys.filter((k) => k !== key) : [...keys, key];
-      return { ...current, [view]: next };
-    });
+    updateUi(activeViewId(), (state) => toggleCollapsed(state, groupBy(), key));
+  }
+
+  /** Loads what each view remembers. Changes made before it arrived win. */
+  async function loadViewUi() {
+    const loaded = (await api.viewUiStates()) ?? {};
+    setViewUi((current) => ({ ...loaded, ...current }));
   }
 
   async function loadLaunchers() {
@@ -799,13 +832,16 @@ function createAppStore() {
       api.runningGames().then((ids) => setRunning(new Set(ids))),
       // The list needs the open view first; the startup page needs the views and settings.
       // Neither settings nor the last page may keep the list from loading.
-      Promise.all([loadViews(), optional(api.getSettings), optional(api.lastPage)]).then(
-        ([, settings, lastPage]) => {
-          if (settings) setShowStartPage(settings.showStartPage);
-          openStartupPage(settings?.startupPage ?? { kind: "start" }, lastPage ?? null);
-          return refresh();
-        },
-      ),
+      Promise.all([
+        loadViews(),
+        optional(api.getSettings),
+        optional(api.lastPage),
+        loadViewUi().catch(() => undefined),
+      ]).then(([, settings, lastPage]) => {
+        if (settings) setShowStartPage(settings.showStartPage);
+        openStartupPage(settings?.startupPage ?? { kind: "start" }, lastPage ?? null);
+        return refresh();
+      }),
       loadSyncTimes(),
       loadLaunchers(),
       loadCategories(),
@@ -816,11 +852,14 @@ function createAppStore() {
         if (r.status === "rejected") pushToast("error", errorMessage(r.reason));
     });
     await Promise.all([subscribe.catch(() => undefined), loads]);
+    window.addEventListener("beforeunload", flushUi);
     void showNotices();
     void showUpdateRequest();
     return () => {
       disposed = true;
       for (const fn of unlisteners) fn();
+      window.removeEventListener("beforeunload", flushUi);
+      uiSaver.flush();
       clearTimeout(refreshTimer);
       clearTimeout(startTimer);
     };
@@ -839,11 +878,11 @@ function createAppStore() {
       setSyncTimes({ all: null, providers: {} });
       setLaunchers([]);
       setCategories([]);
-      setCollapsed({});
+      uiSaver.cancel();
+      setViewUi({});
       setPinnedGame(null);
       setGames([]);
       setLoading(false);
-      setSelectedId(null);
       setDetailsOpen(false);
       setPage("library");
       setShowStartPage(true);
@@ -894,6 +933,18 @@ function createAppStore() {
     setGroupBy,
     groups,
     collapsedGroups,
+    /** The details panel floats over the list in the open view (grid and table). */
+    panelFloating: () => activeUi().panelFloating,
+    setPanelFloating: (floating: boolean) =>
+      updateUi(activeViewId(), (state) => ({ ...state, panelFloating: floating })),
+    /** The open view's details panel width in px; null is the theme default. */
+    panelWidth: () => activeUi().panelWidth,
+    setPanelWidth: (width: number) =>
+      updateUi(activeViewId(), (state) => ({ ...state, panelWidth: width })),
+    /** The open view's list width in the details layout in px; null is the theme default. */
+    listWidth: () => activeUi().listWidth,
+    setListWidth: (width: number) =>
+      updateUi(activeViewId(), (state) => ({ ...state, listWidth: width })),
     toggleGroup,
     // completion statuses and filter values
     completion,

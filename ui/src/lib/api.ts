@@ -30,6 +30,7 @@ import type { StartPage } from "../bindings/StartPage";
 import type { Settings } from "../bindings/Settings";
 import type { SyncTimes } from "../bindings/SyncTimes";
 import type { ViewSection } from "../bindings/ViewSection";
+import type { ViewUiState } from "../bindings/ViewUiState";
 import type { ValueCount } from "../bindings/ValueCount";
 import type { ViewUpdate } from "../bindings/ViewUpdate";
 
@@ -55,6 +56,10 @@ export const startPage = () => invoke<StartPage>("start_page");
 /** The start page (`"home"`) or view id that was open when Questkeep last closed. */
 export const lastPage = () => invoke<string | null>("last_page");
 export const setLastPage = (page: string) => invoke<void>("set_last_page", { page });
+/** What each view remembers between restarts (panel, selection, collapsed groups). */
+export const viewUiStates = () => invoke<Record<string, ViewUiState>>("view_ui_states");
+export const setViewUiState = (id: string, ui: ViewUiState) =>
+  invoke<void>("set_view_ui_state", { id, ui });
 /** Whether the first-run setup or the "no IGDB key" hint should show. */
 export const setupState = () => invoke<SetupState>("setup_state");
 /** Ends the first-run setup (finished, skipped or closed). */
