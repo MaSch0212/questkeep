@@ -74,6 +74,15 @@ impl Database {
             .map_err(|e| CoreError::Invalid(format!("Corrupt session game id: {e}")))
     }
 
+    /// Deletes an unfinished session without crediting anything (a run too short to count).
+    pub fn discard_session(&self, session_id: i64) -> Result<()> {
+        self.conn().execute(
+            "DELETE FROM play_sessions WHERE id = ?1 AND ended_at IS NULL",
+            [session_id],
+        )?;
+        Ok(())
+    }
+
     pub fn open_sessions(&self) -> Result<Vec<OpenSession>> {
         let conn = self.conn();
         let mut stmt = conn.prepare(
@@ -104,7 +113,8 @@ impl Database {
     }
 
     /// Closes sessions left open by a crash, crediting the time up to their last heartbeat.
-    /// Returns the ids of games whose playtime changed.
+    /// Sessions without any recorded time are dropped. Returns the ids of games whose playtime
+    /// changed.
     pub fn recover_open_sessions(&self) -> Result<Vec<Uuid>> {
         let mut changed = Vec::new();
         for session in self.open_sessions()? {
@@ -112,6 +122,10 @@ impl Database {
                 .num_seconds()
                 .max(0);
             let seconds = u64::try_from(seconds).unwrap_or_default();
+            if seconds == 0 {
+                self.discard_session(session.id)?;
+                continue;
+            }
             if let Some(game_id) = self.finish_session(session.id, session.last_seen_at, seconds)? {
                 tracing::info!(%game_id, seconds, "recovered unfinished play session");
                 changed.push(game_id);
@@ -172,6 +186,17 @@ mod tests {
         db.finish_session(s, Utc::now(), 10).unwrap();
         assert_eq!(db.finish_session(s, Utc::now(), 10).unwrap(), None);
         assert_eq!(db.get_game(id).unwrap().playtime_seconds, 10);
+    }
+
+    #[test]
+    fn recovery_drops_sessions_without_recorded_time() {
+        let (db, id) = setup();
+        db.begin_session(id, Utc::now()).unwrap();
+        assert!(db.recover_open_sessions().unwrap().is_empty());
+        assert!(db.open_sessions().unwrap().is_empty());
+        let game = db.get_game(id).unwrap();
+        assert_eq!(game.play_count, 0);
+        assert!(game.last_played.is_none());
     }
 
     #[test]

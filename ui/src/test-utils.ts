@@ -34,6 +34,8 @@ function makeRawGame(overrides: Partial<Game>): Game {
     dateAdded: "2026-01-02T10:00:00Z",
     favorite: false,
     hidden: false,
+    detectLaunches: true,
+    ignoredProcesses: [],
     coverPath: null,
     iconPath: null,
     backgroundPath: null,

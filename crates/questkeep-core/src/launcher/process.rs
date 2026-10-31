@@ -75,13 +75,17 @@ impl ProcessProbe for SystemProbe {
 
 #[cfg(target_os = "linux")]
 fn hint_paths(p: &sysinfo::Process) -> Vec<String> {
-    let mut paths: Vec<String> = p
-        .cwd()
-        .map(|c| c.display().to_string())
-        .into_iter()
-        .collect();
-    for arg in p.cmd() {
-        let arg = arg.to_string_lossy();
+    path_hints(
+        p.cwd().map(|c| c.display().to_string()),
+        p.cmd().iter().map(|a| a.to_string_lossy().into_owned()),
+    )
+}
+
+/// The working directory and path-like command-line arguments of a process.
+#[cfg(target_os = "linux")]
+pub(crate) fn path_hints(cwd: Option<String>, args: impl Iterator<Item = String>) -> Vec<String> {
+    let mut paths: Vec<String> = cwd.into_iter().collect();
+    for arg in args {
         // Wine maps the Unix root to drive Z:.
         if let Some(rest) = arg
             .strip_prefix("Z:\\")
@@ -89,7 +93,7 @@ fn hint_paths(p: &sysinfo::Process) -> Vec<String> {
         {
             paths.push(format!("/{}", rest.replace('\\', "/")));
         } else if arg.starts_with('/') {
-            paths.push(arg.into_owned());
+            paths.push(arg);
         }
     }
     paths
@@ -154,7 +158,17 @@ impl Matcher {
 
     /// Updates internal state from a snapshot and reports whether the game is running.
     pub fn is_running(&mut self, snapshot: &[ProcInfo]) -> bool {
-        match self {
+        self.presence(snapshot, &IgnoredPrograms::default()) == Presence::Game
+    }
+
+    /// Updates internal state from a snapshot and reports what of the game is running. Directory
+    /// and tree matching tell `ignored` programs apart; the original-process and name modes follow
+    /// exactly the process that was picked.
+    pub fn presence(&mut self, snapshot: &[ProcInfo], ignored: &IgnoredPrograms) -> Presence {
+        if let Self::Directory { dir } = self {
+            return directory_presence(snapshot, dir, ignored);
+        }
+        let running = match self {
             Self::Tree { tracked } => {
                 // Adopt children until no new descendant appears (handles multi-level spawns
                 // within one polling interval).
@@ -170,22 +184,164 @@ impl Matcher {
                     }
                 }
                 tracked.retain(|pid| snapshot.iter().any(|p| p.pid == *pid));
-                !tracked.is_empty()
+                if tracked.is_empty() {
+                    return Presence::None;
+                }
+                let playing = snapshot.iter().any(|p| {
+                    tracked.contains(&p.pid)
+                        && !ignored.matches(p.exe.as_deref().unwrap_or(&p.name))
+                });
+                if !playing {
+                    return Presence::Helpers;
+                }
+                true
             }
             Self::Original { pid } => snapshot.iter().any(|p| p.pid == *pid),
-            Self::Directory { dir } => any_under_dir(snapshot, dir),
+            Self::Directory { .. } => false,
             Self::Name { name } => snapshot.iter().any(|p| p.name.to_lowercase() == *name),
+        };
+        if running {
+            Presence::Game
+        } else {
+            Presence::None
         }
     }
 }
 
-fn any_under_dir(snapshot: &[ProcInfo], dir: &str) -> bool {
-    snapshot.iter().any(|p| {
-        p.exe
+/// What of a game is running.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Presence {
+    None,
+    /// Only ignored programs (launchers, crash handlers, installers, ...): the game may still be
+    /// coming, but it is not being played.
+    Helpers,
+    Game,
+}
+
+fn directory_presence(snapshot: &[ProcInfo], dir: &str, ignored: &IgnoredPrograms) -> Presence {
+    let mut presence = Presence::None;
+    for p in snapshot {
+        match ignored.classify(p.exe.iter().chain(p.hint_paths.iter()), dir) {
+            Some(false) => return Presence::Game,
+            Some(true) => presence = Presence::Helpers,
+            None => {}
+        }
+    }
+    presence
+}
+
+/// Programs that don't count as playing a game: built-in helpers that ship in game folders
+/// without ever being the game (crash reporters, redistributable installers, uninstallers,
+/// anti-cheat bootstrappers, a few known prelaunchers) plus the game's own list.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct IgnoredPrograms {
+    /// The game's patterns: lowercase, without `.exe`, `*` as wildcard.
+    patterns: Vec<String>,
+}
+
+impl IgnoredPrograms {
+    /// `names` as the user entered them (`REDprelauncher.exe`, `*launcher*`).
+    pub fn new(names: &[String]) -> Self {
+        let patterns = names
             .iter()
-            .chain(p.hint_paths.iter())
-            .any(|path| normalize_dir(path).starts_with(dir))
-    })
+            .map(|n| program_stem(n.trim()))
+            .filter(|n| !n.is_empty() && n.chars().any(|c| c != '*'))
+            .collect();
+        Self { patterns }
+    }
+
+    /// Whether the program at `path` (or a bare file name) is ignored.
+    pub fn matches(&self, path: &str) -> bool {
+        let lower = path.replace('\\', "/").to_lowercase();
+        let (folders, file) = lower.rsplit_once('/').unwrap_or(("", lower.as_str()));
+        let stem = program_stem(file);
+        is_builtin_helper(folders, &stem) || self.patterns.iter().any(|p| glob_match(p, &stem))
+    }
+
+    /// Whether one of a process's paths lies under the normalized `dir`: `Some(true)` when such
+    /// a path is an ignored program, `Some(false)` when they are all part of the game.
+    pub(crate) fn classify<'a>(
+        &self,
+        paths: impl IntoIterator<Item = &'a String>,
+        dir: &str,
+    ) -> Option<bool> {
+        let mut found = None;
+        for path in paths {
+            if normalize_dir(path).starts_with(dir) {
+                if self.matches(path) {
+                    return Some(true);
+                }
+                found = Some(false);
+            }
+        }
+        found
+    }
+}
+
+/// A program's file name, lowercase and without `.exe`.
+fn program_stem(name: &str) -> String {
+    let file = name
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or(name)
+        .to_lowercase();
+    match file.strip_suffix(".exe") {
+        Some(stem) => stem.to_string(),
+        None => file,
+    }
+}
+
+fn is_builtin_helper(folders: &str, stem: &str) -> bool {
+    const FOLDERS: &[&str] = &[
+        "_commonredist",
+        "redist",
+        "__installer",
+        "easyanticheat",
+        "battleye",
+    ];
+    const NAME_PARTS: &[&str] = &[
+        "crashhandler",
+        "crashreport",
+        "crashpad",
+        "crashsender",
+        "vc_redist",
+        "vcredist",
+        "dxsetup",
+        "dxwebsetup",
+        "easyanticheat",
+        "battleye",
+        "beservice",
+        "start_protected_game",
+    ];
+    // Prelaunchers known to start the game and stay open; "launcher" alone is too common in
+    // real game executables to ignore.
+    const NAMES: &[&str] = &["redprelauncher", "gtavlauncher", "playgtav"];
+    folders.split('/').any(|f| FOLDERS.contains(&f))
+        || NAME_PARTS.iter().any(|part| stem.contains(part))
+        || NAMES.contains(&stem)
+        || stem.starts_with("unins")
+        || matches!(stem, "setup" | "installer")
+}
+
+/// Matches `text` against `pattern`, where `*` stands for any run of characters.
+fn glob_match(pattern: &str, text: &str) -> bool {
+    let mut parts = pattern.split('*');
+    let first = parts.next().unwrap_or_default();
+    let Some(mut rest) = text.strip_prefix(first) else {
+        return false;
+    };
+    let parts: Vec<&str> = parts.collect();
+    let Some((last, middle)) = parts.split_last() else {
+        // No `*`: exact match.
+        return rest.is_empty();
+    };
+    for part in middle {
+        match rest.find(part) {
+            Some(i) => rest = &rest[i + part.len()..],
+            None => return false,
+        }
+    }
+    rest.len() >= last.len() && rest.ends_with(last)
 }
 
 #[cfg(test)]
@@ -236,6 +392,92 @@ mod tests {
         assert!(m.is_running(&[proc(11, Some(10), "/g/game"), proc(99, Some(1), "/other")]));
         // Game exits.
         assert!(!m.is_running(&[proc(99, Some(1), "/other")]));
+    }
+
+    #[test]
+    fn builtin_helpers_are_ignored() {
+        let none = IgnoredPrograms::default();
+        for helper in [
+            r"D:\Steam\steamapps\common\Cyberpunk 2077\REDprelauncher.exe",
+            r"C:\Games\GTAV\GTAVLauncher.exe",
+            r"C:\Games\Foo\UnityCrashHandler64.exe",
+            r"C:\Games\Foo\unins000.exe",
+            r"C:\Games\Foo\_CommonRedist\vcredist\2019\VC_redist.x64.exe",
+            r"C:\Games\Foo\EasyAntiCheat\EasyAntiCheat_EOS_Setup.exe",
+            r"C:\Games\Foo\start_protected_game.exe",
+        ] {
+            assert!(none.matches(helper), "{helper}");
+        }
+        for game in [
+            r"D:\Steam\steamapps\common\Cyberpunk 2077\bin\x64\Cyberpunk2077.exe",
+            r"C:\Games\Crash Bandicoot\CrashBandicootNSaneTrilogy.exe",
+            r"C:\Games\Foo\Launcher.exe",
+            r"C:\Games\Foo\GameLauncher.exe",
+            "/games/foo/game.x86_64",
+        ] {
+            assert!(!none.matches(game), "{game}");
+        }
+    }
+
+    #[test]
+    fn a_games_own_list_matches_names_and_wildcards() {
+        let ignored = IgnoredPrograms::new(&[
+            "Launcher.EXE".into(),
+            "*patch*".into(),
+            "  ".into(),
+            "*".into(),
+        ]);
+        assert!(ignored.matches(r"C:\Games\Foo\launcher.exe"));
+        assert!(ignored.matches("launcher"));
+        assert!(ignored.matches("/games/foo/AutoPatcher.exe"));
+        assert!(!ignored.matches(r"C:\Games\Foo\GameLauncher.exe"));
+        assert!(!ignored.matches(r"C:\Games\Foo\Game.exe"));
+        assert!(glob_match("a*b*c", "axxbyyc"));
+        assert!(glob_match("a*", "a"));
+        assert!(!glob_match("a*b", "ab_"));
+        assert!(!glob_match("ab*ba", "aba"));
+    }
+
+    #[test]
+    fn directory_presence_ignores_prelaunchers() {
+        let none = IgnoredPrograms::default();
+        let mut m = Matcher::directory("/games/Cyberpunk 2077");
+        let launcher = proc(1, None, "/games/Cyberpunk 2077/REDprelauncher.exe");
+        let game = proc(
+            2,
+            Some(1),
+            "/games/Cyberpunk 2077/bin/x64/Cyberpunk2077.exe",
+        );
+        assert_eq!(m.presence(&[], &none), Presence::None);
+        assert_eq!(
+            m.presence(std::slice::from_ref(&launcher), &none),
+            Presence::Helpers
+        );
+        assert!(!m.is_running(std::slice::from_ref(&launcher)));
+        assert_eq!(m.presence(&[launcher, game], &none), Presence::Game);
+    }
+
+    #[test]
+    fn tree_presence_ignores_the_games_launcher() {
+        let ignored = IgnoredPrograms::new(&["Launcher.exe".into()]);
+        let launcher = proc(10, Some(1), "/g/Launcher.exe");
+        let game = proc(11, Some(10), "/g/Game.exe");
+        let mut m = Matcher::tree(10);
+        assert_eq!(
+            m.presence(std::slice::from_ref(&launcher), &ignored),
+            Presence::Helpers
+        );
+        assert_eq!(
+            m.presence(&[launcher.clone(), game], &ignored),
+            Presence::Game
+        );
+        // The game exits, the launcher stays.
+        assert_eq!(
+            m.presence(std::slice::from_ref(&launcher), &ignored),
+            Presence::Helpers
+        );
+        // Without the list the launcher is the game.
+        assert!(Matcher::tree(10).is_running(&[launcher]));
     }
 
     #[test]

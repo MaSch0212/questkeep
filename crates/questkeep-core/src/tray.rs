@@ -232,6 +232,8 @@ mod tests {
             date_added: Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap(),
             favorite: false,
             hidden: false,
+            detect_launches: true,
+            ignored_processes: vec![],
             cover_path: None,
             icon_path: None,
             background_path: None,

@@ -9,10 +9,12 @@
 //! launches. Unlike Playnite we wait for URI-launched games with a timeout and persist sessions.
 
 mod process;
+mod watcher;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::thread::JoinHandle;
@@ -21,7 +23,12 @@ use std::time::{Duration, Instant};
 use chrono::Utc;
 use uuid::Uuid;
 
-pub use process::{Matcher, ProcInfo, ProcessProbe, SystemProbe, normalize_dir};
+#[cfg(target_os = "linux")]
+pub(crate) use process::path_hints;
+pub use process::{
+    IgnoredPrograms, Matcher, Presence, ProcInfo, ProcessProbe, SystemProbe, normalize_dir,
+};
+pub use watcher::{ProcessSource, SystemSource, WatcherConfig};
 
 use crate::db::Database;
 use crate::error::{CoreError, Result};
@@ -63,6 +70,9 @@ pub struct Launcher {
     probe: Arc<dyn ProcessProbe>,
     config: LauncherConfig,
     active: Arc<Mutex<HashMap<Uuid, ActiveSession>>>,
+    /// Games the watcher saw started outside Questkeep and is recording.
+    outside: Arc<Mutex<HashSet<Uuid>>>,
+    watcher: Mutex<Option<watcher::WatcherHandle>>,
 }
 
 impl Launcher {
@@ -87,6 +97,8 @@ impl Launcher {
             probe,
             config,
             active: Arc::new(Mutex::new(HashMap::new())),
+            outside: Arc::new(Mutex::new(HashSet::new())),
+            watcher: Mutex::new(None),
         }
     }
 
@@ -94,11 +106,81 @@ impl Launcher {
         self.active.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// Ids of games that currently have a tracker (starting or running).
+    /// Ids of games that currently have a tracker (starting or running) or were started outside
+    /// Questkeep and are being recorded.
     pub fn running(&self) -> Vec<Uuid> {
-        let mut active = self.active();
-        active.retain(|_, s| !s.handle.is_finished());
-        active.keys().copied().collect()
+        let mut ids: HashSet<Uuid> = {
+            let mut active = self.active();
+            active.retain(|_, s| !s.handle.is_finished());
+            active.keys().copied().collect()
+        };
+        ids.extend(
+            self.outside
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .iter()
+                .copied(),
+        );
+        ids.into_iter().collect()
+    }
+
+    /// Starts noticing games started outside Questkeep (see [`watcher`]). `enabled` is the
+    /// setting; [`Launcher::set_watching`] changes it later.
+    pub fn start_watching(&self, enabled: bool) {
+        self.start_watching_with(Box::new(SystemSource), WatcherConfig::default(), enabled);
+    }
+
+    /// [`Launcher::start_watching`] with another process source and timings (tests).
+    pub fn start_watching_with(
+        &self,
+        source: Box<dyn ProcessSource>,
+        config: WatcherConfig,
+        enabled: bool,
+    ) {
+        let mut slot = self.watcher.lock().unwrap_or_else(PoisonError::into_inner);
+        if slot.is_some() {
+            return;
+        }
+        let library_changed = Arc::new(AtomicBool::new(true));
+        let flag = library_changed.clone();
+        self.events.subscribe(move |event| {
+            if matches!(
+                event,
+                CoreEvent::GamesChanged { .. }
+                    | CoreEvent::GameRemoved { .. }
+                    | CoreEvent::LibraryScanned { .. }
+            ) {
+                flag.store(true, Ordering::SeqCst);
+            }
+        });
+        let (control, receiver) = mpsc::channel();
+        let shared = watcher::Shared {
+            db: self.db.clone(),
+            events: self.events.clone(),
+            trackers: self.active.clone(),
+            running: self.outside.clone(),
+            library_changed,
+        };
+        let watcher = watcher::Watcher::new(shared, config, source, receiver, enabled);
+        match std::thread::Builder::new()
+            .name("launch-watcher".into())
+            .spawn(move || watcher.run())
+        {
+            Ok(thread) => *slot = Some(watcher::WatcherHandle { control, thread }),
+            Err(err) => tracing::error!(%err, "could not spawn the launch watcher"),
+        }
+    }
+
+    /// Switches noticing outside starts on or off; switching off saves running sessions.
+    pub fn set_watching(&self, enabled: bool) {
+        if let Some(handle) = self
+            .watcher
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .as_ref()
+        {
+            let _ = handle.control.send(watcher::Control::Enable(enabled));
+        }
     }
 
     /// Starts `game` and begins tracking it.
@@ -186,7 +268,8 @@ impl Launcher {
             return Ok(());
         };
         tracing::info!(game = %game.id, name = %game.name, ?matcher, "game launched");
-        self.start_tracking(game.id, game.name.clone(), matcher, child);
+        let ignored = IgnoredPrograms::new(&game.ignored_processes);
+        self.start_tracking(game.id, game.name.clone(), matcher, ignored, child);
         Ok(())
     }
 
@@ -196,6 +279,7 @@ impl Launcher {
         game_id: Uuid,
         name: String,
         matcher: Matcher,
+        ignored: IgnoredPrograms,
         child: Option<Child>,
     ) {
         let (stop_tx, stop_rx) = mpsc::channel();
@@ -203,6 +287,7 @@ impl Launcher {
             game_id,
             name,
             matcher,
+            ignored,
             child,
             db: self.db.clone(),
             events: self.events.clone(),
@@ -235,6 +320,17 @@ impl Launcher {
 
     /// Stops all trackers, saving the elapsed time of running sessions, and waits for them.
     pub fn shutdown(&self) {
+        let watcher = self
+            .watcher
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take();
+        if let Some(handle) = watcher {
+            let _ = handle.control.send(watcher::Control::Stop);
+            if handle.thread.join().is_err() {
+                tracing::error!("launch watcher panicked");
+            }
+        }
         let sessions: Vec<(Uuid, ActiveSession)> = self.active().drain().collect();
         for (_, session) in &sessions {
             let _ = session.stop.send(());
@@ -257,6 +353,7 @@ struct Tracker {
     game_id: Uuid,
     name: String,
     matcher: Matcher,
+    ignored: IgnoredPrograms,
     child: Option<Child>,
     db: Arc<Database>,
     events: EventBus,
@@ -279,7 +376,7 @@ impl Tracker {
         }
     }
 
-    fn check(&mut self) -> bool {
+    fn check(&mut self) -> Presence {
         // Reap our own child so it doesn't linger as a zombie on Unix.
         if let Some(child) = self.child.as_mut()
             && matches!(child.try_wait(), Ok(Some(_)) | Err(_))
@@ -287,14 +384,36 @@ impl Tracker {
             self.child = None;
         }
         let snapshot = self.probe.snapshot();
-        self.matcher.is_running(&snapshot)
+        self.matcher.presence(&snapshot, &self.ignored)
     }
 
     fn run(mut self) {
-        // Phase 1: wait for the game to show up. File launches usually match immediately.
-        let startup_started = Instant::now();
+        // Phase 1: wait for the game to show up. File launches usually match immediately. While
+        // only its launcher runs, the user may sit in it for any time: keep waiting.
+        let mut startup_started = Instant::now();
         let startup_poll = self.config.poll_interval.min(Duration::from_secs(1));
-        while !self.check() {
+        let mut saw_ignored = false;
+        loop {
+            match self.check() {
+                Presence::Game => break,
+                Presence::Helpers => {
+                    saw_ignored = true;
+                    startup_started = Instant::now();
+                }
+                // A process tree that ended can't come back.
+                Presence::None if saw_ignored && matches!(self.matcher, Matcher::Tree { .. }) => {
+                    tracing::info!(game = %self.game_id, "only ignored programs ran");
+                    self.events.publish(CoreEvent::GameError {
+                        id: self.game_id,
+                        message: format!(
+                            "{} only ran programs it ignores, so no playtime was recorded.",
+                            self.name
+                        ),
+                    });
+                    return;
+                }
+                Presence::None => {}
+            }
             if startup_started.elapsed() >= self.config.startup_timeout {
                 tracing::warn!(game = %self.game_id, "game process never appeared");
                 self.events.publish(CoreEvent::GameError {
@@ -343,7 +462,7 @@ impl Tracker {
                 tracing::info!(game = %self.game_id, "app shutting down, saving running session");
                 break;
             }
-            if !self.check() {
+            if self.check() != Presence::Game {
                 break;
             }
             if let Err(err) = self.db.heartbeat_session(session_id, Utc::now()) {
@@ -453,6 +572,161 @@ mod tests {
         }
     }
 
+    /// Process source whose processes (pid, executable) are controlled by the test.
+    #[derive(Clone, Default)]
+    struct FakeSource(Arc<Mutex<Vec<(u32, String)>>>);
+    impl FakeSource {
+        fn set(&self, procs: &[(u32, &str)]) {
+            *self.0.lock().unwrap() = procs.iter().map(|(p, e)| (*p, e.to_string())).collect();
+        }
+    }
+    impl ProcessSource for FakeSource {
+        fn list(&mut self, out: &mut Vec<u32>) {
+            out.clear();
+            out.extend(self.0.lock().unwrap().iter().map(|(pid, _)| *pid));
+        }
+        fn open(&mut self, pid: u32) -> (Vec<String>, platform::ProcessRef) {
+            let paths = self
+                .0
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|(p, _)| *p == pid)
+                .map(|(_, exe)| exe.clone())
+                .collect();
+            (paths, platform::ProcessRef::none())
+        }
+    }
+
+    fn watch(s: &Setup, enabled: bool) -> FakeSource {
+        let source = FakeSource::default();
+        s.launcher.start_watching_with(
+            Box::new(source.clone()),
+            WatcherConfig {
+                interval: Duration::from_millis(20),
+                min_session: Duration::from_millis(150),
+                heartbeat: Duration::from_millis(50),
+                sleep_gap: Duration::from_secs(5),
+            },
+            enabled,
+        );
+        source
+    }
+
+    #[test]
+    fn watcher_records_games_started_outside() {
+        let s = setup();
+        let source = watch(&s, true);
+        // Only the prelauncher: not playing.
+        source.set(&[(1, "/games/fake/REDprelauncher.exe"), (2, "/other/app.exe")]);
+        std::thread::sleep(Duration::from_millis(300));
+        assert!(s.launcher.running().is_empty());
+        assert!(s.db.open_sessions().unwrap().is_empty());
+
+        source.set(&[
+            (1, "/games/fake/REDprelauncher.exe"),
+            (3, "/games/fake/bin/fake.exe"),
+        ]);
+        wait_until(|| s.launcher.running() == vec![s.game.id]);
+        assert_eq!(s.db.open_sessions().unwrap().len(), 1);
+        // Playing from Questkeep is refused while it runs.
+        assert!(matches!(
+            s.launcher.launch(&s.game),
+            Err(CoreError::Launch(_))
+        ));
+        // Longer than the minimum session.
+        std::thread::sleep(Duration::from_millis(250));
+        // The game exits; the launcher stays open.
+        source.set(&[(1, "/games/fake/REDprelauncher.exe")]);
+        wait_until(|| s.launcher.running().is_empty());
+        let game = s.db.get_game(s.game.id).unwrap();
+        assert_eq!(game.play_count, 1);
+        assert!(game.last_played.is_some());
+        let events = s.events.lock().unwrap();
+        assert!(
+            matches!(
+                events.as_slice(),
+                [CoreEvent::GameStarted { .. }, CoreEvent::GameStopped { .. }]
+            ),
+            "{events:?}"
+        );
+    }
+
+    #[test]
+    fn watcher_ignores_short_runs_and_opted_out_games() {
+        let s = setup();
+        let source = watch(&s, true);
+        // Shown as playing at once, dropped because it ended within the minimum session.
+        source.set(&[(3, "/games/fake/config.exe")]);
+        wait_until(|| s.launcher.running() == vec![s.game.id]);
+        source.set(&[]);
+        wait_until(|| s.launcher.running().is_empty());
+        assert!(s.db.open_sessions().unwrap().is_empty());
+        let game = s.db.get_game(s.game.id).unwrap();
+        assert_eq!((game.play_count, game.playtime_seconds), (0, 0));
+        assert!(game.last_played.is_none());
+        assert!(matches!(
+            s.events.lock().unwrap().as_slice(),
+            [
+                CoreEvent::GameStarted { .. },
+                CoreEvent::GameStopped {
+                    session_seconds: 0,
+                    ..
+                }
+            ]
+        ));
+
+        // The game's own list: its mod tool doesn't count as playing.
+        let game =
+            s.db.update_game(
+                s.game.id,
+                &crate::model::GameUpdate {
+                    ignored_processes: Some(vec![" ModTool.exe ".into(), "modtool".into()]),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        assert_eq!(game.ignored_processes, ["ModTool.exe"]);
+        s.launcher.events.publish(CoreEvent::GamesChanged {
+            ids: vec![s.game.id],
+        });
+        source.set(&[(5, "/games/fake/tools/modtool.exe")]);
+        std::thread::sleep(Duration::from_millis(300));
+        assert!(s.launcher.running().is_empty());
+
+        s.db.update_game(
+            s.game.id,
+            &crate::model::GameUpdate {
+                detect_launches: Some(false),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        s.launcher.events.publish(CoreEvent::GamesChanged {
+            ids: vec![s.game.id],
+        });
+        source.set(&[(4, "/games/fake/fake.exe")]);
+        std::thread::sleep(Duration::from_millis(300));
+        assert!(s.launcher.running().is_empty());
+    }
+
+    #[test]
+    fn switching_the_watcher_off_saves_the_session() {
+        let s = setup();
+        let source = watch(&s, false);
+        source.set(&[(3, "/games/fake/fake.exe")]);
+        std::thread::sleep(Duration::from_millis(250));
+        assert!(s.launcher.running().is_empty());
+
+        s.launcher.set_watching(true);
+        wait_until(|| s.launcher.running() == vec![s.game.id]);
+        std::thread::sleep(Duration::from_millis(250));
+        s.launcher.set_watching(false);
+        wait_until(|| s.launcher.running().is_empty());
+        assert!(s.db.open_sessions().unwrap().is_empty());
+        assert_eq!(s.db.get_game(s.game.id).unwrap().play_count, 1);
+    }
+
     #[test]
     fn records_session_when_game_stops() {
         let s = setup();
@@ -460,6 +734,7 @@ mod tests {
             s.game.id,
             s.game.name.clone(),
             Matcher::directory("/games/fake"),
+            IgnoredPrograms::default(),
             None,
         );
         // Not running yet: waits for startup.
@@ -487,12 +762,46 @@ mod tests {
     }
 
     #[test]
+    fn a_launch_of_only_ignored_programs_ends_without_waiting() {
+        let s = setup();
+        let launcher = Launcher::with_probe(
+            s.db.clone(),
+            s.launcher.events.clone(),
+            s.probe.clone(),
+            LauncherConfig {
+                startup_timeout: Duration::from_secs(30),
+                ..fast()
+            },
+        );
+        s.probe.running.store(true, Ordering::SeqCst);
+        launcher.start_tracking(
+            s.game.id,
+            s.game.name.clone(),
+            Matcher::tree(4242),
+            IgnoredPrograms::new(&["fake.exe".into()]),
+            None,
+        );
+        std::thread::sleep(Duration::from_millis(100));
+        assert!(s.db.open_sessions().unwrap().is_empty());
+        s.probe.running.store(false, Ordering::SeqCst);
+        let ended = Instant::now();
+        wait_until(|| launcher.running().is_empty());
+        assert!(ended.elapsed() < Duration::from_secs(2));
+        assert_eq!(s.db.get_game(s.game.id).unwrap().play_count, 0);
+        assert!(matches!(
+            s.events.lock().unwrap().as_slice(),
+            [CoreEvent::GameError { .. }]
+        ));
+    }
+
+    #[test]
     fn startup_timeout_reports_error_without_session() {
         let s = setup();
         s.launcher.start_tracking(
             s.game.id,
             s.game.name.clone(),
             Matcher::directory("/games/fake"),
+            IgnoredPrograms::default(),
             None,
         );
         wait_until(|| s.launcher.running().is_empty());
@@ -512,6 +821,7 @@ mod tests {
             s.game.id,
             s.game.name.clone(),
             Matcher::directory("/games/fake"),
+            IgnoredPrograms::default(),
             None,
         );
         wait_until(|| s.db.open_sessions().unwrap().len() == 1);
@@ -537,6 +847,7 @@ mod tests {
             s.game.id,
             s.game.name.clone(),
             Matcher::directory("/games/fake"),
+            IgnoredPrograms::default(),
             None,
         );
         assert!(matches!(

@@ -300,6 +300,7 @@ function makeSettings(overrides: Partial<Settings> = {}): Settings {
     minimizeToTray: false,
     startWithSystem: false,
     startMinimized: true,
+    detectExternalLaunches: true,
     providers: { epic: { token: "keep-me" }, steam: { apiKey: "K" } },
     ...overrides,
   };

@@ -450,6 +450,11 @@ ul {
 .input::placeholder {
   color: var(--qk-color-text-faint);
 }
+.input--multiline {
+  padding: var(--qk-space-2) var(--qk-space-3);
+  resize: vertical;
+  font: inherit;
+}
 
 /* Top bar */
 .topbar {

@@ -54,6 +54,19 @@ Short log of choices made while building. Newest at the bottom of each section.
   working directory and path-like command-line arguments (Wine `Z:\` paths are mapped back to
   Unix paths). Undetected games produce a "couldn't find the process" notice and no playtime.
   Steam's own playtime is not imported in v0.1.
+- **Ignored programs don't count as playing** under directory and process-tree tracking: built in
+  are crash handlers, redistributable installers, uninstallers, anti-cheat bootstrappers and a few
+  exact prelaunchers (`REDprelauncher.exe`); each game adds its own names (`*` wildcard) in the
+  edit dialog. A generic "launcher" rule was dropped: too many real game executables contain the
+  word. While only ignored programs run, a launch keeps waiting (no startup timeout) and a session
+  ends when the last other program exits. Playnite has no such rule.
+- **Games started outside Questkeep are noticed** by one watcher thread polling every 5 s
+  (default on, per-game opt-out in `game_tracking`). For cost it uses `EnumProcesses`
+  (~16 µs vs ~5 ms for a ToolHelp snapshot, which includes every thread) and opens each new
+  process once, keeping the handle: Windows never reuses an id with an open handle, so known ids
+  stay unambiguous and exits show through the handle. Measured steady tick: ~40 µs. A game shows
+  as playing at once; a run under 60 s is dropped when it ends (no playtime, play count or last
+  played). Folders like drive roots, home and Program Files are never matched.
 - **Sessions are persisted** with a heartbeat every poll (2 s). App exit saves elapsed time; a
   crash is recovered on next start up to the last heartbeat (sleep gaps inside a crashed session
   are not subtracted, a deliberate simplification).

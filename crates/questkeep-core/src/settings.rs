@@ -46,6 +46,9 @@ pub struct Settings {
     pub start_with_system: bool,
     /// When started by the system (`--minimized`), stay in the tray without opening the window.
     pub start_minimized: bool,
+    /// Notice installed games started outside Questkeep (store clients, mod managers, shortcuts)
+    /// and record their play sessions.
+    pub detect_external_launches: bool,
 }
 
 impl Settings {
@@ -69,6 +72,7 @@ impl Default for Settings {
             minimize_to_tray: false,
             start_with_system: false,
             start_minimized: true,
+            detect_external_launches: true,
         }
     }
 }
@@ -322,6 +326,7 @@ mod tests {
             minimize_to_tray: true,
             start_with_system: true,
             start_minimized: false,
+            detect_external_launches: false,
         };
         store.save(&custom).unwrap();
         let raw = std::fs::read_to_string(&path).unwrap();

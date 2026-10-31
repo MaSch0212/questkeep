@@ -32,6 +32,12 @@ pub struct Game {
     pub date_added: DateTime<Utc>,
     pub favorite: bool,
     pub hidden: bool,
+    /// Whether Questkeep notices this game when it is started outside Questkeep (from a store
+    /// client, a mod manager, ...) and records the session.
+    pub detect_launches: bool,
+    /// Program names (case-insensitive, `.exe` optional, `*` as wildcard) that don't count as
+    /// playing this game, e.g. its launcher. Applies to launches from Questkeep too.
+    pub ignored_processes: Vec<String>,
     /// Absolute path of the cached cover image when returned by the library API.
     pub cover_path: Option<String>,
     /// Absolute path of the cached icon when returned by the library API.
@@ -225,6 +231,10 @@ pub struct GameUpdate {
     pub favorite: Option<bool>,
     #[serde(default)]
     pub hidden: Option<bool>,
+    #[serde(default)]
+    pub detect_launches: Option<bool>,
+    #[serde(default)]
+    pub ignored_processes: Option<Vec<String>>,
     #[serde(default)]
     pub play_action: Option<PlayAction>,
 }

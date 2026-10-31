@@ -19,6 +19,13 @@ function fileName(path: string): string {
 export function EditGameDialog(props: { game: Game; onClose: () => void }) {
   const game = props.game;
   const [name, setName] = createSignal(game.name);
+  const [detectLaunches, setDetectLaunches] = createSignal(game.detectLaunches);
+  const [ignored, setIgnored] = createSignal(game.ignoredProcesses.join("\n"));
+  const ignoredList = () =>
+    ignored()
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line !== "");
   const [cover, setCoverChange] = createSignal<CoverChange>({ kind: "keep" });
   const [error, setError] = createSignal<string | null>(null);
   const [saving, setSaving] = createSignal(false);
@@ -46,6 +53,12 @@ export function EditGameDialog(props: { game: Game; onClose: () => void }) {
     }
     const steps: (() => Promise<string | null>)[] = [];
     if (trimmed !== props.game.name) steps.push(() => updateGame(game.id, { name: trimmed }));
+    if (detectLaunches() !== game.detectLaunches) {
+      steps.push(() => updateGame(game.id, { detectLaunches: detectLaunches() }));
+    }
+    if (ignoredList().join("\n") !== game.ignoredProcesses.join("\n")) {
+      steps.push(() => updateGame(game.id, { ignoredProcesses: ignoredList() }));
+    }
     if (manual && launch.changed()) {
       steps.push(() => savePlayAction(game.id, launch.playAction()));
     }
@@ -109,6 +122,32 @@ export function EditGameDialog(props: { game: Game; onClose: () => void }) {
           <Show when={manual}>
             <LaunchOptionsFields options={launch} />
           </Show>
+          <fieldset class="fieldset" aria-label="Playtime tracking">
+            <legend class="fieldset__legend">Playtime tracking</legend>
+            <label class="check">
+              <input
+                type="checkbox"
+                checked={detectLaunches()}
+                onChange={(event) => setDetectLaunches(event.currentTarget.checked)}
+              />
+              <span>Record playtime when started outside Questkeep</span>
+            </label>
+            <label class="field">
+              <span class="field__label">Ignored programs</span>
+              <textarea
+                class="input input--multiline"
+                rows={3}
+                placeholder={"Launcher.exe\n*patcher*"}
+                value={ignored()}
+                aria-describedby="ignored-programs-hint"
+                onInput={(event) => setIgnored(event.currentTarget.value)}
+              />
+            </label>
+            <p class="field__hint" id="ignored-programs-hint">
+              One per line. While only these run, the game doesn't count as playing. Use * as a
+              wildcard.
+            </p>
+          </fieldset>
           <Show when={error()}>
             <p class="error-text" role="alert">
               {error()}

@@ -213,6 +213,26 @@ const MIGRATIONS: &[&str] = &[
             WHERE x.game_id = COALESCE(g.merged_into, g.id) AND x.category_id = s.category_id
             AND x.excluded = 1);
     "#,
+    // 7: library entries whose games must not be picked up when started outside Questkeep.
+    // (Superseded by step 8 before a release; kept because development builds ran it.)
+    r#"
+    CREATE TABLE launch_detection_off (
+        game_id TEXT PRIMARY KEY REFERENCES games (id) ON DELETE CASCADE
+    );
+    "#,
+    // 8: per library entry playtime tracking settings: whether the game is picked up when started
+    // outside Questkeep, and program names (JSON array) that don't count as playing it. Entries
+    // without a row use the defaults.
+    r#"
+    CREATE TABLE game_tracking (
+        game_id           TEXT PRIMARY KEY REFERENCES games (id) ON DELETE CASCADE,
+        detect_launches   INTEGER NOT NULL DEFAULT 1,
+        ignored_processes TEXT NOT NULL DEFAULT '[]'
+    );
+    INSERT INTO game_tracking (game_id, detect_launches)
+        SELECT game_id, 0 FROM launch_detection_off;
+    DROP TABLE launch_detection_off;
+    "#,
 ];
 
 /// Latest schema version this build knows.
@@ -358,6 +378,37 @@ mod tests {
             rows("SELECT category_id FROM game_category_links ORDER BY category_id"),
             vec!["coop", "mine", "rpg"]
         );
+    }
+
+    #[test]
+    fn launch_detection_opt_outs_move_into_game_tracking() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE schema_version (version INTEGER NOT NULL);
+             INSERT INTO schema_version VALUES (7);",
+        )
+        .unwrap();
+        let tx = conn.transaction().unwrap();
+        for step in &MIGRATIONS[..7] {
+            tx.execute_batch(step).unwrap();
+        }
+        tx.execute_batch(
+            "INSERT INTO games (id, name, sorting_name, search_key, source, date_added) VALUES
+                 ('g', 'G', 'G', 'g', 'steam', '2026-01-01T00:00:00Z');
+             INSERT INTO launch_detection_off (game_id) VALUES ('g');",
+        )
+        .unwrap();
+        tx.commit().unwrap();
+
+        assert_eq!(migrate(&mut conn).unwrap(), LATEST_VERSION);
+        let row: (String, bool, String) = conn
+            .query_row(
+                "SELECT game_id, detect_launches, ignored_processes FROM game_tracking",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(row, ("g".into(), false, "[]".into()));
     }
 
     #[test]

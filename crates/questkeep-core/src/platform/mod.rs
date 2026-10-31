@@ -9,8 +9,11 @@ use std::process::Command;
 mod exe_icon;
 #[cfg(windows)]
 mod foreground;
+mod processes;
 #[cfg(windows)]
 mod windows;
+
+pub use processes::{ProcessRef, list_processes, open_process};
 
 /// Candidate Steam installation directories, most likely first. Only existing directories that
 /// contain a `steamapps` folder are returned, without duplicates.

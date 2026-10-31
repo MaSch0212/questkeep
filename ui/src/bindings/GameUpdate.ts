@@ -4,4 +4,4 @@ import type { PlayAction } from "./PlayAction";
 /**
  * Partial update of user-editable fields. `None` leaves a field unchanged.
  */
-export type GameUpdate = { name: string | null, favorite: boolean | null, hidden: boolean | null, playAction: PlayAction | null, };
+export type GameUpdate = { name: string | null, favorite: boolean | null, hidden: boolean | null, detectLaunches: boolean | null, ignoredProcesses: Array<string> | null, playAction: PlayAction | null, };

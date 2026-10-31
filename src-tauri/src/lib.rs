@@ -174,6 +174,7 @@ fn build_state(app: &tauri::AppHandle) -> Result<(AppState, Option<WorkerGuard>)
         Err(err) => tracing::error!(%err, "could not recover play sessions"),
     }
     let launcher = Launcher::new(library.database().clone(), events.clone());
+    launcher.start_watching(library.settings().detect_external_launches);
     let covers = CoverFetcher::new(
         library.database().clone(),
         library.images().clone(),

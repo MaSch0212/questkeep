@@ -27,6 +27,16 @@ sourceGameId: string | null,
  */
 installed: boolean, installDir: string | null, playAction: PlayAction | null, playtimeSeconds: number, playCount: number, lastPlayed: string | null, dateAdded: string, favorite: boolean, hidden: boolean, 
 /**
+ * Whether Questkeep notices this game when it is started outside Questkeep (from a store
+ * client, a mod manager, ...) and records the session.
+ */
+detectLaunches: boolean, 
+/**
+ * Program names (case-insensitive, `.exe` optional, `*` as wildcard) that don't count as
+ * playing this game, e.g. its launcher. Applies to launches from Questkeep too.
+ */
+ignoredProcesses: Array<string>, 
+/**
  * Absolute path of the cached cover image when returned by the library API.
  */
 coverPath: string | null, 

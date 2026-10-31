@@ -17,11 +17,25 @@ const COLUMNS: &str = "id, name, sorting_name, source, source_game_id, installed
     play_action, playtime_seconds, play_count, last_played, date_added, favorite, hidden, \
     cover_path, icon_path, background_path, description, release_date, developers, publishers, \
     genres, metadata_updated_at, extra, \
+    COALESCE((SELECT detect_launches FROM game_tracking \
+        WHERE game_id = COALESCE(games.merged_into, games.id)), 1) AS detect_launches, \
+    (SELECT ignored_processes FROM game_tracking \
+        WHERE game_id = COALESCE(games.merged_into, games.id)) AS ignored_processes, \
     (SELECT group_concat(category_id, char(31)) FROM game_category_links WHERE game_id = games.id) \
     AS category_ids";
 
 /// `extra` key set when the user renamed a store game, so re-scans keep their name.
 const USER_RENAMED: &str = "userRenamed";
+
+/// An installed game row to notice when started outside Questkeep (see
+/// [`Database::launch_detection_dirs`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DetectionDir {
+    pub id: Uuid,
+    pub install_dir: String,
+    /// Program names of its entry that don't count as playing.
+    pub ignored_processes: Vec<String>,
+}
 
 /// A game without description or genres (see [`Database::games_missing_metadata`]).
 #[derive(Debug, Clone)]
@@ -143,6 +157,11 @@ fn row_to_game(row: &Row<'_>) -> rusqlite::Result<Game> {
         date_added: row.get("date_added")?,
         favorite: row.get("favorite")?,
         hidden: row.get("hidden")?,
+        detect_launches: row.get("detect_launches")?,
+        ignored_processes: row
+            .get::<_, Option<String>>("ignored_processes")?
+            .map(string_list)
+            .unwrap_or_default(),
         cover_path: row.get("cover_path")?,
         icon_path: row.get("icon_path")?,
         background_path: row.get("background_path")?,
@@ -260,6 +279,38 @@ impl Database {
             ],
         )?;
         self.get_game(id)
+    }
+
+    /// Installed game rows (store copies, not entries) with an install folder whose entry allows
+    /// launch detection, for noticing games started outside Questkeep.
+    pub fn launch_detection_dirs(&self) -> Result<Vec<DetectionDir>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare_cached(
+            "SELECT g.id, g.install_dir, t.ignored_processes FROM games g \
+             LEFT JOIN game_tracking t ON t.game_id = COALESCE(g.merged_into, g.id) \
+             WHERE g.installed = 1 AND g.install_dir IS NOT NULL AND trim(g.install_dir) <> '' \
+             AND COALESCE(t.detect_launches, 1) = 1 \
+             ORDER BY g.copy_position, g.id",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, Option<String>>(2)?,
+            ))
+        })?;
+        let mut dirs = Vec::new();
+        for row in rows {
+            let (id, install_dir, ignored) = row?;
+            if let Ok(id) = Uuid::parse_str(&id) {
+                dirs.push(DetectionDir {
+                    id,
+                    install_dir,
+                    ignored_processes: ignored.map(string_list).unwrap_or_default(),
+                });
+            }
+        }
+        Ok(dirs)
     }
 
     /// One game row as stored: a single store's copy, even when it is combined into an entry.
@@ -382,6 +433,35 @@ impl Database {
                 tx.execute(
                     "UPDATE games SET hidden = ?2 WHERE id = ?1",
                     params![id.to_string(), hidden],
+                )?;
+            }
+            if update.detect_launches.is_some() || update.ignored_processes.is_some() {
+                tx.execute(
+                    "INSERT OR IGNORE INTO game_tracking (game_id) VALUES (?1)",
+                    [id.to_string()],
+                )?;
+            }
+            if let Some(detect) = update.detect_launches {
+                tx.execute(
+                    "UPDATE game_tracking SET detect_launches = ?2 WHERE game_id = ?1",
+                    params![id.to_string(), detect],
+                )?;
+            }
+            if let Some(names) = &update.ignored_processes {
+                // Trimmed, without blanks and without repeats (case and `.exe` don't matter).
+                let key = |name: &str| {
+                    let lower = name.to_lowercase();
+                    lower.strip_suffix(".exe").unwrap_or(&lower).to_string()
+                };
+                let mut cleaned: Vec<String> = Vec::new();
+                for name in names.iter().map(|n| n.trim()).filter(|n| !n.is_empty()) {
+                    if !cleaned.iter().any(|c| key(c) == key(name)) {
+                        cleaned.push(name.to_string());
+                    }
+                }
+                tx.execute(
+                    "UPDATE game_tracking SET ignored_processes = ?2 WHERE game_id = ?1",
+                    params![id.to_string(), list_json(&cleaned)?],
                 )?;
             }
             if let Some(action) = &update.play_action {

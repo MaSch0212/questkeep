@@ -92,6 +92,8 @@ export function updateGame(id: string, patch: Partial<GameUpdate>): Promise<stri
       name: null,
       favorite: null,
       hidden: null,
+      detectLaunches: null,
+      ignoredProcesses: null,
       playAction: null,
       ...patch,
     };

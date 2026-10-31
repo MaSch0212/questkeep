@@ -104,10 +104,34 @@ describe("DetailsPanel", () => {
         name: "Hades II",
         favorite: null,
         hidden: null,
+        detectLaunches: null,
+        ignoredProcesses: null,
         playAction: null,
       }),
     );
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("saves playtime tracking settings from the Edit dialog", async () => {
+    vi.mocked(api.updateGame).mockResolvedValue(makeGame());
+    render(() => <DetailsPanel game={makeGame()} onClose={vi.fn<() => void>()} />);
+    await fireEvent.keyDown(window, { key: "F2" });
+    const dialog = screen.getByRole("dialog", { name: "Edit game" });
+    await fireEvent.click(
+      within(dialog).getByRole("checkbox", {
+        name: "Record playtime when started outside Questkeep",
+      }),
+    );
+    await fireEvent.input(within(dialog).getByRole("textbox", { name: "Ignored programs" }), {
+      target: { value: " Launcher.exe \n\n*patcher*" },
+    });
+    await fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    const updates = vi.mocked(api.updateGame).mock.calls.map(([, update]) => update);
+    expect(updates).toContainEqual(expect.objectContaining({ detectLaunches: false }));
+    expect(updates).toContainEqual(
+      expect.objectContaining({ ignoredProcesses: ["Launcher.exe", "*patcher*"] }),
+    );
   });
 
   it("discards the edits on Cancel and saves nothing when nothing changed", async () => {

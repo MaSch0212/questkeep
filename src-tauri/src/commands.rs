@@ -318,6 +318,9 @@ pub async fn save_settings(
             }
             return Err(err);
         }
+        if before.detect_external_launches != settings.detect_external_launches {
+            s.launcher.set_watching(settings.detect_external_launches);
+        }
         // A newly entered SteamGridDB key can fill in covers for games that had no source.
         if !had_key && s.library.artwork().is_configured() {
             s.queue_missing_covers();

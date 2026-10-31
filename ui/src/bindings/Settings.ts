@@ -47,4 +47,9 @@ startWithSystem: boolean,
 /**
  * When started by the system (`--minimized`), stay in the tray without opening the window.
  */
-startMinimized: boolean, };
+startMinimized: boolean, 
+/**
+ * Notice installed games started outside Questkeep (store clients, mod managers, shortcuts)
+ * and record their play sessions.
+ */
+detectExternalLaunches: boolean, };

@@ -200,6 +200,7 @@ describe("App", () => {
       minimizeToTray: false,
       startWithSystem: false,
       startMinimized: true,
+      detectExternalLaunches: true,
       providers: {},
     });
     render(() => <App />);

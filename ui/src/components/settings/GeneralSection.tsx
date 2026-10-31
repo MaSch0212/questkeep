@@ -5,6 +5,10 @@ const OPTIONS = [
   { key: "scanOnStartup", label: "Scan stores when the app starts" },
   { key: "downloadCovers", label: "Download missing covers" },
   { key: "fetchMetadata", label: "Download store metadata" },
+  {
+    key: "detectExternalLaunches",
+    label: "Record playtime of games started outside Questkeep",
+  },
 ] as const;
 
 const TRAY_OPTIONS = [
