@@ -25,7 +25,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use questkeep_store_api::auth::{AccountAuth, Http, UreqHttp};
-use questkeep_store_api::model::{GameMetadata, ImportedGame, PlayAction};
+use questkeep_store_api::model::{Achievements, GameMetadata, ImportedGame, PlayAction};
 use questkeep_store_api::platform::{self, AppxPackage};
 use questkeep_store_api::settings::{StoreOption, StoreSettings};
 use questkeep_store_api::{ImageCandidate, LibraryProvider, ProviderError};
@@ -204,6 +204,19 @@ impl LibraryProvider for XboxProvider {
 
     fn account(&self) -> Option<&dyn AccountAuth> {
         self.account.as_deref().map(|a| a as &dyn AccountAuth)
+    }
+
+    /// Achievements from the Xbox Live service for the signed-in account; the source id is the
+    /// package family name, mapped to the title id through the title history.
+    fn achievements(
+        &self,
+        _config: &serde_json::Value,
+        source_game_id: &str,
+    ) -> Result<Option<Achievements>, ProviderError> {
+        match &self.account {
+            Some(account) => account.fetch_achievements(source_game_id),
+            None => Ok(None),
+        }
     }
 
     /// Description, developer, publisher, release date and genre from the Store catalog.

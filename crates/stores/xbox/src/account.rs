@@ -17,7 +17,7 @@
 // Logic derived from Playnite (MIT), see THIRD_PARTY_NOTICES.md
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, Datelike, Utc};
 use serde::Deserialize;
@@ -30,7 +30,7 @@ use questkeep_store_api::auth::{
     LoginWindow, TokenSet, TokenStore, UreqHttp, capture_param, query_param, system_clock,
     url_encode,
 };
-use questkeep_store_api::model::ImportedGame;
+use questkeep_store_api::model::{Achievement, Achievements, ImportedGame};
 
 /// The public client id of the Xbox app registration that open-source launchers use; it
 /// identifies the client application, not the user.
@@ -461,10 +461,114 @@ pub fn games_from_titles(titles: &[Title], minutes: &HashMap<String, u64>) -> Ve
     games
 }
 
+pub fn achievements_url(xuid: &str, title_id: &str) -> String {
+    format!(
+        "https://achievements.xboxlive.com/users/xuid({xuid})/achievements?titleId={}&maxItems=1000",
+        url_encode(title_id)
+    )
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RawAchievements {
+    #[serde(default)]
+    achievements: Vec<RawAchievement>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RawAchievement {
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    progress_state: Option<String>,
+    #[serde(default)]
+    progression: Option<RawProgression>,
+    #[serde(default)]
+    media_assets: Vec<RawMedia>,
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    locked_description: Option<String>,
+    #[serde(default)]
+    rarity: Option<RawRarity>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RawProgression {
+    #[serde(default)]
+    time_unlocked: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct RawMedia {
+    #[serde(default, rename = "type")]
+    kind: Option<String>,
+    #[serde(default)]
+    url: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RawRarity {
+    #[serde(default)]
+    current_percentage: Option<f32>,
+}
+
+fn non_empty(text: Option<String>) -> Option<String> {
+    text.map(|t| t.trim().to_string()).filter(|t| !t.is_empty())
+}
+
+/// Unlock time of an achievement in unix seconds; the service sends year 1 for locked ones.
+fn unlock_time(progression: Option<&RawProgression>) -> Option<i64> {
+    let text = progression?.time_unlocked.as_deref()?;
+    let parsed = DateTime::parse_from_rfc3339(text).ok().or_else(|| {
+        // Some responses omit the offset.
+        chrono::NaiveDateTime::parse_from_str(text, "%Y-%m-%dT%H:%M:%S%.f")
+            .ok()
+            .map(|n| n.and_utc().fixed_offset())
+    })?;
+    (parsed.year() >= 2000).then_some(parsed.timestamp())
+}
+
+/// The achievements response (contract version 2): the total is everything the game has,
+/// the unlocked ones (`progressState` `Achieved`) come newest first. `None` without any.
+pub fn parse_achievements(body: &str) -> Result<Option<Achievements>, ProviderError> {
+    let raw: RawAchievements = serde_json::from_str(body).map_err(|_| {
+        ProviderError::Parse("Xbox returned an unexpected response for the achievements.".into())
+    })?;
+    if raw.achievements.is_empty() {
+        return Ok(None);
+    }
+    let total = u32::try_from(raw.achievements.len()).unwrap_or(u32::MAX);
+    let mut unlocked: Vec<Achievement> = raw
+        .achievements
+        .into_iter()
+        .filter(|a| a.progress_state.as_deref() == Some("Achieved"))
+        .map(|a| Achievement {
+            unlocked_at: unlock_time(a.progression.as_ref()),
+            name: non_empty(a.name).unwrap_or_else(|| "Achievement".into()),
+            description: non_empty(a.description).or_else(|| non_empty(a.locked_description)),
+            icon: a
+                .media_assets
+                .into_iter()
+                .find(|m| m.kind.as_deref() == Some("Icon"))
+                .and_then(|m| non_empty(m.url)),
+            percent: a.rarity.and_then(|r| r.current_percentage),
+        })
+        .collect();
+    // Newest first; undated ones last (the sort is stable).
+    unlocked.sort_by_key(|a| std::cmp::Reverse(a.unlocked_at));
+    Ok(Some(Achievements { total, unlocked }))
+}
+
 /// An Xbox account: sign-in, status and the owned games.
 pub struct XboxAccount {
     session: AccountSession,
     http: Arc<dyn Http>,
+    /// Title ids by lowercase package family name, filled from the title history.
+    title_ids: Mutex<HashMap<String, String>>,
 }
 
 impl std::fmt::Debug for XboxAccount {
@@ -491,11 +595,84 @@ impl XboxAccount {
                 refresh_tokens,
             ),
             http,
+            title_ids: Mutex::new(HashMap::new()),
         }
     }
 
     pub fn is_signed_in(&self) -> bool {
         self.session.is_signed_in()
+    }
+
+    /// The signed-in user's achievements for the game with this package family name (the
+    /// source id of Xbox games). The achievements service wants the numeric title id, which
+    /// comes from the title history (remembered per package family after the first lookup).
+    /// `Ok(None)` when signed out, the title is unknown or it has no achievements.
+    pub fn fetch_achievements(&self, pfn: &str) -> Result<Option<Achievements>, ProviderError> {
+        if !self.is_signed_in() {
+            return Ok(None);
+        }
+        let xsts = self.xsts()?;
+        let key = pfn.to_ascii_lowercase();
+        let cached = self
+            .title_ids
+            .lock()
+            .ok()
+            .and_then(|m| m.get(&key).cloned());
+        let title_id = match cached {
+            Some(id) => id,
+            None => {
+                let titles = self.fetch_titles(&xsts)?;
+                self.remember_title_ids(&titles);
+                match titles
+                    .iter()
+                    .find(|t| t.pfn.eq_ignore_ascii_case(pfn) && !t.title_id.is_empty())
+                {
+                    Some(title) => title.title_id.clone(),
+                    None => return Ok(None),
+                }
+            }
+        };
+        let response = self
+            .http
+            .send(&xsts.authorize(HttpRequest::get(achievements_url(&xsts.xuid, &title_id))))
+            .map_err(ProviderError::Network)?;
+        if !response.ok() {
+            return match response.status {
+                401 | 403 => Err(ProviderError::NotConfigured(
+                    "Sign in to Xbox again in Settings.".into(),
+                )),
+                404 => Ok(None),
+                status => Err(ProviderError::Network(format!(
+                    "Xbox returned HTTP {status}"
+                ))),
+            };
+        }
+        parse_achievements(&response.body)
+    }
+
+    fn remember_title_ids(&self, titles: &[Title]) {
+        if let Ok(mut map) = self.title_ids.lock() {
+            for title in titles.iter().filter(|t| !t.title_id.is_empty()) {
+                map.insert(title.pfn.to_ascii_lowercase(), title.title_id.clone());
+            }
+        }
+    }
+
+    /// The account's PC titles from the title history.
+    fn fetch_titles(&self, xsts: &Xsts) -> Result<Vec<Title>, ProviderError> {
+        let history = self
+            .http
+            .send(&xsts.authorize(HttpRequest::get(title_history_url(&xsts.xuid))))
+            .map_err(ProviderError::Network)?;
+        if !history.ok() {
+            return Err(match history.status {
+                401 | 403 => {
+                    ProviderError::NotConfigured("Sign in to Xbox again in Settings.".into())
+                }
+                status => ProviderError::Network(format!("Xbox returned HTTP {status}")),
+            });
+        }
+        parse_title_history(&history.body)
     }
 
     /// Fresh Xbox Live authorization for the signed-in account.
@@ -512,19 +689,8 @@ impl XboxAccount {
     /// The owned PC titles as not-installed games, with playtime and last played when known.
     pub fn fetch_owned(&self) -> Result<Vec<ImportedGame>, ProviderError> {
         let xsts = self.xsts()?;
-        let history = self
-            .http
-            .send(&xsts.authorize(HttpRequest::get(title_history_url(&xsts.xuid))))
-            .map_err(ProviderError::Network)?;
-        if !history.ok() {
-            return Err(match history.status {
-                401 | 403 => {
-                    ProviderError::NotConfigured("Sign in to Xbox again in Settings.".into())
-                }
-                status => ProviderError::Network(format!("Xbox returned HTTP {status}")),
-            });
-        }
-        let titles = parse_title_history(&history.body)?;
+        let titles = self.fetch_titles(&xsts)?;
+        self.remember_title_ids(&titles);
         let minutes = self.fetch_minutes(&xsts, &titles);
         Ok(games_from_titles(&titles, &minutes))
     }
@@ -619,6 +785,8 @@ mod tests {
     const XSTS_ERROR: &str = include_str!("../fixtures/xsts_error.json");
     const HISTORY: &str = include_str!("../fixtures/title_history.json");
     const STATS: &str = include_str!("../fixtures/user_stats.json");
+    const ACHIEVEMENTS: &str = include_str!("../fixtures/achievements.json");
+    const ACHIEVEMENTS_EMPTY: &str = include_str!("../fixtures/achievements_empty.json");
 
     const CODE_URL: &str =
         "https://login.live.com/oauth20_desktop.srf?code=M.C507_BAY.2.U.0123abcd-4567&lc=1033";
@@ -953,6 +1121,162 @@ mod tests {
         assert!(matches!(
             account.fetch_owned(),
             Err(ProviderError::NotConfigured(m)) if m == "Sign in to Xbox in Settings."
+        ));
+    }
+
+    #[test]
+    fn parses_achievements_newest_first() {
+        let a = parse_achievements(ACHIEVEMENTS).unwrap().unwrap();
+        assert_eq!(a.total, 4);
+        let names: Vec<_> = a.unlocked.iter().map(|x| x.name.as_str()).collect();
+        assert_eq!(
+            names,
+            ["Podium Regular", "Hidden Shortcut", "Welcome to the Race"]
+        );
+        let podium = &a.unlocked[0];
+        assert_eq!(podium.unlocked_at, Some(1_678_780_800));
+        assert_eq!(
+            podium.description.as_deref(),
+            Some("Reach the podium 25 times.")
+        );
+        assert_eq!(
+            podium.icon.as_deref(),
+            Some("https://images-eds.xboxlive.com/image?url=icon2"),
+            "the Icon asset, not the Banner"
+        );
+        assert_eq!(podium.percent, Some(12.3));
+        // Empty description falls back to the locked one; no icon or rarity stay empty.
+        let hidden = &a.unlocked[1];
+        assert_eq!(hidden.description.as_deref(), Some("A secret achievement."));
+        assert_eq!((hidden.icon.as_deref(), hidden.percent), (None, None));
+        assert_eq!(a.unlocked[2].unlocked_at, Some(1_638_991_631));
+    }
+
+    #[test]
+    fn no_achievements_is_none_and_garbage_is_an_error() {
+        assert_eq!(parse_achievements(ACHIEVEMENTS_EMPTY).unwrap(), None);
+        assert!(parse_achievements("<html>").is_err());
+    }
+
+    fn achievements_path(req: &HttpRequest) -> Result<HttpResponse, String> {
+        if req.url.starts_with(
+            "https://achievements.xboxlive.com/users/xuid(2535400000000001)/achievements?",
+        ) {
+            response(200, ACHIEVEMENTS)
+        } else {
+            happy_path(req)
+        }
+    }
+
+    fn signed_in_account(
+        handler: impl Fn(&HttpRequest) -> Result<HttpResponse, String> + Send + Sync + 'static,
+    ) -> (XboxAccount, Arc<FakeHttp>) {
+        let (account, store, http) = make_account(handler);
+        store
+            .save("xbox", r#"{"refreshToken":"ms-refresh-token-value"}"#)
+            .unwrap();
+        (account, http)
+    }
+
+    #[test]
+    fn fetches_achievements_by_title_id_with_xbl_headers() {
+        let (account, http) = signed_in_account(achievements_path);
+        let a = account
+            .fetch_achievements("contoso.racer_8wekyb3d8bbwe")
+            .unwrap()
+            .unwrap();
+        assert_eq!((a.total, a.unlocked.len()), (4, 3));
+        let log = http.log.lock().unwrap();
+        let request = log
+            .iter()
+            .find(|r| r.url.starts_with("https://achievements."))
+            .unwrap();
+        assert_eq!(
+            request.url,
+            "https://achievements.xboxlive.com/users/xuid(2535400000000001)/achievements?titleId=1&maxItems=1000"
+        );
+        let header = |name: &str| {
+            request
+                .headers
+                .iter()
+                .find(|(n, _)| n == name)
+                .map(|(_, v)| v.as_str())
+        };
+        assert!(
+            header("Authorization").is_some_and(|v| v.starts_with("XBL3.0 x=1234567890123456789;"))
+        );
+        assert_eq!(header("x-xbl-contract-version"), Some("2"));
+        drop(log);
+
+        // The title id is remembered: a second call does not read the history again.
+        account
+            .fetch_achievements("Contoso.Racer_8wekyb3d8bbwe")
+            .unwrap();
+        let histories = http
+            .urls()
+            .iter()
+            .filter(|u| u.starts_with("https://titlehub"))
+            .count();
+        assert_eq!(histories, 1);
+    }
+
+    #[test]
+    fn achievements_are_none_when_signed_out_or_unknown() {
+        let (account, _, http) = make_account(achievements_path);
+        assert_eq!(
+            account
+                .fetch_achievements("Contoso.Racer_8wekyb3d8bbwe")
+                .unwrap(),
+            None
+        );
+        assert!(http.urls().is_empty(), "signed out: no request at all");
+
+        let (account, http) = signed_in_account(achievements_path);
+        assert_eq!(
+            account.fetch_achievements("Unknown.Game_abc").unwrap(),
+            None
+        );
+        assert!(
+            !http
+                .urls()
+                .iter()
+                .any(|u| u.starts_with("https://achievements."))
+        );
+    }
+
+    #[test]
+    fn achievement_failures_are_readable_and_secret_free() {
+        let (account, _) = signed_in_account(|req| {
+            if req.url.starts_with("https://achievements.") {
+                response(500, "")
+            } else {
+                happy_path(req)
+            }
+        });
+        let err = account
+            .fetch_achievements("Contoso.Racer_8wekyb3d8bbwe")
+            .unwrap_err();
+        assert!(matches!(err, ProviderError::Network(_)));
+        let text = err.to_string();
+        assert!(text.contains("500"));
+        for secret in [
+            "xsts-token-value",
+            "ms-access-token-value",
+            "ms-refresh-token-value",
+        ] {
+            assert!(!text.contains(secret));
+        }
+
+        let (account, _) = signed_in_account(|req| {
+            if req.url.starts_with("https://achievements.") {
+                Err("connection reset".into())
+            } else {
+                happy_path(req)
+            }
+        });
+        assert!(matches!(
+            account.fetch_achievements("Contoso.Racer_8wekyb3d8bbwe"),
+            Err(ProviderError::Network(_))
         ));
     }
 
