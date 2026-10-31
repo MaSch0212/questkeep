@@ -267,6 +267,17 @@
   --qk-category-picker-max-height: 240px;
   --qk-spin-duration: 1s;
   --qk-running-dot-size: 8px;
+  /* Multi-select panel: the fanned cover stack. */
+  --qk-stack-cover-width: 120px;
+  --qk-stack-min-step: 22px;
+  --qk-stack-tilt: 2deg;
+  --qk-stack-height: 200px;
+  --qk-multi-row-label-width: 140px;
+  /* Combine screen. */
+  --qk-combine-thumb-width: 48px;
+  --qk-combine-field-width: 150px;
+  --qk-combine-column-min-width: 160px;
+  --qk-combine-max-height: 60vh;
 }
 
 @media (prefers-reduced-motion: reduce) {

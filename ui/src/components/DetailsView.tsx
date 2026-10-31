@@ -2,6 +2,7 @@ import { createEffect, Show } from "solid-js";
 import { store } from "../lib/store";
 import { DetailsPanel } from "./DetailsPanel";
 import { GameList } from "./GameList";
+import { MultiSelectPanel } from "./MultiSelectPanel";
 import { Splitter } from "./Splitter";
 
 /**
@@ -36,12 +37,23 @@ export function DetailsView(props: {
       />
       <div class="dview__page">
         <Show
-          when={store.selectedGame()}
-          fallback={<p class="dview__empty muted">Select a game to see its details.</p>}
+          when={store.isMulti()}
+          fallback={
+            <Show
+              when={store.selectedGame()}
+              fallback={<p class="dview__empty muted">Select a game to see its details.</p>}
+            >
+              {(game) => (
+                <DetailsPanel game={game()} variant="page" onClose={() => store.closeDetails()} />
+              )}
+            </Show>
+          }
         >
-          {(game) => (
-            <DetailsPanel game={game()} variant="page" onClose={() => store.closeDetails()} />
-          )}
+          <MultiSelectPanel
+            games={store.selectedGames()}
+            variant="page"
+            onClose={() => store.clearSelection()}
+          />
         </Show>
       </div>
     </div>

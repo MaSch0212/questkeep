@@ -1,6 +1,7 @@
 //! Library data model. Every type here is plain serde data shared with the UI via ts-rs.
 
 mod category;
+mod combine;
 mod completion;
 mod edit;
 mod game;
@@ -12,6 +13,7 @@ mod sync;
 mod view;
 
 pub use category::*;
+pub use combine::CombinePlan;
 pub use completion::*;
 pub use edit::*;
 pub use game::*;

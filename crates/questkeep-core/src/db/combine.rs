@@ -7,8 +7,9 @@ use rusqlite::{OptionalExtension, Transaction, params};
 use uuid::Uuid;
 
 use super::Database;
+use super::categories::{game_categories, set_categories};
 use crate::error::{CoreError, Result};
-use crate::model::{Game, GameQuery, HiddenFilter};
+use crate::model::{CombinePlan, Game, GameQuery, HiddenFilter, UserEdits};
 
 /// The entry a game row belongs to: itself, or the entry it was combined into.
 fn entry_of(tx: &Transaction<'_>, id: Uuid) -> Result<String> {
@@ -151,6 +152,158 @@ impl Database {
         tx.commit()?;
         Ok(Combined {
             entry: Uuid::parse_str(&entry).map_err(|_| CoreError::GameNotFound(into))?,
+            absorbed: parse_ids(&absorbed),
+        })
+    }
+
+    /// Combines several entries into `plan.base` keeping what the plan chose (the combine
+    /// screen), all in one transaction. `edits` are the user's edited details the combined
+    /// entry keeps (the caller folds the chosen links into them). Images are left to the caller.
+    pub fn combine_with_plan(&self, plan: &CombinePlan, edits: &UserEdits) -> Result<Combined> {
+        let mut conn = self.conn();
+        let tx = conn.transaction()?;
+        let entries = &plan.entries;
+        let distinct: HashSet<&String> = entries.iter().collect();
+        if distinct.len() < 2 || distinct.len() != entries.len() {
+            return Err(CoreError::Invalid(
+                "Pick at least two different games to combine.".into(),
+            ));
+        }
+        for id in entries {
+            let uuid = Uuid::parse_str(id)
+                .map_err(|_| CoreError::Invalid("That game no longer exists.".into()))?;
+            if &entry_of(&tx, uuid)? != id {
+                return Err(CoreError::Invalid(
+                    "One of the games is already part of another game.".into(),
+                ));
+            }
+        }
+        let singles = [
+            &plan.base,
+            &plan.name_from,
+            &plan.images_from,
+            &plan.details_from,
+            &plan.status_from,
+            &plan.score_from,
+            &plan.profile_from,
+        ];
+        let lists = [
+            &plan.categories_from,
+            &plan.notes_from,
+            &plan.links_from,
+            &plan.profiles_from,
+        ];
+        if singles.iter().any(|id| !distinct.contains(id))
+            || lists
+                .iter()
+                .any(|ids| ids.iter().any(|id| !distinct.contains(id)))
+        {
+            return Err(CoreError::Invalid(
+                "The choices refer to a game that is not being combined.".into(),
+            ));
+        }
+
+        // What the chosen entries hold before their rows move.
+        let (name, sorting, search, sorting_user): (String, String, String, Option<String>) = tx
+            .query_row(
+                "SELECT name, sorting_name, search_key, sorting_name_user FROM games WHERE id = ?1",
+                [&plan.name_from],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+            )?;
+        let value = |column: &str, id: &str| -> Result<Option<rusqlite::types::Value>> {
+            Ok(tx.query_row(
+                &format!("SELECT {column} FROM games WHERE id = ?1"),
+                [id],
+                |r| r.get(0),
+            )?)
+        };
+        let status = value("completion_status", &plan.status_from)?;
+        let score = value("user_score", &plan.score_from)?;
+        let profile: Option<String> = tx.query_row(
+            "SELECT default_profile FROM games WHERE id = ?1",
+            [&plan.profile_from],
+            |r| r.get(0),
+        )?;
+        let mut notes = Vec::new();
+        for id in &plan.notes_from {
+            let note: Option<String> =
+                tx.query_row("SELECT notes FROM games WHERE id = ?1", [id], |r| r.get(0))?;
+            if let Some(note) = note.map(|n| n.trim().to_string()).filter(|n| !n.is_empty()) {
+                notes.push(note);
+            }
+        }
+        let mut categories: HashSet<String> = HashSet::new();
+        for id in &plan.categories_from {
+            categories.extend(game_categories(&tx, id)?);
+        }
+        let mut dropped_profiles: Vec<String> = Vec::new();
+        for id in entries.iter().filter(|id| !plan.profiles_from.contains(id)) {
+            let ids: Vec<String> = tx
+                .prepare("SELECT id FROM launch_profiles WHERE entry_id = ?1")?
+                .query_map([id], |r| r.get(0))?
+                .collect::<rusqlite::Result<_>>()?;
+            dropped_profiles.extend(ids);
+        }
+
+        // The base's copies first, then the others' in plan order.
+        let base = &plan.base;
+        let mut order = copies_of(&tx, base)?;
+        let mut absorbed: Vec<String> = Vec::new();
+        for other in entries.iter().filter(|id| *id != base) {
+            order.extend(copies_of(&tx, other)?);
+            move_user_data(&tx, other, base)?;
+            tx.execute(
+                "UPDATE games SET merged_into = ?2 WHERE id = ?1 OR merged_into = ?1",
+                [other, base],
+            )?;
+            absorbed.push(other.clone());
+        }
+        number_copies(&tx, &order)?;
+
+        // The choices.
+        for id in &dropped_profiles {
+            tx.execute("DELETE FROM launch_profiles WHERE id = ?1", [id])?;
+        }
+        let profile = profile.filter(|p| !dropped_profiles.contains(p));
+        let notes = (!notes.is_empty()).then(|| notes.join("\n\n"));
+        tx.execute(
+            "UPDATE games SET favorite = ?2, completion_status = ?3, user_score = ?4, notes = ?5, \
+             default_profile = ?6 WHERE id = ?1",
+            params![base, plan.favorite, status, score, notes, profile],
+        )?;
+        if &plan.name_from != base {
+            tx.execute(
+                "UPDATE games SET name = ?2, sorting_name = ?3, search_key = ?4, \
+                 sorting_name_user = ?5, extra = json_set(COALESCE(extra, '{}'), ?6, json('true')) \
+                 WHERE id = ?1",
+                params![
+                    base,
+                    name,
+                    sorting,
+                    search,
+                    sorting_user,
+                    format!("$.{}", super::games::USER_RENAMED)
+                ],
+            )?;
+        }
+        let entry = Uuid::parse_str(base)
+            .map_err(|_| CoreError::Invalid("That game no longer exists.".into()))?;
+        set_categories(&tx, entry, &categories.into_iter().collect::<Vec<_>>())?;
+        tx.execute(
+            "DELETE FROM metadata_sources WHERE source = 'user' AND game_id IN \
+             (SELECT id FROM games WHERE id = ?1 OR merged_into = ?1)",
+            [base],
+        )?;
+        if !edits.is_empty() {
+            tx.execute(
+                "INSERT INTO metadata_sources (game_id, source, data, checked_at) \
+                 VALUES (?1, 'user', ?2, ?3)",
+                params![base, serde_json::to_string(edits)?, chrono::Utc::now()],
+            )?;
+        }
+        tx.commit()?;
+        Ok(Combined {
+            entry,
             absorbed: parse_ids(&absorbed),
         })
     }
@@ -495,5 +648,117 @@ mod tests {
         db.combine_games(ids[0], &ids[1..]).unwrap();
         assert_eq!(db.find_duplicates().unwrap().len(), 1);
         assert_eq!(db.get_entry(celeste_epic).unwrap().copies.len(), 2);
+    }
+
+    fn default_profile(db: &Database, id: Uuid) -> Option<String> {
+        db.conn()
+            .query_row(
+                "SELECT default_profile FROM games WHERE id = ?1",
+                [id.to_string()],
+                |r| r.get(0),
+            )
+            .unwrap()
+    }
+    #[test]
+    fn combining_with_a_plan_keeps_the_chosen_values() {
+        let db = db();
+        let a = add(&db, "steam", "1", "Hades II", true);
+        let b = add(&db, "gog", "2", "HADES 2", false);
+        let c = add(&db, "epic", "3", "Hades 2", false);
+        let rpg = db.create_category("RPG").unwrap().id;
+        let couch = db.create_category("Couch").unwrap().id;
+        db.set_game_categories(a, std::slice::from_ref(&rpg))
+            .unwrap();
+        db.set_game_categories(b, std::slice::from_ref(&couch))
+            .unwrap();
+        let sql = |q: &str| db.conn().execute_batch(q).unwrap();
+        sql(&format!(
+            "UPDATE games SET notes = 'Moon route', user_score = 85, completion_status = 'played' \
+             WHERE id = '{a}';
+             UPDATE games SET notes = ' Controller works ', completion_status = 'beaten' \
+             WHERE id = '{b}';
+             UPDATE games SET favorite = 1 WHERE id = '{c}';
+             INSERT INTO launch_profiles (id, entry_id, name, position) VALUES ('p1', '{b}', 'Vulkan', 0);
+             UPDATE games SET default_profile = 'p1' WHERE id = '{b}';"
+        ));
+        let id = |u: Uuid| u.to_string();
+        let edits = UserEdits::default();
+        let mut plan = CombinePlan {
+            entries: vec![id(a), id(b), id(c)],
+            base: id(a),
+            name_from: id(b),
+            images_from: id(a),
+            details_from: id(a),
+            status_from: id(b),
+            score_from: id(a),
+            favorite: true,
+            profile_from: id(b),
+            categories_from: vec![id(a), id(c)],
+            notes_from: vec![id(b), id(a)],
+            links_from: vec![],
+            profiles_from: vec![id(a), id(b), id(c)],
+        };
+
+        // Choices must refer to the games being combined.
+        plan.score_from = Uuid::new_v4().to_string();
+        assert!(db.combine_with_plan(&plan, &edits).is_err());
+        plan.score_from = id(a);
+
+        let combined = db.combine_with_plan(&plan, &edits).unwrap();
+        assert_eq!(combined.entry, a);
+        let game = db.get_game(a).unwrap();
+        assert_eq!(game.name, "HADES 2");
+        assert_eq!(game.completion_status.as_deref(), Some("beaten"));
+        assert_eq!(game.user_score, Some(85));
+        assert!(game.favorite);
+        assert_eq!(
+            game.notes.as_deref(),
+            Some("Controller works\n\nMoon route")
+        );
+        assert_eq!(game.categories, vec![rpg.clone()]);
+        assert_eq!(default_profile(&db, a).as_deref(), Some("p1"));
+        assert_eq!(db.get_entry(a).unwrap().copies.len(), 3);
+        assert_eq!(all(&db).len(), 1);
+        assert_eq!(
+            game.extra.get("userRenamed"),
+            Some(&serde_json::Value::Bool(true))
+        );
+    }
+
+    #[test]
+    fn a_plan_can_drop_own_launch_profiles() {
+        let db = db();
+        let a = add(&db, "steam", "1", "Doom", true);
+        let b = add(&db, "gog", "2", "Doom", false);
+        db.conn()
+            .execute_batch(&format!(
+                "INSERT INTO launch_profiles (id, entry_id, name, position) VALUES ('p1', '{b}', 'Mods', 0);
+                 UPDATE games SET default_profile = 'p1' WHERE id = '{b}';"
+            ))
+            .unwrap();
+        let (a, b) = (a.to_string(), b.to_string());
+        let plan = CombinePlan {
+            entries: vec![a.clone(), b.clone()],
+            base: a.clone(),
+            name_from: a.clone(),
+            images_from: a.clone(),
+            details_from: a.clone(),
+            status_from: a.clone(),
+            score_from: a.clone(),
+            favorite: false,
+            profile_from: b.clone(),
+            categories_from: vec![],
+            notes_from: vec![],
+            links_from: vec![],
+            profiles_from: vec![a.clone()],
+        };
+        db.combine_with_plan(&plan, &UserEdits::default()).unwrap();
+        let profiles: i64 = db
+            .conn()
+            .query_row("SELECT COUNT(*) FROM launch_profiles", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(profiles, 0);
+        let entry = Uuid::parse_str(&a).unwrap();
+        assert_eq!(default_profile(&db, entry), None);
     }
 }

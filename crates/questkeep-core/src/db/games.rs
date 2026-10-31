@@ -27,7 +27,7 @@ pub(super) const COLUMNS: &str = "id, name, sorting_name, source, source_game_id
     AS category_ids";
 
 /// `extra` key set when the user renamed a store game, so re-scans keep their name.
-const USER_RENAMED: &str = "userRenamed";
+pub(super) const USER_RENAMED: &str = "userRenamed";
 
 /// An installed game row to notice when started outside Questkeep (see
 /// [`Database::launch_detection_dirs`]).

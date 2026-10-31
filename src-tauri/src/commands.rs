@@ -8,10 +8,11 @@ use std::sync::Arc;
 use questkeep_core::auth::AccountStatus;
 use questkeep_core::library::MetadataSourceInfo;
 use questkeep_core::model::{
-    Achievements, Category, CompletionSettings, Game, GameActivity, GameEditInfo, GameEdits,
-    GameNews, GameQuery, GameUpdate, ImageOption, ImageSlot, ImageSource, LaunchProfiles,
-    LibraryView, ListField, NewManualGame, NewView, ProfileInput, ScanSummary, SectionOrder,
-    SetupState, StartPage, SyncTimes, ValueCount, ViewSection, ViewUiState, ViewUpdate,
+    Achievements, BulkChange, Category, CombinePlan, CompletionSettings, Game, GameActivity,
+    GameEditInfo, GameEdits, GameNews, GameQuery, GameUpdate, ImageOption, ImageSlot, ImageSource,
+    LaunchProfiles, LibraryView, ListField, NewManualGame, NewView, ProfileInput, ScanSummary,
+    SectionOrder, SetupState, StartPage, SyncTimes, ValueCount, ViewSection, ViewUiState,
+    ViewUpdate,
 };
 use questkeep_core::providers::ProviderInfo;
 use questkeep_core::settings::Settings;
@@ -98,6 +99,35 @@ pub async fn set_cover(
 #[tauri::command]
 pub async fn remove_game(state: State<'_, Arc<AppState>>, id: String) -> CmdResult<()> {
     blocking(state, move |s| s.library.remove_game(parse_id(&id)?)).await
+}
+
+fn parse_ids(ids: &[String]) -> Result<Vec<Uuid>, CoreError> {
+    ids.iter().map(|id| parse_id(id)).collect()
+}
+
+#[tauri::command]
+pub async fn bulk_change(
+    state: State<'_, Arc<AppState>>,
+    ids: Vec<String>,
+    change: BulkChange,
+) -> CmdResult<()> {
+    blocking(state, move |s| {
+        s.library.bulk_change(&parse_ids(&ids)?, &change)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn combine_with_plan(
+    state: State<'_, Arc<AppState>>,
+    plan: CombinePlan,
+) -> CmdResult<Game> {
+    blocking(state, move |s| s.library.combine_with_plan(&plan)).await
+}
+
+#[tauri::command]
+pub async fn remove_games(state: State<'_, Arc<AppState>>, ids: Vec<String>) -> CmdResult<()> {
+    blocking(state, move |s| s.library.remove_games(&parse_ids(&ids)?)).await
 }
 
 #[tauri::command]

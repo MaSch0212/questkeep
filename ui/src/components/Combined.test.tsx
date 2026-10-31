@@ -154,7 +154,6 @@ describe("details of a combined game", () => {
     const steam = makeGame({ id: "s", name: "Rocket League", source: "steam" });
     const epic = makeGame({ id: "e", name: "Rocket League®", source: "epic" });
     vi.mocked(api.listGames).mockResolvedValue([steam, epic]);
-    vi.mocked(api.combineGames).mockResolvedValue(rocket());
     render(() => <DetailsPanel game={steam} onClose={() => undefined} />);
     expect(screen.queryByRole("button", { name: "Choose how to play" })).toBeNull();
 
@@ -167,7 +166,8 @@ describe("details of a combined game", () => {
       expect.objectContaining({ search: "Rocket League", hidden: "all" }),
     );
     await fireEvent.keyDown(input, { key: "Enter" });
-    await waitFor(() => expect(api.combineGames).toHaveBeenCalledWith("s", ["e"]));
+    await waitFor(() => expect(store.combining()).toEqual(["s", "e"]));
+    expect(api.combineGames).not.toHaveBeenCalled();
   });
 });
 

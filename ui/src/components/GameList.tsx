@@ -22,7 +22,7 @@ import {
 } from "../lib/grouping";
 import { createSlotCursor } from "../lib/slotCursor";
 import { followGroupJumps } from "../lib/groupJump";
-import { handleGameKeys } from "../lib/gameKeys";
+import { clickSelect, contextSelect, handleGameKeys, handleSelectionKeys } from "../lib/gameKeys";
 import { store } from "../lib/store";
 import { GameRow, rowDomId } from "./GameRow";
 import { GameRowCompact } from "./GameRowCompact";
@@ -166,10 +166,13 @@ export function GameList(props: { compact?: boolean }) {
     const id = activeDescendant();
     if (handleGameKeys(event, store.selectedGame(), id ? document.getElementById(id) : null))
       return;
+    const pageRows = Math.max(1, Math.floor(height() / rowHeight()));
+    const target = () =>
+      isNavKey(event.key) ? navigateSlots(layout(), cursor(), event.key, pageRows) : cursor();
+    if (handleSelectionKeys(event, layout(), moveTo, target, isNavKey(event.key))) return;
     if (isNavKey(event.key) && !event.altKey && !event.ctrlKey && !event.metaKey) {
       event.preventDefault();
-      const pageRows = Math.max(1, Math.floor(height() / rowHeight()));
-      moveTo(navigateSlots(layout(), cursor(), event.key, pageRows), store.selectGame);
+      moveTo(target(), store.selectGame);
       return;
     }
     if (event.key === "Enter") {
@@ -191,15 +194,21 @@ export function GameList(props: { compact?: boolean }) {
     }
   }
 
-  /** Right-click selects only that game, then opens its menu at the pointer. */
+  /** Right-click selects that game (a multi-selection stays), then opens its menu at the pointer. */
   function onContextMenu(slot: number, event: MouseEvent) {
-    moveTo(slot, store.selectGame);
+    contextSelect(slot, layout(), moveTo);
     const game = layout().slots[slot]?.game;
     if (game) store.openContextMenu(game.id, { x: event.clientX, y: event.clientY });
   }
 
-  function onSelect(slot: number) {
-    moveTo(slot, props.compact ? store.selectGame : store.selectAndOpen);
+  function onSelect(slot: number, event: MouseEvent) {
+    clickSelect(
+      event,
+      slot,
+      layout(),
+      moveTo,
+      props.compact ? store.selectGame : store.selectAndOpen,
+    );
     scroller?.focus({ preventScroll: true });
   }
 
@@ -266,8 +275,8 @@ export function GameList(props: { compact?: boolean }) {
                                   <GameRowCompact
                                     game={slot().game}
                                     domKey={slotKey(slot())}
-                                    selected={slot().game.id === store.selectedId()}
-                                    onSelect={() => onSelect(games().first)}
+                                    selected={store.isSelected(slot().game.id)}
+                                    onSelect={(_, event) => onSelect(games().first, event)}
                                     onContextMenu={(event) => onContextMenu(games().first, event)}
                                   />
                                 }
@@ -275,11 +284,12 @@ export function GameList(props: { compact?: boolean }) {
                                 <GameRow
                                   game={slot().game}
                                   domKey={slotKey(slot())}
-                                  selected={slot().game.id === store.selectedId()}
+                                  selected={store.isSelected(slot().game.id)}
                                   open={
-                                    store.detailsOpen() && slot().game.id === store.selectedId()
+                                    store.isSelected(slot().game.id) &&
+                                    (store.isMulti() || store.detailsOpen())
                                   }
-                                  onSelect={() => onSelect(games().first)}
+                                  onSelect={(_, event) => onSelect(games().first, event)}
                                   onContextMenu={(event) => onContextMenu(games().first, event)}
                                   onLaunch={(id) => void activateGame(id)}
                                 />

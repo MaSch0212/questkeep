@@ -28,7 +28,6 @@ import type { Game } from "../bindings/Game";
 import type { GameCopy } from "../bindings/GameCopy";
 import type { ListField } from "../bindings/ListField";
 import {
-  combineGames,
   installGame,
   launchGame,
   openInstallFolder,
@@ -806,7 +805,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
             inside={() => [moreButton]}
             onPick={(other) => {
               setCombining(null);
-              void run(() => combineGames(props.game.id, [other.id]));
+              store.openCombine([props.game.id, other.id]);
             }}
             onClose={(returnFocus) => {
               setCombining(null);

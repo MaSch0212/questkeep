@@ -50,6 +50,7 @@ import {
 } from "./syncStatus";
 import { takeLegacyViewMode, type ViewMode } from "./viewMode";
 import { HOME_PAGE, startupTarget } from "./startPage";
+import { rangeSelection, toggleSelected } from "./selection";
 import { DEFAULT_VIEW_UI, collapsedKeys, createDebouncedSaver, toggleCollapsed } from "./viewUi";
 
 /** What "Save as new view" asks for. */
@@ -109,6 +110,8 @@ function createAppStore() {
     anchor: PopoverAnchor;
     returnTo: Element | null;
   } | null>(null);
+  /** Games on the combine screen, if it is open. */
+  const [combining, setCombining] = createSignal<readonly string[] | null>(null);
   const [games, setGames] = createSignal<Game[]>([]);
   const [loading, setLoading] = createSignal(false);
   /** What each view remembers (panel, selection, collapsed groups); Explore's is never saved. */
@@ -119,6 +122,10 @@ function createAppStore() {
   const activeUi = createMemo(() => uiOf(activeViewId()));
   /** The open view's selected game. */
   const selectedId = () => activeUi().selected;
+  /** Games selected together (multi-select), in selection order; empty for one game. */
+  const [multi, setMulti] = createSignal<ReadonlySet<string>>(new Set());
+  /** Where a Shift range starts: the game clicked last without Shift. */
+  let rangeAnchor: string | null = null;
   const [detailsOpen, setDetailsOpen] = createSignal(false);
   const [running, setRunning] = createSignal<ReadonlySet<string>>(new Set());
   const [providers, setProviders] = createSignal<ProviderInfo[]>([]);
@@ -162,6 +169,20 @@ function createAppStore() {
     games().forEach((game, index) => map.set(game.id, index));
     return map;
   });
+  /** Every selected game id: the multi-selection, or the one selected game. */
+  const selectedIds = createMemo<ReadonlySet<string>>(() => {
+    const ids = multi();
+    if (ids.size > 0) return ids;
+    const id = selectedId();
+    return new Set(id === null ? [] : [id]);
+  });
+  /** The selected games that are in the list, in selection order. */
+  const selectedGames = createMemo(() =>
+    [...selectedIds()].flatMap((id) => {
+      const index = indexById().get(id);
+      return index === undefined ? [] : [games()[index] as Game];
+    }),
+  );
   const selectedIndex = createMemo(() => {
     const id = selectedId();
     return id === null ? -1 : (indexById().get(id) ?? -1);
@@ -316,6 +337,7 @@ function createAppStore() {
       if (id !== activeViewId()) {
         setKeyword(null);
         setDetailsOpen(false);
+        setMulti(new Set<string>());
       }
       setActiveViewId(id);
       setPinnedGame(null);
@@ -699,6 +721,8 @@ function createAppStore() {
   }
 
   function selectGame(id: string | null) {
+    setMulti(new Set<string>());
+    rangeAnchor = id;
     setSelectedId(id);
     if (id === null) setDetailsOpen(false);
   }
@@ -706,9 +730,40 @@ function createAppStore() {
   function selectAndOpen(id: string) {
     batch(() => {
       setPage("library");
+      setMulti(new Set<string>());
+      rangeAnchor = id;
       setSelectedId(id);
       setDetailsOpen(true);
     });
+  }
+
+  /** Ctrl+click: adds the game to the selection or takes it out. */
+  function toggleSelect(id: string) {
+    const next = toggleSelected(multi(), selectedId(), id);
+    batch(() => {
+      setMulti(next);
+      rangeAnchor = id;
+      setSelectedId(next.has(id) ? id : ([...next].at(-1) ?? null));
+    });
+  }
+
+  /** Shift+click and Shift+arrows: selects from the anchor to `id` in the view's order. */
+  function selectRange(order: readonly string[], id: string) {
+    const ids = rangeSelection(order, rangeAnchor ?? selectedId(), id);
+    batch(() => {
+      setMulti(new Set(ids));
+      setSelectedId(id);
+    });
+  }
+
+  /** Ctrl+A: selects every game in the view. */
+  function selectAll(order: readonly string[]) {
+    if (order.length === 0) return;
+    setMulti(new Set(order));
+  }
+
+  function clearSelection() {
+    setMulti(new Set<string>());
   }
 
   // Copy id -> library entry id, for games combined from several stores.
@@ -939,6 +994,8 @@ function createAppStore() {
       setUpdateOpen(false);
       setSetup(null);
       setContextMenu(null);
+      setCombining(null);
+      setMulti(new Set<string>());
       setGroupJump(null);
       setSettingsSection(null);
       setSeenSources(new Set<string>());
@@ -981,10 +1038,18 @@ function createAppStore() {
     contextMenu: () => {
       const open = contextMenu();
       const game = open && (games().find((g) => g.id === open.id) ?? selectedGame());
-      return open && game?.id === open.id ? { game, anchor: open.anchor } : null;
+      if (!open || game?.id !== open.id) return null;
+      // On a game of a multi-selection the menu acts on all selected games.
+      const all = selectedGames();
+      const several = all.length > 1 && selectedIds().has(game.id);
+      return { game, games: several ? all : [game], anchor: open.anchor };
     },
     openContextMenu,
     closeContextMenu,
+    combining,
+    /** Opens the combine screen for these games (two or more). */
+    openCombine: (ids: readonly string[]) => setCombining(ids.length > 1 ? [...ids] : null),
+    closeCombine: () => setCombining(null),
     /** The details panel floats over the list in the open view (grid and table). */
     panelFloating: () => activeUi().panelFloating,
     setPanelFloating: (floating: boolean) =>
@@ -1104,6 +1169,15 @@ function createAppStore() {
     backgroundUrl,
     // selection
     selectGame,
+    toggleSelect,
+    selectRange,
+    selectAll,
+    clearSelection,
+    selectedIds,
+    selectedGames,
+    isSelected: (id: string) => selectedIds().has(id),
+    /** Several games are selected (the multi-select panel shows). */
+    isMulti: () => selectedGames().length > 1,
     selectAndOpen,
     openDetails: () => setDetailsOpen(selectedId() !== null),
     closeDetails: () => setDetailsOpen(false),

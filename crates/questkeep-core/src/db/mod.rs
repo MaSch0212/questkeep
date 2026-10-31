@@ -1,6 +1,7 @@
 //! SQLite persistence: connection handling, migrations and repositories.
 
 mod backup;
+mod bulk;
 mod categories;
 mod combine;
 mod games;

@@ -51,6 +51,23 @@ describe("GameList", () => {
     expect(row).toHaveTextContent("2020");
   });
 
+  it("selects several games with Ctrl and Shift, Ctrl+A and Esc", async () => {
+    await load(["a", "b", "c", "d"].map((id) => makeGame({ id, name: id.toUpperCase() })));
+    render(() => <GameList />);
+    const list = screen.getByRole("listbox", { name: "Games" });
+    await fireEvent.click(screen.getByRole("option", { name: "A" }));
+    await fireEvent.click(screen.getByRole("option", { name: "C" }), { ctrlKey: true });
+    expect([...store.selectedIds()]).toEqual(["a", "c"]);
+    expect(store.isMulti()).toBe(true);
+    await fireEvent.click(screen.getByRole("option", { name: "C" }), { shiftKey: true });
+    await fireEvent.keyDown(list, { key: "ArrowDown", shiftKey: true });
+    expect([...store.selectedIds()]).toEqual(["c", "d"]);
+    await fireEvent.keyDown(list, { key: "a", ctrlKey: true });
+    expect(store.selectedIds().size).toBe(4);
+    await fireEvent.keyDown(list, { key: "Escape" });
+    expect(store.isMulti()).toBe(false);
+  });
+
   it("selects and opens details on click, and moves with the arrow keys", async () => {
     await load([makeGame({ id: "a", name: "Alpha" }), makeGame({ id: "b", name: "Beta" })]);
     render(() => <GameList />);

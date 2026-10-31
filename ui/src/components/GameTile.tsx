@@ -16,7 +16,7 @@ interface GameTileProps {
   selected: boolean;
   /** The details panel is showing this game. */
   open?: boolean;
-  onSelect: (id: string) => void;
+  onSelect: (id: string, event: MouseEvent) => void;
   /** Right-click: the context menu at the pointer. */
   onContextMenu?: (event: MouseEvent) => void;
   onLaunch: (id: string) => void;
@@ -56,7 +56,7 @@ export function GameTile(props: GameTileProps) {
       }}
       aria-selected={props.selected}
       aria-label={props.game.installed ? props.game.name : `${props.game.name} (not installed)`}
-      onClick={() => props.onSelect(props.game.id)}
+      onClick={(event) => props.onSelect(props.game.id, event)}
       onContextMenu={(event) => {
         if (!props.onContextMenu) return;
         event.preventDefault();

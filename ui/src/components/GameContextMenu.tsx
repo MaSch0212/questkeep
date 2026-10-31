@@ -13,7 +13,6 @@ import { createResource, createSignal, Show } from "solid-js";
 import type { Game } from "../bindings/Game";
 import {
   activateGame,
-  combineGames,
   launchGame,
   openInstallFolder,
   refreshMetadata,
@@ -234,8 +233,8 @@ export function GameContextMenu(props: {
           anchor={props.anchor}
           inside={() => []}
           onPick={(other) => {
-            props.onDone(true);
-            void report(combineGames(game().id, [other.id]));
+            props.onDone(false);
+            store.openCombine([game().id, other.id]);
           }}
           onClose={(returnFocus) => props.onDone(returnFocus)}
         />

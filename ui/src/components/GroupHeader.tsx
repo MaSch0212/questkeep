@@ -1,5 +1,6 @@
 import ChevronRight from "lucide-solid/icons/chevron-right";
 import { Show } from "solid-js";
+import { store } from "../lib/store";
 import { groupSummary, type GameGroup } from "../lib/grouping";
 import { SourceIcon } from "./SourceIcon";
 
@@ -15,6 +16,9 @@ export function GroupHeader(props: {
   tabbable?: boolean;
 }) {
   const count = () => props.group.games.length;
+  /** How many of the group's games a multi-selection holds (0 without one). */
+  const picked = () =>
+    store.isMulti() ? props.group.games.filter((g) => store.isSelected(g.id)).length : 0;
   return (
     <button
       type="button"
@@ -36,7 +40,11 @@ export function GroupHeader(props: {
         {count()}
       </span>
       <span class="group-header__meta" aria-hidden="true">
-        {props.collapsed ? "Collapsed" : groupSummary(props.group.games)}
+        {picked() > 0
+          ? `${picked()} of ${count()} selected`
+          : props.collapsed
+            ? "Collapsed"
+            : groupSummary(props.group.games)}
       </span>
     </button>
   );

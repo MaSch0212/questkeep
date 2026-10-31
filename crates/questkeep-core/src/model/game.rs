@@ -145,6 +145,22 @@ pub struct GameUpdate {
     pub play_action: Option<PlayAction>,
 }
 
+/// One change to several library entries at once ("Change all" with several games selected).
+/// `None` and empty lists leave that part alone.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", default)]
+#[ts(export)]
+pub struct BulkChange {
+    #[ts(optional)]
+    pub favorite: Option<bool>,
+    #[ts(optional)]
+    pub hidden: Option<bool>,
+    /// Categories every entry gets.
+    pub add_categories: Vec<String>,
+    /// Categories taken off every entry.
+    pub remove_categories: Vec<String>,
+}
+
 /// Result of applying a provider scan to the library.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]

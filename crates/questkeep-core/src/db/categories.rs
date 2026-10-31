@@ -89,6 +89,65 @@ fn games_tagged(tx: &Transaction<'_>, source: &str, name: &str) -> Result<HashSe
         .collect::<rusqlite::Result<_>>()?)
 }
 
+/// The categories a game has now (its own and those from store tags).
+pub(super) fn game_categories(tx: &Transaction<'_>, game: &str) -> Result<HashSet<String>> {
+    Ok(tx
+        .prepare("SELECT category_id FROM game_category_links WHERE game_id = ?1")?
+        .query_map([game], |r| r.get(0))?
+        .collect::<rusqlite::Result<_>>()?)
+}
+
+/// Gives a game exactly these categories inside `tx`. Taking off an imported category is
+/// remembered, so the store's next sync doesn't bring it back.
+pub(super) fn set_categories(
+    tx: &Transaction<'_>,
+    game_id: Uuid,
+    category_ids: &[String],
+) -> Result<()> {
+    let game = game_id.to_string();
+    let known: bool = tx.query_row(
+        "SELECT EXISTS (SELECT 1 FROM games WHERE id = ?1)",
+        [&game],
+        |r| r.get(0),
+    )?;
+    if !known {
+        return Err(CoreError::GameNotFound(game_id));
+    }
+    let wanted: HashSet<&str> = category_ids.iter().map(String::as_str).collect();
+    for id in &wanted {
+        if !exists(tx, id)? {
+            return Err(not_found());
+        }
+    }
+    let current = game_categories(tx, &game)?;
+    for id in current.iter().filter(|id| !wanted.contains(id.as_str())) {
+        tx.execute(
+            "DELETE FROM game_categories WHERE game_id = ?1 AND category_id = ?2",
+            [&game, id],
+        )?;
+        if has_category(tx, &game, id)? {
+            tx.execute(
+                "INSERT INTO game_categories (game_id, category_id, excluded) \
+                 VALUES (?1, ?2, 1)",
+                [&game, id],
+            )?;
+        }
+    }
+    for id in wanted.iter().filter(|id| !current.contains(**id)) {
+        tx.execute(
+            "DELETE FROM game_categories WHERE game_id = ?1 AND category_id = ?2",
+            [game.as_str(), id],
+        )?;
+        if !has_category(tx, &game, id)? {
+            tx.execute(
+                "INSERT INTO game_categories (game_id, category_id) VALUES (?1, ?2)",
+                [game.as_str(), id],
+            )?;
+        }
+    }
+    Ok(())
+}
+
 fn has_category(tx: &Transaction<'_>, game: &str, category: &str) -> Result<bool> {
     Ok(tx.query_row(
         "SELECT EXISTS (SELECT 1 FROM game_category_links \
@@ -316,52 +375,9 @@ impl Database {
     /// Gives a game exactly these categories. Taking off an imported category is remembered,
     /// so the store's next sync doesn't bring it back.
     pub fn set_game_categories(&self, game_id: Uuid, category_ids: &[String]) -> Result<()> {
-        let game = game_id.to_string();
         let mut conn = self.conn();
         let tx = conn.transaction()?;
-        let known: bool = tx.query_row(
-            "SELECT EXISTS (SELECT 1 FROM games WHERE id = ?1)",
-            [&game],
-            |r| r.get(0),
-        )?;
-        if !known {
-            return Err(CoreError::GameNotFound(game_id));
-        }
-        let wanted: HashSet<&str> = category_ids.iter().map(String::as_str).collect();
-        for id in &wanted {
-            if !exists(&tx, id)? {
-                return Err(not_found());
-            }
-        }
-        let current: HashSet<String> = tx
-            .prepare("SELECT category_id FROM game_category_links WHERE game_id = ?1")?
-            .query_map([&game], |r| r.get(0))?
-            .collect::<rusqlite::Result<_>>()?;
-        for id in current.iter().filter(|id| !wanted.contains(id.as_str())) {
-            tx.execute(
-                "DELETE FROM game_categories WHERE game_id = ?1 AND category_id = ?2",
-                [&game, id],
-            )?;
-            if has_category(&tx, &game, id)? {
-                tx.execute(
-                    "INSERT INTO game_categories (game_id, category_id, excluded) \
-                     VALUES (?1, ?2, 1)",
-                    [&game, id],
-                )?;
-            }
-        }
-        for id in wanted.iter().filter(|id| !current.contains(**id)) {
-            tx.execute(
-                "DELETE FROM game_categories WHERE game_id = ?1 AND category_id = ?2",
-                [game.as_str(), id],
-            )?;
-            if !has_category(&tx, &game, id)? {
-                tx.execute(
-                    "INSERT INTO game_categories (game_id, category_id) VALUES (?1, ?2)",
-                    [game.as_str(), id],
-                )?;
-            }
-        }
+        set_categories(&tx, game_id, category_ids)?;
         tx.commit()?;
         Ok(())
     }

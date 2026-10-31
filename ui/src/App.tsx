@@ -9,7 +9,10 @@ import { clampWidth } from "./lib/viewUi";
 import { AddGameDialog } from "./components/AddGameDialog";
 import { DuplicatesDialog } from "./components/DuplicatesDialog";
 import { FirstRunDialog } from "./components/FirstRunDialog";
+import { CombineDialog } from "./components/CombineDialog";
 import { GameContextMenu } from "./components/GameContextMenu";
+import { MultiContextMenu } from "./components/MultiContextMenu";
+import { MultiSelectPanel } from "./components/MultiSelectPanel";
 import { IgdbHint } from "./components/IgdbHint";
 import { DetailsPanel } from "./components/DetailsPanel";
 import { UpdateDialog } from "./components/UpdateDialog";
@@ -196,20 +199,41 @@ export function App() {
                 grows="left"
                 onChange={(width) => store.setPanelWidth(width)}
               />
-              <Show when={store.selectedGame()} fallback={<EmptyDetails />}>
-                {(game) => (
-                  <DetailsPanel
-                    game={game()}
-                    split
-                    pin="docked"
-                    onClose={() => store.closeDetails()}
-                  />
-                )}
+              <Show
+                when={store.isMulti()}
+                fallback={
+                  <Show when={store.selectedGame()} fallback={<EmptyDetails />}>
+                    {(game) => (
+                      <DetailsPanel
+                        game={game()}
+                        split
+                        pin="docked"
+                        onClose={() => store.closeDetails()}
+                      />
+                    )}
+                  </Show>
+                }
+              >
+                <MultiSelectPanel
+                  games={store.selectedGames()}
+                  split
+                  pin="docked"
+                  onClose={() => store.clearSelection()}
+                />
               </Show>
+            </Show>
+            <Show when={isPanelView() && !docked() && store.isMulti()}>
+              <MultiSelectPanel
+                games={store.selectedGames()}
+                pin={pin()}
+                onClose={() => store.clearSelection()}
+              />
             </Show>
             <Show
               when={
-                isPanelView() && !docked() && store.detailsOpen() ? store.selectedGame() : undefined
+                isPanelView() && !docked() && store.detailsOpen() && !store.isMulti()
+                  ? store.selectedGame()
+                  : undefined
               }
             >
               {(game) => (
@@ -228,14 +252,28 @@ export function App() {
       <Show when={store.duplicatesOpen()}>
         <DuplicatesDialog onClose={() => store.setDuplicatesOpen(false)} />
       </Show>
-      <Show when={store.contextMenu()} keyed>
+      <Show when={store.contextMenu()}>
         {(open) => (
-          <GameContextMenu
-            game={open.game}
-            anchor={open.anchor}
-            onDone={(returnFocus) => store.closeContextMenu(returnFocus)}
-          />
+          <Show
+            when={open().games.length > 1}
+            fallback={
+              <GameContextMenu
+                game={open().game}
+                anchor={open().anchor}
+                onDone={(returnFocus) => store.closeContextMenu(returnFocus)}
+              />
+            }
+          >
+            <MultiContextMenu
+              games={open().games}
+              anchor={open().anchor}
+              onDone={(returnFocus) => store.closeContextMenu(returnFocus)}
+            />
+          </Show>
         )}
+      </Show>
+      <Show when={store.combining()}>
+        {(ids) => <CombineDialog ids={[...ids()]} onClose={() => store.closeCombine()} />}
       </Show>
       <Show when={store.setup()?.showSetup}>
         <FirstRunDialog />

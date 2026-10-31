@@ -19,11 +19,11 @@ use crate::images::{
 use crate::live::LiveData;
 use crate::metadata::MetadataResolver;
 use crate::model::{
-    Achievements, ActionKind, Category, CompletionSettings, Game, GameActivity, GameNews,
-    GameQuery, GameUpdate, HLTB_SOURCE, HiddenFilter, IGDB_SOURCE, ImportedGame, LibraryView,
-    ListField, MANUAL_SOURCE, NewManualGame, NewView, PlayAction, ScanSummary, SectionOrder,
-    SetupState, StartPage, SyncTimes, TriState, ValueCount, ViewSection, ViewUiState, ViewUpdate,
-    display_name_from_path,
+    Achievements, ActionKind, BulkChange, Category, CombinePlan, CompletionSettings, Game,
+    GameActivity, GameNews, GameQuery, GameUpdate, HLTB_SOURCE, HiddenFilter, IGDB_SOURCE,
+    ImportedGame, LibraryView, ListField, MANUAL_SOURCE, NewManualGame, NewView, PlayAction,
+    ScanSummary, SectionOrder, SetupState, StartPage, SyncTimes, TriState, ValueCount, ViewSection,
+    ViewUiState, ViewUpdate, display_name_from_path,
 };
 use crate::paths::DataPaths;
 use crate::providers::{LibraryProvider, ProviderError, ProviderInfo, ProviderRegistry};
@@ -602,6 +602,71 @@ impl Library {
         self.get_game(combined.entry)
     }
 
+    /// Combines several entries keeping what the combine screen chose, and returns the result.
+    pub fn combine_with_plan(&self, plan: &CombinePlan) -> Result<Game> {
+        let parse = |id: &str| {
+            Uuid::parse_str(id)
+                .map_err(|_| CoreError::Invalid("That game no longer exists.".into()))
+        };
+        // The chosen edited details, with the own links of the entries whose links stay.
+        let mut edits = self.db.user_edits(parse(&plan.details_from)?)?;
+        let mut links: Vec<crate::model::GameLink> = Vec::new();
+        for id in &plan.links_from {
+            for link in self.db.user_edits(parse(id)?)?.meta.links {
+                if !links.iter().any(|l| l.url == link.url) {
+                    links.push(link);
+                }
+            }
+        }
+        edits.meta.links = links;
+        let images = (plan.images_from != plan.base)
+            .then(|| self.db.get_game(parse(&plan.images_from)?))
+            .transpose()?;
+
+        let combined = self.db.combine_with_plan(plan, &edits)?;
+        let entry = combined.entry;
+        // The chosen game's images become the entry's own, picked by the user so fetchers keep them.
+        if let Some(source) = images {
+            for (kind, path) in [
+                (ImageKind::Cover, source.cover_path.as_deref()),
+                (ImageKind::Background, source.background_path.as_deref()),
+                (ImageKind::Icon, source.icon_path.as_deref()),
+            ] {
+                let Some(file) = path.and_then(|p| self.images.resolve(p)) else {
+                    continue;
+                };
+                let copied = self
+                    .images
+                    .import_image(kind, entry, &file)
+                    .and_then(|relative| {
+                        match kind {
+                            ImageKind::Cover => self.db.set_cover_path(entry, Some(&relative))?,
+                            ImageKind::Background => {
+                                self.db.set_background_path(entry, Some(&relative))?
+                            }
+                            ImageKind::Icon => self.db.set_icon_path(entry, Some(&relative))?,
+                        }
+                        self.db.set_extra_value(
+                            entry,
+                            crate::images::user_image_key(kind),
+                            Some(serde_json::Value::Bool(true)),
+                        )
+                    });
+                if let Err(err) = copied {
+                    tracing::warn!(%err, %entry, "could not take over an image when combining");
+                }
+            }
+        }
+        self.resolver.resolve(entry)?;
+        for id in &combined.absorbed {
+            self.events.publish(CoreEvent::GameRemoved { id: *id });
+        }
+        self.events
+            .publish(CoreEvent::GamesChanged { ids: vec![entry] });
+        self.events.publish(CoreEvent::CategoriesChanged);
+        self.get_game(entry)
+    }
+
     /// Takes a store's copy out of its entry again and returns the remaining entry.
     pub fn separate_copy(&self, copy: Uuid) -> Result<Game> {
         let entry = self.db.separate_copy(copy)?;
@@ -716,6 +781,29 @@ impl Library {
         self.events
             .publish(CoreEvent::GamesChanged { ids: vec![id] });
         self.get_game(id)
+    }
+
+    /// Changes several entries at once (multi-select), all or nothing.
+    pub fn bulk_change(&self, ids: &[Uuid], change: &BulkChange) -> Result<()> {
+        self.db.bulk_change(ids, change)?;
+        if !change.add_categories.is_empty() || !change.remove_categories.is_empty() {
+            self.events.publish(CoreEvent::CategoriesChanged);
+        }
+        self.events
+            .publish(CoreEvent::GamesChanged { ids: ids.to_vec() });
+        Ok(())
+    }
+
+    /// Removes several entries at once, all or nothing.
+    pub fn remove_games(&self, ids: &[Uuid]) -> Result<()> {
+        self.db.delete_games(ids)?;
+        for id in ids {
+            if let Err(err) = self.images.remove_all(*id) {
+                tracing::warn!(%err, %id, "could not delete cached images");
+            }
+            self.events.publish(CoreEvent::GameRemoved { id: *id });
+        }
+        Ok(())
     }
 
     pub fn remove_game(&self, id: Uuid) -> Result<()> {

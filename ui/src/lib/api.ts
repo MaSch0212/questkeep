@@ -2,6 +2,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { AccountStatus } from "../bindings/AccountStatus";
 import type { Achievements } from "../bindings/Achievements";
+import type { BulkChange } from "../bindings/BulkChange";
+import type { CombinePlan } from "../bindings/CombinePlan";
 import type { AppInfo } from "../bindings/AppInfo";
 import type { Category } from "../bindings/Category";
 import type { CompletionSettings } from "../bindings/CompletionSettings";
@@ -96,6 +98,13 @@ export const updateGame = (id: string, update: GameUpdate) =>
 export const setCover = (id: string, imagePath: string | null) =>
   invoke<Game>("set_cover", { id, imagePath });
 export const removeGame = (id: string) => invoke<void>("remove_game", { id });
+/** Removes several entries at once (all or nothing). */
+export const removeGames = (ids: string[]) => invoke<void>("remove_games", { ids });
+/** Combines several entries keeping what the combine screen chose. */
+export const combineWithPlan = (plan: CombinePlan) => invoke<Game>("combine_with_plan", { plan });
+/** Changes several entries at once (all or nothing). */
+export const bulkChange = (ids: string[], change: BulkChange) =>
+  invoke<void>("bulk_change", { ids, change });
 export const listProviders = () => invoke<ProviderInfo[]>("list_providers");
 export const scanLibrary = (providerId: string) =>
   invoke<ScanSummary>("scan_library", { providerId });
