@@ -8,6 +8,7 @@ import FolderOpen from "lucide-solid/icons/folder-open";
 import ImageDown from "lucide-solid/icons/image-down";
 import PackageMinus from "lucide-solid/icons/package-minus";
 import Pencil from "lucide-solid/icons/pencil";
+import Play from "lucide-solid/icons/play";
 import RefreshCw from "lucide-solid/icons/refresh-cw";
 import Star from "lucide-solid/icons/star";
 import Trash from "lucide-solid/icons/trash";
@@ -49,7 +50,13 @@ import {
   formatSize,
   releaseYear,
 } from "../lib/format";
-import { gameAchievements, gameActivity, gameNews, gamePlayerCount } from "../lib/api";
+import {
+  gameAchievements,
+  gameActivity,
+  gameNews,
+  gamePlayerCount,
+  launchProfiles,
+} from "../lib/api";
 import { store } from "../lib/store";
 import { CategoryEditor } from "./CategoryEditor";
 import { CombinePicker } from "./CombinePicker";
@@ -158,6 +165,10 @@ function toggleAnchored(
 
 type Confirming = "uninstall" | "remove" | null;
 
+/** A Play menu entry's icon: its store, or a play symbol for an executable profile. */
+const icon = (source: string | null) => () =>
+  source ? <SourceIcon source={source} /> : <Play class="icon" aria-hidden="true" />;
+
 /**
  * A game's page: art, cover, title and the action row on top, then cards (about, details,
  * library). Favorite, hidden and categories change in place; name, cover and launch options
@@ -165,7 +176,7 @@ type Confirming = "uninstall" | "remove" | null;
  */
 export function DetailsPanel(props: DetailsPanelProps) {
   const [error, setError] = createSignal<string | null>(null);
-  const [editing, setEditing] = createSignal(false);
+  const [editing, setEditing] = createSignal<"general" | "launch" | null>(null);
   const [confirming, setConfirming] = createSignal<Confirming>(null);
   const [descriptionOpen, setDescriptionOpen] = createSignal(false);
   const [heroFailed, setHeroFailed] = createSignal(false);
@@ -217,6 +228,21 @@ export function DetailsPanel(props: DetailsPanelProps) {
         .then(() => gameActivity(id))
         .catch(() => null),
   );
+  // Launch profiles for the Play menu; loaded again after the Edit dialog closes.
+  const [profilesVersion, setProfilesVersion] = createSignal(0);
+  const [profiles] = createResource(
+    () => [props.game.id, profilesVersion()] as const,
+    ([id]) =>
+      Promise.resolve()
+        .then(() => launchProfiles(id))
+        .catch(() => null),
+  );
+  const playProfile = () => {
+    const list = profiles();
+    return list?.profiles.find((p) => p.id === list.playId) ?? null;
+  };
+  // The default profile's store copy may not be installed: Play offers to install it then.
+  const playable = () => props.game.installed && (playProfile()?.installed ?? true);
   const hasChips = () =>
     props.game.genres.length + props.game.features.length + props.game.tags.length > 0;
   const released = () => formatReleaseDate(props.game.releaseDate);
@@ -234,7 +260,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
       gameId,
       () => {
         setError(null);
-        setEditing(false);
+        setEditing(null);
         setConfirming(null);
         setMoreMenu(null);
         setCopyMenu(null);
@@ -249,7 +275,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
   function onKey(event: KeyboardEvent) {
     if (event.key === "F2" && !editing()) {
       event.preventDefault();
-      setEditing(true);
+      setEditing("general");
     }
   }
 
@@ -264,26 +290,43 @@ export function DetailsPanel(props: DetailsPanelProps) {
     if (failure) setError(failure);
   }
 
-  /** Play or install with one store's copy (the store menu next to Play). */
-  const storeEntries = (): MenuEntry[] => [
-    { kind: "heading", label: "Stores" },
-    ...copies().map((copy): MenuEntry => {
-      const name = sourceName(copy.source);
-      return copy.installed
-        ? {
-            label: `Play with ${name}`,
-            icon: () => <SourceIcon source={copy.source} />,
+  /** Play with a launch profile, or install a store's copy (the menu next to Play). */
+  const storeEntries = (): MenuEntry[] => {
+    const list = profiles();
+    const played: MenuEntry[] = list
+      ? list.profiles
+          .filter((profile) => profile.installed)
+          .map((profile) => ({
+            label: profile.name,
+            icon: icon(profile.source),
+            hint: profile.id === list.playId ? "Default" : undefined,
+            disabled: running(),
+            onSelect: () => void run(() => launchGame(props.game.id, null, profile.id)),
+          }))
+      : copies()
+          .filter((copy) => copy.installed)
+          .map((copy) => ({
+            label: `Play with ${sourceName(copy.source)}`,
+            icon: icon(copy.source),
             hint: copy.id === playCopy(props.game)?.id ? "Default" : undefined,
             disabled: running(),
             onSelect: () => void run(() => launchGame(props.game.id, copy.id)),
-          }
-        : {
-            label: `Install with ${name}`,
-            icon: () => <SourceIcon source={copy.source} />,
-            onSelect: () => void install(copy.id),
-          };
-    }),
-  ];
+          }));
+    const installs: MenuEntry[] = copies()
+      .filter((copy) => !copy.installed)
+      .map((copy) => ({
+        label: `Install with ${sourceName(copy.source)}`,
+        icon: icon(copy.source),
+        onSelect: () => void install(copy.id),
+      }));
+    return [
+      { kind: "heading", label: "Play" },
+      ...played,
+      ...(installs.length > 0 ? [{ kind: "separator" } as const, ...installs] : []),
+      { kind: "separator" },
+      { label: "Edit profiles…", onSelect: () => setEditing("launch") },
+    ];
+  };
 
   const moreEntries = (): MenuEntry[] => [
     {
@@ -430,12 +473,14 @@ export function DetailsPanel(props: DetailsPanelProps) {
             <div class="details__actions">
               <div class="play-split">
                 <Show
-                  when={props.game.installed}
+                  when={playable()}
                   fallback={
                     <button
                       type="button"
                       class="btn btn--primary btn--play"
-                      onClick={() => void install()}
+                      onClick={() =>
+                        void install(props.game.installed ? (playProfile()?.copyId ?? null) : null)
+                      }
                     >
                       Install
                     </button>
@@ -450,13 +495,13 @@ export function DetailsPanel(props: DetailsPanelProps) {
                     {running() ? "Running…" : "Play"}
                   </button>
                 </Show>
-                <Show when={combined()}>
+                <Show when={combined() || (profiles()?.profiles.length ?? 0) > 1}>
                   <button
                     ref={(el) => (storeMenuButton = el)}
                     type="button"
                     class="btn btn--primary play-split__more"
-                    aria-label="Choose a store"
-                    title="Play or install with another store"
+                    aria-label="Choose how to play"
+                    title="Play with another profile or store"
                     aria-haspopup="menu"
                     aria-expanded={storeMenu() !== null}
                     onClick={() => toggleAnchored(storeMenu, setStoreMenu, storeMenuButton, "end")}
@@ -535,7 +580,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
                   class="btn"
                   aria-haspopup="dialog"
                   title="Edit name, cover and launch options (F2)"
-                  onClick={() => setEditing(true)}
+                  onClick={() => setEditing("general")}
                 >
                   <Pencil class="icon" aria-hidden="true" /> Edit
                 </button>
@@ -592,7 +637,12 @@ export function DetailsPanel(props: DetailsPanelProps) {
                   </div>
                 </Show>
                 <ChipGroup label="Genres" field="genre" values={props.game.genres} />
-                <ChipGroup label="Features" field="feature" values={props.game.features} limit={10} />
+                <ChipGroup
+                  label="Features"
+                  field="feature"
+                  values={props.game.features}
+                  limit={10}
+                />
                 <ChipGroup label="Tags" field="tag" values={props.game.tags} plain limit={12} />
               </Card>
             </Show>
@@ -775,7 +825,16 @@ export function DetailsPanel(props: DetailsPanelProps) {
       </Show>
 
       <Show when={editing()}>
-        <EditGameDialog game={props.game} onClose={() => setEditing(false)} />
+        {(section) => (
+          <EditGameDialog
+            game={props.game}
+            section={section()}
+            onClose={() => {
+              setEditing(null);
+              setProfilesVersion((v) => v + 1);
+            }}
+          />
+        )}
       </Show>
       <Show when={confirming() === "uninstall"}>
         <ConfirmDialog

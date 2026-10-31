@@ -22,3 +22,12 @@ export async function pickDirectory(): Promise<string | null> {
   const result = await open({ multiple: false, directory: true, title: "Choose a folder" });
   return typeof result === "string" ? result : null;
 }
+
+/** An image for a game's cover, background or icon (icons also from .ico, .exe and .dll). */
+export function pickGameImage(icon: boolean): Promise<string | null> {
+  return pickFile(icon ? "Choose an icon" : "Choose an image", [
+    icon
+      ? { name: "Icon or image", extensions: ["png", "jpg", "jpeg", "ico", "exe", "dll"] }
+      : { name: "Image", extensions: ["png", "jpg", "jpeg", "webp"] },
+  ]);
+}

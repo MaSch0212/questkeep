@@ -131,13 +131,13 @@ describe("details of a combined game", () => {
     render(() => <DetailsPanel game={game} onClose={() => undefined} />);
 
     await fireEvent.click(screen.getByRole("button", { name: "Play" }));
-    expect(api.launchGame).toHaveBeenCalledWith("rl", null);
+    expect(api.launchGame).toHaveBeenCalledWith("rl", null, null);
 
-    await fireEvent.click(screen.getByRole("button", { name: "Choose a store" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Choose how to play" }));
     const menu = screen.getByRole("menu", { name: "Stores" });
     expect(within(menu).getByRole("menuitem", { name: /Install with Steam/ })).toBeTruthy();
     await fireEvent.click(within(menu).getByRole("menuitem", { name: /Play with Epic/ }));
-    await waitFor(() => expect(api.launchGame).toHaveBeenLastCalledWith("rl", "rl-epic"));
+    await waitFor(() => expect(api.launchGame).toHaveBeenLastCalledWith("rl", "rl-epic", null));
 
     const stores = screen.getByRole("list", { name: "Stores" });
     expect(within(stores).getByText(/Not installed · preferred · 1h/)).toBeTruthy();
@@ -156,7 +156,7 @@ describe("details of a combined game", () => {
     vi.mocked(api.listGames).mockResolvedValue([steam, epic]);
     vi.mocked(api.combineGames).mockResolvedValue(rocket());
     render(() => <DetailsPanel game={steam} onClose={() => undefined} />);
-    expect(screen.queryByRole("button", { name: "Choose a store" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Choose how to play" })).toBeNull();
 
     await fireEvent.click(screen.getByRole("button", { name: "More actions" }));
     await fireEvent.click(screen.getByRole("menuitem", { name: "Combine with another game…" }));

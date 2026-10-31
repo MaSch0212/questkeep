@@ -622,3 +622,10 @@ Short log of choices made while building. Newest at the bottom of each section.
   `/api/search/site/init` (bound to IP and User-Agent, Referer required) sent as `x-auth-token`
   to `POST /api/search/site`; a refused token is renewed once, otherwise the lookup gives up
   quietly. Asked only when IGDB has no time to beat; never in unit tests.
+
+## Edit game (step 3)
+
+- **User edits are the "user" metadata source** with an explicit list of edited fields, so an emptied list ("no tags") wins too; edits of copies combined into an entry still count, after the entry's own.
+- **Launch profiles:** a store copy's profile is implicit and only gets a row once changed (id = the copy's id); own profiles belong to the entry. No default means "automatic" (today's behaviour), so the migration changes nothing until the user picks one. Executable launches take extra arguments directly; store URIs only through `LibraryProvider::launch_with_args` (Steam: `steam://run/<id>//<args>/`).
+- **Picked images** are marked in `games.extra` (`userCover`, ...) so fetchers never replace them; Remove keeps the image empty, Reset (icon) drops the mark.
+- **Web image search** reads DuckDuckGo's own `i.js` answer from inside a hidden webview with its own profile (a plain HTTP client gets a bot challenge).

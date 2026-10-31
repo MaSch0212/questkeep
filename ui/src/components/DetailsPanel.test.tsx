@@ -51,6 +51,42 @@ async function loadProviders(canUninstall: boolean) {
 const steamGame = (overrides = {}) =>
   makeGame({ source: "steam", sourceGameId: "440", ...overrides });
 
+const emptyMeta = () => ({
+  description: null,
+  releaseDate: null,
+  developers: [],
+  publishers: [],
+  genres: [],
+  tags: [],
+  features: [],
+  series: [],
+  ageRatings: [],
+  platforms: [],
+  gameModes: [],
+  themes: [],
+  perspectives: [],
+  criticScore: null,
+  communityScore: null,
+  installSize: null,
+  timeToBeat: null,
+  links: [],
+});
+
+/** What the Edit dialog loads: an IGDB description, no edits yet. */
+function mockEditInfo() {
+  vi.mocked(api.gameEditInfo).mockResolvedValue({
+    edits: { meta: emptyMeta(), edited: [], hiddenLinks: [] },
+    automatic: { ...emptyMeta(), description: "From IGDB" },
+    automaticSources: { description: "igdb" },
+    links: [],
+    automaticSortingName: "Hades",
+    sortingName: null,
+    userImages: { cover: false, background: false, icon: false },
+  });
+  vi.mocked(api.saveGameEdits).mockResolvedValue(makeGame());
+  vi.mocked(api.getGame).mockResolvedValue(makeGame());
+}
+
 /** Opens the "More actions" menu and returns it. */
 async function openMore() {
   await fireEvent.click(screen.getByRole("button", { name: "More actions" }));
@@ -75,7 +111,7 @@ describe("DetailsPanel", () => {
     vi.mocked(api.launchGame).mockResolvedValue(undefined);
     render(() => <DetailsPanel game={makeGame()} onClose={vi.fn<() => void>()} />);
     await fireEvent.click(screen.getByRole("button", { name: "Play" }));
-    expect(api.launchGame).toHaveBeenCalledWith("g1", null);
+    expect(api.launchGame).toHaveBeenCalledWith("g1", null, null);
   });
 
   it("shows launch errors", async () => {
@@ -92,12 +128,12 @@ describe("DetailsPanel", () => {
   });
 
   it("renames in the Edit dialog, opened with the button or F2", async () => {
+    mockEditInfo();
     vi.mocked(api.updateGame).mockResolvedValue(makeGame({ name: "Hades II" }));
     render(() => <DetailsPanel game={makeGame()} onClose={vi.fn<() => void>()} />);
     await fireEvent.keyDown(window, { key: "F2" });
     const dialog = screen.getByRole("dialog", { name: "Edit game" });
-    const input = within(dialog).getByRole("textbox", { name: "Name" });
-    await waitFor(() => expect(input).toHaveFocus());
+    const input = await within(dialog).findByRole("textbox", { name: "Name" });
     await fireEvent.input(input, { target: { value: "Hades II" } });
     await fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await waitFor(() =>
@@ -114,10 +150,12 @@ describe("DetailsPanel", () => {
   });
 
   it("saves playtime tracking settings from the Edit dialog", async () => {
+    mockEditInfo();
     vi.mocked(api.updateGame).mockResolvedValue(makeGame());
     render(() => <DetailsPanel game={makeGame()} onClose={vi.fn<() => void>()} />);
     await fireEvent.keyDown(window, { key: "F2" });
     const dialog = screen.getByRole("dialog", { name: "Edit game" });
+    await fireEvent.click(within(dialog).getByRole("button", { name: "Playtime tracking" }));
     await fireEvent.click(
       within(dialog).getByRole("checkbox", {
         name: "Record playtime when started outside Questkeep",
@@ -128,18 +166,21 @@ describe("DetailsPanel", () => {
     });
     await fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    const updates = vi.mocked(api.updateGame).mock.calls.map(([, update]) => update);
-    expect(updates).toContainEqual(expect.objectContaining({ detectLaunches: false }));
-    expect(updates).toContainEqual(
-      expect.objectContaining({ ignoredProcesses: ["Launcher.exe", "*patcher*"] }),
+    expect(api.updateGame).toHaveBeenCalledWith(
+      "g1",
+      expect.objectContaining({
+        detectLaunches: false,
+        ignoredProcesses: ["Launcher.exe", "*patcher*"],
+      }),
     );
   });
 
-  it("discards the edits on Cancel and saves nothing when nothing changed", async () => {
+  it("discards the edits on Cancel and changes no game fields when nothing changed", async () => {
+    mockEditInfo();
     render(() => <DetailsPanel game={makeGame()} onClose={vi.fn<() => void>()} />);
     await fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     let dialog = screen.getByRole("dialog", { name: "Edit game" });
-    await fireEvent.input(within(dialog).getByRole("textbox", { name: "Name" }), {
+    await fireEvent.input(await within(dialog).findByRole("textbox", { name: "Name" }), {
       target: { value: "Other" },
     });
     await fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
@@ -148,51 +189,102 @@ describe("DetailsPanel", () => {
 
     await fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     dialog = screen.getByRole("dialog", { name: "Edit game" });
-    expect(within(dialog).getByRole("textbox", { name: "Name" })).toHaveValue("Hades");
+    expect(await within(dialog).findByRole("textbox", { name: "Name" })).toHaveValue("Hades");
     await fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(api.updateGame).not.toHaveBeenCalled();
-    expect(api.setCover).not.toHaveBeenCalled();
+    expect(api.saveGameEdits).toHaveBeenCalledWith(
+      "g1",
+      expect.objectContaining({ edits: expect.objectContaining({ edited: [] }) }),
+    );
   });
 
-  it("applies a picked cover only on Save, and keeps the dialog open on errors", async () => {
-    const { open } = await import("@tauri-apps/plugin-dialog");
-    vi.mocked(open).mockResolvedValue("C:\\img\\new.png");
-    vi.mocked(api.setCover).mockRejectedValueOnce("Unsupported image");
+  it("keeps edited metadata and goes back to the automatic value", async () => {
+    mockEditInfo();
     render(() => <DetailsPanel game={makeGame()} onClose={vi.fn<() => void>()} />);
     await fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     const dialog = screen.getByRole("dialog", { name: "Edit game" });
-    await fireEvent.click(within(dialog).getByRole("button", { name: "Change…" }));
-    expect(await within(dialog).findByText("New: new.png")).toBeTruthy();
-    expect(api.setCover).not.toHaveBeenCalled();
+    const description = await within(dialog).findByRole("textbox", { name: /Description/ });
+    expect(within(dialog).getByText("from IGDB")).toBeTruthy();
+    await fireEvent.input(description, { target: { value: "Mine" } });
+    expect(within(dialog).getByRole("button", { name: /General\s*1 edited/ })).toBeTruthy();
+    await fireEvent.click(within(dialog).getByRole("button", { name: "Use IGDB value" }));
+    expect(description).toHaveValue("From IGDB");
+    await fireEvent.input(description, { target: { value: "Mine" } });
     await fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
-    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Unsupported image");
-    expect(api.setCover).toHaveBeenCalledWith("g1", "C:\\img\\new.png");
+    await waitFor(() =>
+      expect(api.saveGameEdits).toHaveBeenCalledWith(
+        "g1",
+        expect.objectContaining({
+          edits: expect.objectContaining({
+            edited: ["description"],
+            meta: expect.objectContaining({ description: "Mine" }),
+          }),
+        }),
+      ),
+    );
   });
 
-  it("edits launch options of manually added games only", async () => {
-    vi.mocked(api.updateGame).mockResolvedValue(makeGame());
-    const { unmount } = render(() => (
-      <DetailsPanel game={steamGame()} onClose={vi.fn<() => void>()} />
-    ));
-    await fireEvent.click(screen.getByRole("button", { name: "Edit" }));
-    expect(screen.queryByRole("group", { name: "Launch options" })).toBeNull();
-    unmount();
-
+  it("sets a chosen image file at once and shows errors", async () => {
+    mockEditInfo();
+    const { open } = await import("@tauri-apps/plugin-dialog");
+    vi.mocked(open).mockResolvedValue("C:\\img\\new.png");
+    vi.mocked(api.setUserImage).mockRejectedValueOnce("Unsupported image");
     render(() => <DetailsPanel game={makeGame()} onClose={vi.fn<() => void>()} />);
     await fireEvent.click(screen.getByRole("button", { name: "Edit" }));
-    const options = screen.getByRole("group", { name: "Launch options" });
-    await fireEvent.input(within(options).getByRole("textbox", { name: "Arguments" }), {
+    const dialog = screen.getByRole("dialog", { name: "Edit game" });
+    await fireEvent.click(within(dialog).getByRole("button", { name: "Images" }));
+    const [chooseCover] = within(dialog).getAllByRole("button", { name: "Choose file…" });
+    if (chooseCover) await fireEvent.click(chooseCover);
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Unsupported image");
+    expect(api.setUserImage).toHaveBeenCalledWith("g1", "cover", "C:\\img\\new.png");
+  });
+
+  it("edits the launch of a manually added game as its profile", async () => {
+    mockEditInfo();
+    vi.mocked(api.updateGame).mockResolvedValue(makeGame());
+    const profiles = {
+      profiles: [
+        {
+          id: "g1",
+          name: "Executable",
+          customName: null,
+          copyId: "g1",
+          source: "manual",
+          own: false,
+          args: null,
+          action: null,
+          argsSupported: true,
+          installed: true,
+        },
+      ],
+      defaultId: null,
+      playId: "g1",
+    };
+    vi.mocked(api.launchProfiles).mockResolvedValue(profiles);
+    vi.mocked(api.saveLaunchProfile).mockResolvedValue(profiles);
+    render(() => <DetailsPanel game={makeGame()} onClose={vi.fn<() => void>()} />);
+    await fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    const dialog = screen.getByRole("dialog", { name: "Edit game" });
+    await fireEvent.click(within(dialog).getByRole("button", { name: "Launch" }));
+    await fireEvent.click(await within(dialog).findByRole("button", { name: "Executable" }));
+    await fireEvent.input(within(dialog).getByRole("textbox", { name: "Arguments" }), {
       target: { value: "-windowed" },
     });
-    await fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await fireEvent.click(within(dialog).getByRole("button", { name: "Save profile" }));
     await waitFor(() =>
       expect(api.updateGame).toHaveBeenCalledWith(
         "g1",
         expect.objectContaining({
-          name: null,
           playAction: expect.objectContaining({ args: "-windowed" }),
         }),
+      ),
+    );
+    await waitFor(() =>
+      expect(api.saveLaunchProfile).toHaveBeenCalledWith(
+        "g1",
+        "g1",
+        expect.objectContaining({ args: null }),
       ),
     );
   });

@@ -7,6 +7,13 @@ import type { Category } from "../bindings/Category";
 import type { CompletionSettings } from "../bindings/CompletionSettings";
 import type { Game } from "../bindings/Game";
 import type { GameActivity } from "../bindings/GameActivity";
+import type { GameEditInfo } from "../bindings/GameEditInfo";
+import type { GameEdits } from "../bindings/GameEdits";
+import type { ImageOption } from "../bindings/ImageOption";
+import type { ImageSlot } from "../bindings/ImageSlot";
+import type { ImageSource } from "../bindings/ImageSource";
+import type { LaunchProfiles } from "../bindings/LaunchProfiles";
+import type { ProfileInput } from "../bindings/ProfileInput";
 import type { GameNews } from "../bindings/GameNews";
 import type { GameQuery } from "../bindings/GameQuery";
 import type { GameUpdate } from "../bindings/GameUpdate";
@@ -81,8 +88,11 @@ export const scanLibrary = (providerId: string) =>
 /** Scans every store; progress arrives as core events. */
 export const scanAllLibraries = () => invoke<void>("scan_all_libraries");
 /** `copyId` picks one store's copy of a game owned in several; by default the core picks. */
-export const launchGame = (id: string, copyId: string | null = null) =>
-  invoke<void>("launch_game", { id, copyId });
+export const launchGame = (
+  id: string,
+  copyId: string | null = null,
+  profileId: string | null = null,
+) => invoke<void>("launch_game", { id, copyId, profileId });
 export const installGame = (id: string, copyId: string | null = null) =>
   invoke<void>("install_game", { id, copyId });
 export const uninstallGame = (id: string, copyId: string | null = null) =>
@@ -169,3 +179,26 @@ export const onWindowResized = (handler: () => void) => getCurrentWindow().onRes
 /** Resolves to an unlisten function. */
 export const onWindowFocusChanged = (handler: (focused: boolean) => void) =>
   getCurrentWindow().onFocusChanged((event) => handler(event.payload));
+
+export const gameEditInfo = (id: string) => invoke<GameEditInfo>("game_edit_info", { id });
+export const saveGameEdits = (id: string, edits: GameEdits) =>
+  invoke<Game>("save_game_edits", { id, edits });
+export const setUserImage = (id: string, slot: ImageSlot, source: string) =>
+  invoke<Game>("set_user_image", { id, slot, source });
+export const removeUserImage = (id: string, slot: ImageSlot) =>
+  invoke<Game>("remove_user_image", { id, slot });
+export const imageSources = (id: string, slot: ImageSlot) =>
+  invoke<ImageSource[]>("image_sources", { id, slot });
+export const imageOptions = (id: string, slot: ImageSlot, source: string) =>
+  invoke<ImageOption[]>("image_options", { id, slot, source });
+export const searchWebImages = (query: string, large: boolean, transparent: boolean) =>
+  invoke<ImageOption[]>("search_web_images", { query, large, transparent });
+export const launchProfiles = (id: string) => invoke<LaunchProfiles>("launch_profiles", { id });
+export const saveLaunchProfile = (id: string, profileId: string | null, input: ProfileInput) =>
+  invoke<LaunchProfiles>("save_launch_profile", { id, profileId, input });
+export const deleteLaunchProfile = (id: string, profileId: string) =>
+  invoke<LaunchProfiles>("delete_launch_profile", { id, profileId });
+export const orderLaunchProfiles = (id: string, order: string[]) =>
+  invoke<LaunchProfiles>("order_launch_profiles", { id, order });
+export const setDefaultLaunchProfile = (id: string, profileId: string | null) =>
+  invoke<LaunchProfiles>("set_default_launch_profile", { id, profileId });

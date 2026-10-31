@@ -67,7 +67,7 @@ describe("GameList", () => {
     await load();
     render(() => <GameList />);
     await fireEvent.dblClick(screen.getByRole("option", { name: "Hades" }));
-    expect(api.launchGame).toHaveBeenCalledWith("g1", null);
+    expect(api.launchGame).toHaveBeenCalledWith("g1", null, null);
     expect(api.installGame).not.toHaveBeenCalled();
   });
 

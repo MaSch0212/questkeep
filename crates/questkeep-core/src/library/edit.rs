@@ -355,7 +355,7 @@ impl Library {
                 store_name
             };
             let custom_name = row.and_then(|r| r.name.clone());
-            let position = row.map_or(10_000 + index as i64, |r| r.position);
+            let position = row.map_or(index as i64, |r| r.position);
             listed.push((
                 position,
                 LaunchProfile {
@@ -802,6 +802,23 @@ mod tests {
         assert!(profiles.profiles[0].args_supported);
         assert_eq!(profiles.default_id, None);
         assert_eq!(profiles.play_id, Some(id));
+
+        // A new own profile goes after the store copies' (they have no stored row yet).
+        let tool0 = tmp.path().join("tool0.exe");
+        std::fs::write(&tool0, b"MZ").unwrap();
+        let listed = lib
+            .save_launch_profile(
+                id,
+                None,
+                &ProfileInput {
+                    action: Some(PlayAction::file(tool0.display().to_string())),
+                    ..ProfileInput::default()
+                },
+            )
+            .unwrap();
+        assert_eq!(listed.profiles[0].id, id);
+        lib.delete_launch_profile(id, listed.profiles[1].id)
+            .unwrap();
 
         // Extra arguments on the copy's profile.
         let profiles = lib

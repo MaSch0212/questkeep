@@ -39,7 +39,7 @@ describe("quick action on a tile", () => {
   it("plays an installed game without selecting the tile or launching twice", async () => {
     const { onSelect, onLaunch } = renderTile();
     await fireEvent.click(screen.getByRole("button", { name: "Play Hades" }));
-    expect(api.launchGame).toHaveBeenCalledWith("g1", null);
+    expect(api.launchGame).toHaveBeenCalledWith("g1", null, null);
     expect(onSelect).not.toHaveBeenCalled();
     // A double click on the button must not also trigger the tile's own double-click launch.
     await fireEvent.dblClick(screen.getByRole("button", { name: "Play Hades" }));
@@ -105,7 +105,7 @@ describe("quick action on a row", () => {
       />
     ));
     await fireEvent.click(screen.getByRole("button", { name: "Play Hades" }));
-    expect(api.launchGame).toHaveBeenCalledWith("g1", null);
+    expect(api.launchGame).toHaveBeenCalledWith("g1", null, null);
     expect(onSelect).not.toHaveBeenCalled();
   });
 });

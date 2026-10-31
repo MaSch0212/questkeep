@@ -16,8 +16,12 @@ async function attempt(work: () => Promise<void>): Promise<string | null> {
   }
 }
 
-export function launchGame(id: string, copyId: string | null = null): Promise<string | null> {
-  return attempt(() => api.launchGame(id, copyId));
+export function launchGame(
+  id: string,
+  copyId: string | null = null,
+  profileId: string | null = null,
+): Promise<string | null> {
+  return attempt(() => api.launchGame(id, copyId, profileId));
 }
 
 /** Keyboard/double-click launch: failures surface as a toast. */
