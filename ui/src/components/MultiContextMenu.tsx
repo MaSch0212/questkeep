@@ -2,6 +2,7 @@ import Combine from "lucide-solid/icons/combine";
 import Download from "lucide-solid/icons/download";
 import EyeOff from "lucide-solid/icons/eye-off";
 import Eye from "lucide-solid/icons/eye";
+import Pencil from "lucide-solid/icons/pencil";
 import RefreshCw from "lucide-solid/icons/refresh-cw";
 import Star from "lucide-solid/icons/star";
 import Trash from "lucide-solid/icons/trash";
@@ -80,6 +81,7 @@ export function MultiContextMenu(props: {
     },
     { kind: "submenu", label: "Completion status", entries: statusEntries },
     { kind: "submenu", label: "Categories", entries: categoryEntries },
+    { label: "Edit…", icon: iconOf(Pencil), hint: "F2", disabled: true, onSelect: () => undefined },
     { kind: "separator" },
     {
       label: "Refresh metadata",
