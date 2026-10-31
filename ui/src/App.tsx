@@ -7,6 +7,7 @@ import { UpdateDialog } from "./components/UpdateDialog";
 import { DetailsView } from "./components/DetailsView";
 import { GameGrid } from "./components/GameGrid";
 import { GameList } from "./components/GameList";
+import { HomePage } from "./components/HomePage";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { Sidebar } from "./components/Sidebar";
 import { TitleBar } from "./components/TitleBar";
@@ -125,7 +126,9 @@ export function App() {
           when={store.page() === "library"}
           fallback={
             <div class="app__content">
-              <SettingsPage />
+              <Show when={store.page() === "home"} fallback={<SettingsPage />}>
+                <HomePage />
+              </Show>
             </div>
           }
         >

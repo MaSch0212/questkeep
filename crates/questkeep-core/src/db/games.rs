@@ -13,7 +13,7 @@ use crate::model::{
     PlayAction, PlayedFilter, ScanSummary, SortField, TriState, sorting_name,
 };
 
-const COLUMNS: &str = "id, name, sorting_name, source, source_game_id, installed, install_dir, \
+pub(super) const COLUMNS: &str = "id, name, sorting_name, source, source_game_id, installed, install_dir, \
     play_action, playtime_seconds, play_count, last_played, date_added, favorite, hidden, \
     cover_path, icon_path, background_path, description, release_date, developers, publishers, \
     genres, metadata_updated_at, extra, \
@@ -134,7 +134,7 @@ fn query_filter(query: &GameQuery) -> (String, Vec<Box<dyn ToSql>>) {
     (where_sql, args)
 }
 
-fn row_to_game(row: &Row<'_>) -> rusqlite::Result<Game> {
+pub(super) fn row_to_game(row: &Row<'_>) -> rusqlite::Result<Game> {
     let id: String = row.get("id")?;
     let play_action: Option<String> = row.get("play_action")?;
     let extra: String = row.get("extra")?;
@@ -199,7 +199,7 @@ fn own_copy(game: &Game) -> GameCopy {
 /// Fills `copies` of library entries that have games combined into them. Entries come from
 /// `library_entries` (installed and playtime over all copies), so each copy is read from its
 /// own row.
-fn attach_copies(conn: &rusqlite::Connection, games: &mut [Game]) -> Result<()> {
+pub(super) fn attach_copies(conn: &rusqlite::Connection, games: &mut [Game]) -> Result<()> {
     let mut stmt = conn.prepare_cached(
         "SELECT id, COALESCE(merged_into, id), source, source_game_id, installed, \
          playtime_seconds, last_played FROM games \

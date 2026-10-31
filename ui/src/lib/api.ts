@@ -12,6 +12,7 @@ import type { ScanSummary } from "../bindings/ScanSummary";
 import type { LibraryView } from "../bindings/LibraryView";
 import type { NewView } from "../bindings/NewView";
 import type { SectionOrder } from "../bindings/SectionOrder";
+import type { StartPage } from "../bindings/StartPage";
 import type { Settings } from "../bindings/Settings";
 import type { SyncTimes } from "../bindings/SyncTimes";
 import type { ViewSection } from "../bindings/ViewSection";
@@ -35,6 +36,10 @@ export const renameViewSection = (id: string, name: string) =>
 export const deleteViewSection = (id: string) => invoke<void>("delete_view_section", { id });
 export const arrangeViews = (order: SectionOrder[]) => invoke<void>("arrange_views", { order });
 export const syncTimes = () => invoke<SyncTimes>("sync_times");
+export const startPage = () => invoke<StartPage>("start_page");
+/** The start page (`"home"`) or view id that was open when Questkeep last closed. */
+export const lastPage = () => invoke<string | null>("last_page");
+export const setLastPage = (page: string) => invoke<void>("set_last_page", { page });
 export const listCategories = () => invoke<Category[]>("list_categories");
 /** Creates a category, or returns the existing one with that name. */
 export const createCategory = (name: string) => invoke<Category>("create_category", { name });

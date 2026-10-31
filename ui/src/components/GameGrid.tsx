@@ -36,7 +36,7 @@ interface Metrics {
   minWidth: number;
   gap: number;
   padding: number;
-  titleHeight: number;
+  stripHeight: number;
   ratioHeight: number;
   headerHeight: number;
 }
@@ -45,7 +45,7 @@ const DEFAULT_METRICS: Metrics = {
   minWidth: 170,
   gap: 16,
   padding: 20,
-  titleHeight: 36,
+  stripHeight: 36,
   ratioHeight: 1.5,
   headerHeight: 40,
 };
@@ -58,7 +58,7 @@ function readMetrics(element: Element): Metrics {
     minWidth: read("--qk-tile-min-width", DEFAULT_METRICS.minWidth),
     gap: read("--qk-grid-gap", DEFAULT_METRICS.gap),
     padding: read("--qk-grid-padding", DEFAULT_METRICS.padding),
-    titleHeight: read("--qk-tile-title-height", DEFAULT_METRICS.titleHeight),
+    stripHeight: read("--qk-tile-strip-height", DEFAULT_METRICS.stripHeight),
     ratioHeight: read("--qk-tile-ratio-height", DEFAULT_METRICS.ratioHeight),
     headerHeight: read("--qk-group-header-height", DEFAULT_METRICS.headerHeight),
   };
@@ -92,7 +92,7 @@ export function GameGrid() {
     const m = metrics();
     const usable = width() - m.padding * 2;
     const tileWidth = (usable - m.gap * (columns() - 1)) / columns();
-    return Math.round(tileWidth * m.ratioHeight + m.titleHeight + m.gap);
+    return Math.round(tileWidth * m.ratioHeight + m.stripHeight + m.gap);
   });
   const layout = createMemo(() =>
     layoutGroups(store.groups(), {

@@ -3,13 +3,13 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use chrono::Utc;
+use chrono::{Local, Utc};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use uuid::Uuid;
 
 use crate::auth::{AccountStatus, TokenStore};
-use crate::db::{Database, NewGameRecord};
+use crate::db::{Database, NewGameRecord, playtime_by_day};
 use crate::error::{CoreError, Result};
 use crate::events::{CoreEvent, EventBus};
 use crate::images::{
@@ -17,7 +17,7 @@ use crate::images::{
 };
 use crate::model::{
     ActionKind, Category, Game, GameQuery, GameUpdate, ImportedGame, LibraryView, MANUAL_SOURCE,
-    NewManualGame, NewView, PlayAction, ScanSummary, SectionOrder, SyncTimes, TriState,
+    NewManualGame, NewView, PlayAction, ScanSummary, SectionOrder, StartPage, SyncTimes, TriState,
     ViewSection, ViewUpdate, display_name_from_path,
 };
 use crate::paths::DataPaths;
@@ -197,6 +197,38 @@ impl Library {
             .into_iter()
             .map(|g| self.resolve_images(g))
             .collect())
+    }
+
+    /// The start page: both shelves, playtime of the last 7 local days and installs per store.
+    pub fn start_page(&self) -> Result<StartPage> {
+        const SHELF_SIZE: u32 = 15;
+        const DAYS: u32 = 7;
+        let shelf = |games: Vec<crate::model::ShelfGame>| {
+            games
+                .into_iter()
+                .map(|mut s| {
+                    s.game = self.resolve_images(s.game);
+                    s
+                })
+                .collect()
+        };
+        let today = Local::now().date_naive();
+        let since = Utc::now() - chrono::Duration::days(i64::from(DAYS) + 1);
+        Ok(StartPage {
+            recently_played: shelf(self.db.recently_played(SHELF_SIZE)?),
+            recently_added: shelf(self.db.recently_added(SHELF_SIZE)?),
+            playtime: playtime_by_day(&self.db.sessions_since(since)?, today, &Local, DAYS),
+            stores: self.db.installed_by_store()?,
+        })
+    }
+
+    /// The start page (`"home"`) or view id that was open last.
+    pub fn last_page(&self) -> Result<Option<String>> {
+        self.db.last_page()
+    }
+
+    pub fn set_last_page(&self, page: &str) -> Result<()> {
+        self.db.set_last_page(page)
     }
 
     /// How many games each query matches, in order (the sidebar's view counts).

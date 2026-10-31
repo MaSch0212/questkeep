@@ -7,7 +7,7 @@ use std::sync::Arc;
 use questkeep_core::auth::AccountStatus;
 use questkeep_core::model::{
     Category, Game, GameQuery, GameUpdate, LibraryView, NewManualGame, NewView, ScanSummary,
-    SectionOrder, SyncTimes, ViewSection, ViewUpdate,
+    SectionOrder, StartPage, SyncTimes, ViewSection, ViewUpdate,
 };
 use questkeep_core::providers::ProviderInfo;
 use questkeep_core::settings::Settings;
@@ -542,6 +542,21 @@ pub async fn arrange_views(
 #[tauri::command]
 pub async fn sync_times(state: State<'_, Arc<AppState>>) -> CmdResult<SyncTimes> {
     blocking(state, |s| s.library.sync_times()).await
+}
+
+#[tauri::command]
+pub async fn start_page(state: State<'_, Arc<AppState>>) -> CmdResult<StartPage> {
+    blocking(state, |s| s.library.start_page()).await
+}
+
+#[tauri::command]
+pub async fn last_page(state: State<'_, Arc<AppState>>) -> CmdResult<Option<String>> {
+    blocking(state, |s| s.library.last_page()).await
+}
+
+#[tauri::command]
+pub async fn set_last_page(state: State<'_, Arc<AppState>>, page: String) -> CmdResult<()> {
+    blocking(state, move |s| s.library.set_last_page(&page)).await
 }
 
 #[tauri::command]

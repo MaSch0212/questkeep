@@ -5,6 +5,7 @@ import * as api from "./lib/api";
 import { defaultQuery } from "./lib/query";
 import { store } from "./lib/store";
 import type { ViewLayout } from "./bindings/ViewLayout";
+import type { Settings } from "./bindings/Settings";
 import { makeGame } from "./test-utils";
 
 vi.mock("./lib/api");
@@ -80,7 +81,26 @@ beforeEach(() => {
   vi.mocked(api.listLaunchers).mockResolvedValue([]);
   vi.mocked(api.updateView).mockResolvedValue(undefined as never);
   mockViews();
+  vi.mocked(api.getSettings).mockResolvedValue(SETTINGS);
 });
+
+const SETTINGS: Settings = {
+  scanOnStartup: true,
+  downloadCovers: true,
+  fetchMetadata: true,
+  steamGridDbApiKey: null,
+  igdbClientId: null,
+  igdbClientSecret: null,
+  closeToTray: true,
+  minimizeToTray: false,
+  startWithSystem: false,
+  startMinimized: true,
+  detectExternalLaunches: true,
+  showStartPage: true,
+  // Most tests are about the library; the start page has its own tests.
+  startupPage: { kind: "view", id: "all" },
+  providers: {},
+};
 
 function mockViews(layout: ViewLayout = "grid") {
   vi.mocked(api.listViews).mockResolvedValue([
@@ -189,20 +209,6 @@ describe("App", () => {
       makeGame({ id: "1", name: "Hades" }),
       makeGame({ id: "2", name: "Celeste" }),
     ]);
-    vi.mocked(api.getSettings).mockResolvedValue({
-      scanOnStartup: true,
-      downloadCovers: true,
-      fetchMetadata: true,
-      steamGridDbApiKey: null,
-      igdbClientId: null,
-      igdbClientSecret: null,
-      closeToTray: true,
-      minimizeToTray: false,
-      startWithSystem: false,
-      startMinimized: true,
-      detectExternalLaunches: true,
-      providers: {},
-    });
     render(() => <App />);
     await screen.findByRole("gridcell", { name: "Hades" });
     await fireEvent.click(
@@ -262,5 +268,55 @@ describe("App", () => {
     await waitFor(() => expect(panel()).not.toHaveClass("details--split"));
     resizeAll(1100);
     await waitFor(() => expect(panel()).toHaveClass("details--split"));
+  });
+
+  describe("start page", () => {
+    const hades = makeGame({ id: "1", name: "Hades" });
+
+    beforeEach(() => {
+      vi.mocked(api.listGames).mockResolvedValue([hades]);
+      vi.mocked(api.startPage).mockResolvedValue({
+        recentlyPlayed: [{ game: hades, date: new Date().toISOString() }],
+        recentlyAdded: [],
+        playtime: [
+          { date: "2026-10-30", seconds: 3600 },
+          { date: "2026-10-31", seconds: 5400 },
+        ],
+        stores: [{ source: "steam", installed: 3, owned: 4 }],
+      });
+    });
+
+    it("opens on the start page and opens a game in a view with Enter", async () => {
+      vi.mocked(api.getSettings).mockResolvedValue({ ...SETTINGS, startupPage: { kind: "start" } });
+      render(() => <App />);
+      const shelf = await screen.findByRole("grid", { name: "Recently played" });
+      expect(screen.getByRole("button", { name: "Home" })).toHaveAttribute("aria-current", "page");
+      expect(screen.getByRole("gridcell", { name: "Hades" })).toHaveTextContent("Today");
+      expect(screen.getByText("No games yet")).toBeInTheDocument();
+      expect(screen.getByTitle("75 % of your Steam games are installed")).toBeInTheDocument();
+      expect(screen.getByText("2.5 h · avg 1.3 h/day")).toBeInTheDocument();
+      // No library toolbar on the start page.
+      expect(
+        screen.queryByRole("button", { name: "Filter this view by name (Ctrl+F)" }),
+      ).toBeNull();
+
+      shelf.focus();
+      await fireEvent.keyDown(shelf, { key: "Enter" });
+      await waitFor(() => expect(store.page()).toBe("library"));
+      expect(store.activeViewId()).toBe("all");
+      expect(store.detailsOpen()).toBe(true);
+      expect(api.setLastPage).toHaveBeenCalledWith("all");
+    });
+
+    it("reopens the page that was open last and hides Home while it is off", async () => {
+      vi.mocked(api.getSettings).mockResolvedValue({ ...SETTINGS, startupPage: { kind: "last" } });
+      vi.mocked(api.lastPage).mockResolvedValue("home");
+      render(() => <App />);
+      await screen.findByRole("grid", { name: "Recently played" });
+
+      store.applySettings({ ...SETTINGS, showStartPage: false });
+      await waitFor(() => expect(store.page()).toBe("library"));
+      expect(screen.queryByRole("button", { name: "Home" })).toBeNull();
+    });
   });
 });

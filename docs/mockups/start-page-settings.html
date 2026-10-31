@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Start page settings</title>
+<style>
+  :root {
+    --bg:#111317; --surface:#171a20; --raised:#1e222a; --border:#2a2f3a; --text:#e6e8ec; --muted:#9aa1ae; --faint:#6b7280; --accent:#7c9cff;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 "Segoe UI Variable","Segoe UI",sans-serif; }
+  button, input, select { font:inherit; color:inherit; }
+  .variants { display:grid; grid-template-columns:repeat(auto-fit, minmax(520px, 1fr)); gap:24px; padding:24px; }
+  .variant > h3 { margin:0 0 4px; font-size:13px; color:var(--accent); letter-spacing:.04em; text-transform:uppercase; }
+  .variant > p.note { margin:0 0 12px; color:var(--muted); font-size:12.5px; }
+  .window { display:flex; border:1px solid var(--border); border-radius:10px; overflow:hidden; background:var(--bg); min-height:440px; }
+  .nav { width:170px; flex:none; padding:16px 12px; border-right:1px solid var(--border); }
+  .nav-item { display:block; width:100%; text-align:left; background:none; border:0; padding:6px 10px; border-radius:6px; color:var(--muted); }
+  .nav-item.on { background:var(--raised); color:var(--text); }
+  .content { flex:1; padding:24px; min-width:0; }
+  h2 { margin:0 0 12px; font-size:16px; }
+  .check { display:flex; align-items:center; gap:8px; padding:4px 8px; cursor:pointer; }
+  .check input { accent-color:var(--accent); margin:0; }
+  .check--nested { padding-left:32px; }
+  .check--disabled { opacity:.6; cursor:default; }
+  .legend { margin:16px 0 6px; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+  .input { min-height:32px; padding:0 12px; background:var(--raised); border:1px solid var(--border); border-radius:8px; }
+  .row { display:flex; align-items:center; gap:10px; padding:4px 8px 4px 32px; }
+  .row label { color:var(--muted); font-size:13px; white-space:nowrap; }
+  .row .input { flex:1; min-width:0; max-width:300px; }
+  .hint { padding:2px 8px 0 32px; color:var(--faint); font-size:12px; }
+  .inline-select { margin-left:4px; min-height:28px; max-width:220px; }
+  .new { outline:1px dashed #7c9cff66; outline-offset:4px; border-radius:6px; }
+  .dim { opacity:.55; }
+</style>
+</head>
+<body>
+<div class="variants">
+
+  <!-- A: radio buttons, view picker inline -->
+  <div class="variant">
+    <h3>A · Radio buttons</h3>
+    <p class="note">The choices are always visible. The view picker sits on its option and turns on when you pick it.</p>
+    <div class="window">
+      <nav class="nav"><button class="nav-item on">General</button><button class="nav-item">Stores and accounts</button><button class="nav-item">Categories</button><button class="nav-item">Artwork</button><button class="nav-item">Metadata</button><button class="nav-item">Updates</button><button class="nav-item">About</button></nav>
+      <div class="content">
+        <h2>General</h2>
+        <div class="dim">
+          <label class="check"><input type="checkbox" checked> <span>Scan stores when the app starts</span></label>
+          <label class="check"><input type="checkbox" checked> <span>Download missing covers</span></label>
+          <label class="check"><input type="checkbox" checked> <span>Download store metadata</span></label>
+          <label class="check"><input type="checkbox" checked> <span>Record playtime of games started outside Questkeep</span></label>
+        </div>
+        <div class="new">
+          <div class="legend">Start page</div>
+          <label class="check"><input type="checkbox" id="a-show" checked> <span>Show the start page</span></label>
+          <div class="legend">When Questkeep opens, show</div>
+          <label class="check" id="a-start-row"><input type="radio" name="a" value="start" checked> <span>The start page</span></label>
+          <label class="check"><input type="radio" name="a" value="last"> <span>The page I had open last</span></label>
+          <label class="check"><input type="radio" name="a" value="view"> <span>This view:</span>
+            <select class="input inline-select" id="a-view" disabled><option>All games</option><option>Installed</option><option>Favorites</option><option>Recently played</option></select></label>
+          <div class="hint" id="a-hint" hidden>The start page is turned off, so Questkeep opens the first view instead.</div>
+        </div>
+        <div class="dim">
+          <label class="check" style="margin-top:12px"><input type="checkbox" checked> <span>Close to the tray instead of quitting</span></label>
+          <label class="check"><input type="checkbox"> <span>Minimize to the tray</span></label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- B: one dropdown -->
+  <div class="variant">
+    <h3>B · One dropdown</h3>
+    <p class="note">Smaller: one list with the start page, "last page" and every saved view.</p>
+    <div class="window">
+      <nav class="nav"><button class="nav-item on">General</button><button class="nav-item">Stores and accounts</button><button class="nav-item">Categories</button><button class="nav-item">Artwork</button><button class="nav-item">Metadata</button><button class="nav-item">Updates</button><button class="nav-item">About</button></nav>
+      <div class="content">
+        <h2>General</h2>
+        <div class="dim">
+          <label class="check"><input type="checkbox" checked> <span>Scan stores when the app starts</span></label>
+          <label class="check"><input type="checkbox" checked> <span>Download missing covers</span></label>
+          <label class="check"><input type="checkbox" checked> <span>Download store metadata</span></label>
+          <label class="check"><input type="checkbox" checked> <span>Record playtime of games started outside Questkeep</span></label>
+        </div>
+        <div class="new">
+          <div class="legend">Start page</div>
+          <label class="check"><input type="checkbox" id="b-show" checked> <span>Show the start page</span></label>
+          <div class="row" style="padding-left:8px; margin-top:6px"><label for="b-open">When Questkeep opens, show</label>
+            <select class="input" id="b-open">
+              <option value="start">Start page</option>
+              <option value="last">The page I had open last</option>
+              <optgroup label="Views"><option>All games</option><option>Installed</option><option>Favorites</option><option>Recently played</option></optgroup>
+            </select></div>
+          <div class="hint" id="b-hint" style="padding-left:8px" hidden>The start page is turned off, so Questkeep opens the first view instead.</div>
+        </div>
+        <div class="dim">
+          <label class="check" style="margin-top:12px"><input type="checkbox" checked> <span>Close to the tray instead of quitting</span></label>
+          <label class="check"><input type="checkbox"> <span>Minimize to the tray</span></label>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  // A: the view picker follows its radio; the start-page option follows the switch.
+  const aRadios = document.querySelectorAll('input[name="a"]');
+  const syncA = () => {
+    const show = document.getElementById("a-show").checked;
+    const startRow = document.getElementById("a-start-row");
+    startRow.classList.toggle("check--disabled", !show);
+    startRow.querySelector("input").disabled = !show;
+    const picked = [...aRadios].find((r) => r.checked)?.value;
+    document.getElementById("a-view").disabled = picked !== "view";
+    document.getElementById("a-hint").hidden = show || picked !== "start";
+  };
+  aRadios.forEach((r) => r.addEventListener("change", syncA));
+  document.getElementById("a-show").addEventListener("change", syncA);
+
+  // B: the start-page entry is disabled while the start page is off.
+  const syncB = () => {
+    const show = document.getElementById("b-show").checked;
+    const sel = document.getElementById("b-open");
+    sel.querySelector('option[value="start"]').disabled = !show;
+    document.getElementById("b-hint").hidden = show || sel.value !== "start";
+  };
+  document.getElementById("b-show").addEventListener("change", syncB);
+  document.getElementById("b-open").addEventListener("change", syncB);
+</script>
+</body>
+</html>

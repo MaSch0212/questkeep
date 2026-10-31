@@ -33,16 +33,23 @@ export function createSettingsModel() {
       .catch((error: unknown) => store.pushToast("error", errorMessage(error)));
   });
 
-  async function toggle(key: keyof Settings, value: boolean) {
+  /** Saves a change right away (optimistically) and tells the app shell about it. */
+  async function update(patch: Partial<Settings>) {
     const previous = settings();
     if (!previous) return;
-    setSettings({ ...previous, [key]: value });
+    const next = { ...previous, ...patch };
+    setSettings(next);
     try {
-      await api.saveSettings({ ...previous, [key]: value });
+      await api.saveSettings(next);
+      store.applySettings(next);
     } catch (error) {
       setSettings(previous);
       store.pushToast("error", errorMessage(error));
     }
+  }
+
+  async function toggle(key: keyof Settings, value: boolean) {
+    await update({ [key]: value });
   }
 
   async function saveSteam() {
@@ -176,6 +183,7 @@ export function createSettingsModel() {
     setIgdbClientSecret,
     savingIgdb,
     toggle,
+    update,
     setProviderOption,
     saveSteam,
     steamKeySaved,

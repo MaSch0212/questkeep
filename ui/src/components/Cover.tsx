@@ -14,8 +14,11 @@ export function initialsFor(name: string): string {
   return (letters.join("") || "?").toUpperCase();
 }
 
-/** Cover art, or a gradient placeholder when there is none or the image fails to load. */
-export function Cover(props: { game: Game }) {
+/**
+ * Cover art, or a gradient placeholder when there is none or the image fails to load. With
+ * `showName` the placeholder also shows the game's name (cards hide their title otherwise).
+ */
+export function Cover(props: { game: Game; showName?: boolean }) {
   const [failed, setFailed] = createSignal(false);
   const url = createMemo(() => store.coverUrl(props.game));
   createEffect(on(url, () => setFailed(false), { defer: true }));
@@ -28,6 +31,9 @@ export function Cover(props: { game: Game }) {
       fallback={
         <div class="cover cover--placeholder" style={{ "--qk-tile-hue": hue() }} aria-hidden="true">
           <span class="cover__initials">{initials()}</span>
+          <Show when={props.showName}>
+            <span class="cover__name">{props.game.name}</span>
+          </Show>
         </div>
       }
     >

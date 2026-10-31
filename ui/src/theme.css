@@ -27,8 +27,6 @@
   --qk-color-star: #ffd166;
   --qk-color-running: #6fd6a0;
   --qk-color-backdrop: #05060acc;
-  --qk-color-badge-bg: #0b0d12cc;
-  --qk-color-banner-bg: #0b0d12b3;
   --qk-color-quick-bg: #0b0d12e6;
   --qk-color-cover-bg: #0d0f13;
   --qk-color-title-on-cover: #ffffff;
@@ -43,6 +41,12 @@
   --qk-color-warn-hover: #3a2d1f;
   --qk-color-play: #2f6d4f;
   --qk-color-play-hover: #3a8462;
+  /* Game cards */
+  --qk-color-tile-outline: #ffffff14;
+  --qk-color-tile-date-bg: #0b0d12e0;
+  --qk-color-tile-title-fade: #0b0d12f2;
+  --qk-color-tile-quick-scrim: #0b0d1233;
+  --qk-color-running-ring: #6fd6a055;
 
   /* Placeholder cover gradients: hue is set per tile, the rest comes from here */
   --qk-placeholder-saturation: 38%;
@@ -83,6 +87,7 @@
 
   /* Shadows */
   --qk-shadow-tile: 0 2px 8px #00000066;
+  --qk-shadow-tile-hover: 0 10px 24px #000000aa;
   --qk-shadow-panel: -12px 0 32px #00000066;
   --qk-shadow-dialog: 0 24px 64px #000000aa;
   --qk-shadow-badge: 0 1px 4px #00000099;
@@ -109,12 +114,33 @@
   --qk-split-breakpoint: 1100px;
   --qk-settings-nav-width: 200px;
   --qk-settings-content-width: 720px;
-  --qk-badge-blur: 6px;
+  --qk-settings-select-width: 300px;
   --qk-icon-stroke: 2;
   --qk-tile-min-width: 170px;
   --qk-tile-aspect-ratio: 2 / 3;
   --qk-tile-ratio-height: 1.5; /* height / width of the tile above, used by the grid maths */
-  --qk-tile-title-height: 36px;
+  --qk-tile-strip-height: 36px; /* store and state strip above the cover, used by the grid maths */
+  --qk-tile-radius: 10px;
+  --qk-tile-lift: 3px;
+  --qk-tile-logo-size: 18px;
+  --qk-tile-state-size: 24px;
+  --qk-tile-state-icon-size: 13px;
+  --qk-tile-more-dot-size: 7px;
+  --qk-tile-title-lines: 2;
+  --qk-tile-overlay-bleed: -2px; /* overlays reach past the cover edge, see .tile__body */
+  --qk-mask-solid: linear-gradient(black, black);
+  --qk-tile-missing-filter: saturate(0.4) brightness(0.65);
+  --qk-tile-pulse-duration: 1.8s;
+  --qk-tile-pulse-scale: 1.6;
+  --qk-home-stats-width: 1180px;
+  --qk-home-chart-height: 110px;
+  --qk-home-bar-width: 26px;
+  --qk-home-track-height: 8px;
+  --qk-home-store-name-width: 104px;
+  --qk-home-min-height: 560px; /* below this the start page scrolls */
+  --qk-shelf-cover-min-width: 90px;
+  --qk-shelf-cover-max-height: 300px;
+  --qk-shelf-lift-room: 6px; /* room above the cards so a raised card is not clipped */
   --qk-grid-gap: 16px;
   --qk-grid-padding: 20px;
   --qk-control-height: 34px;
@@ -126,7 +152,6 @@
   --qk-focus-ring-width: 2px;
   --qk-focus-ring-offset: 2px;
   --qk-details-cover-width: 180px;
-  --qk-badge-size: 24px;
   --qk-scrollbar-size: 10px;
   --qk-dimmed-opacity: 0.45;
   --qk-icon-size: 14px;
@@ -139,7 +164,6 @@
   --qk-details-hero-height: 170px;
   --qk-details-hero-overlap: 90px;
   --qk-description-clamp-lines: 5;
-  --qk-tile-banner-height: 22px;
   --qk-source-icon-size: 12px;
   --qk-icon-btn-small-size: 24px;
   --qk-compact-row-height: 32px;

@@ -513,98 +513,233 @@ ul {
   pointer-events: none;
 }
 
-/* Tile */
+/* Game card (grid and start page): store strip above an uncropped cover. The title, every store
+   logo and Play/Install show on hover, keyboard selection (while the list has focus) and when the
+   card's details are open. */
 .tile {
+  position: relative;
   min-width: 0;
   cursor: pointer;
-  border-radius: var(--qk-radius-md);
-}
-.tile__cover {
-  position: relative;
-  aspect-ratio: var(--qk-tile-aspect-ratio);
-  overflow: hidden;
-  background: var(--qk-color-cover-bg);
-  border-radius: var(--qk-radius-md);
-  box-shadow: var(--qk-shadow-tile);
+  border-radius: var(--qk-tile-radius);
+  box-shadow:
+    0 0 0 1px var(--qk-color-tile-outline),
+    var(--qk-shadow-tile);
   transition:
     transform var(--qk-duration-fast) var(--qk-easing),
-    outline-color var(--qk-duration-fast) var(--qk-easing);
-  outline: var(--qk-focus-ring-width) solid transparent;
-  outline-offset: var(--qk-focus-ring-offset);
+    box-shadow var(--qk-duration-fast) var(--qk-easing);
 }
-.tile:hover .tile__cover {
-  transform: translateY(calc(var(--qk-space-1) * -0.5));
+.tile:hover {
+  transform: translateY(calc(var(--qk-tile-lift) * -1));
+  box-shadow:
+    0 0 0 1px var(--qk-color-surface-active),
+    var(--qk-shadow-tile-hover);
 }
-/* The keyboard cursor only shows while the grid has focus; "open" is the strong accent border. */
-.grid:focus .tile--selected .tile__cover {
-  outline-color: var(--qk-color-cursor);
+/* The keyboard cursor only shows while the list has focus; "open" is the strong accent border. */
+:focus .tile--selected {
+  box-shadow:
+    0 0 0 var(--qk-focus-ring-width) var(--qk-color-cursor),
+    var(--qk-shadow-tile-hover);
 }
-.tile--open .tile__cover,
-.grid:focus .tile--open .tile__cover {
-  outline-color: var(--qk-color-accent);
+.tile--open,
+:focus .tile--open {
+  box-shadow:
+    0 0 0 var(--qk-focus-ring-width) var(--qk-color-accent),
+    var(--qk-shadow-tile-hover);
 }
-.tile--missing .cover,
-.tile--missing .tile__title {
-  opacity: var(--qk-dimmed-opacity);
-}
-.tile__title {
-  height: var(--qk-tile-title-height);
-  padding-top: var(--qk-space-2);
+/* All clipping happens here, once: the mask makes the card body one group, so the rounded corners
+   cut the cover and the overlays on it together. The overlays reach past the cover's edges (see
+   --qk-tile-overlay-bleed), so no cover pixel sits at the anti-aliased edge where it could show
+   through on some GPUs. */
+.tile__body {
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--qk-font-size-sm);
-  color: var(--qk-color-text-muted);
+  background: var(--qk-color-surface);
+  border-radius: var(--qk-tile-radius);
+  mask-image: var(--qk-mask-solid);
 }
-.tile--open .tile__title {
+.tile__strip {
+  display: flex;
+  align-items: center;
+  gap: var(--qk-space-2);
+  height: var(--qk-tile-strip-height);
+  flex: none;
+  min-width: 0;
+  padding: 0 var(--qk-space-2);
+}
+.tile__source {
+  display: flex;
+  align-items: center;
+  gap: var(--qk-space-2);
+  min-width: 0;
+  flex: 1;
   color: var(--qk-color-text);
 }
-.tile__badges {
-  position: absolute;
-  left: var(--qk-space-2);
-  right: var(--qk-space-2);
-  display: flex;
-  align-items: center;
-  gap: var(--qk-space-1);
-  pointer-events: none;
+.tile__source .source-icon,
+.tile__source .icon {
+  width: var(--qk-tile-logo-size);
+  height: var(--qk-tile-logo-size);
 }
-.tile__badges--top {
-  top: calc(var(--qk-tile-banner-height) + var(--qk-space-2));
-}
-.tile__badges--bottom {
-  bottom: var(--qk-space-2);
-}
-/* Store banner across the top of the cover; the cover art shows through. */
-.tile__source {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  display: flex;
-  align-items: center;
-  gap: var(--qk-space-1);
-  height: var(--qk-tile-banner-height);
-  padding: 0 var(--qk-space-2);
-  background: var(--qk-color-banner-bg);
-  backdrop-filter: blur(var(--qk-badge-blur));
-  font-size: var(--qk-font-size-xs);
-  font-weight: var(--qk-font-weight-bold);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--qk-color-title-on-cover);
-  pointer-events: none;
-}
-.source-icons {
+.tile__primary {
+  position: relative;
   display: inline-flex;
-  align-items: center;
-  gap: var(--qk-space-1);
   flex: none;
+}
+/* In several stores: a dot on the primary store's logo. */
+.tile__more {
+  position: absolute;
+  right: calc(var(--qk-tile-more-dot-size) / -2);
+  bottom: calc(var(--qk-tile-more-dot-size) / -3);
+  width: var(--qk-tile-more-dot-size);
+  height: var(--qk-tile-more-dot-size);
+  border-radius: var(--qk-radius-pill);
+  background: var(--qk-color-accent);
+  box-shadow: 0 0 0 2px var(--qk-color-surface);
 }
 .tile__source-name {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: var(--qk-font-size-sm);
+  color: var(--qk-color-text-muted);
+}
+/* More specific than .source-icons, which would show the list at rest. */
+.tile__source .tile__all {
+  display: none;
+  gap: var(--qk-space-2);
+}
+.tile__states {
+  display: flex;
+  align-items: center;
+  gap: var(--qk-space-1);
+  flex: none;
+  margin-left: auto;
+}
+.tile__state {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--qk-tile-state-size);
+  height: var(--qk-tile-state-size);
+  color: var(--qk-color-text-muted);
+}
+.tile__state .icon {
+  width: var(--qk-tile-logo-size);
+  height: var(--qk-tile-logo-size);
+}
+.tile__state--ring {
+  border-radius: var(--qk-radius-pill);
+  background: var(--qk-color-bg);
+  border: 1px solid var(--qk-color-border);
+}
+.tile__state--ring .icon {
+  width: var(--qk-tile-state-icon-size);
+  height: var(--qk-tile-state-icon-size);
+}
+.tile__state--star {
+  color: var(--qk-color-star);
+}
+.tile__state--running {
+  color: var(--qk-color-running);
+  background: var(--qk-color-success-soft);
+  border-color: var(--qk-color-running-ring);
+}
+.tile__state--running::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: var(--qk-radius-pill);
+  border: 1px solid var(--qk-color-running);
+  animation: qk-tile-pulse var(--qk-tile-pulse-duration) ease-out infinite;
+  will-change: transform, opacity;
+  pointer-events: none;
+}
+@keyframes qk-tile-pulse {
+  from {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  to {
+    transform: scale(var(--qk-tile-pulse-scale));
+    opacity: 0;
+  }
+}
+.tile__cover {
+  position: relative;
+  aspect-ratio: var(--qk-tile-aspect-ratio);
+  background: var(--qk-color-cover-bg);
+}
+.tile--missing .cover {
+  filter: var(--qk-tile-missing-filter);
+}
+.tile__date {
+  position: absolute;
+  left: var(--qk-space-2);
+  bottom: var(--qk-space-2);
+  padding: calc(var(--qk-space-1) / 2) var(--qk-space-2);
+  border-radius: var(--qk-radius-pill);
+  background: var(--qk-color-tile-date-bg);
+  border: 1px solid var(--qk-color-badge-border);
+  font-size: var(--qk-font-size-xs);
+  font-weight: var(--qk-font-weight-bold);
+  white-space: nowrap;
+  transition: opacity var(--qk-duration-fast) var(--qk-easing);
+}
+.tile__title {
+  position: absolute;
+  left: var(--qk-tile-overlay-bleed);
+  right: var(--qk-tile-overlay-bleed);
+  bottom: var(--qk-tile-overlay-bleed);
+  padding: var(--qk-space-6) var(--qk-space-3) var(--qk-space-3);
+  background: linear-gradient(to top, var(--qk-color-tile-title-fade), transparent);
+  color: var(--qk-color-title-on-cover);
+  font-size: var(--qk-font-size-md);
+  font-weight: var(--qk-font-weight-bold);
+  line-height: var(--qk-line-height-tight);
+  opacity: 0;
+  transform: translateY(var(--qk-space-1));
+  transition:
+    opacity var(--qk-duration-fast) var(--qk-easing),
+    transform var(--qk-duration-fast) var(--qk-easing);
+  pointer-events: none;
+}
+.tile__title > span {
+  display: -webkit-box;
+  -webkit-line-clamp: var(--qk-tile-title-lines);
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.tile:hover .tile__title,
+:focus .tile--selected .tile__title,
+.tile--open .tile__title,
+.tile:focus-within .tile__title {
+  opacity: 1;
+  transform: none;
+}
+.tile:hover .tile__date,
+:focus .tile--selected .tile__date,
+.tile--open .tile__date,
+.tile:focus-within .tile__date {
+  opacity: 0;
+}
+.tile:hover .tile__source .tile__all,
+:focus .tile--selected .tile__source .tile__all,
+.tile--open .tile__source .tile__all,
+.tile:focus-within .tile__source .tile__all {
+  display: inline-flex;
+}
+.tile:hover .tile__source:has(.tile__all) > :not(.tile__all),
+:focus .tile--selected .tile__source:has(.tile__all) > :not(.tile__all),
+.tile--open .tile__source:has(.tile__all) > :not(.tile__all),
+.tile:focus-within .tile__source:has(.tile__all) > :not(.tile__all) {
+  display: none;
+}
+.source-icons {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--qk-space-1);
+  flex: none;
 }
 .source-icon {
   display: inline-flex;
@@ -615,10 +750,6 @@ ul {
 .source-icon > svg {
   width: 100%;
   height: 100%;
-}
-.tile__source .icon {
-  width: var(--qk-source-icon-size);
-  height: var(--qk-source-icon-size);
 }
 
 /* Quick action (Play / Install) on a tile or row: on hover, selection and keyboard focus. */
@@ -653,46 +784,18 @@ ul {
 }
 .tile__quick {
   position: absolute;
-  inset: 0;
+  inset: 0 var(--qk-tile-overlay-bleed) var(--qk-tile-overlay-bleed);
   display: grid;
   place-items: center;
+  background: var(--qk-color-tile-quick-scrim);
   pointer-events: none;
   opacity: 0;
   transition: opacity var(--qk-duration-fast) var(--qk-easing);
 }
 .tile:hover .tile__quick,
-.grid:focus .tile--selected .tile__quick,
+:focus .tile--selected .tile__quick,
 .tile__quick:focus-within {
   opacity: 1;
-}
-.badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--qk-space-1);
-  min-width: var(--qk-badge-size);
-  height: var(--qk-badge-size);
-  padding: 0 var(--qk-space-2);
-  background: var(--qk-color-badge-bg);
-  border: 1px solid var(--qk-color-badge-border);
-  border-radius: var(--qk-radius-pill);
-  box-shadow: var(--qk-shadow-badge);
-  backdrop-filter: blur(var(--qk-badge-blur));
-  font-size: var(--qk-font-size-xs);
-  font-weight: var(--qk-font-weight-bold);
-  line-height: 1;
-  white-space: nowrap;
-}
-.badge--star {
-  color: var(--qk-color-star);
-}
-.badge--missing {
-  max-width: 100%;
-  color: var(--qk-color-text);
-}
-.badge--running {
-  color: var(--qk-color-running);
-  margin-left: auto;
 }
 
 /* Icons, links, chips */
@@ -964,6 +1067,22 @@ ul {
   font-weight: var(--qk-font-weight-bold);
   color: var(--qk-color-title-on-cover);
   opacity: 0.85;
+}
+/* A card's title is hidden until hover, so a placeholder shows the name under the initials. */
+.cover--placeholder:has(.cover__name) {
+  align-content: center;
+  gap: var(--qk-space-2);
+  padding: var(--qk-space-3);
+}
+.cover__name {
+  display: -webkit-box;
+  -webkit-line-clamp: var(--qk-tile-title-lines);
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-align: center;
+  font-size: var(--qk-font-size-sm);
+  font-weight: var(--qk-font-weight-bold);
+  color: var(--qk-color-title-on-cover);
 }
 
 /* Details panel */
@@ -1432,6 +1551,28 @@ ul {
 }
 .settings-section:last-child {
   border-bottom: 0;
+}
+.settings-group {
+  gap: var(--qk-space-1);
+  margin: var(--qk-space-2) 0;
+}
+.settings-group .fieldset__legend {
+  margin-bottom: 0;
+}
+.settings-group .field__hint {
+  padding: 0 var(--qk-space-2);
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: var(--qk-space-3);
+  padding: var(--qk-space-1) var(--qk-space-2);
+  font-size: var(--qk-font-size-md);
+}
+.settings-row__input {
+  flex: 1;
+  min-width: 0;
+  max-width: var(--qk-settings-select-width);
 }
 .settings-section__title {
   font-size: var(--qk-font-size-lg);
@@ -2704,9 +2845,187 @@ ul {
   .icon--spin {
     animation: none;
   }
-  .tile:hover .tile__cover {
+  .tile:hover {
     transform: none;
   }
+  .tile__state--running::after {
+    animation: none;
+  }
+}
+
+/* Start page: two shelves that share the height, stats below. */
+.home {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+}
+.home__shelves,
+.home__stats {
+  padding: 0 var(--qk-space-5);
+}
+.home {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-4);
+  padding: var(--qk-space-4) 0 var(--qk-space-5);
+}
+.home__shelves {
+  flex: 1 1 0;
+  min-height: calc(var(--qk-home-min-height) - var(--qk-home-chart-height) * 2);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--qk-space-3);
+}
+/* The shelves size to their cards; capped covers leave the spare height above and below them. */
+.shelf {
+  flex: none;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-1);
+}
+.shelf__title {
+  font-size: var(--qk-font-size-lg);
+  font-weight: var(--qk-font-weight-bold);
+}
+.shelf__scroller {
+  flex: none;
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: var(--qk-shelf-lift-room) var(--qk-space-1) var(--qk-space-2);
+  outline: none;
+}
+/* Centered while the cards fit; scrolls from the left edge when they don't. */
+.shelf__row {
+  display: flex;
+  gap: var(--qk-space-4);
+  margin-inline: auto;
+}
+.shelf__row .tile {
+  flex: none;
+  width: var(--qk-shelf-cover-width);
+  align-self: flex-start;
+}
+.shelf__empty {
+  margin: auto;
+  color: var(--qk-color-text-faint);
+}
+.home__stats {
+  flex: none;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--qk-space-4);
+  width: 100%;
+  max-width: calc(var(--qk-home-stats-width) + var(--qk-space-5) * 2);
+  margin: 0 auto;
+}
+.home-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-3);
+  min-width: 0;
+  padding: var(--qk-space-3) var(--qk-space-4);
+  background: var(--qk-color-surface);
+  border: 1px solid var(--qk-color-border);
+  border-radius: var(--qk-radius-lg);
+}
+.home-panel__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--qk-space-3);
+}
+.home-panel__title {
+  font-size: var(--qk-font-size-md);
+  font-weight: var(--qk-font-weight-bold);
+}
+.home-panel__sub {
+  font-size: var(--qk-font-size-sm);
+  color: var(--qk-color-text-muted);
+  white-space: nowrap;
+}
+.playtime-chart {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: var(--qk-space-2);
+  height: var(--qk-home-chart-height);
+}
+.playtime-chart__day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--qk-space-1);
+  min-height: 0;
+}
+.playtime-chart__value {
+  font-size: var(--qk-font-size-xs);
+  color: var(--qk-color-text-muted);
+}
+.playtime-chart__track {
+  flex: 1;
+  min-height: 0;
+  width: var(--qk-home-bar-width);
+  display: flex;
+  align-items: flex-end;
+}
+.playtime-chart__bar {
+  width: 100%;
+  border-radius: var(--qk-radius-sm) var(--qk-radius-sm) 0 0;
+  background: var(--qk-color-accent-soft);
+}
+.playtime-chart__day--today .playtime-chart__bar {
+  background: var(--qk-color-accent);
+}
+.playtime-chart__label {
+  font-size: var(--qk-font-size-xs);
+  color: var(--qk-color-text-muted);
+}
+.playtime-chart__day--today .playtime-chart__label {
+  color: var(--qk-color-text);
+  font-weight: var(--qk-font-weight-bold);
+}
+.store-stats {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--qk-space-2) var(--qk-space-5);
+  align-content: start;
+}
+.store-stats__row {
+  display: grid;
+  grid-template-columns: auto minmax(0, var(--qk-home-store-name-width)) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--qk-space-2);
+  font-size: var(--qk-font-size-sm);
+}
+.store-stats__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.store-stats__track {
+  height: var(--qk-home-track-height);
+  border-radius: var(--qk-radius-pill);
+  background: var(--qk-color-surface-raised);
+  overflow: hidden;
+}
+.store-stats__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--qk-color-accent);
+}
+.store-stats__count {
+  color: var(--qk-color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.store-stats__count b {
+  color: var(--qk-color-text);
+}
+.sidebar__home {
+  margin-bottom: var(--qk-space-2);
 }
 
 /* Accounts and updates */

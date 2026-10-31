@@ -600,3 +600,9 @@ Short log of choices made while building. Newest at the bottom of each section.
 - **Backup before migrating**: `Database::open` copies an existing database with an older schema to
   `backups/library-<UTC time>-schema<N>.sqlite` (`VACUUM INTO`, so WAL content is included) and
   keeps the newest five. If the copy fails the app refuses to migrate rather than risk the data.
+- **The page open last lives in the database**: the start page's "The page I had open last" reads
+  an `app_state` row, not `settings.json`. The settings page saves the whole settings object, so a
+  value written behind its back would be overwritten. Settings never counts as a last page.
+- **Daily playtime spreads credited time**: the start page's per-day bars split a session's
+  `duration_seconds` (which skips system sleep) over the days in proportion to its wall-clock span,
+  so the week matches the playtime shown elsewhere without storing time per day.

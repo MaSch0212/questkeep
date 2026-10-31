@@ -1,4 +1,5 @@
 import Copy from "lucide-solid/icons/copy";
+import House from "lucide-solid/icons/house";
 import Pencil from "lucide-solid/icons/pencil";
 import PencilLine from "lucide-solid/icons/pencil-line";
 import Shapes from "lucide-solid/icons/shapes";
@@ -101,6 +102,23 @@ export function Sidebar() {
           <SidebarEditor renameId={renaming()} onDone={() => store.setEditingViews(false)} />
         }
       >
+        {/* The start page sits above every view; it is not a view and cannot be edited. */}
+        <Show when={store.showStartPage()}>
+          <ul class="sidebar__list sidebar__home">
+            <li>
+              <button
+                type="button"
+                class="nav-item nav-item--icon view-item"
+                classList={{ "nav-item--active": store.page() === "home" }}
+                aria-current={store.page() === "home" ? "page" : undefined}
+                onClick={() => store.showHome()}
+              >
+                <House class="icon" aria-hidden="true" />
+                <span class="nav-item__text">Home</span>
+              </button>
+            </li>
+          </ul>
+        </Show>
         <For each={store.sections()}>
           {(section) => (
             <div class="sidebar__group">

@@ -6,6 +6,7 @@ mod combine;
 mod games;
 pub mod migrations;
 mod sessions;
+mod start;
 mod views;
 
 use std::path::Path;
@@ -18,6 +19,7 @@ use crate::error::Result;
 pub use combine::{Combined, duplicate_key};
 pub use games::{DetectionDir, GameMissingMetadata, NewGameRecord};
 pub use sessions::OpenSession;
+pub use start::playtime_by_day;
 
 /// The library database. One connection guarded by a mutex: SQLite serializes writes anyway and
 /// every query here takes well under a millisecond for realistic library sizes.

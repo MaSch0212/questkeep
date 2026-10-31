@@ -31,6 +31,8 @@ function makeSettings(overrides: Partial<Settings> = {}): Settings {
     startWithSystem: false,
     startMinimized: true,
     detectExternalLaunches: true,
+    showStartPage: true,
+    startupPage: { kind: "start" },
     providers: {
       epic: { token: "keep-me" },
       steam: { apiKey: "OLDKEY", extraFlag: 7 },
@@ -132,6 +134,28 @@ describe("SettingsPage", () => {
     );
   });
 
+  it("turns the start page off and chooses the page shown on start", async () => {
+    render(() => <SettingsPage />);
+    const show = await screen.findByRole("checkbox", { name: "Show the start page" });
+    const startup = screen.getByRole("combobox", { name: "When Questkeep opens, show" });
+    expect(startup).toHaveValue("start");
+    await fireEvent.click(show);
+    await waitFor(() =>
+      expect(api.saveSettings).toHaveBeenLastCalledWith(
+        expect.objectContaining({ showStartPage: false }),
+      ),
+    );
+    expect(store.showStartPage()).toBe(false);
+    expect(screen.getByRole("option", { name: "Start page" })).toBeDisabled();
+    expect(screen.getByText(/opens the first view instead/)).toBeInTheDocument();
+    await fireEvent.change(startup, { target: { value: "last" } });
+    await waitFor(() =>
+      expect(api.saveSettings).toHaveBeenLastCalledWith(
+        expect.objectContaining({ startupPage: { kind: "last" } }),
+      ),
+    );
+  });
+
   it("enables start-minimized only while start-with-system is on", async () => {
     render(() => <SettingsPage />);
     const startWithSystem = await screen.findByRole("checkbox", {
@@ -227,6 +251,8 @@ describe("SettingsPage", () => {
         startWithSystem: false,
         startMinimized: true,
         detectExternalLaunches: true,
+        showStartPage: true,
+        startupPage: { kind: "start" },
         providers: {
           epic: { token: "keep-me" },
           steam: { apiKey: "NEWKEY", extraFlag: 7, steamId: "76561198000000000" },

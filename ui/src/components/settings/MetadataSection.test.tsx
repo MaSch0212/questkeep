@@ -31,6 +31,8 @@ function makeSettings(overrides: Partial<Settings> = {}): Settings {
     startWithSystem: false,
     startMinimized: true,
     detectExternalLaunches: true,
+    showStartPage: true,
+    startupPage: { kind: "start" },
     providers: { epic: { token: "keep-me" } },
     ...overrides,
   };

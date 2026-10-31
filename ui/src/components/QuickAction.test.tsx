@@ -60,14 +60,11 @@ describe("quick action on a tile", () => {
     expect(screen.queryByRole("button")).toBeNull();
   });
 
-  it("shows the running state instead of Play and never launches twice", async () => {
+  it("shows the running state instead of a button", () => {
     store.handleCoreEvent({ type: "gameStarted", id: "g1" });
     renderTile();
-    expect(screen.queryByRole("button", { name: "Play Hades" })).toBeNull();
-    const running = screen.getByRole("button", { name: "Hades is running" });
-    expect(running).toBeDisabled();
-    await fireEvent.click(running);
-    expect(api.launchGame).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button")).toBeNull();
+    expect(screen.getByTitle("Running")).toBeInTheDocument();
   });
 
   it("is only in the tab order on the selected tile", () => {

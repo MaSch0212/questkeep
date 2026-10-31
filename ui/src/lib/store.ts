@@ -1,6 +1,6 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { batch, createMemo, createRoot, createSignal } from "solid-js";
+import { batch, createEffect, createMemo, createRoot, createSignal, on, onCleanup } from "solid-js";
 import { createStore } from "solid-js/store";
 import type { AppInfo } from "../bindings/AppInfo";
 import type { Category } from "../bindings/Category";
@@ -9,7 +9,10 @@ import type { Game } from "../bindings/Game";
 import type { GameQuery } from "../bindings/GameQuery";
 import type { GroupBy } from "../bindings/GroupBy";
 import type { ProviderInfo } from "../bindings/ProviderInfo";
+import type { Settings } from "../bindings/Settings";
 import type { SortField } from "../bindings/SortField";
+import type { StartPage } from "../bindings/StartPage";
+import type { StartupPage } from "../bindings/StartupPage";
 import type { SyncTimes } from "../bindings/SyncTimes";
 import type { ViewLayout } from "../bindings/ViewLayout";
 import type { ViewSection } from "../bindings/ViewSection";
@@ -37,6 +40,7 @@ import {
   type SyncState,
 } from "./syncStatus";
 import { takeLegacyViewMode, type ViewMode } from "./viewMode";
+import { HOME_PAGE, startupTarget } from "./startPage";
 
 /** What "Save as new view" asks for. */
 export interface NewViewInput {
@@ -45,7 +49,7 @@ export interface NewViewInput {
   sectionId: string;
 }
 
-export type Page = "library" | "settings";
+export type Page = "home" | "library" | "settings";
 
 export interface Toast {
   id: number;
@@ -56,6 +60,13 @@ export interface Toast {
 }
 
 const REFRESH_DEBOUNCE_MS = 60;
+
+/** The result of a call, or null when it fails. */
+function optional<T>(call: () => Promise<T>): Promise<T | null> {
+  return Promise.resolve()
+    .then(call)
+    .catch(() => null);
+}
 
 function createAppStore() {
   const [sections, setSections] = createSignal<ViewSection[]>([]);
@@ -87,6 +98,10 @@ function createAppStore() {
   const [updateOpen, setUpdateOpen] = createSignal(false);
   const [coverVersions, setCoverVersions] = createStore<Record<string, number>>({});
   const [page, setPage] = createSignal<Page>("library");
+  const [showStartPage, setShowStartPage] = createSignal(true);
+  const [startData, setStartData] = createSignal<StartPage | null>(null);
+  // Set once the startup page was chosen; from then on the open page is remembered.
+  const [started, setStarted] = createSignal(false);
   const [syncState, setSyncState] = createSignal<SyncState>(IDLE_SYNC);
   const [backgroundWork, setBackgroundWork] = createSignal<BackgroundWork>(IDLE_WORK);
 
@@ -350,6 +365,75 @@ function createAppStore() {
     scheduleRefresh(0);
   }
 
+  let startSeq = 0;
+  let startTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Loads the start page's shelves and stats. */
+  async function loadStart(): Promise<void> {
+    const seq = ++startSeq;
+    try {
+      const data = await api.startPage();
+      if (seq === startSeq && data) setStartData(data);
+    } catch (error) {
+      if (seq === startSeq) pushToast("error", errorMessage(error));
+    }
+  }
+
+  /** Reloads the start page soon, but only while it is open. */
+  function scheduleStartRefresh(delay = REFRESH_DEBOUNCE_MS) {
+    clearTimeout(startTimer);
+    if (page() !== "home") return;
+    startTimer = setTimeout(() => void loadStart(), delay);
+  }
+
+  function showHome() {
+    if (!showStartPage()) return;
+    batch(() => {
+      setPage("home");
+      setDetailsOpen(false);
+    });
+    void loadStart();
+  }
+
+  /** Applies saved settings the app shell depends on (the start page switch). */
+  function applySettings(settings: Settings) {
+    setShowStartPage(settings.showStartPage);
+    if (!settings.showStartPage && page() === "home") {
+      const first = allViews(sections())[0];
+      if (first) selectView(first.id);
+      else setPage("library");
+    }
+  }
+
+  /** Opens the page chosen in the settings, once the views are loaded. */
+  function openStartupPage(startup: StartupPage, lastPage: string | null) {
+    const ids = allViews(sections()).map((v) => v.id);
+    const target = startupTarget(startup, showStartPage(), lastPage, ids);
+    if (target.kind === "home") showHome();
+    else if (target.id !== null && target.id !== activeViewId()) selectView(target.id);
+    setStarted(true);
+  }
+
+  // Remember the open start page or view for "The page I had open last" (never settings).
+  createEffect(
+    on([started, page, activeViewId], ([ready, current, viewId]) => {
+      if (!ready || current === "settings") return;
+      const value = current === "home" ? HOME_PAGE : viewId;
+      if (value === null) return;
+      void Promise.resolve()
+        .then(() => api.setLastPage(value))
+        .catch(() => undefined);
+    }),
+  );
+
+  // Today's playtime grows while a game runs.
+  createEffect(
+    on([page, running], ([current, ids]) => {
+      if (current !== "home" || ids.size === 0) return;
+      const timer = setInterval(() => void loadStart(), 60_000);
+      onCleanup(() => clearInterval(timer));
+    }),
+  );
+
   async function loadSyncTimes() {
     try {
       const times = await api.syncTimes();
@@ -495,6 +579,17 @@ function createAppStore() {
   function handleCoreEvent(event: CoreEvent) {
     switch (event.type) {
       case "gamesChanged":
+      case "gameRemoved":
+      case "libraryScanned":
+      case "gameStarted":
+      case "gameStopped":
+        scheduleStartRefresh();
+        break;
+      default:
+        break;
+    }
+    switch (event.type) {
+      case "gamesChanged":
         bumpCover(event.ids);
         scheduleRefresh();
         break;
@@ -580,8 +675,15 @@ function createAppStore() {
       loadProviders(),
       api.appInfo().then(setAppInfo),
       api.runningGames().then((ids) => setRunning(new Set(ids))),
-      // The list needs the open view first.
-      loadViews().then(refresh),
+      // The list needs the open view first; the startup page needs the views and settings.
+      // Neither settings nor the last page may keep the list from loading.
+      Promise.all([loadViews(), optional(api.getSettings), optional(api.lastPage)]).then(
+        ([, settings, lastPage]) => {
+          if (settings) setShowStartPage(settings.showStartPage);
+          openStartupPage(settings?.startupPage ?? { kind: "start" }, lastPage ?? null);
+          return refresh();
+        },
+      ),
       loadSyncTimes(),
       loadLaunchers(),
       loadCategories(),
@@ -597,6 +699,7 @@ function createAppStore() {
       disposed = true;
       for (const fn of unlisteners) fn();
       clearTimeout(refreshTimer);
+      clearTimeout(startTimer);
     };
   }
 
@@ -620,6 +723,9 @@ function createAppStore() {
       setSelectedId(null);
       setDetailsOpen(false);
       setPage("library");
+      setShowStartPage(true);
+      setStartData(null);
+      setStarted(false);
       libraryScroll.grid = 0;
       libraryScroll.list = 0;
       libraryScroll.details = 0;
@@ -683,6 +789,10 @@ function createAppStore() {
     backgroundWorkLabel: () => workLabel(backgroundWork()),
     page,
     showSettings: () => setPage("settings"),
+    showHome,
+    showStartPage,
+    startData,
+    applySettings,
     showLibrary: () => setPage("library"),
     rememberLibraryScroll: (mode: ViewMode, top: number) => {
       libraryScroll[mode] = top;

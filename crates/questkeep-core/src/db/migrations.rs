@@ -233,6 +233,13 @@ pub(crate) const MIGRATIONS: &[&str] = &[
         SELECT game_id, 0 FROM launch_detection_off;
     DROP TABLE launch_detection_off;
     "#,
+    // 9: small app state kept across restarts (the start page or view open last).
+    r#"
+    CREATE TABLE app_state (
+        key   TEXT PRIMARY KEY NOT NULL,
+        value TEXT NOT NULL
+    );
+    "#,
 ];
 
 /// Latest schema version this build knows.

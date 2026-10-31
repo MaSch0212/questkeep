@@ -49,6 +49,24 @@ pub struct Settings {
     /// Notice installed games started outside Questkeep (store clients, mod managers, shortcuts)
     /// and record their play sessions.
     pub detect_external_launches: bool,
+    /// Show the start page (the Home entry above the views).
+    pub show_start_page: bool,
+    /// The page Questkeep opens on.
+    pub startup_page: StartupPage,
+}
+
+/// The page Questkeep shows when it opens.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+#[ts(export)]
+pub enum StartupPage {
+    /// The start page; the first view while the start page is turned off.
+    #[default]
+    Start,
+    /// The start page or view that was open when Questkeep last closed.
+    Last,
+    /// A saved view; the first view if it no longer exists.
+    View { id: String },
 }
 
 impl Settings {
@@ -73,6 +91,8 @@ impl Default for Settings {
             start_with_system: false,
             start_minimized: true,
             detect_external_launches: true,
+            show_start_page: true,
+            startup_page: StartupPage::Start,
         }
     }
 }
@@ -327,6 +347,8 @@ mod tests {
             start_with_system: true,
             start_minimized: false,
             detect_external_launches: false,
+            show_start_page: false,
+            startup_page: StartupPage::View { id: "fav".into() },
         };
         store.save(&custom).unwrap();
         let raw = std::fs::read_to_string(&path).unwrap();
@@ -369,6 +391,20 @@ mod tests {
         assert!(s.download_covers);
         assert!(s.close_to_tray && s.start_minimized);
         assert!(!s.minimize_to_tray && !s.start_with_system);
+        assert!(s.show_start_page);
+        assert_eq!(s.startup_page, StartupPage::Start);
+    }
+
+    #[test]
+    fn startup_page_roundtrips_as_tagged_json() {
+        let page = StartupPage::View { id: "fav".into() };
+        let json = serde_json::to_string(&page).unwrap();
+        assert_eq!(json, r#"{"kind":"view","id":"fav"}"#);
+        assert_eq!(serde_json::from_str::<StartupPage>(&json).unwrap(), page);
+        assert_eq!(
+            serde_json::from_str::<StartupPage>(r#"{"kind":"last"}"#).unwrap(),
+            StartupPage::Last
+        );
     }
 
     #[test]
