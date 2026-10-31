@@ -22,6 +22,7 @@ import {
 } from "../lib/grouping";
 import { createSlotCursor } from "../lib/slotCursor";
 import { followGroupJumps } from "../lib/groupJump";
+import { handleGameKeys } from "../lib/gameKeys";
 import { store } from "../lib/store";
 import { GameRow, rowDomId } from "./GameRow";
 import { GameRowCompact } from "./GameRowCompact";
@@ -162,6 +163,9 @@ export function GameList(props: { compact?: boolean }) {
   );
 
   function onKeyDown(event: KeyboardEvent) {
+    const id = activeDescendant();
+    if (handleGameKeys(event, store.selectedGame(), id ? document.getElementById(id) : null))
+      return;
     if (isNavKey(event.key) && !event.altKey && !event.ctrlKey && !event.metaKey) {
       event.preventDefault();
       const pageRows = Math.max(1, Math.floor(height() / rowHeight()));
@@ -185,6 +189,13 @@ export function GameList(props: { compact?: boolean }) {
       scroller.scrollTop = row.top;
       setScrollTop(row.top);
     }
+  }
+
+  /** Right-click selects only that game, then opens its menu at the pointer. */
+  function onContextMenu(slot: number, event: MouseEvent) {
+    moveTo(slot, store.selectGame);
+    const game = layout().slots[slot]?.game;
+    if (game) store.openContextMenu(game.id, { x: event.clientX, y: event.clientY });
   }
 
   function onSelect(slot: number) {
@@ -257,6 +268,7 @@ export function GameList(props: { compact?: boolean }) {
                                     domKey={slotKey(slot())}
                                     selected={slot().game.id === store.selectedId()}
                                     onSelect={() => onSelect(games().first)}
+                                    onContextMenu={(event) => onContextMenu(games().first, event)}
                                   />
                                 }
                               >
@@ -268,6 +280,7 @@ export function GameList(props: { compact?: boolean }) {
                                     store.detailsOpen() && slot().game.id === store.selectedId()
                                   }
                                   onSelect={() => onSelect(games().first)}
+                                  onContextMenu={(event) => onContextMenu(games().first, event)}
                                   onLaunch={(id) => void activateGame(id)}
                                 />
                               </Show>

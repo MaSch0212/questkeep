@@ -17,6 +17,8 @@ interface GameTileProps {
   /** The details panel is showing this game. */
   open?: boolean;
   onSelect: (id: string) => void;
+  /** Right-click: the context menu at the pointer. */
+  onContextMenu?: (event: MouseEvent) => void;
   onLaunch: (id: string) => void;
   /** Unique within the grid when the same game shows in several groups; the game id by default. */
   domKey?: string;
@@ -55,6 +57,11 @@ export function GameTile(props: GameTileProps) {
       aria-selected={props.selected}
       aria-label={props.game.installed ? props.game.name : `${props.game.name} (not installed)`}
       onClick={() => props.onSelect(props.game.id)}
+      onContextMenu={(event) => {
+        if (!props.onContextMenu) return;
+        event.preventDefault();
+        props.onContextMenu(event);
+      }}
       onDblClick={() => props.onLaunch(props.game.id)}
     >
       <div class="tile__body">

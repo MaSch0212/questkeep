@@ -22,6 +22,7 @@ import type { ViewLayout } from "../bindings/ViewLayout";
 import type { ValueCount } from "../bindings/ValueCount";
 import type { ViewSection } from "../bindings/ViewSection";
 import type { ViewUiState } from "../bindings/ViewUiState";
+import type { PopoverAnchor } from "../components/Popover";
 import * as api from "./api";
 import { errorMessage } from "./errors";
 import { groupGames } from "./grouping";
@@ -102,6 +103,12 @@ function createAppStore() {
   /** A request to scroll the open grid or list to a group (`seq` makes repeats distinct). */
   const [groupJump, setGroupJump] = createSignal<{ key: string; seq: number } | null>(null);
   let jumpSeq = 0;
+  /** The open game context menu, if any. */
+  const [contextMenu, setContextMenu] = createSignal<{
+    id: string;
+    anchor: PopoverAnchor;
+    returnTo: Element | null;
+  } | null>(null);
   const [games, setGames] = createSignal<Game[]>([]);
   const [loading, setLoading] = createSignal(false);
   /** What each view remembers (panel, selection, collapsed groups); Explore's is never saved. */
@@ -629,6 +636,18 @@ function createAppStore() {
     }));
   }
 
+  /** Opens a game's context menu; focus goes back to where it was when it closes. */
+  function openContextMenu(id: string, anchor: PopoverAnchor) {
+    setContextMenu({ id, anchor, returnTo: document.activeElement });
+  }
+
+  function closeContextMenu(returnFocus: boolean) {
+    const open = contextMenu();
+    setContextMenu(null);
+    if (returnFocus && open?.returnTo instanceof HTMLElement) {
+      open.returnTo.focus({ preventScroll: true });
+    }
+  }
   /** Loads what each view remembers. Changes made before it arrived win. */
   async function loadViewUi() {
     const loaded = (await api.viewUiStates()) ?? {};
@@ -800,6 +819,8 @@ function createAppStore() {
     } catch (error) {
       pushToast("error", errorMessage(error));
       setSetup(null);
+      setContextMenu(null);
+      setGroupJump(null);
     }
   }
 
@@ -917,6 +938,8 @@ function createAppStore() {
       setUpdate(null);
       setUpdateOpen(false);
       setSetup(null);
+      setContextMenu(null);
+      setGroupJump(null);
       setSettingsSection(null);
       setSeenSources(new Set<string>());
       setToasts([]);
@@ -954,6 +977,14 @@ function createAppStore() {
     groupJump,
     jumpToGroup,
     setAllGroupsCollapsed,
+    /** The game whose context menu is open (fresh from the list), if any. */
+    contextMenu: () => {
+      const open = contextMenu();
+      const game = open && (games().find((g) => g.id === open.id) ?? selectedGame());
+      return open && game?.id === open.id ? { game, anchor: open.anchor } : null;
+    },
+    openContextMenu,
+    closeContextMenu,
     /** The details panel floats over the list in the open view (grid and table). */
     panelFloating: () => activeUi().panelFloating,
     setPanelFloating: (floating: boolean) =>

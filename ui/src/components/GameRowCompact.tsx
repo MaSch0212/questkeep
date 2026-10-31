@@ -11,6 +11,8 @@ interface GameRowCompactProps {
   /** This game is the one the page on the right shows. */
   selected: boolean;
   onSelect: (id: string) => void;
+  /** Right-click: the context menu at the pointer. */
+  onContextMenu?: (event: MouseEvent) => void;
   /** Unique within the list when the same game shows in several groups; the game id by default. */
   domKey?: string;
 }
@@ -30,6 +32,11 @@ export function GameRowCompact(props: GameRowCompactProps) {
       aria-selected={props.selected}
       aria-label={props.game.installed ? props.game.name : `${props.game.name} (not installed)`}
       onClick={() => props.onSelect(props.game.id)}
+      onContextMenu={(event) => {
+        if (!props.onContextMenu) return;
+        event.preventDefault();
+        props.onContextMenu(event);
+      }}
     >
       <div class="list-row__thumb">
         <GameIcon game={props.game} />

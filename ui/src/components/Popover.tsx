@@ -34,7 +34,7 @@ function place(anchor: PopoverAnchor, width: number, height: number) {
   if (top + height > window.innerHeight - MARGIN) {
     top = Math.max(MARGIN, window.innerHeight - height - MARGIN);
   }
-  return { left, top };
+  return { left, top: Math.max(MARGIN, top) };
 }
 
 export interface PopoverProps {

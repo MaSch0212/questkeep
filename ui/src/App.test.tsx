@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@solidjs/testing-library";
+import { fireEvent, render, screen, waitFor, within } from "@solidjs/testing-library";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import * as api from "./lib/api";
@@ -332,6 +332,44 @@ describe("App", () => {
     expect(store.selectedId()).toBe("2");
     store.setGroupBy("source");
     expect(store.collapsedGroups().has("steam")).toBe(true);
+  });
+
+  it("opens a game's context menu by right-click or Shift+F10 and hides with Del", async () => {
+    const hades = makeGame({ id: "1", name: "Hades" });
+    const celeste = makeGame({ id: "2", name: "Celeste" });
+    vi.mocked(api.listGames).mockResolvedValue([hades, celeste]);
+    vi.mocked(api.updateGame).mockImplementation(async (id, update) => ({
+      ...(id === "1" ? hades : celeste),
+      favorite: update.favorite ?? false,
+      hidden: update.hidden ?? false,
+    }));
+    vi.mocked(api.launchProfiles).mockResolvedValue({ profiles: [], playId: null } as never);
+    render(() => <App />);
+    const tile = await screen.findByRole("gridcell", { name: "Celeste" });
+
+    // Right-click selects only that game and opens its menu.
+    await fireEvent.contextMenu(tile, { clientX: 40, clientY: 50 });
+    expect(store.selectedId()).toBe("2");
+    const menu = screen.getByRole("menu", { name: "Celeste actions" });
+    await fireEvent.click(within(menu).getByRole("menuitem", { name: /Add to favorites/ }));
+    await waitFor(() =>
+      expect(api.updateGame).toHaveBeenCalledWith("2", expect.objectContaining({ favorite: true })),
+    );
+    expect(screen.queryByRole("menu")).toBeNull();
+
+    const grid = screen.getByRole("grid");
+    await fireEvent.keyDown(grid, { key: "F10", shiftKey: true });
+    expect(screen.getByRole("menu", { name: "Celeste actions" })).toBeInTheDocument();
+    await fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
+    expect(screen.queryByRole("menu")).toBeNull();
+
+    await fireEvent.keyDown(grid, { key: "Delete" });
+    await waitFor(() =>
+      expect(api.updateGame).toHaveBeenLastCalledWith(
+        "2",
+        expect.objectContaining({ hidden: true }),
+      ),
+    );
   });
 
   describe("start page", () => {

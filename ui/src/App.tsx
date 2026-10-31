@@ -9,6 +9,7 @@ import { clampWidth } from "./lib/viewUi";
 import { AddGameDialog } from "./components/AddGameDialog";
 import { DuplicatesDialog } from "./components/DuplicatesDialog";
 import { FirstRunDialog } from "./components/FirstRunDialog";
+import { GameContextMenu } from "./components/GameContextMenu";
 import { IgdbHint } from "./components/IgdbHint";
 import { DetailsPanel } from "./components/DetailsPanel";
 import { UpdateDialog } from "./components/UpdateDialog";
@@ -226,6 +227,15 @@ export function App() {
       </Show>
       <Show when={store.duplicatesOpen()}>
         <DuplicatesDialog onClose={() => store.setDuplicatesOpen(false)} />
+      </Show>
+      <Show when={store.contextMenu()} keyed>
+        {(open) => (
+          <GameContextMenu
+            game={open.game}
+            anchor={open.anchor}
+            onDone={(returnFocus) => store.closeContextMenu(returnFocus)}
+          />
+        )}
       </Show>
       <Show when={store.setup()?.showSetup}>
         <FirstRunDialog />
