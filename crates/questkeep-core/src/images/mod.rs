@@ -2,6 +2,7 @@
 //! directory, e.g. `images/covers/<game id>.jpg` or `images/backgrounds/<game id>.jpg`.
 
 mod fetcher;
+pub mod hltb;
 mod igdb;
 mod steamgriddb;
 
