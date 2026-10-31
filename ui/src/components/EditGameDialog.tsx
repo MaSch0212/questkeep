@@ -10,6 +10,7 @@ import {
 } from "solid-js";
 import { Portal } from "solid-js/web";
 import type { Game } from "../bindings/Game";
+import type { GameKind } from "../bindings/GameKind";
 import type { GameEditInfo } from "../bindings/GameEditInfo";
 import type { GameLink } from "../bindings/GameLink";
 import type { GameMetadata } from "../bindings/GameMetadata";
@@ -45,6 +46,11 @@ import { Modal } from "./Modal";
 import { sourceName as storeName } from "./SourceIcon";
 
 type Section = "general" | "details" | "links" | "launch" | "tracking" | "images";
+
+const KINDS: readonly (readonly [GameKind, string])[] = [
+  ["game", "Game"],
+  ["app", "App"],
+];
 
 const SECTIONS: { id: Section; label: string }[] = [
   { id: "general", label: "General" },
@@ -187,6 +193,7 @@ export function EditGameDialog(props: {
   const [ownLinks, setOwnLinks] = createSignal<GameLink[]>([]);
   const [hidden, setHidden] = createSignal<string[]>([]);
   const [completion, setCompletion] = createSignal(props.game.completionStatus);
+  const [kind, setKind] = createSignal(props.game.kind);
   const [score, setScore] = createSignal<number | null>(props.game.userScore);
   const [notes, setNotes] = createSignal(props.game.notes ?? "");
   const [categoryNames, setCategoryNames] = createSignal(
@@ -330,6 +337,7 @@ export function EditGameDialog(props: {
       const current = values();
       const steps: (() => Promise<unknown>)[] = [];
       if (trimmed !== props.game.name) steps.push(() => patch({ name: trimmed }));
+      if (kind() !== props.game.kind) steps.push(() => patch({ kind: kind() }));
       if (
         detectLaunches() !== props.game.detectLaunches ||
         ignoredList().join("\n") !== props.game.ignoredProcesses.join("\n")
@@ -350,7 +358,7 @@ export function EditGameDialog(props: {
           }),
         );
       }
-      if (completion() !== props.game.completionStatus) {
+      if (kind() === "game" && completion() !== props.game.completionStatus) {
         steps.push(() => store.setCompletionStatus([id], completion()));
       }
       const wanted = await categoryIds();
@@ -624,6 +632,26 @@ export function EditGameDialog(props: {
                         onInput={(event) => setField("releaseDate", event.currentTarget.value)}
                       />
                     </div>
+                    <div class="field">
+                      <span class="field__label" id="edit-kind">
+                        Type
+                      </span>
+                      <div class="segmented" role="radiogroup" aria-labelledby="edit-kind">
+                        <For each={KINDS}>
+                          {([value, text]) => (
+                            <button
+                              type="button"
+                              role="radio"
+                              class="segmented__option"
+                              aria-checked={kind() === value}
+                              onClick={() => setKind(value)}
+                            >
+                              {text}
+                            </button>
+                          )}
+                        </For>
+                      </div>
+                    </div>
                     <div class="field field--full">
                       {label("Description", "description")}
                       <textarea
@@ -640,28 +668,30 @@ export function EditGameDialog(props: {
                   </div>
                   <h3 class="edit-section__title">You</h3>
                   <div class="edit-grid">
-                    <div class="field field--full">
-                      <span class="field__label" id="edit-completion">
-                        Completion status
-                      </span>
-                      <div class="segmented" role="radiogroup" aria-labelledby="edit-completion">
-                        <For each={store.completion().statuses}>
-                          {(status) => (
-                            <button
-                              type="button"
-                              role="radio"
-                              class="segmented__option"
-                              aria-checked={completion() === status.id}
-                              onClick={() =>
-                                setCompletion(completion() === status.id ? null : status.id)
-                              }
-                            >
-                              {status.name}
-                            </button>
-                          )}
-                        </For>
+                    <Show when={kind() === "game"}>
+                      <div class="field field--full">
+                        <span class="field__label" id="edit-completion">
+                          Completion status
+                        </span>
+                        <div class="segmented" role="radiogroup" aria-labelledby="edit-completion">
+                          <For each={store.completion().statuses}>
+                            {(status) => (
+                              <button
+                                type="button"
+                                role="radio"
+                                class="segmented__option"
+                                aria-checked={completion() === status.id}
+                                onClick={() =>
+                                  setCompletion(completion() === status.id ? null : status.id)
+                                }
+                              >
+                                {status.name}
+                              </button>
+                            )}
+                          </For>
+                        </div>
                       </div>
-                    </div>
+                    </Show>
                     <div class="field">
                       <span class="field__label edit-field__label" id="edit-score">
                         Your score

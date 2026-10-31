@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use uuid::Uuid;
 
-use crate::model::Game;
+use crate::model::{Game, GameKind};
 use crate::settings::Settings;
 
 /// Games in the "recently played" part of the tray menu.
@@ -49,7 +49,11 @@ fn listable(game: &Game) -> bool {
 fn entry(game: &Game) -> TrayGame {
     TrayGame {
         id: game.id,
-        name: game.name.clone(),
+        // Apps show up among the games, so they say what they are.
+        name: match game.kind {
+            GameKind::App => format!("{} (App)", game.name),
+            GameKind::Game => game.name.clone(),
+        },
         icon: game.icon_path.as_ref().map(PathBuf::from),
         cover: game.cover_path.as_ref().map(PathBuf::from),
     }
@@ -224,6 +228,7 @@ mod tests {
             source: "manual".into(),
             source_game_id: None,
             installed: true,
+            kind: GameKind::Game,
             install_dir: None,
             play_action: None,
             playtime_seconds: 0,

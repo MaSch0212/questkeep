@@ -210,6 +210,17 @@ pub enum PlayedFilter {
     Never,
 }
 
+/// Which entries to show by type. Games is the default, so views that predate apps hide them.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum KindFilter {
+    #[default]
+    Games,
+    Apps,
+    Both,
+}
+
 /// Filter and sort options for listing games.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", default)]
@@ -225,6 +236,7 @@ pub struct GameQuery {
     pub hidden: HiddenFilter,
     pub installed: TriState,
     pub played: PlayedFilter,
+    pub kind: KindFilter,
     /// Category ids; a game matches when it has any of them ([`NO_CATEGORY`](super::NO_CATEGORY)
     /// matches games without one). Empty means all.
     pub categories: Vec<String>,

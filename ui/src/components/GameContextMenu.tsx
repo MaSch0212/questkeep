@@ -1,4 +1,6 @@
+import AppWindow from "lucide-solid/icons/app-window";
 import Combine from "lucide-solid/icons/combine";
+import Gamepad from "lucide-solid/icons/gamepad-2";
 import EyeOff from "lucide-solid/icons/eye-off";
 import Eye from "lucide-solid/icons/eye";
 import FolderOpen from "lucide-solid/icons/folder-open";
@@ -157,12 +159,17 @@ export function GameContextMenu(props: {
       icon: iconOf(Star),
       onSelect: () => void report(updateGame(game().id, { favorite: !game().favorite })),
     },
-    {
-      kind: "submenu",
-      label: "Completion status",
-      hint: statusName(),
-      entries: statusEntries,
-    },
+    // Apps have no completion status.
+    ...(game().kind === "app"
+      ? []
+      : [
+          {
+            kind: "submenu" as const,
+            label: "Completion status",
+            hint: statusName(),
+            entries: statusEntries,
+          },
+        ]),
     { kind: "submenu", label: "Categories", entries: categoryEntries },
     { label: "Edit…", icon: iconOf(Pencil), hint: "F2", onSelect: () => setStep("edit") },
     { kind: "separator" },
@@ -175,6 +182,12 @@ export function GameContextMenu(props: {
       label: "Combine with another game…",
       icon: iconOf(Combine),
       onSelect: () => setStep("combine"),
+    },
+    {
+      label: game().kind === "app" ? "Mark as game" : "Mark as app",
+      icon: iconOf(game().kind === "app" ? Gamepad : AppWindow),
+      onSelect: () =>
+        void report(updateGame(game().id, { kind: game().kind === "app" ? "game" : "app" })),
     },
     {
       label: game().hidden ? "Unhide" : "Hide",

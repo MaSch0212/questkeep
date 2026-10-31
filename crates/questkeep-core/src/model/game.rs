@@ -13,6 +13,29 @@ pub use questkeep_store_api::model::{
 /// Provider id used for games added by hand.
 pub const MANUAL_SOURCE: &str = "manual";
 
+/// Whether a library entry is a game or an app (store tools, software, anything marked by hand).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum GameKind {
+    #[default]
+    Game,
+    App,
+}
+
+impl GameKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Game => "game",
+            Self::App => "app",
+        }
+    }
+
+    pub fn parse(text: &str) -> Self {
+        if text == "app" { Self::App } else { Self::Game }
+    }
+}
+
 /// A game in the library.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -39,6 +62,8 @@ pub struct Game {
     pub date_added: DateTime<Utc>,
     pub favorite: bool,
     pub hidden: bool,
+    /// Game or app: the user's choice if they made one, else what the store says.
+    pub kind: GameKind,
     /// Whether Questkeep notices this game when it is started outside Questkeep (from a store
     /// client, a mod manager, ...) and records the session.
     pub detect_launches: bool,
@@ -143,6 +168,9 @@ pub struct GameUpdate {
     pub ignored_processes: Option<Vec<String>>,
     #[serde(default)]
     pub play_action: Option<PlayAction>,
+    /// Marks the entry as a game or an app; wins over what the store says.
+    #[ts(optional)]
+    pub kind: Option<GameKind>,
 }
 
 /// One change to several library entries at once ("Change all" with several games selected).
@@ -155,6 +183,8 @@ pub struct BulkChange {
     pub favorite: Option<bool>,
     #[ts(optional)]
     pub hidden: Option<bool>,
+    #[ts(optional)]
+    pub kind: Option<GameKind>,
     /// Categories every entry gets.
     pub add_categories: Vec<String>,
     /// Categories taken off every entry.

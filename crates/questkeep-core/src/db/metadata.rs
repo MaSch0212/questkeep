@@ -420,6 +420,7 @@ impl Database {
             "UPDATE games SET completion_status = \
                 (SELECT value FROM app_state WHERE key = 'completion.firstStart') \
              WHERE id = (SELECT COALESCE(merged_into, id) FROM games WHERE id = ?1) \
+               AND COALESCE(kind_user, kind) = 'game' \
                AND EXISTS (SELECT 1 FROM app_state WHERE key = 'completion.firstStart') \
                AND completion_status IS (SELECT value FROM app_state WHERE key = 'completion.newGame') \
                AND completion_status IS NOT \

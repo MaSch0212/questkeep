@@ -9,7 +9,7 @@ use uuid::Uuid;
 use super::Database;
 use super::categories::{game_categories, set_categories};
 use crate::error::{CoreError, Result};
-use crate::model::{CombinePlan, Game, GameQuery, HiddenFilter, UserEdits};
+use crate::model::{CombinePlan, Game, GameQuery, HiddenFilter, KindFilter, UserEdits};
 
 /// The entry a game row belongs to: itself, or the entry it was combined into.
 fn entry_of(tx: &Transaction<'_>, id: Uuid) -> Result<String> {
@@ -396,6 +396,7 @@ impl Database {
     pub fn find_duplicates(&self) -> Result<Vec<Vec<Game>>> {
         let entries = self.list_games(&GameQuery {
             hidden: HiddenFilter::All,
+            kind: KindFilter::Both,
             ..GameQuery::default()
         })?;
         let dismissed: HashSet<(String, String)> = {

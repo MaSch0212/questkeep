@@ -21,22 +21,22 @@ pub struct SessionSpan {
 }
 
 impl Database {
-    /// The most recently played library entries (hidden ones left out), newest first.
+    /// The most recently played library entries (hidden ones and apps left out), newest first.
     pub fn recently_played(&self, limit: u32) -> Result<Vec<ShelfGame>> {
         self.shelf(
             "last_played",
-            "hidden = 0 AND last_played IS NOT NULL",
+            "hidden = 0 AND last_played IS NOT NULL AND COALESCE(kind_user, kind) = 'game'",
             limit,
         )
     }
 
-    /// The most recently added library entries (hidden ones left out), newest first. An entry
+    /// The most recently added library entries (hidden ones and apps left out), newest first. An entry
     /// combined from several stores counts as added when its newest copy was.
     pub fn recently_added(&self, limit: u32) -> Result<Vec<ShelfGame>> {
         self.shelf(
             "MAX(date_added, COALESCE((SELECT MAX(m.date_added) FROM games m \
              WHERE m.merged_into = games.id), date_added))",
-            "hidden = 0",
+            "hidden = 0 AND COALESCE(kind_user, kind) = 'game'",
             limit,
         )
     }
@@ -63,12 +63,15 @@ impl Database {
             .collect())
     }
 
-    /// Play sessions that were still running at or after `since`. Unfinished sessions count up
-    /// to their last heartbeat.
+    /// Play sessions of games (not apps) that were still running at or after `since`.
+    /// Unfinished sessions count up to their last heartbeat.
     pub fn sessions_since(&self, since: DateTime<Utc>) -> Result<Vec<SessionSpan>> {
         self.spans(
             "SELECT started_at, COALESCE(ended_at, last_seen_at), duration_seconds \
-             FROM play_sessions WHERE COALESCE(ended_at, last_seen_at) >= ?1",
+             FROM play_sessions WHERE COALESCE(ended_at, last_seen_at) >= ?1 \
+             AND game_id NOT IN (SELECT g.id FROM games g \
+                 JOIN games e ON e.id = COALESCE(g.merged_into, g.id) \
+                 WHERE COALESCE(e.kind_user, e.kind) = 'app')",
             params![since],
         )
     }
@@ -117,6 +120,7 @@ impl Database {
                  COUNT(DISTINCT CASE WHEN g.installed THEN e.id END), COUNT(DISTINCT e.id) \
              FROM games g JOIN games e ON e.id = COALESCE(g.merged_into, g.id) \
              WHERE e.hidden = 0 AND g.source <> ?1 \
+                 AND COALESCE(e.kind_user, e.kind) = 'game' \
              GROUP BY g.source ORDER BY COUNT(DISTINCT e.id) DESC, g.source",
         )?;
         let stores = stmt

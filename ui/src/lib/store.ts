@@ -110,6 +110,8 @@ function createAppStore() {
     id: string;
     anchor: PopoverAnchor;
     returnTo: Element | null;
+    /** The game itself, for one that isn't in the open view (the apps launcher). */
+    game?: Game;
   } | null>(null);
   /** Games on the combine screen, if it is open. */
   const [combining, setCombining] = createSignal<readonly string[] | null>(null);
@@ -665,9 +667,10 @@ function createAppStore() {
     }));
   }
 
-  /** Opens a game's context menu; focus goes back to where it was when it closes. */
-  function openContextMenu(id: string, anchor: PopoverAnchor) {
-    setContextMenu({ id, anchor, returnTo: document.activeElement });
+  /** Opens a game's context menu; focus goes back to where it was when it closes. Pass the
+   *  game when the open view may not contain it. */
+  function openContextMenu(id: string, anchor: PopoverAnchor, game?: Game) {
+    setContextMenu({ id, anchor, returnTo: document.activeElement, game });
   }
 
   function closeContextMenu(returnFocus: boolean) {
@@ -1057,7 +1060,7 @@ function createAppStore() {
     /** The game whose context menu is open (fresh from the list), if any. */
     contextMenu: () => {
       const open = contextMenu();
-      const game = open && (games().find((g) => g.id === open.id) ?? selectedGame());
+      const game = open && (games().find((g) => g.id === open.id) ?? open.game ?? selectedGame());
       if (!open || game?.id !== open.id) return null;
       // On a game of a multi-selection the menu acts on all selected games.
       const all = selectedGames();

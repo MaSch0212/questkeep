@@ -129,6 +129,10 @@ impl LibraryProvider for SteamProvider {
         }
         let mut games = scan::scan_roots(&self.roots);
         self.apply_local_stats(&mut games);
+        // Unit tests stay offline.
+        if !cfg!(test) {
+            web::mark_apps(&mut games);
+        }
         games.sort_by_cached_key(|g| (g.name.to_lowercase(), g.source_game_id.clone()));
         Ok(games)
     }
@@ -147,22 +151,11 @@ impl LibraryProvider for SteamProvider {
     }
 
     fn scan_owned(&self, config: &serde_json::Value) -> Result<Vec<ImportedGame>, ProviderError> {
-        if let Some(account) = self.account.as_deref().filter(|a| a.is_signed_in()) {
-            match Self::owned_with_session(account) {
-                Ok(games) => return Ok(games),
-                Err(err) if config_text(config, "apiKey").is_some() => {
-                    tracing::warn!(%err, "Steam sign-in failed, using the API key");
-                }
-                Err(err) => return Err(err),
-            }
+        let mut games = self.owned_games(config)?;
+        if !cfg!(test) {
+            web::mark_apps(&mut games);
         }
-        let (api_key, steam_id) = self.owned_credentials(config)?;
-        web::fetch_owned(web::Credential::Key(&api_key), &steam_id).map_err(|e| match e {
-            web::OwnedError::Rejected => {
-                ProviderError::Network("The Steam Web API key was rejected.".into())
-            }
-            web::OwnedError::Other(err) => err,
-        })
+        Ok(games)
     }
 
     fn account(&self) -> Option<&dyn AccountAuth> {
@@ -452,6 +445,27 @@ impl SteamProvider {
         } else {
             Ok(None)
         }
+    }
+
+    /// Owned games with the store sign-in, else (or when it fails and a key is set) with the
+    /// Web API key from `config`.
+    fn owned_games(&self, config: &serde_json::Value) -> Result<Vec<ImportedGame>, ProviderError> {
+        if let Some(account) = self.account.as_deref().filter(|a| a.is_signed_in()) {
+            match Self::owned_with_session(account) {
+                Ok(games) => return Ok(games),
+                Err(err) if config_text(config, "apiKey").is_some() => {
+                    tracing::warn!(%err, "Steam sign-in failed, using the API key");
+                }
+                Err(err) => return Err(err),
+            }
+        }
+        let (api_key, steam_id) = self.owned_credentials(config)?;
+        web::fetch_owned(web::Credential::Key(&api_key), &steam_id).map_err(|e| match e {
+            web::OwnedError::Rejected => {
+                ProviderError::Network("The Steam Web API key was rejected.".into())
+            }
+            web::OwnedError::Other(err) => err,
+        })
     }
 
     /// Owned games with the store session's token; a rejected token is renewed once.

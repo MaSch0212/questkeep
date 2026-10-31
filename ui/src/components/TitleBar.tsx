@@ -1,6 +1,7 @@
 import ChevronDown from "lucide-solid/icons/chevron-down";
 import Combine from "lucide-solid/icons/combine";
 import Copy from "lucide-solid/icons/copy";
+import LayoutGrid from "lucide-solid/icons/layout-grid";
 import Minus from "lucide-solid/icons/minus";
 import Pencil from "lucide-solid/icons/pencil";
 import Plus from "lucide-solid/icons/plus";
@@ -17,6 +18,7 @@ import { addGameMenuItems, type AddGameMenuItem } from "../lib/addGameOptions";
 import { errorMessage } from "../lib/errors";
 import { store } from "../lib/store";
 import { syncLabel } from "../lib/syncStatus";
+import { AppsLauncher } from "./AppsLauncher";
 import { CommandBar, type CommandBarHandle } from "./CommandBar";
 import { Logo } from "./Logo";
 import { Menu, type MenuEntry } from "./Menu";
@@ -76,7 +78,7 @@ const downloading = () => store.backgroundWorkLabel() !== null;
 const syncButtonLabel = () =>
   store.syncBusy() ? syncLabel(store.syncState()) : (store.backgroundWorkLabel() ?? "Sync");
 
-type Open = "app" | "add" | "launch" | "sync" | null;
+type Open = "app" | "add" | "launch" | "apps" | "sync" | null;
 
 /**
  * Replaces the native window frame (`decorations: false`). Left: the Questkeep menu (every app
@@ -195,7 +197,11 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
     },
   ];
 
-  const toolButton = (which: "add" | "launch" | "sync", label: string, icon: () => JSX.Element) => (
+  const toolButton = (
+    which: "add" | "launch" | "apps" | "sync",
+    label: string,
+    icon: () => JSX.Element,
+  ) => (
     <button
       ref={(el) => (buttons[which] = el)}
       type="button"
@@ -203,7 +209,7 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
       classList={{ "titlebar__tool--open": open() === which }}
       aria-label={label}
       title={label}
-      aria-haspopup={which === "sync" ? "dialog" : "menu"}
+      aria-haspopup={which === "sync" || which === "apps" ? "dialog" : "menu"}
       aria-expanded={open() === which}
       onClick={() => toggle(which)}
     >
@@ -238,6 +244,9 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
         ))}
         {toolButton("launch", "Open launcher", () => (
           <Rocket class="icon" aria-hidden="true" />
+        ))}
+        {toolButton("apps", "Apps", () => (
+          <LayoutGrid class="icon" aria-hidden="true" />
         ))}
         <span class="titlebar__sync">
           {toolButton("sync", syncButtonLabel(), () => (
@@ -322,7 +331,7 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
           </button>
         </div>
       </div>
-      <Show when={open() !== null && open() !== "sync" && anchor()}>
+      <Show when={open() !== null && open() !== "sync" && open() !== "apps" && anchor()}>
         {(at) => (
           <Menu
             anchor={at()}
@@ -334,6 +343,9 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
             }
           />
         )}
+      </Show>
+      <Show when={open() === "apps" && anchor()}>
+        {(at) => <AppsLauncher anchor={at()} onClose={close} inside={() => [buttons.apps]} />}
       </Show>
       <Show when={open() === "sync" && anchor()}>
         {(at) => <SyncPanel anchor={at()} onClose={close} inside={() => [buttons.sync]} />}

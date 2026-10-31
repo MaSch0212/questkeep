@@ -26,7 +26,9 @@ use super::{ImageCache, ImageKind, MAX_IMAGE_BYTES};
 use crate::db::Database;
 use crate::events::{CoreEvent, EventBus, WorkQueue};
 use crate::metadata::MetadataResolver;
-use crate::model::{ActionKind, Game, GameMetadata, HLTB_SOURCE, IGDB_SOURCE, MEASURED_SOURCE};
+use crate::model::{
+    ActionKind, Game, GameKind, GameMetadata, HLTB_SOURCE, IGDB_SOURCE, MEASURED_SOURCE,
+};
 use crate::providers::{ImageCandidate, LibraryProvider, ProviderRegistry};
 use crate::seed::is_fake_source;
 use questkeep_imaging::{SquareFrom, icon_png_from_bytes, icon_png_from_rgba};
@@ -607,7 +609,7 @@ fn fetch_metadata(shared: &MetadataShared, job: &MetadataJob, last_request: &mut
     }
 }
 
-/// Asks IGDB about the game's library entry and stores the answer as the entry's `igdb` source.
+/// Asks IGDB about the game's library entry (never for apps) and stores the answer as the entry's `igdb` source.
 /// "IGDB had nothing" is stored too (and remembered in `extra`, which the automatic jobs check);
 /// errors (offline, rate limit, bad credentials) are only logged so they are retried later.
 /// Returns whether data was stored.
@@ -621,6 +623,10 @@ fn fetch_igdb(shared: &MetadataShared, id: Uuid) -> bool {
     let Ok(Some(game)) = shared.db.find_game(entry) else {
         return false;
     };
+    // Apps keep their store metadata: IGDB only knows games.
+    if game.kind == GameKind::App {
+        return false;
+    }
     let lookup = IgdbLookup {
         name: &game.name,
         year: release_year(game.release_date.as_deref()),

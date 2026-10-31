@@ -67,6 +67,7 @@ function sameQuery(a: GameQuery, b: GameQuery): boolean {
     a.descending === b.descending &&
     a.favorite === b.favorite &&
     a.installed === b.installed &&
+    a.kind === b.kind &&
     a.hidden === b.hidden &&
     a.played === b.played &&
     sameSet(a.sources, b.sources) &&
@@ -112,6 +113,7 @@ export function activeFilterCount(query: GameQuery): number {
     (query.installed !== "any" ? 1 : 0) +
     (query.played !== "any" ? 1 : 0) +
     (query.hidden !== "visible" ? 1 : 0) +
+    (query.kind !== "games" ? 1 : 0) +
     activeTreeCount(query.filter)
   );
 }
@@ -126,6 +128,7 @@ export function clearedFilters(query: GameQuery): GameQuery {
     installed: "any",
     played: "any",
     hidden: "visible",
+    kind: "games",
     filter: emptyGroup(),
   };
 }
@@ -141,6 +144,7 @@ export function matchesFilters(query: GameQuery, game: Game): boolean {
   }
   if (query.favorite !== "any" && game.favorite !== (query.favorite === "yes")) return false;
   if (query.installed !== "any" && game.installed !== (query.installed === "yes")) return false;
+  if (query.kind !== "both" && (game.kind === "app") !== (query.kind === "apps")) return false;
   if (query.hidden === "visible" && game.hidden) return false;
   if (query.hidden === "hidden" && !game.hidden) return false;
   if (query.played !== "any" && hasPlayed(game) !== (query.played === "played")) return false;

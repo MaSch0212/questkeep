@@ -522,12 +522,14 @@ export function DetailsPanel(props: DetailsPanelProps) {
                   <dt>Playtime</dt>
                   <dd>{formatPlaytime(props.game.playtimeSeconds)}</dd>
                 </div>
-                <div class="details__stat">
-                  <dt>Status</dt>
-                  <dd>
-                    <CompletionPicker game={props.game} />
-                  </dd>
-                </div>
+                <Show when={props.game.kind === "game"}>
+                  <div class="details__stat">
+                    <dt>Status</dt>
+                    <dd>
+                      <CompletionPicker game={props.game} />
+                    </dd>
+                  </div>
+                </Show>
                 <div class="details__stat details__stat--stores">
                   <dt>{combined() ? "Stores" : "Store"}</dt>
                   <dd class="details__stores">

@@ -21,9 +21,9 @@ use crate::metadata::MetadataResolver;
 use crate::model::{
     Achievements, ActionKind, BulkChange, Category, CombinePlan, CompletionSettings, Game,
     GameActivity, GameNews, GameQuery, GameUpdate, HLTB_SOURCE, HiddenFilter, IGDB_SOURCE,
-    ImportedGame, LibraryView, ListField, MANUAL_SOURCE, NewManualGame, NewView, PlayAction,
-    ScanSummary, SectionOrder, SetupState, StartPage, SyncTimes, TriState, ValueCount, ViewSection,
-    ViewUiState, ViewUpdate, display_name_from_path,
+    ImportedGame, KindFilter, LibraryView, ListField, MANUAL_SOURCE, NewManualGame, NewView,
+    PlayAction, ScanSummary, SectionOrder, SetupState, StartPage, SyncTimes, TriState, ValueCount,
+    ViewSection, ViewUiState, ViewUpdate, display_name_from_path,
 };
 use crate::paths::DataPaths;
 use crate::providers::{LibraryProvider, ProviderError, ProviderInfo, ProviderRegistry};
@@ -172,6 +172,7 @@ impl Library {
     pub fn tray_games(&self) -> Result<TrayGames> {
         let games = self.db.list_games(&GameQuery {
             installed: TriState::Yes,
+            kind: KindFilter::Both,
             ..GameQuery::default()
         })?;
         // Icons are shown from their absolute path; files that are gone count as missing, which
@@ -1164,6 +1165,7 @@ impl Library {
     pub fn all_metadata_jobs(&self) -> Result<Vec<MetadataJob>> {
         let entries = self.db.list_games(&GameQuery {
             hidden: HiddenFilter::All,
+            kind: KindFilter::Both,
             ..GameQuery::default()
         })?;
         let mut jobs = Vec::new();

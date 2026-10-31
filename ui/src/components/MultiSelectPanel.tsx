@@ -60,6 +60,7 @@ export function MultiSelectPanel(props: {
   const favorite = () => common(props.games, (g) => g.favorite);
   const hidden = () => common(props.games, (g) => g.hidden);
   const status = () => common(props.games, (g) => g.completionStatus);
+  const kind = () => common(props.games, (g) => g.kind);
   const ids = () => props.games.map((g) => g.id);
 
   function onStatus(value: string) {
@@ -172,6 +173,31 @@ export function MultiSelectPanel(props: {
               {mixedLabel(favorite(), (v) => (v ? "Yes" : "No"))}
             </button>
           </div>
+          <label class="multi__row">
+            <span>Type</span>
+            <select
+              class="input"
+              onChange={(e) =>
+                void changeAll(props.games, {
+                  kind: e.currentTarget.value === "app" ? "app" : "game",
+                  addCategories: [],
+                  removeCategories: [],
+                })
+              }
+            >
+              <Show when={kind() === "mixed"}>
+                <option value="mixed" disabled selected>
+                  Mixed
+                </option>
+              </Show>
+              <option value="game" selected={kind() === "game"}>
+                Game
+              </option>
+              <option value="app" selected={kind() === "app"}>
+                App
+              </option>
+            </select>
+          </label>
           <div class="multi__row">
             <span>Hidden</span>
             <button

@@ -13,6 +13,7 @@ export function defaultQuery(): GameQuery {
     hidden: "visible",
     installed: "any",
     played: "any",
+    kind: "games",
     filter: { mode: "all", items: [] },
   };
 }

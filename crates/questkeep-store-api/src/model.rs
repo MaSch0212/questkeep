@@ -177,6 +177,10 @@ pub struct ImportedGame {
     /// Last played according to the store. Merged as the later of both values.
     #[serde(default)]
     pub last_played: Option<DateTime<Utc>>,
+    /// Whether the store lists it as an app (software, tool) rather than a game; `None` when
+    /// the store doesn't say (the entry keeps what it had, new ones are games).
+    #[serde(default)]
+    pub app: Option<bool>,
 }
 
 fn default_true() -> bool {
@@ -194,6 +198,7 @@ impl ImportedGame {
             play_action: None,
             playtime_seconds: None,
             last_played: None,
+            app: None,
         }
     }
 }

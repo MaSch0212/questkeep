@@ -4899,3 +4899,68 @@ ul {
 .picker__item--dragging {
   opacity: var(--qk-dimmed-opacity);
 }
+
+/* Apps launcher */
+.apps {
+  width: var(--qk-apps-width);
+  padding: 0;
+}
+.apps__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--qk-space-1);
+  padding: 0 var(--qk-space-2);
+}
+.apps__app {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--qk-space-1);
+  min-width: 0;
+  padding: var(--qk-space-2) var(--qk-space-1);
+  border: 0;
+  border-radius: var(--qk-radius-md);
+  background: none;
+  color: var(--qk-color-text-muted);
+  font: inherit;
+  font-size: var(--qk-font-size-sm);
+  cursor: pointer;
+}
+.apps__app:hover,
+.apps__app:focus-visible {
+  background: var(--qk-color-surface-hover);
+  color: var(--qk-color-text);
+}
+.apps__icon {
+  --qk-game-icon-size: var(--qk-apps-icon-size);
+  display: inline-flex;
+  width: var(--qk-apps-icon-size);
+  height: var(--qk-apps-icon-size);
+}
+.apps__name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.apps__empty {
+  margin: 0;
+  padding: var(--qk-space-3) var(--qk-space-4);
+  color: var(--qk-color-text-muted);
+  font-size: var(--qk-font-size-sm);
+}
+.apps__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--qk-space-2);
+  margin-top: var(--qk-space-2);
+  padding: var(--qk-space-2) var(--qk-space-3);
+  border-top: 1px solid var(--qk-color-border);
+  font-size: var(--qk-font-size-sm);
+}
+.apps__foot .link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--qk-space-1);
+}

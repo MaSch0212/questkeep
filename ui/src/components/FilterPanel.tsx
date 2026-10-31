@@ -1,6 +1,7 @@
 import { For, onMount, Show, type JSX } from "solid-js";
 import type { GameQuery } from "../bindings/GameQuery";
 import type { HiddenFilter } from "../bindings/HiddenFilter";
+import type { KindFilter } from "../bindings/KindFilter";
 import type { PlayedFilter } from "../bindings/PlayedFilter";
 import type { TriState } from "../bindings/TriState";
 import { toggleSource } from "../lib/query";
@@ -130,6 +131,16 @@ export function FilterPanel(props: {
               </For>
             </div>
           </Show>
+          <Choice<KindFilter>
+            label="Type"
+            value={query().kind}
+            options={[
+              ["games", "Games"],
+              ["apps", "Apps"],
+              ["both", "Both"],
+            ]}
+            onChange={(kind) => set({ kind })}
+          />
           <Choice
             label="Installed"
             value={query().installed}

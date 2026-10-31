@@ -17,4 +17,9 @@ playtimeSeconds: number | null,
 /**
  * Last played according to the store. Merged as the later of both values.
  */
-lastPlayed: string | null, };
+lastPlayed: string | null, 
+/**
+ * Whether the store lists it as an app (software, tool) rather than a game; `None` when
+ * the store doesn't say (the entry keeps what it had, new ones are games).
+ */
+app: boolean | null, };

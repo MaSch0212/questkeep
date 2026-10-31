@@ -48,11 +48,15 @@ export function CommandBar(props: { ref?: (handle: CommandBarHandle) => void }) 
     const search = value.trim();
     try {
       const games = search
-        ? rankMatches(await api.listGames({ ...defaultQuery(), search, hidden: "all" }), search)
+        ? rankMatches(
+            await api.listGames({ ...defaultQuery(), search, hidden: "all", kind: "both" }),
+            search,
+          )
         : (
             await api.listGames({
               ...defaultQuery(),
               played: "played",
+              kind: "both",
               sort: "lastPlayed",
               descending: true,
             })
@@ -187,6 +191,7 @@ export function CommandBar(props: { ref?: (handle: CommandBarHandle) => void }) 
                     <span class="command__meta">
                       <SourceIcon source={game.source} />
                       <span class="visually-hidden">{sourceName(game.source)}, </span>
+                      {game.kind === "app" ? "App · " : ""}
                       {game.hidden ? "Hidden · " : ""}
                       {game.installed ? "Installed" : "Not installed"}
                     </span>

@@ -358,6 +358,35 @@ pub(crate) const MIGRATIONS: &[&str] = &[
     r#"
     ALTER TABLE views ADD COLUMN columns TEXT NOT NULL DEFAULT '[]';
     "#,
+    // 14: games or apps: `kind` as the store says (scans update it), `kind_user` the user's
+    // choice, which wins. The entries view gains both.
+    r#"
+    ALTER TABLE games ADD COLUMN kind TEXT NOT NULL DEFAULT 'game';
+    ALTER TABLE games ADD COLUMN kind_user TEXT;
+
+    DROP VIEW library_entries;
+    CREATE VIEW library_entries AS
+    SELECT g.id, g.name, g.sorting_name, g.search_key, g.source, g.source_game_id,
+        (g.installed OR EXISTS
+            (SELECT 1 FROM games m WHERE m.merged_into = g.id AND m.installed)) AS installed,
+        g.install_dir, g.play_action,
+        g.playtime_seconds + COALESCE(
+            (SELECT SUM(m.playtime_seconds) FROM games m WHERE m.merged_into = g.id), 0)
+            AS playtime_seconds,
+        g.play_count + COALESCE(
+            (SELECT SUM(m.play_count) FROM games m WHERE m.merged_into = g.id), 0) AS play_count,
+        COALESCE(
+            MAX(g.last_played,
+                (SELECT MAX(m.last_played) FROM games m WHERE m.merged_into = g.id)),
+            g.last_played,
+            (SELECT MAX(m.last_played) FROM games m WHERE m.merged_into = g.id)) AS last_played,
+        g.date_added, g.favorite, g.hidden, g.cover_path, g.icon_path, g.background_path,
+        g.description, g.release_date, g.developers, g.publishers, g.genres,
+        g.metadata_updated_at, g.extra, g.merged_into, g.copy_position,
+        g.details, g.release_year, g.critic_score, g.community_score, g.install_size, g.ttb_main,
+        g.completion_status, g.user_score, g.notes, g.kind, g.kind_user
+    FROM games g WHERE g.merged_into IS NULL;
+    "#,
 ];
 
 /// Latest schema version this build knows.

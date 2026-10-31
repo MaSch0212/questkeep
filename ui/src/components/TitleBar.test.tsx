@@ -196,4 +196,23 @@ describe("Command bar", () => {
     expect(store.detailsOpen()).toBe(true);
     expect(screen.queryByRole("option")).toBeNull();
   });
+
+  it("starts apps from the apps launcher and shows all of them in Explore", async () => {
+    const blender = makeGame({ id: "b", name: "Blender", kind: "app" });
+    vi.mocked(api.listGames).mockResolvedValue([blender]);
+    render(() => <TitleBar onAdd={() => undefined} />);
+    await fireEvent.click(screen.getByRole("button", { name: "Apps" }));
+    const launcher = await screen.findByRole("dialog", { name: "Apps" });
+    expect(api.listGames).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "apps", sort: "playtime" }),
+    );
+    await fireEvent.contextMenu(await within(launcher).findByRole("button", { name: /Blender/ }));
+    expect(store.contextMenu()?.game.id).toBe("b");
+    store.closeContextMenu(false);
+
+    await fireEvent.click(screen.getByRole("button", { name: "Apps" }));
+    await fireEvent.click(await screen.findByRole("button", { name: "Show all apps" }));
+    expect(store.query().kind).toBe("apps");
+    expect(screen.queryByRole("dialog", { name: "Apps" })).toBeNull();
+  });
 });

@@ -27,6 +27,12 @@ function quickPills(query: GameQuery): QuickPill[] {
       clear: { categories: [] },
     });
   }
+  if (query.kind !== "games") {
+    pills.push({
+      parts: [{ label: query.kind === "apps" ? "Apps" : "Games and apps", value: "" }],
+      clear: { kind: "games" },
+    });
+  }
   if (query.installed !== "any") {
     pills.push({
       parts: [{ label: query.installed === "yes" ? "Installed" : "Not installed", value: "" }],
@@ -146,6 +152,7 @@ export function FilterPills() {
               favorite: cleared.favorite,
               played: cleared.played,
               hidden: cleared.hidden,
+              kind: cleared.kind,
               filter: emptyGroup(),
             });
           }}

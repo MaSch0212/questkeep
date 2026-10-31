@@ -1,4 +1,6 @@
+import AppWindow from "lucide-solid/icons/app-window";
 import Combine from "lucide-solid/icons/combine";
+import Gamepad from "lucide-solid/icons/gamepad-2";
 import Download from "lucide-solid/icons/download";
 import EyeOff from "lucide-solid/icons/eye-off";
 import Eye from "lucide-solid/icons/eye";
@@ -30,6 +32,7 @@ export function MultiContextMenu(props: {
   const favorite = () => common(props.games, (g) => g.favorite);
   const hidden = () => common(props.games, (g) => g.hidden);
   const status = () => common(props.games, (g) => g.completionStatus);
+  const allApps = () => props.games.every((g) => g.kind === "app");
 
   const statusEntries = (): MenuEntry[] => [
     {
@@ -92,6 +95,12 @@ export function MultiContextMenu(props: {
       label: "Combine into one game…",
       icon: iconOf(Combine),
       onSelect: () => store.openCombine(ids()),
+    },
+    {
+      label: allApps() ? "Mark all as games" : "Mark all as apps",
+      icon: iconOf(allApps() ? Gamepad : AppWindow),
+      onSelect: () =>
+        void changeAll(props.games, { kind: allApps() ? "game" : "app", ...NO_CATEGORIES }),
     },
     {
       label: hidden() === true ? "Unhide all" : "Hide all",

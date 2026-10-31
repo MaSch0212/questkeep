@@ -6,7 +6,7 @@ use uuid::Uuid;
 use super::Database;
 use super::categories::{game_categories, set_categories};
 use crate::error::{CoreError, Result};
-use crate::model::BulkChange;
+use crate::model::{BulkChange, GameKind};
 
 impl Database {
     /// Applies `change` to every entry in `ids`; nothing changes when one of them is unknown.
@@ -18,8 +18,13 @@ impl Database {
             let key = id.to_string();
             let found = tx.execute(
                 "UPDATE games SET favorite = COALESCE(?2, favorite), \
-                 hidden = COALESCE(?3, hidden) WHERE id = ?1",
-                params![key, change.favorite, change.hidden],
+                 hidden = COALESCE(?3, hidden), kind_user = COALESCE(?4, kind_user) WHERE id = ?1",
+                params![
+                    key,
+                    change.favorite,
+                    change.hidden,
+                    change.kind.map(GameKind::as_str)
+                ],
             )?;
             if found == 0 {
                 return Err(CoreError::GameNotFound(*id));

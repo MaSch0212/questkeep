@@ -102,6 +102,12 @@ describe("filters", () => {
   it("matches games like the core does", () => {
     const played = makeGame({ playCount: 1 });
     expect(matchesFilters(q({ played: "played" }), played)).toBe(true);
+    const app = makeGame({ kind: "app" });
+    expect(matchesFilters(q({}), app)).toBe(false);
+    expect(matchesFilters(q({ kind: "apps" }), app)).toBe(true);
+    expect(matchesFilters(q({ kind: "apps" }), makeGame())).toBe(false);
+    expect(matchesFilters(q({ kind: "both" }), app)).toBe(true);
+    expect(activeFilterCount(q({ kind: "apps" }))).toBe(1);
     expect(matchesFilters(q({ played: "never" }), played)).toBe(false);
     expect(matchesFilters(q({}), makeGame({ hidden: true }))).toBe(false);
     expect(matchesFilters(q({ hidden: "all" }), makeGame({ hidden: true }))).toBe(true);

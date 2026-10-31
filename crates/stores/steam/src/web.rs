@@ -136,6 +136,83 @@ fn fetch_store_item(app_id: &str) -> Result<Option<StoreItem>, ProviderError> {
     }
 }
 
+/// Store item types that are apps rather than games (`EStoreAppType`): movie, software,
+/// video, music, tool. Game is 0; demos, mods and DLC stay games.
+const APP_TYPES: [u64; 5] = [3, 6, 7, 11, 13];
+/// Apps per `GetItems` request.
+const TYPE_BATCH: usize = 100;
+
+/// Whether an app id is an app (software, tool) rather than a game, cached per process: an
+/// app's type doesn't change. Ids the store doesn't list are left out.
+static APP_KINDS: Mutex<Option<HashMap<String, bool>>> = Mutex::new(None);
+
+/// Sets `app` on every scanned game the Steam store knows (one request per hundred unknown ids).
+/// A failed request leaves those games as they are.
+pub fn mark_apps(games: &mut [ImportedGame]) {
+    let Ok(mut cache) = APP_KINDS.lock() else {
+        return;
+    };
+    let known = cache.get_or_insert_with(HashMap::new);
+    let missing: Vec<&str> = games
+        .iter()
+        .map(|g| g.source_game_id.as_str())
+        .filter(|id| !known.contains_key(*id) && id.parse::<u32>().is_ok())
+        .collect();
+    for batch in missing.chunks(TYPE_BATCH) {
+        match fetch_app_kinds(batch) {
+            Ok(kinds) => known.extend(kinds),
+            Err(err) => tracing::debug!("Steam app types unavailable: {err}"),
+        }
+    }
+    for game in games.iter_mut() {
+        game.app = known.get(&game.source_game_id).copied();
+    }
+}
+
+fn fetch_app_kinds(ids: &[&str]) -> Result<Vec<(String, bool)>, ProviderError> {
+    let list: Vec<String> = ids
+        .iter()
+        .map(|id| format!(r#"{{"appid":{id}}}"#))
+        .collect();
+    let input = format!(
+        r#"{{"ids":[{}],"context":{{"language":"english","country_code":"US"}},"data_request":{{}}}}"#,
+        list.join(",")
+    );
+    let url = format!(
+        "https://api.steampowered.com/IStoreBrowseService/GetItems/v1/?input_json={}",
+        encode(&input)
+    );
+    match http_get(&url, None) {
+        Ok(body) => Ok(parse_app_kinds(&body)),
+        Err(HttpFailure::Status(code)) => Err(ProviderError::Network(format!(
+            "Steam store returned HTTP {code}"
+        ))),
+        Err(HttpFailure::Other(message)) => Err(ProviderError::Network(message)),
+    }
+}
+
+/// App id and "is an app" for every item of a `GetItems` response the store found.
+pub fn parse_app_kinds(body: &str) -> Vec<(String, bool)> {
+    let Ok(json) = serde_json::from_str::<Value>(body) else {
+        return Vec::new();
+    };
+    json.get("response")
+        .and_then(|r| r.get("store_items"))
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter(|item| item.get("success").and_then(Value::as_u64) == Some(1))
+                .filter_map(|item| {
+                    let id = item.get("appid")?.as_u64()?;
+                    let kind = item.get("type").and_then(Value::as_u64).unwrap_or(0);
+                    Some((id.to_string(), APP_TYPES.contains(&kind)))
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// Tag id to name, fetched once per process (it only changes when Steam adds tags).
 static TAG_NAMES: Mutex<Option<HashMap<u32, String>>> = Mutex::new(None);
 
@@ -706,6 +783,27 @@ pub fn parse_release_date(text: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_app_types_from_store_items() {
+        // Recorded from GetItems (2026-10-31): TF2 is a game, Wallpaper Engine and Blender are
+        // software, the redistributables aren't in the store.
+        let body = r#"{"response":{"store_items":[
+            {"item_type":0,"id":440,"success":1,"visible":true,"name":"Team Fortress 2","appid":440,"type":0},
+            {"item_type":0,"id":431960,"success":1,"visible":true,"name":"Wallpaper Engine","appid":431960,"type":6},
+            {"item_type":0,"id":228980,"success":15},
+            {"item_type":0,"id":365670,"success":1,"visible":true,"name":"Blender","appid":365670,"type":6}
+        ]}}"#;
+        assert_eq!(
+            parse_app_kinds(body),
+            vec![
+                ("440".to_string(), false),
+                ("431960".to_string(), true),
+                ("365670".to_string(), true)
+            ]
+        );
+        assert!(parse_app_kinds("nope").is_empty());
+    }
 
     #[test]
     fn maps_owned_games() {

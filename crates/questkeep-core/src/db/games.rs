@@ -10,21 +10,32 @@ use super::Database;
 use super::metadata::Details;
 use crate::error::{CoreError, Result};
 use crate::model::{
-    FilterGroup, FilterNode, Game, GameCopy, GameQuery, GameUpdate, HiddenFilter, ImportedGame,
-    ListField, ListFilter, ListMode, MatchMode, MetadataField, NO_CATEGORY, NO_VALUE, PlayAction,
-    PlayedFilter, RangeField, RangeFilter, ScanSummary, SortField, TriState, sorting_name,
+    FilterGroup, FilterNode, Game, GameCopy, GameKind, GameQuery, GameUpdate, HiddenFilter,
+    ImportedGame, KindFilter, ListField, ListFilter, ListMode, MatchMode, MetadataField,
+    NO_CATEGORY, NO_VALUE, PlayAction, PlayedFilter, RangeField, RangeFilter, ScanSummary,
+    SortField, TriState, sorting_name,
 };
 
 pub(super) const COLUMNS: &str = "id, name, sorting_name, source, source_game_id, installed, install_dir, \
     play_action, playtime_seconds, play_count, last_played, date_added, favorite, hidden, \
     cover_path, icon_path, background_path, description, release_date, developers, publishers, \
     genres, metadata_updated_at, extra, details, completion_status, user_score, notes, \
+    COALESCE(kind_user, kind) AS kind, \
     COALESCE((SELECT detect_launches FROM game_tracking \
         WHERE game_id = COALESCE(games.merged_into, games.id)), 1) AS detect_launches, \
     (SELECT ignored_processes FROM game_tracking \
         WHERE game_id = COALESCE(games.merged_into, games.id)) AS ignored_processes, \
     (SELECT group_concat(category_id, char(31)) FROM game_category_links WHERE game_id = games.id) \
     AS category_ids";
+
+/// A game row's type: the user's choice, else the store's.
+pub(super) const KIND_SQL: &str = "COALESCE(games.kind_user, games.kind)";
+
+/// What a scan says about an entry's type, if anything.
+fn scanned_kind(game: &ImportedGame) -> Option<GameKind> {
+    game.app
+        .map(|app| if app { GameKind::App } else { GameKind::Game })
+}
 
 /// `extra` key set when the user renamed a store game, so re-scans keep their name.
 pub(super) const USER_RENAMED: &str = "userRenamed";
@@ -101,6 +112,11 @@ fn query_filter(query: &GameQuery) -> (String, Vec<Box<dyn ToSql>>) {
         HiddenFilter::Visible => clauses.push("hidden = 0".into()),
         HiddenFilter::Hidden => clauses.push("hidden = 1".into()),
         HiddenFilter::All => {}
+    }
+    match query.kind {
+        KindFilter::Games => clauses.push(format!("{KIND_SQL} = 'game'")),
+        KindFilter::Apps => clauses.push(format!("{KIND_SQL} = 'app'")),
+        KindFilter::Both => {}
     }
     match query.played {
         PlayedFilter::Any => {}
@@ -311,6 +327,7 @@ pub(super) fn row_to_game(row: &Row<'_>) -> rusqlite::Result<Game> {
         date_added: row.get("date_added")?,
         favorite: row.get("favorite")?,
         hidden: row.get("hidden")?,
+        kind: GameKind::parse(&row.get::<_, String>("kind")?),
         detect_launches: row.get("detect_launches")?,
         ignored_processes: row
             .get::<_, Option<String>>("ignored_processes")?
@@ -600,6 +617,12 @@ impl Database {
                     params![id.to_string(), hidden],
                 )?;
             }
+            if let Some(kind) = update.kind {
+                tx.execute(
+                    "UPDATE games SET kind_user = ?2 WHERE id = ?1",
+                    params![id.to_string(), kind.as_str()],
+                )?;
+            }
             if update.detect_launches.is_some() || update.ignored_processes.is_some() {
                 tx.execute(
                     "INSERT OR IGNORE INTO game_tracking (game_id) VALUES (?1)",
@@ -700,6 +723,8 @@ impl Database {
             playtime_seconds: i64,
             last_played: Option<DateTime<Utc>>,
             user_renamed: bool,
+            /// The store's kind as last scanned.
+            kind: String,
         }
 
         let mut summary = ScanSummary::default();
@@ -709,7 +734,7 @@ impl Database {
         let mut existing: HashMap<String, Existing> = HashMap::new();
         {
             let mut stmt = tx.prepare(
-                "SELECT id, name, installed, install_dir, play_action, extra, source_game_id,                  playtime_seconds, last_played                  FROM games WHERE source = ?1 AND source_game_id IS NOT NULL",
+                "SELECT id, name, installed, install_dir, play_action, extra, source_game_id,                  playtime_seconds, last_played, kind                  FROM games WHERE source = ?1 AND source_game_id IS NOT NULL",
             )?;
             let rows = stmt.query_map([source], |r| {
                 let extra: String = r.get(5)?;
@@ -728,6 +753,7 @@ impl Database {
                         playtime_seconds: r.get(7)?,
                         last_played: r.get(8)?,
                         user_renamed,
+                        kind: r.get(9)?,
                     },
                 ))
             })?;
@@ -755,17 +781,19 @@ impl Database {
                     // Store playtime and last played merge as maximum with our own tracking.
                     let playtime = row.playtime_seconds.max(store_playtime);
                     let last_played = row.last_played.max(game.last_played);
+                    let kind = scanned_kind(game).map_or(row.kind.as_str(), |k| k.as_str());
                     let changed = *name != row.name
                         || row.installed != game.installed
                         || row.install_dir != game.install_dir
                         || row.play_action != action
                         || playtime != row.playtime_seconds
-                        || last_played != row.last_played;
+                        || last_played != row.last_played
+                        || kind != row.kind;
                     if !changed {
                         continue;
                     }
                     tx.execute(
-                        "UPDATE games SET name = ?2, sorting_name = COALESCE(sorting_name_user, ?3), search_key = ?4,                          installed = ?5, install_dir = ?6, play_action = ?7,                          playtime_seconds = ?8, last_played = ?9 WHERE id = ?1",
+                        "UPDATE games SET name = ?2, sorting_name = COALESCE(sorting_name_user, ?3), search_key = ?4,                          installed = ?5, install_dir = ?6, play_action = ?7,                          playtime_seconds = ?8, last_played = ?9, kind = ?10 WHERE id = ?1",
                         params![
                             row.id,
                             name,
@@ -775,7 +803,8 @@ impl Database {
                             game.install_dir,
                             action,
                             playtime,
-                            last_played
+                            last_played,
+                            kind
                         ],
                     )?;
                     if row.installed && !game.installed {
@@ -790,9 +819,10 @@ impl Database {
                 None => {
                     let id = Uuid::new_v4();
                     tx.execute(
-                        "INSERT INTO games (id, name, sorting_name, search_key, source,                          source_game_id, installed, install_dir, play_action, date_added,                          playtime_seconds, last_played, completion_status) \
-                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, \
-                         (SELECT value FROM app_state WHERE key = 'completion.newGame'))",
+                        "INSERT INTO games (id, name, sorting_name, search_key, source,                          source_game_id, installed, install_dir, play_action, date_added,                          playtime_seconds, last_played, kind, completion_status) \
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, \
+                         CASE WHEN ?13 = 'app' THEN NULL \
+                         ELSE (SELECT value FROM app_state WHERE key = 'completion.newGame') END)",
                         params![
                             id.to_string(),
                             game.name,
@@ -805,7 +835,8 @@ impl Database {
                             action,
                             now,
                             store_playtime,
-                            game.last_played
+                            game.last_played,
+                            scanned_kind(game).unwrap_or_default().as_str()
                         ],
                     )?;
                     summary.added += 1;
@@ -1412,6 +1443,58 @@ mod tests {
             .unwrap();
         assert_eq!(back.added, 0);
         assert!(db.get_game(beta.id).unwrap().installed);
+    }
+
+    #[test]
+    fn apps_come_from_scans_hide_from_game_views_and_the_user_choice_wins() {
+        let db = db();
+        let now = Utc::now();
+        let app = |id: &str, name: &str, app: Option<bool>| ImportedGame {
+            app,
+            ..imported(id, name)
+        };
+        db.upsert_imported(
+            "steam",
+            &[
+                app("1", "Portal", Some(false)),
+                app("2", "Blender", Some(true)),
+            ],
+            now,
+        )
+        .unwrap();
+        let kind = |k| GameQuery {
+            kind: k,
+            ..Default::default()
+        };
+        assert_eq!(
+            names(&db.list_games(&GameQuery::default()).unwrap()),
+            ["Portal"]
+        );
+        let apps = db.list_games(&kind(KindFilter::Apps)).unwrap();
+        assert_eq!(names(&apps), ["Blender"]);
+        assert_eq!(apps[0].kind, GameKind::App);
+        assert_eq!(
+            apps[0].completion_status, None,
+            "apps get no new-game status"
+        );
+        assert_eq!(db.list_games(&kind(KindFilter::Both)).unwrap().len(), 2);
+
+        // A scan that doesn't know the type keeps it; the user's choice survives scans.
+        db.upsert_imported("steam", &[app("2", "Blender", None)], now)
+            .unwrap();
+        assert_eq!(db.get_game(apps[0].id).unwrap().kind, GameKind::App);
+        db.update_game(
+            apps[0].id,
+            &GameUpdate {
+                kind: Some(GameKind::Game),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        db.upsert_imported("steam", &[app("2", "Blender", Some(true))], now)
+            .unwrap();
+        assert_eq!(db.get_game(apps[0].id).unwrap().kind, GameKind::Game);
+        assert_eq!(db.list_games(&GameQuery::default()).unwrap().len(), 2);
     }
 
     #[test]
