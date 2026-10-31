@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Filters, sort and group mockup</title>
+<style>
+  :root {
+    --bg:#111317; --surface:#171a20; --raised:#1e222a; --hover:#262b35; --active:#343a47; --border:#2a2f3a;
+    --text:#e6e8ec; --muted:#9aa1ae; --faint:#6c7381; --accent:#7c9cff; --accent-soft:#232c4a;
+  }
+  * { box-sizing:border-box; }
+  html, body { margin:0; }
+  body { background:var(--bg); color:var(--text); font-family:"Segoe UI Variable","Segoe UI",system-ui,sans-serif; font-size:13px; padding:16px 20px 120px; }
+  .switch { position:fixed; right:16px; top:12px; display:flex; gap:3px; background:#0b0d12e6; border:1px solid var(--border); border-radius:99px; padding:3px; z-index:50; }
+  .switch button { background:none; border:none; color:var(--muted); font:inherit; font-size:12px; padding:4px 12px; border-radius:99px; cursor:pointer; }
+  .switch button.on { background:var(--accent-soft); color:var(--text); }
+  [data-variant="a"] .only-b, [data-variant="b"] .only-a { display:none !important; }
+  .note { position:fixed; left:16px; bottom:12px; max-width:620px; background:#0b0d12f0; border:1px solid var(--border); border-radius:10px; padding:10px 12px; color:var(--muted); z-index:50; line-height:1.45; }
+  .note b { color:var(--text); }
+
+  .toolbar { display:flex; gap:6px; align-items:center; padding:8px; background:var(--surface); border:1px solid var(--border); border-radius:10px; width:max-content; }
+  .tool { height:30px; min-width:30px; padding:0 8px; border-radius:7px; display:inline-flex; gap:6px; align-items:center; color:var(--muted); background:none; border:1px solid transparent; font:inherit; }
+  .tool.open { background:var(--accent-soft); color:var(--text); border-color:#7c9cff55; }
+  .tool .badge { background:var(--accent); color:#0e1220; border-radius:99px; font-size:11px; font-weight:700; padding:0 6px; }
+  .active-bar { display:flex; gap:6px; flex-wrap:wrap; margin:10px 0 0; }
+  .pill { display:inline-flex; gap:6px; align-items:center; height:26px; padding:0 4px 0 10px; border-radius:99px; background:var(--accent-soft); border:1px solid #7c9cff44; font-size:12px; }
+  .pill b { font-weight:600; } .pill span.x { width:18px; height:18px; display:grid; place-items:center; border-radius:50%; color:var(--muted); }
+  .pill.clear { background:none; border-color:var(--border); color:var(--muted); padding-right:10px; }
+
+  .stage { display:flex; gap:24px; align-items:flex-start; margin-top:12px; flex-wrap:wrap; }
+  .pop { background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:0 18px 40px #000a; }
+  .pop h2 { margin:0; font-size:14px; }
+  .pop-head { display:flex; justify-content:space-between; align-items:center; padding:12px 14px; border-bottom:1px solid var(--border); }
+  .pop-foot { display:flex; justify-content:space-between; padding:10px 14px; border-top:1px solid var(--border); }
+  .btn { height:30px; padding:0 12px; border-radius:7px; background:var(--raised); border:1px solid var(--border); color:var(--text); font:inherit; }
+  .btn.ghost { background:none; border-color:transparent; color:var(--muted); }
+  .btn.primary { background:var(--accent); color:#0e1220; border:none; font-weight:600; }
+  .seg { display:inline-flex; background:var(--raised); border:1px solid var(--border); border-radius:7px; padding:2px; }
+  .seg span { padding:3px 9px; border-radius:5px; color:var(--muted); font-size:12px; }
+  .seg span.on { background:var(--accent-soft); color:var(--text); }
+  .chip { white-space:nowrap; display:inline-flex; gap:5px; align-items:center; padding:3px 9px; border-radius:99px; background:var(--raised); border:1px solid var(--border); color:var(--muted); font-size:12px; }
+  .chip.on { background:var(--accent-soft); border-color:#7c9cff66; color:var(--text); }
+  .chip i { width:12px; height:12px; border-radius:3px; background:#4c6b9a; }
+  .label { color:var(--faint); font-size:11px; letter-spacing:.06em; }
+
+  /* ---------- A: quick filters + added filters ---------- */
+  .a { width:460px; }
+  .a .body { padding:12px 14px; display:flex; flex-direction:column; gap:12px; }
+  .a .quick { display:grid; grid-template-columns:90px 1fr; gap:8px 10px; align-items:center; }
+  .a .added { border-top:1px solid var(--border); padding-top:12px; display:flex; flex-direction:column; gap:10px; }
+  .frow { background:var(--raised); border:1px solid var(--border); border-radius:9px; padding:8px 10px; }
+  .frow .top { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+  .frow .top b { font-size:12.5px; }
+  .frow .top .r { display:flex; gap:6px; align-items:center; color:var(--muted); }
+  .range { display:flex; gap:8px; align-items:center; }
+  .num { width:84px; height:28px; border-radius:6px; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:0 8px; font:inherit; }
+  .slider { position:relative; height:4px; background:var(--hover); border-radius:99px; margin:12px 4px 4px; }
+  .slider i { position:absolute; left:20%; right:35%; top:0; bottom:0; background:var(--accent); border-radius:99px; }
+  .slider b { position:absolute; top:-5px; width:14px; height:14px; border-radius:50%; background:var(--text); }
+  .a { width:500px !important; }
+  .match { display:flex; gap:8px; align-items:center; color:var(--muted); }
+  .group { border:1px solid #7c9cff44; border-left:3px solid var(--accent); border-radius:9px; padding:8px 10px; display:flex; flex-direction:column; gap:6px; background:#7c9cff0a; }
+  .ghead { display:flex; gap:8px; align-items:center; font-size:12px; }
+  .gx { color:var(--muted); padding:0 4px; }
+  .or, .and { align-self:flex-start; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--faint); padding:0 10px; }
+  .or { color:var(--accent); }
+  .add.sm { height:26px; font-size:12px; padding:0 9px; }
+  .add { display:flex; gap:6px; align-items:center; color:var(--accent); background:none; border:1px dashed #7c9cff66; border-radius:8px; height:32px; padding:0 12px; font:inherit; width:max-content; }
+
+  /* field picker / value list (shared) */
+  .picker { width:300px; }
+  .search { margin:10px 12px; height:30px; border-radius:7px; background:var(--bg); border:1px solid var(--border); color:var(--faint); display:flex; align-items:center; padding:0 10px; }
+  .list { max-height:360px; overflow:auto; padding:0 6px 8px; }
+  .grp { color:var(--faint); font-size:11px; letter-spacing:.06em; padding:8px 8px 4px; }
+  .item { display:flex; justify-content:space-between; align-items:center; padding:6px 8px; border-radius:6px; }
+  .item:hover, .item.hl { background:var(--hover); }
+  .item small { color:var(--faint); }
+  .item .on { color:var(--accent); }
+  .check { width:14px; height:14px; border-radius:4px; border:1px solid var(--active); display:inline-grid; place-items:center; margin-right:8px; font-size:10px; }
+  .check.on { background:var(--accent); border-color:var(--accent); color:#0e1220; }
+
+  /* ---------- B: two panes ---------- */
+  .b { width:720px; display:flex; flex-direction:column; }
+  .b .panes { display:flex; min-height:420px; }
+  .b .fields { width:210px; border-right:1px solid var(--border); padding:8px 6px; overflow:auto; max-height:460px; }
+  .b .field { display:flex; justify-content:space-between; padding:6px 10px; border-radius:6px; color:var(--muted); }
+  .b .field.sel { background:var(--accent-soft); color:var(--text); }
+  .b .field .n { background:var(--accent); color:#0e1220; border-radius:99px; font-size:11px; font-weight:700; padding:0 6px; }
+  .b .editor { flex:1; padding:12px 16px; display:flex; flex-direction:column; gap:10px; }
+
+  /* ---------- sort / group menus ---------- */
+  .menu { width:240px; padding:6px; }
+  .menu .item { padding:6px 10px; }
+  .menu .sep { border-top:1px solid var(--border); margin:6px 0; }
+  .menu .more { color:var(--muted); }
+  .menus { display:flex; gap:16px; }
+  h3.cap { margin:0 0 8px; font-size:12px; color:var(--faint); letter-spacing:.06em; }
+</style>
+</head>
+<body data-variant="a">
+<div class="switch">
+  <button class="on" onclick="setV('a',this)">A: add filters</button>
+  <button onclick="setV('b',this)">B: field list</button>
+</div>
+
+<div class="toolbar">
+  <span class="tool">⌕</span>
+  <span class="tool open">⏷ Filters <span class="badge">4</span></span>
+  <span class="tool">⇅</span>
+  <span class="tool">▦</span>
+</div>
+<div class="active-bar">
+  <span class="pill">Store: <b>Steam, GOG</b><span class="x">×</span></span>
+  <span class="pill">Installed<span class="x">×</span></span>
+  <span class="pill">( Tags: <b>Co-op</b> <i style="color:var(--accent)">or</i> Genre: <b>Roguelike</b> )<span class="x">×</span></span>
+  <span class="pill">Playtime: <b>2 – 50 h</b><span class="x">×</span></span>
+  <span class="pill clear">Clear all</span>
+</div>
+
+<!-- ================= A ================= -->
+<div class="stage only-a">
+  <div class="pop a">
+    <div class="pop-head"><h2>Filters</h2><span class="label">4 ACTIVE · 212 GAMES</span></div>
+    <div class="body">
+      <div class="quick">
+        <span class="label">STORE</span>
+        <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="chip on"><i></i>Steam</span><span class="chip on"><i></i>GOG</span><span class="chip"><i></i>Epic</span><span class="chip"><i></i>Xbox</span><span class="chip"><i></i>EA</span><span class="chip">+4</span></div>
+        <span class="label">INSTALLED</span><div class="seg"><span>Any</span><span class="on">Yes</span><span>No</span></div>
+        <span class="label">FAVORITE</span><div class="seg"><span class="on">Any</span><span>Yes</span><span>No</span></div>
+        <span class="label">PLAYED</span><div class="seg"><span class="on">Any</span><span>Played</span><span>Never</span></div>
+        <span class="label">HIDDEN</span><div class="seg"><span class="on">Leave out</span><span>Include</span><span>Only</span></div>
+      </div>
+      <div class="added">
+        <div class="match">Games must match <span class="seg"><span class="on">all</span><span>any</span></span> of these</div>
+        <div class="group">
+          <div class="ghead"><span class="seg"><span>All</span><span class="on">Any</span></span><span style="color:var(--muted)">of this group</span><span style="flex:1"></span><span class="gx">⋯</span><span class="gx">×</span></div>
+          <div class="frow">
+            <div class="top"><b>Tags</b><span class="r"><span class="seg"><span class="on">Any of</span><span>All of</span><span>None of</span></span><span>×</span></span></div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="chip on">Co-op ×</span><span class="chip">+ Add tag</span></div>
+          </div>
+          <div class="or">or</div>
+          <div class="frow">
+            <div class="top"><b>Genre</b><span class="r"><span class="seg"><span class="on">Any of</span><span>All of</span><span>None of</span></span><span>×</span></span></div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="chip on">Roguelike ×</span><span class="chip">+ Add genre</span></div>
+          </div>
+          <div style="display:flex;gap:6px"><button class="add sm">＋ Filter</button><button class="add sm">＋ Group</button></div>
+        </div>
+        <div class="and">and</div>
+        <div class="frow">
+          <div class="top"><b>Playtime</b><span class="r"><span>×</span></span></div>
+          <div class="range"><input class="num" value="2 h"> <span style="color:var(--faint)">to</span> <input class="num" value="50 h"><span style="flex:1"></span><span class="chip">Never</span><span class="chip">&lt; 1 h</span><span class="chip">10 h +</span></div>
+          <div class="slider"><i></i><b style="left:19%"></b><b style="left:63%"></b></div>
+        </div>
+        <div style="display:flex;gap:8px"><button class="add">＋ Add filter</button><button class="add">＋ Add group</button></div>
+      </div>
+    </div>
+    <div class="pop-foot"><button class="btn ghost">Clear filters</button><button class="btn">Done</button></div>
+  </div>
+
+  <div class="pop picker">
+    <div class="search">⌕ &nbsp;Filter by…</div>
+    <div class="list">
+      <div class="grp">ABOUT THE GAME</div>
+      <div class="item hl">Genre <small>24</small></div><div class="item">Tags <small class="on">active</small></div><div class="item">Features <small>18</small></div>
+      <div class="item">Series <small>61</small></div><div class="item">Developer <small>402</small></div><div class="item">Publisher <small>315</small></div>
+      <div class="item">Platform <small>9</small></div><div class="item">Age rating <small>12</small></div><div class="item">Game mode <small>6</small></div>
+      <div class="item">Theme <small>22</small></div><div class="item">Perspective <small>7</small></div><div class="item">Release year</div>
+      <div class="grp">SCORES &amp; LENGTH</div>
+      <div class="item">Critic score</div><div class="item">Community score</div><div class="item">Time to beat</div>
+      <div class="grp">YOU</div>
+      <div class="item">Category</div><div class="item">Completion status</div><div class="item">Your score</div>
+      <div class="item">Playtime <small class="on">active</small></div><div class="item">Play count</div><div class="item">Last played</div><div class="item">Date added</div><div class="item">Install size</div>
+    </div>
+  </div>
+  <div class="pop picker">
+    <div class="search">⌕ &nbsp;co</div>
+    <div class="list">
+      <div class="grp">TAGS · ANY OF</div>
+      <div class="item"><span><span class="check on">✓</span>Co-op</span><small>143</small></div>
+      <div class="item"><span><span class="check"></span>Online Co-Op</span><small>88</small></div>
+      <div class="item"><span><span class="check"></span>Local Co-Op</span><small>41</small></div>
+      <div class="item"><span><span class="check"></span>Colony Sim</span><small>12</small></div>
+      <div class="item"><span><span class="check"></span>Comedy</span><small>57</small></div>
+      <div class="item"><span><span class="check"></span>Cozy</span><small>39</small></div>
+      <div class="item"><span><span class="check"></span>Competitive</span><small>45</small></div>
+      <div class="grp">SPECIAL</div>
+      <div class="item"><span><span class="check"></span><i style="color:var(--muted)">No tags</i></span><small>96</small></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= B ================= -->
+<div class="stage only-b">
+  <div class="pop b">
+    <div class="pop-head"><h2>Filters</h2><span class="label">4 ACTIVE · 212 GAMES</span></div>
+    <div class="panes">
+      <div class="fields">
+        <div class="search" style="margin:4px 4px 8px">⌕ &nbsp;Find a field</div>
+        <div class="grp">QUICK</div>
+        <div class="field">Store <span class="n">2</span></div><div class="field">Installed <span class="n">1</span></div><div class="field">Favorite</div><div class="field">Played</div><div class="field">Hidden</div>
+        <div class="grp">ABOUT THE GAME</div>
+        <div class="field">Genre</div><div class="field sel">Tags <span class="n">2</span></div><div class="field">Features</div><div class="field">Series</div><div class="field">Developer</div><div class="field">Publisher</div><div class="field">Platform</div><div class="field">Age rating</div><div class="field">Game mode</div><div class="field">Theme</div><div class="field">Perspective</div><div class="field">Release year</div>
+        <div class="grp">SCORES &amp; LENGTH</div>
+        <div class="field">Critic score</div><div class="field">Community score</div><div class="field">Time to beat</div>
+        <div class="grp">YOU</div>
+        <div class="field">Category</div><div class="field">Completion status</div><div class="field">Your score</div><div class="field">Playtime <span class="n">1</span></div><div class="field">Play count</div><div class="field">Last played</div><div class="field">Date added</div><div class="field">Install size</div>
+      </div>
+      <div class="editor">
+        <div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:14px">Tags</b><span class="seg"><span class="on">Any of</span><span>All of</span><span>None of</span></span></div>
+        <div class="search" style="margin:0">⌕ &nbsp;Search 412 tags</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="chip on">Co-op ×</span><span class="chip on">Roguelike ×</span></div>
+        <div class="list" style="padding:0;max-height:300px">
+          <div class="item"><span><span class="check on">✓</span>Co-op</span><small>143</small></div>
+          <div class="item"><span><span class="check on">✓</span>Roguelike</span><small>64</small></div>
+          <div class="item"><span><span class="check"></span>Open World</span><small>121</small></div>
+          <div class="item"><span><span class="check"></span>Singleplayer</span><small>402</small></div>
+          <div class="item"><span><span class="check"></span>Strategy</span><small>98</small></div>
+          <div class="item"><span><span class="check"></span>Indie</span><small>287</small></div>
+          <div class="item"><span><span class="check"></span><i style="color:var(--muted)">No tags</i></span><small>96</small></div>
+        </div>
+      </div>
+    </div>
+    <div class="pop-foot"><button class="btn ghost">Clear filters</button><button class="btn">Done</button></div>
+  </div>
+</div>
+
+<!-- ================= sort & group ================= -->
+<div style="margin-top:28px">
+  <h3 class="cap">SORT AND GROUP MENUS (BOTH VARIANTS)</h3>
+  <div class="menus">
+    <div class="pop menu">
+      <div class="item"><span>Name</span><span class="on">✓</span></div><div class="item">Last played</div><div class="item">Playtime</div><div class="item">Date added</div><div class="item">Release date</div>
+      <div class="sep"></div>
+      <div class="item more">More <span>›</span></div>
+      <div class="sep"></div>
+      <div class="item">Ascending <span class="on">✓</span></div><div class="item">Descending</div>
+    </div>
+    <div class="pop menu">
+      <div class="grp" style="padding-top:2px">MORE SORT FIELDS</div>
+      <div class="item">Play count</div><div class="item">Critic score</div><div class="item">Community score</div><div class="item">Your score</div><div class="item">Time to beat</div><div class="item">Install size</div><div class="item">Completion status</div><div class="item">Developer</div><div class="item">Publisher</div><div class="item">Series</div>
+    </div>
+    <div class="pop menu">
+      <div class="item"><span>None</span><span class="on">✓</span></div><div class="item">Store</div><div class="item">Category</div><div class="item">Genre</div><div class="item">Completion status</div>
+      <div class="sep"></div>
+      <div class="grp">ABOUT THE GAME</div><div class="item more">Tag, Feature, Series, … <span>›</span></div>
+      <div class="grp">TIME AND NUMBERS</div><div class="item more">Release year, Playtime, … <span>›</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="note"><b>Groups:</b> the added filters match all (and) or any (or) of their rows; "Add group" nests a group with its own all/any, e.g. Installed and Store and (Tags: Co-op <i>or</i> Genre: Roguelike) and Playtime. The quick filters on top always apply with "and". "⋯" on a group: ungroup, duplicate. <br><b>A: add filters</b> keeps today's quick filters (store, installed, favorite, played, hidden) and adds any other field with "Add filter" (searchable list, grouped); each added filter is a row with any/all or a range. <b>B: field list</b> shows every field on the left with active counts, the chosen field's editor on the right. Both: active filters appear as removable pills under the toolbar; value lists are searchable with game counts and a "No …" entry; sort and group menus show common fields first and the rest under "More".</div>
+<script>
+function setV(v,b){ document.body.dataset.variant=v; document.querySelectorAll('.switch button').forEach(x=>x.classList.toggle('on',x===b)); }
+</script>
+</body>
+</html>

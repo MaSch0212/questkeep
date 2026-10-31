@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Combine games mockup</title>
+<style>
+  :root {
+    --bg:#111317; --surface:#171a20; --raised:#1e222a; --hover:#262b35; --active:#343a47; --border:#2a2f3a;
+    --text:#e6e8ec; --muted:#9aa1ae; --faint:#6c7381; --accent:#7c9cff; --accent-soft:#232c4a;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#0c0e12; color:var(--text); font-family:"Segoe UI Variable","Segoe UI",system-ui,sans-serif; font-size:13px; padding:24px 16px 120px; }
+  .note { position:fixed; left:12px; right:12px; bottom:10px; background:#0b0d12f0; border:1px solid var(--border); border-radius:10px; padding:9px 12px; color:var(--muted); line-height:1.45; }
+  .note b { color:var(--text); }
+  .modal { width:900px; max-width:100%; margin:0 auto; background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:0 24px 60px #000c; }
+  .head { padding:14px 18px; border-bottom:1px solid var(--border); }
+  .head h2 { margin:0 0 4px; font-size:15px; } .head p { margin:0; color:var(--muted); }
+  table { width:100%; border-collapse:collapse; }
+  th, td { padding:8px 12px; text-align:left; border-bottom:1px solid #1d2028; vertical-align:middle; }
+  th { color:var(--faint); font-size:11px; letter-spacing:.06em; font-weight:500; position:sticky; top:0; background:var(--surface); z-index:2; box-shadow:0 1px 0 var(--border); }
+  th.g { color:var(--text); font-size:12.5px; letter-spacing:0; }
+  th.g small { display:block; color:var(--faint); font-weight:400; }
+  th.g i { display:inline-block; width:22px; height:30px; border-radius:4px; background:linear-gradient(160deg,#4d5b3a,#1f2d3d); vertical-align:middle; margin-right:8px; }
+  td.f { color:var(--muted); width:150px; }
+  .opt { display:flex; align-items:center; gap:8px; padding:4px 8px; border-radius:7px; border:1px solid transparent; cursor:pointer; }
+  .opt.on { background:var(--accent-soft); border-color:#7c9cff55; }
+  .r { width:14px; height:14px; border-radius:50%; border:1px solid var(--active); flex:none; }
+  .r.on { border:4px solid var(--accent); }
+  .c { width:14px; height:14px; border-radius:4px; border:1px solid var(--active); flex:none; display:grid; place-items:center; font-size:10px; }
+  .c.on { background:var(--accent); border-color:var(--accent); color:#0e1220; }
+  .empty { color:var(--faint); font-style:italic; }
+  .sum { color:var(--text); font-weight:600; }
+  .sec td { color:var(--faint); font-size:11px; letter-spacing:.06em; padding-top:14px; }
+  .foot { display:flex; justify-content:space-between; align-items:center; padding:12px 18px; border-top:1px solid var(--border); }
+  .btn { height:30px; padding:0 12px; border-radius:7px; background:var(--raised); border:1px solid var(--border); color:var(--text); display:inline-flex; align-items:center; }
+  .btn.primary { background:var(--accent); color:#0e1220; border:none; font-weight:600; }
+  .btn.ghost { background:none; border-color:transparent; color:var(--muted); }
+  .scroll { max-height:560px; overflow:auto; }
+</style>
+</head>
+<body>
+<div class="modal">
+  <div class="head"><h2>Combine 3 games into one</h2><p>Each game's store copies are kept. Choose which values the combined game keeps; values marked ☐ can be combined.</p></div>
+  <div class="scroll">
+  <table>
+    <tr><th></th><th class="g"><i></i>Hades II<small>Steam · 146h</small></th><th class="g"><i style="background:linear-gradient(160deg,#2a4a6a,#132)"></i>Hades II<small>Xbox · 12h</small></th><th class="g"><i style="background:linear-gradient(160deg,#5a3a6a,#213)"></i>HADES 2<small>Epic · 0h</small></th></tr>
+    <tr class="sec"><td colspan="4">GAME</td></tr>
+    <tr><td class="f">Name</td><td><span class="opt on"><span class="r on"></span>Hades II</span></td><td><span class="opt"><span class="r"></span>Hades II</span></td><td><span class="opt"><span class="r"></span>HADES 2</span></td></tr>
+    <tr><td class="f">Cover</td><td><span class="opt on"><span class="r on"></span>From Steam</span></td><td><span class="opt"><span class="r"></span>Your image</span></td><td><span class="opt"><span class="r"></span>From Epic</span></td></tr>
+    <tr><td class="f">Edited details</td><td><span class="opt on"><span class="r on"></span>Series, Description</span></td><td><span class="opt"><span class="r"></span>Tags</span></td><td><span class="empty">none</span></td></tr>
+    <tr class="sec"><td colspan="4">YOU</td></tr>
+    <tr><td class="f">Completion status</td><td><span class="opt"><span class="r"></span>Played</span></td><td><span class="opt on"><span class="r on"></span>Beaten</span></td><td><span class="opt"><span class="r"></span>Not Played</span></td></tr>
+    <tr><td class="f">Your score</td><td><span class="opt on"><span class="r on"></span>85</span></td><td><span class="empty">none</span></td><td><span class="empty">none</span></td></tr>
+    <tr><td class="f">Favorite</td><td><span class="opt on"><span class="r on"></span>Yes</span></td><td><span class="opt"><span class="r"></span>No</span></td><td><span class="opt"><span class="r"></span>No</span></td></tr>
+    <tr><td class="f">Categories</td><td><span class="opt on"><span class="c on">✓</span>Roguelikes, Couch</span></td><td><span class="opt on"><span class="c on">✓</span>Game Pass</span></td><td><span class="empty">none</span></td></tr>
+    <tr><td class="f">Notes</td><td><span class="opt on"><span class="c on">✓</span>"Try the Moon route…"</span></td><td><span class="opt on"><span class="c on">✓</span>"Controller works"</span></td><td><span class="empty">none</span></td></tr>
+    <tr><td class="f">Your links</td><td><span class="opt on"><span class="c on">✓</span>Build planner</span></td><td><span class="empty">none</span></td><td><span class="empty">none</span></td></tr>
+    <tr><td class="f">Launch profiles</td><td><span class="opt on"><span class="c on">✓</span>Vulkan, windowed</span></td><td><span class="empty">none</span></td><td><span class="empty">none</span></td></tr>
+    <tr><td class="f">Default profile</td><td><span class="opt on"><span class="r on"></span>Automatic</span></td><td><span class="opt"><span class="r"></span>Xbox app</span></td><td><span class="empty">automatic</span></td></tr>
+    <tr class="sec"><td colspan="4">ADDED UP</td></tr>
+    <tr><td class="f">Playtime</td><td colspan="3"><span class="sum">158h</span> <span style="color:var(--faint)">(146h + 12h + 0h)</span></td></tr>
+    <tr><td class="f">Play count, sessions</td><td colspan="3"><span class="sum">214 sessions</span> <span style="color:var(--faint)">all play history is kept</span></td></tr>
+    <tr><td class="f">Last played / added</td><td colspan="3"><span class="sum">Today / 12 Mar 2024</span> <span style="color:var(--faint)">latest played, earliest added</span></td></tr>
+  </table>
+  </div>
+  <div class="foot"><span class="btn ghost">Reset to suggested</span><span style="display:flex;gap:8px"><span class="btn">Cancel</span><span class="btn primary">Combine</span></span></div>
+</div>
+<div class="note"><b>Combine</b> (from multi-select, or "Combine with another game…" for two): one column per game, one row per value that differs. ◉ rows keep one value, ☑ rows can keep several (combined). Rows where all games agree or have nothing are left out. Suggested defaults: name, cover and edited details from the game with the most playtime; the most advanced completion status (latest in the status list); score from the most-played game that has one; favorite if any is; categories, notes, your links and profiles all kept. Playtime, sessions and play history are added up.</div>
+</body>
+</html>

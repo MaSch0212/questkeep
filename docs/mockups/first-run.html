@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>First-run setup mockup</title>
+<style>
+  :root {
+    --bg:#111317; --surface:#171a20; --raised:#1e222a; --hover:#262b35; --border:#2a2f3a;
+    --text:#e6e8ec; --muted:#9aa1ae; --faint:#6c7381; --accent:#7c9cff; --accent-soft:#232c4a; --ok:#6fcf97; --warn:#e8b45a; --warn-soft:#3a2f1a;
+  }
+  * { box-sizing:border-box; }
+  html, body { margin:0; }
+  body { background:radial-gradient(circle at 30% 0%,#1a2033,#0c0e12 60%); color:var(--text); font-family:"Segoe UI Variable","Segoe UI",system-ui,sans-serif; font-size:13px; padding:24px 20px 140px; min-height:100vh; }
+  .switch { position:fixed; right:16px; top:12px; display:flex; gap:3px; background:#0b0d12e6; border:1px solid var(--border); border-radius:99px; padding:3px; z-index:50; }
+  .switch button { background:none; border:none; color:var(--muted); font:inherit; font-size:12px; padding:4px 12px; border-radius:99px; cursor:pointer; }
+  .switch button.on { background:var(--accent-soft); color:var(--text); }
+  .note { position:fixed; left:16px; bottom:12px; max-width:640px; background:#0b0d12f0; border:1px solid var(--border); border-radius:10px; padding:10px 12px; color:var(--muted); line-height:1.45; }
+  .note b { color:var(--text); }
+  .card { width:640px; max-width:100%; margin:40px auto 0; background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:0 24px 60px #000c; display:none; flex-direction:column; }
+  .card.on { display:flex; }
+  .steps { display:flex; gap:6px; padding:14px 18px 0; }
+  .steps i { flex:1; height:3px; border-radius:99px; background:var(--hover); }
+  .steps i.on { background:var(--accent); }
+  .inner { padding:18px 22px; display:flex; flex-direction:column; gap:14px; }
+  h1 { margin:0; font-size:20px; } h2 { margin:0; font-size:15px; }
+  p { margin:0; color:var(--muted); line-height:1.5; }
+  .foot { display:flex; justify-content:space-between; align-items:center; padding:12px 18px; border-top:1px solid var(--border); }
+  .btn { height:32px; padding:0 14px; border-radius:7px; background:var(--raised); border:1px solid var(--border); color:var(--text); font:inherit; display:inline-flex; align-items:center; gap:6px; }
+  .btn.primary { background:var(--accent); color:#0e1220; border:none; font-weight:600; }
+  .btn.ghost { background:none; border-color:transparent; color:var(--muted); }
+  .stores { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .store { display:flex; align-items:center; gap:10px; background:var(--raised); border:1px solid var(--border); border-radius:9px; padding:9px 11px; }
+  .store i { width:22px; height:22px; border-radius:5px; background:#4c6b9a; }
+  .store b { flex:1; font-weight:500; } .store small { color:var(--faint); }
+  .store .ok { color:var(--ok); font-size:12px; }
+  .key { background:var(--raised); border:1px solid var(--border); border-radius:10px; padding:12px 14px; display:flex; flex-direction:column; gap:10px; }
+  .key .top { display:flex; justify-content:space-between; align-items:center; }
+  .badge { font-size:11px; border-radius:99px; padding:2px 8px; background:var(--accent-soft); color:var(--accent); }
+  ol { margin:0; padding-left:20px; color:var(--muted); line-height:1.7; }
+  ol a, p a { color:var(--accent); }
+  .in { height:30px; border-radius:7px; background:var(--bg); border:1px solid var(--border); color:var(--faint); padding:0 9px; display:flex; align-items:center; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .warn { background:var(--warn-soft); border:1px solid #e8b45a55; border-radius:9px; padding:10px 12px; color:#f0d9a8; line-height:1.5; }
+  .warn b { color:var(--warn); }
+  ul.miss { margin:4px 0 0; padding-left:18px; }
+  .banner { width:900px; max-width:100%; margin:40px auto 0; display:none; }
+  .banner.on { display:block; }
+  .bar { display:flex; gap:10px; align-items:center; background:var(--warn-soft); border:1px solid #e8b45a55; border-radius:9px; padding:8px 12px; color:#f0d9a8; }
+  .bar span { flex:1; }
+  .fake { margin-top:10px; height:300px; border-radius:10px; background:repeating-linear-gradient(90deg,#1a1e26 0 120px,#111317 120px 132px); opacity:.6; }
+</style>
+</head>
+<body>
+<div class="switch">
+  <button class="on" onclick="show(0,this)">1 Welcome</button>
+  <button onclick="show(1,this)">2 Stores</button>
+  <button onclick="show(2,this)">3 Metadata keys</button>
+  <button onclick="show(3,this)">3b Skipped warning</button>
+  <button onclick="show(4,this)">Later: library hint</button>
+</div>
+
+<!-- 1 -->
+<div class="card on">
+  <div class="steps"><i class="on"></i><i></i><i></i></div>
+  <div class="inner">
+    <h1>Welcome to Questkeep</h1>
+    <p>All your PC games from every store in one library. Questkeep already looked for installed stores; the next two steps let you sign in to stores and set up optional keys for richer game details. Everything here can be changed later in Settings.</p>
+  </div>
+  <div class="foot"><span class="btn ghost">Skip setup</span><span class="btn primary">Get started</span></div>
+</div>
+
+<!-- 2 -->
+<div class="card">
+  <div class="steps"><i class="on"></i><i class="on"></i><i></i></div>
+  <div class="inner">
+    <h2>Your stores</h2>
+    <p>Installed games are found without signing in. Sign in to also see games you own but haven't installed, and to import playtime.</p>
+    <div class="stores">
+      <div class="store"><i></i><b>Steam</b><span class="ok">● 214 games</span></div>
+      <div class="store"><i></i><b>Epic</b><span class="btn" style="height:26px">Sign in</span></div>
+      <div class="store"><i></i><b>GOG</b><span class="ok">● Signed in</span></div>
+      <div class="store"><i></i><b>Xbox</b><span class="btn" style="height:26px">Sign in</span></div>
+      <div class="store"><i></i><b>EA</b><small>not installed</small></div>
+      <div class="store"><i></i><b>Ubisoft</b><small>12 installed</small></div>
+    </div>
+    <p style="font-size:12px">The list is the same as Settings → Stores; it only shows stores this system supports.</p>
+  </div>
+  <div class="foot"><span class="btn ghost">Back</span><span class="btn primary">Next</span></div>
+</div>
+
+<!-- 3 -->
+<div class="card">
+  <div class="steps"><i class="on"></i><i class="on"></i><i class="on"></i></div>
+  <div class="inner">
+    <h2>Richer game details (optional)</h2>
+    <p>Questkeep gets most details from your stores. Two free services add more; both need a key from your own free account, stored only in your system's keyring.</p>
+    <div class="key">
+      <div class="top"><b>IGDB (via Twitch)</b><span class="badge">Recommended</span></div>
+      <p>Time to beat, wiki and social links, series, age ratings, game modes, themes, and details for games your stores know little about.</p>
+      <ol>
+        <li>Sign in at <a>dev.twitch.tv/console</a> (any Twitch account; turn on two-factor authentication if asked).</li>
+        <li>Register an application: any name, OAuth redirect <code>http://localhost</code>, category "Application Integration", client type "Confidential".</li>
+        <li>Copy the Client ID, create a New Secret, and paste both here.</li>
+      </ol>
+      <div class="row2"><div class="in">Client ID</div><div class="in">Client secret</div></div>
+      <div style="display:flex;gap:8px"><span class="btn">Test keys</span><span style="color:var(--ok);align-self:center;font-size:12px">✓ Works</span></div>
+    </div>
+    <div class="key">
+      <div class="top"><b>SteamGridDB</b><span class="badge" style="background:var(--raised);color:var(--muted)">Optional</span></div>
+      <p>Covers for games without one, and more covers, backgrounds and icons in the image picker.</p>
+      <ol><li>Sign in at <a>steamgriddb.com</a>, open Preferences → API, generate a key and paste it here.</li></ol>
+      <div class="in">API key</div>
+    </div>
+  </div>
+  <div class="foot"><span class="btn ghost">Back</span><span style="display:flex;gap:8px"><span class="btn ghost">Skip</span><span class="btn primary">Finish</span></span></div>
+</div>
+
+<!-- 3b -->
+<div class="card">
+  <div class="steps"><i class="on"></i><i class="on"></i><i class="on"></i></div>
+  <div class="inner">
+    <h2>Continue without IGDB?</h2>
+    <div class="warn"><b>Without an IGDB key these stay empty:</b>
+      <ul class="miss"><li>Time to beat</li><li>Website, wiki and social links (store links still work)</li><li>Series, age ratings, game modes, themes, perspectives, and filters on them</li><li>Details for games from stores without metadata (Ubisoft, EA, Battle.net, manually added)</li></ul>
+    </div>
+    <p>You can add the key any time in Settings → Metadata, then use "Refresh metadata for all games".</p>
+  </div>
+  <div class="foot"><span class="btn ghost">Back to keys</span><span class="btn primary">Continue without</span></div>
+</div>
+
+<!-- later -->
+<div class="banner">
+  <div class="bar"><span>⚠ Game details are limited: no IGDB key is set.</span><span class="btn" style="height:26px">Set up</span><span class="btn ghost" style="height:26px">Don't show again</span></div>
+  <div class="fake"></div>
+  <p style="margin-top:10px">A dismissible bar above the library, shown after setup was skipped without an IGDB key. Settings → Metadata shows the same steps as screen 3.</p>
+</div>
+
+<div class="note"><b>First run</b>: shown once on a fresh database (not for existing users, who get the dismissible bar instead). Three short steps, all skippable: welcome, stores (reuses the settings store list), metadata keys with step-by-step instructions and a key test. Skipping without IGDB shows what stays missing.</div>
+<script>
+function show(i,b){ const cs=[...document.querySelectorAll('.card'),document.querySelector('.banner')]; cs.forEach((c,j)=>c.classList.toggle('on',j===i)); document.querySelectorAll('.switch button').forEach(x=>x.classList.toggle('on',x===b)); }
+</script>
+</body>
+</html>

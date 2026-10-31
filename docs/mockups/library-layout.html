@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Library layout mockup</title>
+<style>
+  :root {
+    --bg:#111317; --surface:#171a20; --raised:#1e222a; --hover:#262b35; --active:#343a47; --border:#2a2f3a;
+    --text:#e6e8ec; --muted:#9aa1ae; --faint:#6c7381; --accent:#7c9cff; --accent-soft:#232c4a; --sel:#26304d;
+  }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; }
+  body { background:#0c0e12; color:var(--text); font-family:"Segoe UI Variable","Segoe UI",system-ui,sans-serif; font-size:13px; padding:44px 12px 110px; }
+  .switch { position:fixed; left:50%; transform:translateX(-50%); top:8px; display:flex; gap:3px; background:#0b0d12e6; border:1px solid var(--border); border-radius:99px; padding:3px; z-index:50; }
+  .switch button { background:none; border:none; color:var(--muted); font:inherit; font-size:12px; padding:4px 12px; border-radius:99px; cursor:pointer; white-space:nowrap; }
+  .switch button.on { background:var(--accent-soft); color:var(--text); }
+  .note { position:fixed; left:12px; right:12px; bottom:10px; background:#0b0d12f0; border:1px solid var(--border); border-radius:10px; padding:9px 12px; color:var(--muted); line-height:1.45; z-index:50; }
+  .note b { color:var(--text); }
+  [data-v] .v { display:none; }
+  [data-v="pinned"] .v-pinned, [data-v="float"] .v-float, [data-v="grid"] .v-grid, [data-v="apps"] .v-apps { display:block; }
+  [data-v="pinned"] .v-pinned.flex, [data-v="float"] .v-float.flex, [data-v="grid"] .v-grid.flex, [data-v="multi"] .v-multi.flex, [data-v="cols"] .v-cols.flex { display:flex; }
+  .c6 { grid-template-columns:1fr 110px 110px 100px 70px 100px !important; }
+  .hov { background:var(--hover); color:var(--text); margin:-8px 0; padding:8px 6px; position:relative; }
+  .rz { position:absolute; right:-2px; top:4px; bottom:4px; width:3px; border-radius:2px; background:var(--accent); }
+  .ck { width:14px; height:14px; border-radius:4px; border:1px solid var(--active); display:inline-grid; place-items:center; margin-right:8px; font-size:10px; font-style:normal; }
+  .ck.on { background:var(--accent); border-color:var(--accent); color:#0e1220; }
+  .drag2 { color:var(--faint); margin-right:6px; }
+  .v-multi .pbody { overflow:auto; padding-bottom:16px; }
+  .stack { position:relative; height:170px; flex:none; } .stack i { position:absolute; top:6px; width:110px; height:150px; border-radius:9px; box-shadow:0 8px 20px #0009; border:1px solid #0006; }
+  .stack i:nth-child(1){left:40px;transform:rotate(-8deg)} .stack i:nth-child(2){left:85px;transform:rotate(-2deg)} .stack i:nth-child(3){left:130px;transform:rotate(4deg)} .stack i:nth-child(4){left:175px;transform:rotate(9deg)}
+  .bulk { display:flex; flex-direction:column; gap:8px; margin-top:4px; }
+  .hd2 { color:var(--faint); font-size:11px; letter-spacing:.06em; margin-top:6px; }
+  .kv { display:flex; justify-content:space-between; align-items:center; }
+  .dd { border:1px solid var(--border); background:var(--raised); border-radius:7px; padding:4px 10px; color:var(--muted); font-size:12px; }
+  .seg2 { display:inline-flex; border:1px solid var(--border); background:var(--raised); border-radius:7px; padding:2px; } .seg2 span { padding:2px 10px; color:var(--muted); font-size:12px; border-radius:5px; }
+  .btns { display:flex; flex-wrap:wrap; gap:6px; } .b2 { border:1px solid var(--border); background:var(--raised); border-radius:7px; padding:5px 10px; font-size:12px; } .b2.danger { color:#f08a8a; }
+
+  .win { width:1260px; max-width:100%; height:720px; margin:0 auto; background:var(--bg); border:1px solid var(--border); border-radius:10px; overflow:hidden; display:grid; grid-template-rows:40px 1fr; position:relative; }
+  .title { display:flex; align-items:center; gap:6px; padding:0 10px; border-bottom:1px solid var(--border); background:var(--surface); }
+  .title .brand { font-weight:600; margin-right:10px; }
+  .ib { width:30px; height:28px; border-radius:7px; display:inline-grid; place-items:center; color:var(--muted); border:1px solid transparent; position:relative; }
+  .ib.on { background:var(--accent-soft); color:var(--text); border-color:#7c9cff55; }
+  .find { margin:0 auto; width:420px; height:28px; border-radius:7px; border:1px solid var(--border); background:var(--bg); color:var(--faint); display:flex; align-items:center; padding:0 10px; }
+  .body { display:grid; grid-template-columns:200px 1fr; min-height:0; }
+  .side { border-right:1px solid var(--border); padding:10px 8px; color:var(--muted); display:flex; flex-direction:column; gap:2px; }
+  .side .h { font-size:11px; letter-spacing:.06em; color:var(--faint); padding:10px 8px 4px; }
+  .side a { padding:6px 8px; border-radius:7px; display:flex; justify-content:space-between; }
+  .side a.on { background:var(--accent-soft); color:var(--text); }
+  .side small { color:var(--faint); }
+  .main { display:grid; grid-template-rows:48px 1fr; min-width:0; min-height:0; }
+  .top { display:flex; align-items:center; gap:6px; padding:0 12px; border-bottom:1px solid var(--border); }
+  .top .count { margin-left:auto; color:var(--muted); margin-right:8px; }
+  .content { display:flex; min-height:0; position:relative; }
+  .list { flex:1; overflow:hidden; min-width:0; }
+  .thead { display:grid; grid-template-columns:1fr 130px 110px 90px; gap:8px; padding:8px 16px; color:var(--faint); font-size:11px; letter-spacing:.06em; border-bottom:1px solid var(--border); }
+  .row { display:grid; grid-template-columns:1fr 130px 110px 90px; gap:8px; padding:0 16px; height:34px; align-items:center; border-bottom:1px solid #1d2028; }
+  .row .n { display:flex; gap:10px; align-items:center; white-space:nowrap; overflow:hidden; }
+  .row .n i { width:20px; height:20px; border-radius:4px; background:linear-gradient(140deg,#4a5a7a,#232a3a); flex:none; }
+  .row span:not(.n) { color:var(--muted); }
+  .row.sel { background:var(--sel); }
+  .row.ctx { outline:1px solid #7c9cff88; outline-offset:-1px; }
+
+  /* new group header */
+  .gh { position:relative; display:flex; align-items:center; gap:10px; height:40px; padding:0 16px; margin-top:6px; background:linear-gradient(90deg,#1e2433,#171a20 70%); border-top:1px solid var(--border); border-bottom:1px solid var(--border); }
+  .gh::before { content:""; position:absolute; left:0; top:6px; bottom:6px; width:3px; border-radius:0 3px 3px 0; background:var(--accent); }
+  .gh .chev { color:var(--muted); }
+  .gh .si { width:18px; height:18px; border-radius:4px; background:#4c6b9a; }
+  .gh b { font-size:14px; }
+  .gh .cnt { background:var(--raised); border:1px solid var(--border); color:var(--muted); font-size:11px; padding:1px 8px; border-radius:99px; }
+  .gh .line { flex:1; }
+  .gh .meta { color:var(--faint); font-size:12px; }
+  .gh.sticky { margin-top:0; box-shadow:0 6px 12px #0008; }
+
+  /* details panel */
+  .panel { width:380px; flex:none; border-left:1px solid var(--border); background:var(--surface); display:flex; flex-direction:column; position:relative; }
+  .ptools { display:flex; justify-content:flex-end; gap:4px; padding:6px 8px; }
+  .pbody { padding:0 18px; display:flex; flex-direction:column; gap:10px; }
+  .pcover { height:210px; border-radius:10px; background:linear-gradient(160deg,#4d5b3a,#1f2d3d); }
+  .pbody h3 { margin:4px 0 0; font-size:20px; }
+  .pbody .sub { color:var(--muted); }
+  .play { height:34px; border-radius:8px; background:var(--accent); color:#0e1220; font-weight:600; display:grid; place-items:center; }
+  .facts { display:flex; gap:18px; } .facts small { display:block; color:var(--faint); font-size:11px; } .facts b { font-size:13px; }
+  .split { width:9px; flex:none; margin-left:-5px; margin-right:-4px; cursor:col-resize; position:relative; z-index:3; }
+  .split::after { content:""; position:absolute; left:4px; top:0; bottom:0; width:1px; background:var(--accent); opacity:.9; }
+  .split .grip { position:absolute; top:50%; left:0; width:9px; height:36px; margin-top:-18px; border-radius:5px; background:var(--active); border:1px solid #7c9cff88; }
+  .wtip { position:absolute; top:calc(50% + 26px); left:-26px; background:#000c; border-radius:5px; padding:2px 6px; font-size:11px; color:var(--muted); white-space:nowrap; }
+  .empty { flex:1; display:grid; place-items:center; text-align:center; color:var(--faint); padding:20px; }
+  .empty .big { width:120px; height:160px; border-radius:10px; border:1px dashed var(--active); margin:0 auto 12px; }
+  .panel.float { position:absolute; right:12px; top:12px; bottom:12px; border:1px solid var(--border); border-radius:12px; box-shadow:-16px 0 40px #000b; z-index:5; }
+
+  /* menus */
+  .menu { position:absolute; z-index:10; width:250px; background:var(--surface); border:1px solid var(--border); border-radius:10px; box-shadow:0 18px 40px #000b; padding:6px; }
+  .menu .it { display:flex; justify-content:space-between; align-items:center; padding:6px 10px; border-radius:6px; gap:10px; }
+  .menu .it:hover, .menu .it.hl { background:var(--hover); }
+  .menu .it small { color:var(--faint); }
+  .menu .sep { border-top:1px solid var(--border); margin:5px 0; }
+  .menu .hd { color:var(--faint); font-size:11px; letter-spacing:.06em; padding:6px 10px 3px; }
+  .menu .search { height:28px; border-radius:6px; background:var(--bg); border:1px solid var(--border); color:var(--faint); display:flex; align-items:center; padding:0 9px; margin:2px 2px 6px; }
+  .tip { position:absolute; background:#000d; border-radius:6px; padding:3px 8px; font-size:11px; color:var(--text); white-space:nowrap; z-index:11; }
+
+  /* grid */
+  .grid { flex:1; overflow:hidden; padding:0 0 0 0; }
+  .tiles { display:grid; grid-template-columns:repeat(6,1fr); gap:14px; padding:12px 16px; }
+  .tile { aspect-ratio:3/4; border-radius:10px; background:linear-gradient(160deg,#3a4a6a,#1a2030); }
+
+  /* apps */
+  .apps { position:absolute; left:116px; top:40px; width:360px; background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:0 18px 40px #000b; padding:10px; z-index:10; }
+  .apps .search { height:30px; border-radius:7px; background:var(--bg); border:1px solid var(--border); color:var(--faint); display:flex; align-items:center; padding:0 9px; margin-bottom:8px; }
+  .apps .grid3 { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
+  .app { display:flex; flex-direction:column; align-items:center; gap:6px; padding:10px 4px; border-radius:8px; text-align:center; font-size:12px; color:var(--muted); }
+  .app:hover, .app.hl { background:var(--hover); color:var(--text); }
+  .app i { width:36px; height:36px; border-radius:8px; }
+  .apps .foot { display:flex; justify-content:space-between; border-top:1px solid var(--border); margin-top:8px; padding-top:8px; color:var(--muted); font-size:12px; }
+  [data-v="apps"] .side a.on { background:none; color:var(--muted); }
+  [data-v="apps"] .side a.tmp { background:var(--accent-soft); color:var(--text); border-radius:7px; }
+  .unsaved { display:none; align-items:center; gap:6px; height:28px; padding:0 10px; border-radius:7px; border:1px solid #e8b45a66; background:#3a2f1a; color:#f0d9a8; font-size:12px; }
+  [data-v="apps"] .unsaved { display:inline-flex; }
+</style>
+</head>
+<body data-v="pinned">
+<div class="switch">
+  <button class="on" onclick="v('pinned',this)">Docked panel</button>
+  <button onclick="v('float',this)">Floating panel</button>
+  <button onclick="v('grid',this)">Grid groups</button>
+  <button onclick="v('apps',this)">Apps launcher</button>
+  <button onclick="v('multi',this)">Multi-select</button>
+  <button onclick="v('cols',this)">Columns</button>
+</div>
+
+<div class="win">
+  <div class="title">
+    <span class="brand">⌂ Questkeep ▾</span>
+    <span class="ib">＋</span><span class="ib">🚀</span>
+    <span class="ib" id="appsbtn" title="Apps">▦</span>
+    <span class="ib">⟳</span>
+    <div class="find">⌕ &nbsp;Find a game…</div>
+    <span class="ib">⚙</span><span class="ib">–</span><span class="ib">▢</span><span class="ib">✕</span>
+  </div>
+  <div class="body">
+    <div class="side">
+      <a>⌂ Home</a>
+      <div class="h">LIBRARY</div>
+      <a class="on">All games <small>158</small></a><a>Favorites <small>0</small></a><a>Installed <small>58</small></a><a>Recently played <small>87</small></a>
+      <div class="h">OTHER</div>
+      <a>Hidden <small>0</small></a>
+      <span style="flex:1"></span>
+      <a class="tmp" style="border-top:1px solid var(--border);border-radius:0;padding-top:10px;margin-top:6px"><span>🧭 Explore</span><small>⟲</small></a>
+    </div>
+    <div class="main">
+      <div class="top">
+        <span class="ib">⌕</span><span class="ib">⏷</span><span class="ib">⇅</span><span class="ib on">▤</span>
+        <span class="ib" id="jump" title="Jump to group">⇣</span>
+        <span class="unsaved">Explore · Type: Apps <b style="margin-left:6px;color:var(--text)">Save as view…</b></span>
+        <span class="count">158 games</span>
+        <span class="ib">▦</span><span class="ib on">☰</span><span class="ib">◧</span>
+      </div>
+
+      <!-- LIST + PANEL (pinned / float) -->
+      <div class="content v v-pinned flex">
+        <div class="list">
+          <div class="thead"><span>NAME</span><span>SOURCE</span><span>STATUS</span><span>PLAYTIME</span></div>
+          <div class="gh sticky"><span class="chev">⌄</span><span class="si"></span><b>Amazon Games</b><span class="cnt">35</span><span class="line"></span><span class="meta">2 installed · 0h</span></div>
+          <div class="row"><span class="n"><i></i>Battle Chef Brigade Deluxe</span><span>Amazon Games</span><span>Not installed</span><span>–</span></div>
+          <div class="row sel"><span class="n"><i></i>Broken Age</span><span>Amazon Games</span><span>Not installed</span><span>–</span></div>
+          <div class="row ctx"><span class="n"><i></i>Brütal Legend</span><span>Amazon Games</span><span>Not installed</span><span>–</span></div>
+          <div class="row"><span class="n"><i></i>Clustertruck</span><span>Amazon Games</span><span>Not installed</span><span>–</span></div>
+          <div class="row"><span class="n"><i></i>Deponia Doomsday</span><span>Amazon Games</span><span>Not installed</span><span>–</span></div>
+          <div class="gh"><span class="chev">⌄</span><span class="si" style="background:#2a4a6a"></span><b>Epic Games</b><span class="cnt">30</span><span class="line"></span><span class="meta">4 installed · 61h</span></div>
+          <div class="row"><span class="n"><i></i>Ape Out</span><span>Epic Games</span><span>Not installed</span><span>–</span></div>
+          <div class="row"><span class="n"><i></i>Batman™ Arkham Asylum</span><span>Epic Games</span><span>Not installed</span><span>–</span></div>
+          <div class="row"><span class="n"><i></i>Batman™ Arkham City</span><span>Epic Games</span><span>Not installed</span><span>–</span></div>
+          <div class="gh"><span class="chev">›</span><span class="si" style="background:#3a3a5a"></span><b>GOG</b><span class="cnt">12</span><span class="line"></span><span class="meta">collapsed</span></div>
+          <div class="gh"><span class="chev">⌄</span><span class="si" style="background:#1a3a5a"></span><b>Steam</b><span class="cnt">54</span><span class="line"></span><span class="meta">41 installed · 2,310h</span></div>
+          <div class="row"><span class="n"><i></i>Among Us</span><span>Steam</span><span>Installed</span><span>137h</span></div>
+          <div class="row"><span class="n"><i></i>Astro Prospector</span><span>Steam</span><span>Installed</span><span>6h</span></div>
+        </div>
+        <div class="split"><span class="grip"></span><span class="wtip">380 px</span></div>
+        <div class="panel">
+          <div class="ptools"><span class="ib on" title="Unpin: let the panel float">📌</span></div>
+          <div class="pbody">
+            <div class="pcover"></div>
+            <h3>Broken Age</h3><div class="sub">Double Fine Productions · 2014</div>
+            <div class="play">Install</div>
+            <div class="facts"><div><small>Last played</small><b>Never</b></div><div><small>Playtime</small><b>–</b></div><div><small>Store</small><b>Amazon Games</b></div></div>
+          </div>
+        </div>
+        <!-- context menu -->
+        <div class="menu" style="left:470px;top:120px">
+          <div class="it hl">▶ Play <small>Enter</small></div>
+          <div class="it">Play with ▸</div>
+          <div class="it">Open game page</div>
+          <div class="sep"></div>
+          <div class="it">☆ Add to favorites</div>
+          <div class="it">Completion status ▸ <small>Not Played</small></div>
+          <div class="it">Categories ▸</div>
+          <div class="it">Edit… <small>F2</small></div>
+          <div class="sep"></div>
+          <div class="it">Refresh metadata</div>
+          <div class="it">Combine with another game…</div>
+          <div class="it">Mark as app</div>
+          <div class="it">Hide <small>Del</small></div>
+          <div class="sep"></div>
+          <div class="it">Install</div>
+          <div class="it">Remove from library…</div>
+        </div>
+        <!-- jump to group -->
+        <div class="menu" style="left:150px;top:-6px;width:230px">
+          <div class="search">⌕ &nbsp;Type to find a group</div>
+          <div class="it">Amazon Games <small>35</small></div>
+          <div class="it hl">Epic Games <small>30</small></div>
+          <div class="it">GOG <small>12</small></div>
+          <div class="it">Prism Launcher <small>9</small></div>
+          <div class="it">Steam <small>54</small></div>
+          <div class="it">Xbox <small>18</small></div>
+          <div class="sep"></div>
+          <div class="it">Collapse all</div><div class="it">Expand all</div>
+        </div>
+      </div>
+
+      <!-- COLUMNS -->
+      <div class="content v v-cols flex">
+        <div class="list">
+          <div class="thead c6"><span>NAME</span><span>SOURCE</span><span>COMPLETION</span><span class="hov">PLAYTIME <small>▾</small><i class="rz"></i></span><span>CRITIC</span><span>TIME TO BEAT</span></div>
+          <div class="row c6"><span class="n"><i></i>Among Us</span><span>Steam</span><span>Played</span><span>137h</span><span>–</span><span>–</span></div>
+          <div class="row c6"><span class="n"><i></i>Astro Prospector</span><span>Steam</span><span>Played</span><span>6h</span><span>78</span><span>9h</span></div>
+          <div class="row c6"><span class="n"><i></i>ASTRONEER</span><span>Steam</span><span>Beaten</span><span>40h</span><span>81</span><span>24h</span></div>
+          <div class="row c6"><span class="n"><i></i>Avorion</span><span>Steam</span><span>Played</span><span>391h</span><span>–</span><span>60h</span></div>
+          <div class="row c6"><span class="n"><i></i>Balatro</span><span>Steam</span><span>Beaten</span><span>14h</span><span>90</span><span>18h</span></div>
+        </div>
+        <div class="menu" style="left:440px;top:30px;width:280px">
+          <div class="hd">COLUMNS · THIS VIEW</div>
+          <div class="search">⌕ &nbsp;Find a column</div>
+          <div class="it"><span><span class="ck on">✓</span>Name</span><small>always</small></div>
+          <div class="it"><span><span class="drag2">⠿</span><span class="ck on">✓</span>Source</span></div>
+          <div class="it"><span><span class="drag2">⠿</span><span class="ck on">✓</span>Completion status</span></div>
+          <div class="it hl"><span><span class="drag2">⠿</span><span class="ck on">✓</span>Playtime</span></div>
+          <div class="it"><span><span class="drag2">⠿</span><span class="ck on">✓</span>Critic score</span></div>
+          <div class="it"><span><span class="drag2">⠿</span><span class="ck on">✓</span>Time to beat</span></div>
+          <div class="sep"></div>
+          <div class="it"><span><span class="ck"></span>Last played</span></div>
+          <div class="it"><span><span class="ck"></span>Release date</span></div>
+          <div class="it"><span><span class="ck"></span>Developer</span></div>
+          <div class="it"><span><span class="ck"></span>Genres</span></div>
+          <div class="it"><span><span class="ck"></span>Install size</span></div>
+          <div class="it"><span><span class="ck"></span>Your score</span></div>
+          <div class="it more" style="color:var(--muted)">+ 16 more…</div>
+          <div class="sep"></div>
+          <div class="it" style="color:var(--muted)">Reset to default columns</div>
+        </div>
+      </div>
+
+      <!-- MULTI -->
+      <div class="content v v-multi flex">
+        <div class="list">
+          <div class="thead"><span>NAME</span><span>SOURCE</span><span>STATUS</span><span>PLAYTIME</span></div>
+          <div class="gh sticky"><span class="chev">⌄</span><span class="si"></span><b>Amazon Games</b><span class="cnt">35</span><span class="line"></span><span class="meta">3 of 35 selected</span></div>
+          <div class="row"><span class="n"><i></i>Battle Chef Brigade Deluxe</span><span>Amazon Games</span><span>Not installed</span><span>–</span></div>
+          <div class="row sel"><span class="n"><i></i>Broken Age</span><span>Amazon Games</span><span>Not installed</span><span>–</span></div>
+          <div class="row sel"><span class="n"><i></i>Brütal Legend</span><span>Amazon Games</span><span>Not installed</span><span>–</span></div>
+          <div class="row sel ctx"><span class="n"><i></i>Clustertruck</span><span>Amazon Games</span><span>Not installed</span><span>–</span></div>
+          <div class="row"><span class="n"><i></i>Deponia Doomsday</span><span>Amazon Games</span><span>Not installed</span><span>–</span></div>
+          <div class="gh"><span class="chev">⌄</span><span class="si" style="background:#2a4a6a"></span><b>Epic Games</b><span class="cnt">30</span><span class="line"></span><span class="meta">1 of 30 selected</span></div>
+          <div class="row"><span class="n"><i></i>Ape Out</span><span>Epic Games</span><span>Not installed</span><span>–</span></div>
+          <div class="row sel"><span class="n"><i></i>Batman™ Arkham Asylum</span><span>Epic Games</span><span>Not installed</span><span>–</span></div>
+          <div class="row"><span class="n"><i></i>Batman™ Arkham City</span><span>Epic Games</span><span>Not installed</span><span>–</span></div>
+        </div>
+        <div class="split"><span class="grip"></span></div>
+        <div class="panel">
+          <div class="ptools"><span class="ib on" title="Unpin">📌</span></div>
+          <div class="pbody">
+            <div class="stack"><i style="background:linear-gradient(160deg,#4d5b3a,#1f2d3d)"></i><i style="background:linear-gradient(160deg,#6a3a2a,#2a1a1a)"></i><i style="background:linear-gradient(160deg,#3a5a7a,#1a2a3a)"></i><i style="background:linear-gradient(160deg,#333,#111)"></i></div>
+            <h3>4 games selected</h3>
+            <div class="sub">Amazon Games 3 · Epic Games 1 · <span style="color:var(--accent)">Clear selection</span></div>
+            <div class="facts"><div><small>Installed</small><b>0 of 4</b></div><div><small>Playtime</small><b>0h</b></div><div><small>Install size</small><b>–</b></div></div>
+            <div class="bulk">
+              <div class="hd2">CHANGE ALL</div>
+              <div class="kv"><span>Completion status</span><span class="dd">Mixed ▾</span></div>
+              <div class="kv"><span>Categories</span><span class="dd">Add or remove ▾</span></div>
+              <div class="kv"><span>Favorite</span><span class="seg2"><span>Yes</span><span>No</span></span></div>
+              <div class="kv"><span>Hidden</span><span class="seg2"><span>Hide</span><span>Show</span></span></div>
+              <div class="kv"><span>Type</span><span class="seg2"><span>Game</span><span>App</span></span></div>
+              <div class="hd2">ACTIONS</div>
+              <div class="btns"><span class="b2">Install all</span><span class="b2">Refresh metadata</span><span class="b2">Combine into one game</span><span class="b2 danger">Remove from library…</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="menu" style="left:240px;top:150px">
+          <div class="hd">4 GAMES</div>
+          <div class="it">Install all</div>
+          <div class="sep"></div>
+          <div class="it">☆ Add to favorites</div>
+          <div class="it">Completion status ▸</div>
+          <div class="it">Categories ▸</div>
+          <div class="it">Edit… <small>disabled</small></div>
+          <div class="sep"></div>
+          <div class="it">Refresh metadata</div>
+          <div class="it">Combine into one game…</div>
+          <div class="it">Mark as apps</div>
+          <div class="it">Hide</div>
+          <div class="sep"></div>
+          <div class="it">Remove from library…</div>
+        </div>
+      </div>
+
+      <!-- FLOAT -->
+      <div class="content v v-float flex">
+        <div class="list">
+          <div class="thead"><span>NAME</span><span>SOURCE</span><span>STATUS</span><span>PLAYTIME</span></div>
+          <div class="gh sticky"><span class="chev">⌄</span><span class="si"></span><b>Amazon Games</b><span class="cnt">35</span><span class="line"></span><span class="meta">2 installed · 0h</span></div>
+          <div class="row"><span class="n"><i></i>Battle Chef Brigade Deluxe</span><span>Amazon Games</span><span>Not installed</span><span>–</span></div>
+          <div class="row sel"><span class="n"><i></i>Broken Age</span><span>Amazon Games</span><span>Not installed</span><span>–</span></div>
+          <div class="row"><span class="n"><i></i>Brütal Legend</span><span>Amazon Games</span><span>Not installed</span><span>–</span></div>
+          <div class="row"><span class="n"><i></i>Clustertruck</span><span>Amazon Games</span><span>Not installed</span><span>–</span></div>
+          <div class="row"><span class="n"><i></i>Deponia Doomsday</span><span>Amazon Games</span><span>Not installed</span><span>–</span></div>
+          <div class="gh"><span class="chev">⌄</span><span class="si" style="background:#2a4a6a"></span><b>Epic Games</b><span class="cnt">30</span><span class="line"></span><span class="meta">4 installed · 61h</span></div>
+          <div class="row"><span class="n"><i></i>Ape Out</span><span>Epic Games</span><span>Not installed</span><span>–</span></div>
+          <div class="row"><span class="n"><i></i>Batman™ Arkham Asylum</span><span>Epic Games</span><span>Not installed</span><span>–</span></div>
+        </div>
+        <div class="panel float">
+          <div class="ptools"><span class="ib" title="Pin: dock the panel">📌</span><span class="ib" title="Close (Esc)">✕</span></div>
+          <div class="pbody">
+            <div class="pcover"></div>
+            <h3>Broken Age</h3><div class="sub">Double Fine Productions · 2014</div>
+            <div class="play">Install</div>
+            <div class="facts"><div><small>Last played</small><b>Never</b></div><div><small>Playtime</small><b>–</b></div><div><small>Store</small><b>Amazon Games</b></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- GRID -->
+      <div class="content v v-grid flex">
+        <div class="grid">
+          <div class="gh sticky"><span class="chev">⌄</span><span class="si"></span><b>Amazon Games</b><span class="cnt">35</span><span class="line"></span><span class="meta">2 installed</span></div>
+          <div class="tiles"><div class="tile"></div><div class="tile"></div><div class="tile"></div><div class="tile"></div><div class="tile"></div><div class="tile"></div></div>
+          <div class="gh"><span class="chev">⌄</span><span class="si" style="background:#2a4a6a"></span><b>Epic Games</b><span class="cnt">30</span><span class="line"></span><span class="meta">4 installed</span></div>
+          <div class="tiles"><div class="tile"></div><div class="tile"></div><div class="tile"></div><div class="tile"></div><div class="tile"></div><div class="tile"></div></div>
+        </div>
+        <div class="panel" style="display:flex">
+          <div class="ptools"><span class="ib on" title="Unpin">📌</span></div>
+          <div class="empty"><div><div class="big"></div>Select a game to see its details here.</div></div>
+        </div>
+      </div>
+
+      <!-- APPS -->
+      <div class="content v v-apps">
+        <div class="list">
+          <div class="thead"><span>NAME</span><span>SOURCE</span><span>STATUS</span><span>PLAYTIME</span></div>
+          <div class="row"><span class="n"><i></i>Wallpaper Engine</span><span>Steam</span><span>Installed</span><span>412h</span></div>
+          <div class="row"><span class="n"><i></i>SteamVR</span><span>Steam</span><span>Installed</span><span>3h</span></div>
+          <div class="row"><span class="n"><i></i>Blender</span><span>Steam</span><span>Installed</span><span>96h</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="apps v v-apps">
+    <div class="search">⌕ &nbsp;Find an app</div>
+    <div class="grid3">
+      <div class="app hl"><i style="background:linear-gradient(140deg,#2a8,#145)"></i>Wallpaper Engine</div>
+      <div class="app"><i style="background:linear-gradient(140deg,#58f,#224)"></i>SteamVR</div>
+      <div class="app"><i style="background:linear-gradient(140deg,#e94,#532)"></i>Blender</div>
+      <div class="app"><i style="background:linear-gradient(140deg,#a6f,#324)"></i>OBS Studio</div>
+      <div class="app"><i style="background:linear-gradient(140deg,#fc4,#552)"></i>Aseprite</div>
+      <div class="app"><i style="background:linear-gradient(140deg,#4cf,#235)"></i>Soundpad</div>
+      <div class="app"><i style="background:linear-gradient(140deg,#ccc,#444)"></i>Steamworks Common</div>
+    </div>
+    <div class="foot"><span>Click to start · right-click for more</span><span style="color:var(--accent)">Show all apps ↗</span></div>
+  </div>
+</div>
+
+<div class="note" id="note"></div>
+<script>
+const notes = {
+  pinned: "<b>Docked panel</b>: the details panel is always shown in library views (also with nothing selected), so selecting a game never reflows the list. The splitter between list and panel resizes it (width remembered per view, shown while dragging); 📌 unpins it. <b>Group headers</b>: a full-width band with an accent bar, bigger name, count chip and a short summary; it sticks to the top while scrolling. <b>Jump to group</b> (⇣ next to group, only while grouped): type-to-find list of groups, collapse/expand all. <b>Right-click</b> (or the Menu key / Shift+F10) on a game opens the context menu.",
+  float: "<b>Floating panel</b> (unpinned): opens over the list when a game is selected, closes with Esc or ✕, the list keeps its full width. 📌 docks it again. Pinned/floating is remembered per view.",
+  grid: "<b>Grid</b> uses the same group header band. The docked panel with nothing selected shows an empty state instead of disappearing.",
+  cols: "<b>Columns</b> (table view): right-click the column header to pick columns from every field (search, checkboxes, drag to reorder; Name is always first). Drag a column edge to resize, drag a header to move it, click a header to sort by it (▾ shows the sort). Columns, order and widths are saved per view; Explore starts with the default columns.",
+  multi: "<b>Multi-select</b>: Ctrl+click adds or removes a game, Shift+click selects a range (Shift+arrows, Ctrl+A also work; Esc clears). The panel shows a multi-select summary: cover stack, counts per store, totals, \"Change all\" fields (completion status, categories, favorite, hidden, type; \"Mixed\" when they differ) and bulk actions. Right-click on a selected game opens the multi-select menu; right-click on an unselected one selects just that game first. Group headers show how many of their games are selected.",
+  apps: "<b>Apps</b> (Steam tools, software from other stores, or anything marked by hand) have the type \"App\". Every view gets a <b>Type</b> filter (Games / Apps / Both, default Games), so apps stay out of game views. The ▦ launcher in the title bar starts apps quickly; <b>Show all apps</b> opens <b>Explore</b> (bottom of the sidebar) filtered to Type: Apps, in table view. Clicking \"Explore\" in the sidebar always starts fresh: table view, no filter, no sort, no grouping; \"Save as view…\" turns it into a normal view. Right-click → \"Mark as app\" / \"Mark as game\" overrides the detection."
+};
+function v(name,b){ document.body.dataset.v=name; document.querySelectorAll('.switch button').forEach(x=>x.classList.toggle('on',x===b)); document.getElementById('note').innerHTML=notes[name]; document.getElementById('appsbtn').classList.toggle('on',name==='apps'); }
+v('pinned', document.querySelector('.switch button'));
+</script>
+</body>
+</html>

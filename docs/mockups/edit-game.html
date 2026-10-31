@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Edit game mockup</title>
+<style>
+  :root {
+    --bg:#111317; --surface:#171a20; --raised:#1e222a; --hover:#262b35; --active:#343a47; --border:#2a2f3a;
+    --text:#e6e8ec; --muted:#9aa1ae; --faint:#6c7381; --accent:#7c9cff; --accent-soft:#232c4a; --warn:#e8b45a;
+  }
+  * { box-sizing:border-box; }
+  html, body { margin:0; }
+  body { background:#0c0e12; color:var(--text); font-family:"Segoe UI Variable","Segoe UI",system-ui,sans-serif; font-size:13px; padding:24px 20px 120px; }
+  .note { position:fixed; left:16px; bottom:12px; max-width:640px; background:#0b0d12f0; border:1px solid var(--border); border-radius:10px; padding:10px 12px; color:var(--muted); z-index:50; line-height:1.45; }
+  .note b { color:var(--text); }
+  .modal { width:860px; max-width:100%; margin:0 auto; background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:0 24px 60px #000c; display:flex; flex-direction:column; }
+  .mhead { display:flex; align-items:center; gap:12px; padding:14px 16px; border-bottom:1px solid var(--border); }
+  .mhead .cov { width:36px; height:48px; border-radius:5px; background:linear-gradient(160deg,#5b3d2a,#1d2a3a); }
+  .mhead h2 { margin:0; font-size:15px; } .mhead small { color:var(--muted); }
+  .mbody { display:flex; min-height:520px; }
+  nav { width:170px; border-right:1px solid var(--border); padding:10px 8px; display:flex; flex-direction:column; gap:2px; }
+  nav a { padding:7px 10px; border-radius:7px; color:var(--muted); cursor:pointer; display:flex; justify-content:space-between; }
+  nav a.on { background:var(--accent-soft); color:var(--text); }
+  nav a small { color:var(--accent); font-size:11px; }
+  .pane { flex:1; padding:16px 18px; display:none; flex-direction:column; gap:14px; overflow:auto; max-height:620px; }
+  .pane.on { display:flex; }
+  .mfoot { display:flex; justify-content:space-between; align-items:center; padding:10px 16px; border-top:1px solid var(--border); }
+  .btn { height:30px; padding:0 12px; border-radius:7px; background:var(--raised); border:1px solid var(--border); color:var(--text); font:inherit; display:inline-flex; align-items:center; gap:6px; }
+  .btn.primary { background:var(--accent); color:#0e1220; border:none; font-weight:600; }
+  .btn.ghost { background:none; border-color:transparent; color:var(--muted); }
+  .btn.sm { height:24px; padding:0 8px; font-size:12px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:12px 16px; }
+  .f { display:flex; flex-direction:column; gap:5px; }
+  .f.full { grid-column:1/-1; }
+  .lab { display:flex; justify-content:space-between; align-items:center; color:var(--muted); font-size:12px; }
+  .src { font-size:11px; color:var(--faint); display:inline-flex; gap:6px; align-items:center; }
+  .src.user { color:var(--accent); }
+  .src .reset { color:var(--muted); text-decoration:underline; cursor:pointer; }
+  .in { min-height:30px; border-radius:7px; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:5px 9px; font:inherit; display:flex; flex-wrap:wrap; gap:5px; align-items:center; }
+  .in.edited { border-color:#7c9cff88; }
+  .in.area { min-height:96px; align-items:flex-start; line-height:1.45; color:#cfd3da; }
+  .in .ph { color:var(--faint); }
+  .tag { display:inline-flex; gap:5px; align-items:center; padding:2px 8px; border-radius:99px; background:var(--raised); border:1px solid var(--border); font-size:12px; }
+  .tag b { color:var(--faint); font-weight:400; }
+  .sec { color:var(--faint); font-size:11px; letter-spacing:.06em; margin-top:4px; }
+  .hint { color:var(--faint); font-size:12px; line-height:1.4; }
+  .seg { display:inline-flex; background:var(--raised); border:1px solid var(--border); border-radius:7px; padding:2px; flex-wrap:wrap; }
+  .seg span { padding:3px 9px; border-radius:5px; color:var(--muted); font-size:12px; }
+  .seg span.on { background:var(--accent-soft); color:var(--text); }
+  table { border-collapse:collapse; width:100%; }
+  td { padding:6px 6px; border-bottom:1px solid var(--border); vertical-align:middle; }
+  td.icon { width:28px; color:var(--muted); }
+  td .muted { color:var(--faint); font-size:12px; }
+  .prof { background:var(--raised); border:1px solid var(--border); border-radius:10px; }
+  .prof.sel { border-color:#7c9cff77; }
+  .prof .top { display:flex; align-items:center; gap:10px; padding:9px 12px; }
+  .prof .top b { flex:1; }
+  .prof .def { font-size:11px; color:#0e1220; background:var(--accent); border-radius:99px; padding:1px 8px; font-weight:700; }
+  .prof .body { border-top:1px solid var(--border); padding:12px; display:grid; grid-template-columns:1fr 1fr; gap:10px 14px; }
+  .img-row { display:grid; grid-template-columns:200px 1fr; gap:16px; align-items:center; padding:12px 0; border-bottom:1px solid var(--border); }
+  .img-slot { height:140px; border-radius:8px; background:var(--bg); border:1px solid var(--border); display:grid; place-items:center; }
+  .img-info { display:flex; flex-direction:column; gap:6px; }
+  .img-btns { display:flex; gap:8px; margin-top:4px; }
+  .pgrid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; padding:14px 16px; max-height:420px; overflow:auto; }
+  .pimg { aspect-ratio:16/9; border-radius:8px; border:2px solid transparent; position:relative; }
+  .pimg small { position:absolute; left:6px; bottom:6px; font-size:11px; background:#000a; padding:1px 6px; border-radius:4px; color:var(--muted); }
+  .pimg.sel { border-color:var(--accent); }
+  .pimg.cur::after { content:"✓"; position:absolute; top:6px; right:8px; color:var(--muted); }
+  .pimg.loading { background:var(--raised); }
+  .drag { color:var(--faint); cursor:grab; }
+  .menu { position:relative; width:max-content; }
+  .playmenu { margin-top:8px; width:240px; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:6px; box-shadow:0 18px 40px #000a; }
+  .playmenu div { padding:6px 10px; border-radius:6px; display:flex; justify-content:space-between; }
+  .playmenu div:hover { background:var(--hover); }
+  .playmenu .sep { border-top:1px solid var(--border); padding:0; margin:5px 0; }
+  .playmenu small { color:var(--faint); }
+  .play { display:inline-flex; border-radius:8px; overflow:hidden; }
+  .play span { background:var(--accent); color:#0e1220; font-weight:600; padding:7px 14px; }
+  .play span + span { border-left:1px solid #0e122044; padding:7px 9px; }
+  .stars { display:flex; gap:10px; align-items:center; }
+  .slider { position:relative; height:4px; background:var(--hover); border-radius:99px; flex:1; }
+  .slider i { position:absolute; left:0; width:85%; top:0; bottom:0; background:var(--accent); border-radius:99px; }
+  .slider b { position:absolute; left:85%; top:-5px; width:14px; height:14px; margin-left:-7px; border-radius:50%; background:var(--text); }
+</style>
+</head>
+<body>
+<div class="modal">
+  <div class="mhead"><div class="cov"></div><div><h2>Edit game</h2><small>Hades II · Steam, Xbox</small></div></div>
+  <div class="mbody">
+    <nav>
+      <a class="on" data-p="general">General</a>
+      <a data-p="details">Details <small>2 edited</small></a>
+      <a data-p="links">Links</a>
+      <a data-p="launch">Launch <small>3</small></a>
+      <a data-p="tracking">Playtime tracking</a>
+      <a data-p="media">Images</a>
+    </nav>
+
+    <!-- General -->
+    <div class="pane on" id="general">
+      <div class="grid2">
+        <div class="f full"><span class="lab">Name</span><div class="in">Hades II</div></div>
+        <div class="f"><span class="lab">Sorting name<span class="src">automatic</span></span><div class="in"><span class="ph">Hades 2</span></div></div>
+        <div class="f"><span class="lab">Release date<span class="src">from IGDB</span></span><div class="in">25 Sep 2025</div></div>
+        <div class="f full"><span class="lab">Description<span class="src user">edited by you · <span class="reset">Use IGDB value</span></span></span><div class="in area edited">Battle beyond the Underworld using dark sorcery to take on the Titan of Time in this bewitching sequel to the award-winning rogue-like dungeon crawler. My notes: try the Moon Monument route…</div></div>
+      </div>
+      <div class="sec">YOU</div>
+      <div class="grid2">
+        <div class="f full"><span class="lab">Completion status</span><div class="seg"><span>Not Played</span><span class="on">Played</span><span>Beaten</span></div></div>
+        <div class="f"><span class="lab">Your score<span class="src">85 / 100</span></span><div class="stars"><div class="slider"><i></i><b></b></div><span class="btn sm ghost">Clear</span></div></div>
+        <div class="f"><span class="lab">Categories</span><div class="in"><span class="tag">Roguelikes ×</span><span class="tag">Couch ×</span><span class="ph">Add…</span></div></div>
+        <div class="f full"><span class="lab">Notes</span><div class="in area"><span class="ph">Anything you want to remember about this game. Only stored on this device.</span></div></div>
+      </div>
+    </div>
+
+    <!-- Details -->
+    <div class="pane" id="details">
+      <p class="hint">Each field shows where its value comes from. Change a field to keep your own value through every metadata refresh; "Use … value" goes back to the automatic one.</p>
+      <div class="grid2">
+        <div class="f"><span class="lab">Developers<span class="src">from IGDB</span></span><div class="in"><span class="tag">Supergiant Games ×</span><span class="ph">Add…</span></div></div>
+        <div class="f"><span class="lab">Publishers<span class="src">from IGDB</span></span><div class="in"><span class="tag">Supergiant Games ×</span><span class="ph">Add…</span></div></div>
+        <div class="f"><span class="lab">Genres<span class="src">from IGDB</span></span><div class="in"><span class="tag">Roguelike ×</span><span class="tag">Action ×</span><span class="tag">RPG ×</span></div></div>
+        <div class="f"><span class="lab">Series<span class="src user">edited by you · <span class="reset">Use IGDB value</span></span></span><div class="in edited"><span class="tag">Hades ×</span></div></div>
+        <div class="f full"><span class="lab">Tags<span class="src">from Steam</span></span><div class="in"><span class="tag">Roguelite ×</span><span class="tag">Hack and Slash ×</span><span class="tag">Mythology ×</span><span class="tag">Isometric ×</span><span class="tag">Great Soundtrack ×</span><span class="tag">+9</span><span class="ph">Add…</span></div></div>
+        <div class="f full"><span class="lab">Features<span class="src">from Steam</span></span><div class="in"><span class="tag">Single-player ×</span><span class="tag">Controller support ×</span><span class="tag">Cloud saves ×</span><span class="tag">Achievements ×</span></div></div>
+        <div class="f"><span class="lab">Platforms<span class="src">from IGDB</span></span><div class="in"><span class="tag">Windows ×</span><span class="tag">macOS ×</span><span class="tag">Switch ×</span></div></div>
+        <div class="f"><span class="lab">Age rating<span class="src">from IGDB</span></span><div class="in"><span class="tag">PEGI 12 ×</span><span class="tag">ESRB Teen ×</span></div></div>
+        <div class="f"><span class="lab">Game modes<span class="src">from IGDB</span></span><div class="in"><span class="tag">Single player ×</span></div></div>
+        <div class="f"><span class="lab">Perspective<span class="src">from IGDB</span></span><div class="in"><span class="tag">Bird view / Isometric ×</span></div></div>
+        <div class="f full"><span class="lab">Themes<span class="src">from IGDB</span></span><div class="in"><span class="tag">Action ×</span><span class="tag">Fantasy ×</span></div></div>
+      </div>
+      <div class="sec">NUMBERS</div>
+      <div class="grid2">
+        <div class="f"><span class="lab">Critic score<span class="src">from IGDB</span></span><div class="in">94</div></div>
+        <div class="f"><span class="lab">Community score<span class="src">from Steam</span></span><div class="in">96</div></div>
+        <div class="f"><span class="lab">Time to beat: main story<span class="src">from IGDB</span></span><div class="in">28 h</div></div>
+        <div class="f"><span class="lab">Main + extras / completionist</span><div class="in">46 h &nbsp;/&nbsp; 92 h</div></div>
+        <div class="f"><span class="lab">Install size<span class="src">measured</span></span><div class="in">9.4 GB</div></div>
+      </div>
+    </div>
+
+    <!-- Links -->
+    <div class="pane" id="links">
+      <p class="hint">Links from all sources are shown on the game page. Hide ones you don't need, or add your own.</p>
+      <table>
+        <tr><td class="icon">◧</td><td>Steam store page<div class="muted">store.steampowered.com/app/1145350 · Steam</div></td><td style="text-align:right"><span class="btn sm ghost">Hide</span></td></tr>
+        <tr><td class="icon">◧</td><td>Xbox store page<div class="muted">xbox.com/games/store/hades-ii/… · Xbox</div></td><td style="text-align:right"><span class="btn sm ghost">Hide</span></td></tr>
+        <tr><td class="icon">◎</td><td>Official website<div class="muted">supergiantgames.com/games/hades-ii · IGDB</div></td><td style="text-align:right"><span class="btn sm ghost">Hide</span></td></tr>
+        <tr><td class="icon">W</td><td>PCGamingWiki<div class="muted">pcgamingwiki.com/… · Steam</div></td><td style="text-align:right"><span class="btn sm ghost">Hide</span></td></tr>
+        <tr><td class="icon">W</td><td>Fandom wiki<div class="muted">hades.fandom.com · IGDB</div></td><td style="text-align:right"><span class="btn sm ghost">Hide</span></td></tr>
+        <tr><td class="icon">◉</td><td>Discord<div class="muted">discord.gg/supergiant · IGDB</div></td><td style="text-align:right"><span class="btn sm ghost">Hide</span></td></tr>
+        <tr style="opacity:.5"><td class="icon">r/</td><td>Reddit <span class="muted">(hidden)</span><div class="muted">reddit.com/r/HadesTheGame · IGDB</div></td><td style="text-align:right"><span class="btn sm ghost">Show</span></td></tr>
+        <tr><td class="icon">✎</td><td>Build planner<div class="muted">hades2.gg/builds · added by you</div></td><td style="text-align:right"><span class="btn sm ghost">Edit</span><span class="btn sm ghost">Remove</span></td></tr>
+      </table>
+      <div style="display:grid;grid-template-columns:180px 1fr auto;gap:8px"><div class="in"><span class="ph">Name</span></div><div class="in"><span class="ph">https://…</span></div><span class="btn">Add link</span></div>
+    </div>
+
+    <!-- Launch -->
+    <div class="pane" id="launch">
+      <p class="hint">Profiles are ways to start this game. The default one runs on Play (and from the tray); all are in the ▾ menu next to Play. Drag to reorder.</p>
+      <div class="prof sel">
+        <div class="top"><span class="drag">⠿</span><b>Steam</b><span class="def">DEFAULT</span><span class="btn sm ghost">Rename</span></div>
+        <div class="body">
+          <div class="f full"><span class="lab">Starts through<span class="src">from Steam</span></span><div class="in" style="color:var(--muted)">steam://rungameid/1145350</div></div>
+          <div class="f full"><span class="lab">Extra arguments</span><div class="in"><span class="ph">e.g. -windowed -skipintro</span></div><span class="hint">Passed to the game through Steam.</span></div>
+        </div>
+      </div>
+      <div class="prof">
+        <div class="top"><span class="drag">⠿</span><b>Xbox app</b><span class="btn sm ghost">Make default</span><span class="btn sm ghost">⋯</span></div>
+      </div>
+      <div class="prof">
+        <div class="top"><span class="drag">⠿</span><b>Vulkan, windowed</b><span class="btn sm ghost">Make default</span><span class="btn sm ghost">⋯</span></div>
+        <div class="body">
+          <div class="f"><span class="lab">Based on</span><div class="seg"><span class="on">Steam</span><span>Executable</span></div></div>
+          <div class="f"><span class="lab">Name</span><div class="in">Vulkan, windowed</div></div>
+          <div class="f full"><span class="lab">Extra arguments</span><div class="in">-vulkan -windowed</div></div>
+          <div class="f full" style="opacity:.55"><span class="lab">Executable · Working directory<span class="src">only for "Executable"</span></span><div class="in"><span class="ph">D:\Steam\steamapps\common\Hades II\Ship\Hades2.exe</span></div></div>
+        </div>
+      </div>
+      <span class="btn" style="width:max-content">＋ Add profile</span>
+      <div class="sec">ON THE GAME PAGE</div>
+      <div class="menu"><div class="play"><span>▶ Play</span><span>▾</span></div>
+        <div class="playmenu"><div>▶ Steam <small>default</small></div><div>▶ Xbox app</div><div>▶ Vulkan, windowed</div><div class="sep"></div><div>Edit profiles…</div></div>
+      </div>
+    </div>
+
+    <!-- Tracking -->
+    <div class="pane" id="tracking">
+      <label style="display:flex;gap:8px;align-items:center"><span class="btn sm" style="background:var(--accent);color:#0e1220;border:none">✓</span>Record playtime when started outside Questkeep</label>
+      <div class="f"><span class="lab">Ignored programs</span><div class="in area"><span class="ph">Launcher.exe<br>*patcher*</span></div><span class="hint">One per line. While only these run, the game doesn't count as playing. Use * as a wildcard.</span></div>
+      <p class="hint">(Unchanged from today.)</p>
+    </div>
+
+    <!-- Media -->
+    <div class="pane" id="media">
+      <div class="img-row">
+        <div class="img-slot"><div style="width:96px;height:128px;border-radius:6px;background:linear-gradient(160deg,#5b3d2a,#1d2a3a)"></div></div>
+        <div class="img-info"><b>Cover</b><span class="hint">Grid view and game page. From Steam.</span>
+          <div class="img-btns"><span class="btn">Choose file…</span><span class="btn">Pick image…</span><span class="btn ghost">Remove</span></div></div>
+      </div>
+      <div class="img-row">
+        <div class="img-slot"><div style="width:176px;height:76px;border-radius:6px;background:linear-gradient(110deg,#2a1d3a,#123)"></div></div>
+        <div class="img-info"><b>Background</b><span class="hint">Behind the game page header. From Steam.</span>
+          <div class="img-btns"><span class="btn">Choose file…</span><span class="btn">Pick image…</span><span class="btn ghost">Remove</span></div></div>
+      </div>
+      <div class="img-row">
+        <div class="img-slot"><div style="width:48px;height:48px;border-radius:8px;background:linear-gradient(160deg,#c9762f,#5b2a1a)"></div></div>
+        <div class="img-info"><b>Icon</b><span class="hint">List view, tray and command bar. From the game's executable.</span>
+          <div class="img-btns"><span class="btn">Choose file…</span><span class="btn">Pick image…</span><span class="btn ghost">Reset</span></div></div>
+      </div>
+      <p class="hint">Files: .png, .jpg, .webp; icons also .ico, .exe or .dll. "Pick image…" shows images from the stores, IGDB and SteamGridDB (each when available). Remove/Reset goes back to the automatic image.</p>
+    </div>
+  </div>
+  <div class="mfoot"><span class="btn ghost">Refresh metadata</span><span style="display:flex;gap:8px"><span class="btn">Cancel</span><span class="btn primary">Save</span></span></div>
+</div>
+
+<div class="modal picker-modal" style="margin-top:28px;width:760px">
+  <div class="mhead"><div><h2>Choose a background</h2><small>Hades II</small></div><span style="flex:1"></span><span class="btn ghost">×</span></div>
+  <div style="display:flex;gap:6px;padding:10px 16px;border-bottom:1px solid var(--border);align-items:center">
+    <span class="seg"><span class="on">All 24</span><span>Steam 6</span><span>IGDB 9</span><span>SteamGridDB 9</span><span>⌕ Web</span></span>
+    <span style="flex:1"></span><span class="hint">IGDB: artworks and screenshots</span>
+  </div>
+  <div class="pgrid">
+    <div class="pimg cur" style="background:linear-gradient(110deg,#2a1d3a,#123)"><small>Current</small></div>
+    <div class="pimg sel" style="background:linear-gradient(110deg,#3a2a1d,#321)"><small>IGDB · artwork</small></div>
+    <div class="pimg" style="background:linear-gradient(110deg,#1d3a2a,#132)"><small>IGDB · artwork</small></div>
+    <div class="pimg" style="background:linear-gradient(110deg,#1d2a3a,#213)"><small>IGDB · screenshot</small></div>
+    <div class="pimg" style="background:linear-gradient(110deg,#3a1d2a,#312)"><small>Steam · hero</small></div>
+    <div class="pimg" style="background:linear-gradient(110deg,#2a3a1d,#231)"><small>Steam · screenshot</small></div>
+    <div class="pimg" style="background:linear-gradient(110deg,#1d1d3a,#113)"><small>SteamGridDB · hero</small></div>
+    <div class="pimg" style="background:linear-gradient(110deg,#3a3a1d,#331)"><small>SteamGridDB · hero</small></div>
+    <div class="pimg loading"><small>Loading…</small></div>
+  </div>
+  <div class="mfoot"><span class="hint">1920 × 1080 · IGDB artwork</span><span style="display:flex;gap:8px"><span class="btn">Cancel</span><span class="btn primary">Use this image</span></span></div>
+</div>
+<div class="modal picker-modal" style="margin-top:28px;width:760px">
+  <div class="mhead"><div><h2>Choose a background</h2><small>Hades II · web search</small></div><span style="flex:1"></span><span class="btn ghost">×</span></div>
+  <div style="display:flex;gap:6px;padding:10px 16px;border-bottom:1px solid var(--border);align-items:center">
+    <span class="seg"><span>All 24</span><span>Steam 6</span><span>IGDB 9</span><span>SteamGridDB 9</span><span class="on">⌕ Web</span></span>
+  </div>
+  <div style="display:flex;gap:8px;padding:12px 16px 0;align-items:center">
+    <div class="in" style="flex:1">Hades II wallpaper</div><span class="btn primary">Search</span>
+    <span class="seg"><span class="on">Any size</span><span>Large</span></span>
+  </div>
+  <div class="pgrid">
+    <div class="pimg sel" style="background:linear-gradient(110deg,#3a1d1d,#211)"><small>2560 × 1440 · wallpapercave.com</small></div>
+    <div class="pimg" style="background:linear-gradient(110deg,#1d3a3a,#123)"><small>1920 × 1080 · steamcommunity.com</small></div>
+    <div class="pimg" style="background:linear-gradient(110deg,#2a1d3a,#213)"><small>3840 × 2160 · reddit.com</small></div>
+    <div class="pimg" style="background:linear-gradient(110deg,#3a2a1d,#321)"><small>1920 × 1080 · supergiantgames.com</small></div>
+    <div class="pimg" style="background:linear-gradient(110deg,#1d2a1d,#121)"><small>1600 × 900 · ign.com</small></div>
+    <div class="pimg" style="background:linear-gradient(110deg,#3a1d2a,#312)"><small>1920 × 1200 · fandom.com</small></div>
+  </div>
+  <div class="mfoot"><span class="hint">Results from DuckDuckGo image search. Images belong to their owners.</span><span style="display:flex;gap:8px"><span class="btn">Cancel</span><span class="btn primary">Use this image</span></span></div>
+</div>
+<div class="note"><b>Edit game</b> becomes a larger dialog with sections on the left. Every metadata field shows its source; editing a field makes it "edited by you" and keeps it through refreshes, with a link back to the automatic value. <b>Launch</b> holds profiles: every store copy gives one automatically (the default can be changed), and you add your own with extra arguments, on top of a store launch or a plain executable. Play's ▾ menu lists them.</div>
+<script>
+document.querySelectorAll('nav a').forEach(a=>a.onclick=()=>{
+  document.querySelectorAll('nav a').forEach(x=>x.classList.toggle('on',x===a));
+  document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('on',p.id===a.dataset.p));
+});
+</script>
+</body>
+</html>

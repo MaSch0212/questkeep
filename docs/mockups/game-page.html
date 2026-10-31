@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Game page mockup</title>
+<style>
+  :root {
+    --bg:#111317; --surface:#171a20; --raised:#1e222a; --hover:#262b35; --active:#343a47; --border:#2a2f3a;
+    --text:#e6e8ec; --muted:#9aa1ae; --faint:#6c7381; --accent:#7c9cff; --accent-soft:#232c4a;
+    --running:#6fd6a0; --star:#ffd166; --warn:#f2b45a;
+  }
+  * { box-sizing:border-box; }
+  html, body { margin:0; }
+  body { background:var(--bg); color:var(--text); font-family:"Segoe UI Variable","Segoe UI",system-ui,sans-serif; font-size:13px; }
+  a { color:inherit; text-decoration:none; }
+  .switch { position:fixed; right:16px; top:12px; display:flex; gap:3px; background:#0b0d12e6; border:1px solid var(--border); border-radius:99px; padding:3px; z-index:50; }
+  .switch button { background:none; border:none; color:var(--muted); font:inherit; font-size:12px; padding:4px 12px; border-radius:99px; cursor:pointer; }
+  .switch button.on { background:var(--accent-soft); color:var(--text); }
+  .note { position:fixed; left:16px; bottom:12px; max-width:520px; background:#0b0d12f0; border:1px solid var(--border); border-radius:10px; padding:10px 12px; color:var(--muted); z-index:50; line-height:1.45; }
+  .note b { color:var(--text); }
+
+  /* ---------- header (as today, plus player count + links) ---------- */
+  .hero { position:relative; height:250px; background:
+      radial-gradient(ellipse at 70% 40%, #c9372c55, transparent 60%),
+      linear-gradient(120deg, #2a3446 0%, #46566e 40%, #8a97a8 70%, #2f3746 100%); }
+  .hero::after { content:""; position:absolute; inset:0; background:linear-gradient(180deg, transparent 30%, var(--bg) 100%); }
+  .players { position:absolute; right:22px; top:16px; z-index:2; display:flex; align-items:center; gap:7px; padding:5px 11px; border-radius:99px;
+    background:#0b0d12d0; border:1px solid #ffffff22; font-size:12px; }
+  .players i { width:8px; height:8px; border-radius:50%; background:var(--running); box-shadow:0 0 0 3px #6fd6a033; }
+  .players small { color:var(--muted); }
+  .head { position:relative; display:flex; gap:22px; padding:0 28px; margin-top:-120px; z-index:3; }
+  .cover { width:150px; aspect-ratio:2/3; border-radius:8px; flex:none; box-shadow:0 10px 30px #000c;
+    background:linear-gradient(160deg,#f4f0ea 0%,#e9e2da 45%,#c22c2c 70%,#3a3a3a 100%); display:grid; place-items:center; font-weight:900; color:#1c1c1c; font-size:18px; }
+  .titles { align-self:flex-end; padding-bottom:4px; min-width:0; flex:1; }
+  .titles h1 { margin:0; font-size:28px; }
+  .sub { color:var(--muted); margin-top:4px; }
+  .row { display:flex; gap:12px; align-items:center; margin-top:14px; flex-wrap:wrap; }
+  .play { display:flex; } .play button { background:var(--accent); color:#0e1220; border:none; font:inherit; font-weight:700; height:36px; padding:0 30px; border-radius:8px 0 0 8px; }
+  .play span { width:32px; height:36px; background:#96b0ff; border-radius:0 8px 8px 0; display:grid; place-items:center; color:#0e1220; }
+  .stat small { display:block; color:var(--faint); font-size:11px; } .stat b { font-size:13px; }
+  .btn { height:32px; min-width:32px; padding:0 10px; border-radius:8px; background:var(--raised); border:1px solid var(--border); color:var(--text); font:inherit; display:inline-flex; align-items:center; gap:6px; }
+  .completion { height:32px; padding:0 10px; border-radius:8px; background:var(--accent-soft); border:1px solid #7c9cff55; display:inline-flex; gap:6px; align-items:center; }
+  .completion small { color:var(--muted); }
+
+  .links { display:flex; gap:6px; flex-wrap:nowrap; overflow:hidden; padding:14px 28px 0; }
+  .link { flex:none; }
+  .link { display:inline-flex; gap:6px; align-items:center; height:28px; padding:0 10px; border-radius:99px; background:var(--surface); border:1px solid var(--border); color:var(--muted); font-size:12px; }
+  .link:hover { color:var(--text); border-color:var(--active); }
+  .link i { width:14px; height:14px; border-radius:3px; background:var(--active); display:inline-block; }
+  .link.store i { background:#4c6b9a; }
+  .link.more { color:var(--faint); }
+
+  /* ---------- body ---------- */
+  .body { padding:16px 28px 80px; }
+  .grid { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:14px; align-items:start; }
+  .col { display:flex; flex-direction:column; gap:14px; min-width:0; }
+  .panel { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px 16px; }
+  .panel h3 { margin:0 0 10px; font-size:11px; letter-spacing:.08em; color:var(--faint); font-weight:600; display:flex; justify-content:space-between; align-items:center; }
+  .panel h3 a { letter-spacing:0; font-size:12px; color:var(--accent); font-weight:500; }
+  .about p { margin:0 0 10px; line-height:1.55; color:#cfd3da; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; }
+  .chip { padding:3px 10px; border-radius:99px; background:var(--accent-soft); color:#c6d2ff; font-size:12px; }
+  .chip.plain { background:var(--raised); color:var(--muted); }
+  .kv { display:grid; grid-template-columns:110px 1fr; gap:7px 10px; }
+  .kv dt { color:var(--faint); } .kv dd { margin:0; }
+  .tagline { margin-top:12px; }
+  .tagline .lab { color:var(--faint); font-size:11px; margin:10px 0 6px; letter-spacing:.06em; }
+
+  /* time to beat */
+  .ttb-bar { position:relative; height:10px; border-radius:99px; background:var(--raised); margin:26px 0 14px; }
+  .ttb-bar .seg { position:absolute; top:0; bottom:0; border-radius:99px; }
+  .ttb-bar .you { position:absolute; top:-5px; width:2px; height:20px; background:var(--text); }
+  .ttb-bar .you b { position:absolute; bottom:24px; font-size:11px; white-space:nowrap; color:var(--text); font-weight:600; transform:translateX(-50%); }
+  .ttb-bar .you.end b { right:0; transform:none; }
+  .ttb-bar .you.start b { left:0; transform:none; }
+  .ttb { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .ttb div { background:var(--raised); border-radius:8px; padding:8px; text-align:center; }
+  .ttb small { display:block; color:var(--faint); font-size:11px; } .ttb b { font-size:15px; }
+  .src { color:var(--faint); font-size:11px; margin-top:8px; }
+
+  /* scores */
+  .scores { display:flex; gap:10px; }
+  .score { flex:1; display:flex; gap:10px; align-items:center; background:var(--raised); border-radius:8px; padding:8px 10px; }
+  .score .ring { width:38px; height:38px; border-radius:50%; display:grid; place-items:center; font-weight:700; font-size:13px;
+    background:conic-gradient(var(--running) calc(var(--v) * 1%), var(--hover) 0); position:relative; }
+  .score .ring::before { content:""; position:absolute; inset:4px; border-radius:50%; background:var(--raised); }
+  .score .ring span { position:relative; }
+  .score small { color:var(--faint); display:block; font-size:11px; }
+
+  /* activity */
+  .bars { display:flex; align-items:flex-end; gap:6px; height:90px; padding-top:6px; }
+  .bars div { flex:1; background:var(--accent); border-radius:3px 3px 0 0; opacity:.85; position:relative; min-height:2px; }
+  .bars div.zero { background:var(--hover); }
+  .bars div:hover::after { content:attr(data-t); position:absolute; bottom:100%; left:50%; transform:translate(-50%,-4px); white-space:nowrap; background:#0b0d12; border:1px solid var(--border); padding:2px 6px; border-radius:5px; font-size:11px; }
+  .axis { display:flex; justify-content:space-between; color:var(--faint); font-size:11px; margin-top:6px; }
+  .act-sum { display:flex; gap:18px; margin-bottom:6px; } .act-sum small { color:var(--faint); display:block; font-size:11px; }
+
+  /* achievements */
+  .prog { height:8px; background:var(--raised); border-radius:99px; overflow:hidden; margin:6px 0 10px; }
+  .prog i { display:block; height:100%; width:47%; background:var(--star); }
+  .ach { display:grid; grid-template-columns:repeat(8,1fr); gap:6px; }
+  .ach div { aspect-ratio:1; border-radius:6px; background:linear-gradient(135deg,#5b6d93,#2b3346); }
+  .ach div.locked { background:var(--raised); opacity:.6; }
+  .ach-row { display:flex; justify-content:space-between; }
+  .rare { display:flex; gap:10px; align-items:center; margin-top:10px; padding:8px; background:var(--raised); border-radius:8px; }
+  .rare i { width:34px; height:34px; border-radius:6px; background:linear-gradient(135deg,#d9a441,#7a4b13); flex:none; }
+  .rare small { color:var(--faint); display:block; }
+
+  /* news */
+  .news-item { display:flex; gap:12px; padding:10px 0; border-top:1px solid var(--border); }
+  .news-item:first-of-type { border-top:none; padding-top:2px; }
+  .news-item .thumb { width:120px; height:68px; border-radius:6px; flex:none; background:linear-gradient(135deg,#7b2d1f,#d9772b); }
+  .news-item h4 { margin:0 0 3px; font-size:14px; }
+  .news-item small { color:var(--faint); }
+  .news-item p { margin:4px 0 0; color:var(--muted); line-height:1.45; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+
+  .library .store { display:flex; justify-content:space-between; padding:4px 0; }
+  .library .store small { color:var(--faint); }
+  .path { margin-top:8px; font-family:Consolas,monospace; font-size:11.5px; color:var(--muted); }
+
+  /* ---------- variant B: tabs ---------- */
+  .tabs { display:flex; gap:4px; border-bottom:1px solid var(--border); margin:16px 28px 0; }
+  .tabs button { background:none; border:none; color:var(--muted); font:inherit; padding:8px 14px; border-bottom:2px solid transparent; }
+  .tabs button.on { color:var(--text); border-color:var(--accent); }
+  .tabs small { color:var(--faint); }
+    .page { container-type:inline-size; margin:0 auto; border-left:1px solid var(--border); border-right:1px solid var(--border); min-height:100vh; }
+  @container (max-width: 700px) {
+    .grid { grid-template-columns:1fr; }
+    .hero { height:170px; }
+    .head { margin-top:-90px; gap:14px; padding:0 16px; }
+    .cover { width:96px; }
+    .titles h1 { font-size:20px; }
+    .sub { font-size:12px; }
+    .row { gap:8px; }
+    .play button { padding:0 18px; }
+    .links, .body { padding-left:16px; padding-right:16px; }
+    .kv { grid-template-columns:96px 1fr; }
+    .news-item .thumb { width:84px; height:48px; }
+    .players small { display:none; }
+    .ach { grid-template-columns:repeat(6,1fr); }
+    .ach div:nth-child(n+7) { display:none; }
+  }
+  .facts, .tools { display:flex; gap:12px; align-items:center; }
+  .tools { gap:6px; }
+  @container (max-width: 700px) {
+    .head { display:grid; grid-template-columns:96px 1fr; column-gap:14px; row-gap:4px; align-items:end; }
+    .cover { grid-row:1 / 3; }
+    .titles { display:contents; }
+    .titles h1 { grid-column:2; grid-row:1; }
+    .sub { grid-column:2; grid-row:2; align-self:start; }
+    .row { grid-column:1 / -1; grid-row:3; margin-top:12px; gap:8px; }
+    .play { flex:1; } .play button { flex:1; }
+    .tools .lbl { display:none; }
+    .facts { order:3; flex-basis:100%; justify-content:space-between; gap:8px; }
+    .facts .stores { display:none; }
+    .link { width:30px; padding:0; justify-content:center; }
+    .link .name { display:none; }
+    .link.more { width:auto; padding:0 10px; }
+    .only-a .grid { display:flex; flex-direction:column; align-items:stretch; }
+    .only-a .col { display:contents; }
+    .only-a .panel { order:var(--o); }
+  }
+  [data-variant="a"] .only-b, [data-variant="b"] .only-a { display:none !important; }
+</style>
+</head>
+<body data-variant="a">
+<div class="switch" style="right:240px">
+  <button class="on" onclick="setW('',this)">Full width</button>
+  <button onclick="setW('380px',this)">Side panel</button>
+</div>
+<div class="switch">
+  <button class="on" onclick="setV('a',this)">A: one page</button>
+  <button onclick="setV('b',this)">B: tabs</button>
+</div>
+
+<div class="page" id="page">
+<div class="hero">
+  <div class="players"><i></i><b>19,192</b> <small>playing now on Steam</small></div>
+</div>
+<div class="head">
+  <div class="cover">FORZA<br>HORIZON 6</div>
+  <div class="titles">
+    <h1>Forza Horizon 6</h1>
+    <div class="sub">Playground Games · Xbox Game Studios · 2026 · Racing, Simulation, Sports</div>
+    <div class="row">
+      <div class="play"><button>▶ Play</button><span>▾</span></div>
+      <div class="facts">
+        <div class="stat"><small>Last played</small><b>Today</b></div>
+        <div class="stat"><small>Playtime</small><b>146h 8m</b></div>
+        <div class="stat stores"><small>Stores</small><b>Steam, Xbox</b></div>
+        <div class="completion">◐ Played <small>▾</small></div>
+      </div>
+      <div class="tools"><button class="btn" title="Favorite">☆</button><button class="btn" title="Hide">◌</button><button class="btn" title="Edit">✎<span class="lbl"> Edit</span></button><button class="btn" title="More">⋯</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="links">
+  <a class="link store" title="Steam store"><i></i><span class="name">Steam store</span></a>
+  <a class="link store" title="Microsoft Store"><i></i><span class="name">Microsoft Store</span></a>
+  <a class="link" title="Official site"><i></i><span class="name">Official site</span></a>
+  <a class="link" title="Community wiki"><i></i><span class="name">Community wiki</span></a>
+  <a class="link" title="PCGamingWiki"><i></i><span class="name">PCGamingWiki</span></a>
+  <a class="link" title="Steam community"><i></i><span class="name">Steam community</span></a>
+  <a class="link" title="Reddit"><i></i><span class="name">Reddit</span></a>
+  <a class="link" title="Discord"><i></i><span class="name">Discord</span></a>
+  <a class="link" title="YouTube"><i></i><span class="name">YouTube</span></a>
+  <a class="link" title="Twitch"><i></i><span class="name">Twitch</span></a>
+  <a class="link" title="X"><i></i><span class="name">X</span></a>
+  <a class="link" title="Bluesky"><i></i><span class="name">Bluesky</span></a>
+  <a class="link" title="Wikipedia"><i></i><span class="name">Wikipedia</span></a>
+  <a class="link" title="Steam guides"><i></i><span class="name">Steam guides</span></a>
+  <a class="link more" id="more">+0 more</a>
+</div>
+
+<!-- ======== Variant A: everything on one page, two columns ======== -->
+<div class="body only-a">
+  <div class="grid">
+    <div class="col">
+      <div style="--o:1" class="panel about">
+        <h3>ABOUT</h3>
+        <p>Discover the breathtaking landscapes of Japan in over 550 real-world cars and become a racing Legend in Forza Horizon's biggest open world driving adventure yet. Start your journey as a tourist and explore a world full of hit music and Japanese culture.</p>
+        <div class="tagline">
+          <div class="lab">FEATURES</div>
+          <div class="chips"><span class="chip">Single player</span><span class="chip">Online co-op</span><span class="chip">Online PvP</span><span class="chip">Controller support</span><span class="chip">Cloud saves</span><span class="chip">Achievements</span></div>
+          <div class="lab">TAGS</div>
+          <div class="chips"><span class="chip plain">Open World</span><span class="chip plain">Driving</span><span class="chip plain">Racing</span><span class="chip plain">Automobile Sim</span><span class="chip plain">Exploration</span><span class="chip plain">Multiplayer</span><span class="chip plain">Realistic</span><span class="chip plain">Sandbox</span><span class="chip plain">+8</span></div>
+        </div>
+      </div>
+
+      <div style="--o:6" class="panel">
+        <h3>NEWS <a>Open all news ↗</a></h3>
+        <div class="news-item"><div class="thumb"></div><div><h4>Australian Power &amp; American Muscle Collide During this Week's Festival Playlist</h4><small>Thu, Oct 29 · Steam</small><p>If you lived in Australia and wanted to have THE cool car of the late 60s, there was nowhere else to look than the 1968 Holden Monaro GTS 327…</p></div></div>
+        <div class="news-item"><div class="thumb" style="background:linear-gradient(135deg,#1f4f7b,#2bb5d9)"></div><div><h4>Forza Horizon 6 Update 3 Release Notes</h4><small>Tue, Oct 20 · Steam</small><p>Update 3 brings the Halloween event, 12 new cars, fixes for multiplayer convoys and a new photo mode filter…</p></div></div>
+        <div class="news-item"><div class="thumb" style="background:linear-gradient(135deg,#3d2a6b,#a46be0)"></div><div><h4>Series 2: Autumn in Hokkaido</h4><small>Oct 8 · Steam</small><p>The leaves are turning and so is the Festival. Head north for a new expansion of the map with mountain passes…</p></div></div>
+      </div>
+
+      <div style="--o:7" class="panel">
+        <h3>DETAILS</h3>
+        <dl class="kv">
+          <dt>Released</dt><dd>May 19, 2026</dd>
+          <dt>Developer</dt><dd>Playground Games</dd>
+          <dt>Publisher</dt><dd>Xbox Game Studios</dd>
+          <dt>Series</dt><dd>Forza</dd>
+          <dt>Platforms</dt><dd>Windows, Xbox Series X|S</dd>
+          <dt>Game modes</dt><dd>Single player, Multiplayer, Co-operative</dd>
+          <dt>Perspective</dt><dd>Third person, First person</dd>
+          <dt>Themes</dt><dd>Open world, Racing</dd>
+          <dt>Age rating</dt><dd>PEGI 3 · ESRB Everyone</dd>
+          <dt>Install size</dt><dd>158.7 GB</dd>
+          <dt>Date added</dt><dd>Oct 18, 2026</dd>
+          <dt>Play count</dt><dd>3</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="col">
+      <div style="--o:2" class="panel">
+        <h3>SCORES</h3>
+        <div class="scores">
+          <div class="score"><div class="ring" style="--v:91"><span>91</span></div><div><b>Critics</b><small>Metacritic</small></div></div>
+          <div class="score"><div class="ring" style="--v:86"><span>86</span></div><div><b>Players</b><small>Steam reviews</small></div></div>
+        </div>
+      </div>
+
+      <div style="--o:3" class="panel">
+        <h3>TIME TO BEAT</h3>
+        <div class="ttb-bar">
+          <div class="seg" style="left:0;width:26%;background:#2bb3a3"></div>
+          <div class="seg" style="left:26%;width:14%;background:#4f7dea"></div>
+          <div class="seg" style="left:40%;width:60%;background:#3f9e4f"></div>
+          <div class="you end" style="left:99%"><b>You · 146h</b></div>
+        </div>
+        <div class="ttb"><div><small>Main story</small><b>27h</b></div><div><small>Main + extras</small><b>42h</b></div><div><small>Completionist</small><b>105h</b></div></div>
+        <div class="src">From IGDB</div>
+      </div>
+
+      <div style="--o:4" class="panel">
+        <h3>ACHIEVEMENTS <a>Show all ↗</a></h3>
+        <div class="ach-row"><b>34 of 72</b><span style="color:var(--muted)">47%</span></div>
+        <div class="prog"><i></i></div>
+        <div class="ach"><div></div><div></div><div></div><div></div><div></div><div></div><div class="locked"></div><div class="locked"></div></div>
+        <div class="rare"><i></i><div><b>Kanjo King</b><small>Rarest you have · 3.4% of players · Oct 27</small></div></div>
+      </div>
+
+      <div style="--o:5" class="panel">
+        <h3>YOUR ACTIVITY</h3>
+        <div class="act-sum"><div><small>Last 12 weeks</small><b>38h 20m</b></div><div><small>This week</small><b>6h 10m</b></div><div><small>Sessions</small><b>21</b></div></div>
+        <div class="bars">
+          <div class="zero" data-t="Aug 10: 0h"></div><div class="zero" data-t="Aug 17: 0h"></div><div style="height:20%" data-t="Aug 24: 1.5h"></div><div style="height:55%" data-t="Aug 31: 4h"></div><div style="height:90%" data-t="Sep 7: 6.6h"></div><div style="height:70%" data-t="Sep 14: 5.2h"></div><div style="height:30%" data-t="Sep 21: 2.2h"></div><div class="zero" data-t="Sep 28: 0h"></div><div style="height:40%" data-t="Oct 5: 3h"></div><div style="height:60%" data-t="Oct 12: 4.5h"></div><div style="height:100%" data-t="Oct 19: 7.4h"></div><div style="height:84%" data-t="Oct 26: 6.2h"></div>
+        </div>
+        <div class="axis"><span>Aug 10</span><span>this week</span></div>
+      </div>
+
+      <div style="--o:8" class="panel library">
+        <h3>LIBRARY</h3>
+        <div class="tagline" style="margin-top:0"><div class="lab" style="margin-top:0">CATEGORIES</div><div class="chips"><span class="chip">Casual ×</span><span class="chip plain">+ Category</span></div></div>
+        <div class="lab" style="color:var(--faint);font-size:11px;margin:12px 0 4px;letter-spacing:.06em">STORES</div>
+        <div class="store"><span><b>Steam</b> <small>Installed · preferred · 74h 12m</small></span><span>⋯</span></div>
+        <div class="store"><span><b>Xbox</b> <small>Not installed · 71h 56m</small></span><span>⋯</span></div>
+        <div class="path">F:\SteamLibrary\steamapps\common\ForzaHorizon6</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======== Variant B: overview + tabs ======== -->
+<div class="only-b">
+  <div class="tabs">
+    <button class="on">Overview</button><button>News <small>12</small></button><button>Achievements <small>34/72</small></button><button>Activity</button>
+  </div>
+  <div class="body">
+    <div class="grid">
+      <div class="col">
+        <div class="panel about"><h3>ABOUT</h3><p>Discover the breathtaking landscapes of Japan in over 550 real-world cars and become a racing Legend in Forza Horizon's biggest open world driving adventure yet.</p>
+          <div class="tagline"><div class="lab">FEATURES</div><div class="chips"><span class="chip">Single player</span><span class="chip">Online co-op</span><span class="chip">Controller support</span><span class="chip">Cloud saves</span></div>
+          <div class="lab">TAGS</div><div class="chips"><span class="chip plain">Open World</span><span class="chip plain">Driving</span><span class="chip plain">Racing</span><span class="chip plain">+11</span></div></div></div>
+        <div class="panel"><h3>DETAILS</h3><dl class="kv"><dt>Released</dt><dd>May 19, 2026</dd><dt>Series</dt><dd>Forza</dd><dt>Platforms</dt><dd>Windows, Xbox Series X|S</dd><dt>Age rating</dt><dd>PEGI 3</dd><dt>Install size</dt><dd>158.7 GB</dd></dl></div>
+      </div>
+      <div class="col">
+        <div class="panel"><h3>SCORES</h3><div class="scores"><div class="score"><div class="ring" style="--v:91"><span>91</span></div><div><b>Critics</b><small>Metacritic</small></div></div><div class="score"><div class="ring" style="--v:86"><span>86</span></div><div><b>Players</b><small>Steam</small></div></div></div></div>
+        <div class="panel"><h3>TIME TO BEAT</h3><div class="ttb"><div><small>Main</small><b>27h</b></div><div><small>+ Extras</small><b>42h</b></div><div><small>100%</small><b>105h</b></div></div></div>
+        <div class="panel library"><h3>LIBRARY</h3><div class="store"><span><b>Steam</b> <small>Installed · 74h 12m</small></span><span>⋯</span></div><div class="store"><span><b>Xbox</b> <small>Not installed</small></span><span>⋯</span></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div>
+<div class="note"><b>Links</b> stay on one row; "+N more" only appears when they do not fit and opens the rest in a menu. <b>Side panel</b> shows the page at the width of the grid view's details pane: one column, smaller header. <b>Variant A</b>: everything on one scrolling page; the wide column has About, News and Details, the side column the at-a-glance boxes. <b>Variant B</b>: a short Overview, with News, Achievements and Activity on their own tabs. Sections without data (no IGDB, not on Steam) are left out, never shown empty.</div>
+
+<script>
+function setW(w,b){ document.getElementById('page').style.width=w; b.parentNode.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b)); fitLinks(); }
+function fitLinks(){ const row=document.querySelector('.links'), more=document.getElementById('more'); const links=[...row.querySelectorAll('.link:not(.more)')]; links.forEach(l=>l.style.display=''); more.style.display='none'; if(row.scrollWidth<=row.clientWidth) return; more.style.display=''; let hidden=0; for(let i=links.length-1;i>=0&&row.scrollWidth>row.clientWidth;i--){ links[i].style.display='none'; hidden++; more.textContent='+'+hidden+' more'; } }
+window.addEventListener('resize',fitLinks); window.addEventListener('load',fitLinks);
+function setV(v, b) { document.body.dataset.variant = v; document.querySelectorAll('.switch button').forEach(x => x.classList.toggle('on', x === b)); }
+</script>
+</body>
+</html>
