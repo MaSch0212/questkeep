@@ -19,13 +19,14 @@ use std::time::{Duration, Instant};
 use chrono::Utc;
 use uuid::Uuid;
 
+use super::hltb::Hltb;
 use super::igdb::{CHECKED_KEY as IGDB_CHECKED_KEY, Igdb, IgdbLookup, release_year};
 use super::steamgriddb::{Lookup, SteamGridDb, checked_key};
 use super::{ImageCache, ImageKind, MAX_IMAGE_BYTES};
 use crate::db::Database;
 use crate::events::{CoreEvent, EventBus, WorkQueue};
 use crate::metadata::MetadataResolver;
-use crate::model::{ActionKind, Game, GameMetadata, IGDB_SOURCE, MEASURED_SOURCE};
+use crate::model::{ActionKind, Game, GameMetadata, HLTB_SOURCE, IGDB_SOURCE, MEASURED_SOURCE};
 use crate::providers::{ImageCandidate, LibraryProvider, ProviderRegistry};
 use crate::seed::is_fake_source;
 use questkeep_imaging::{SquareFrom, icon_png_from_bytes, icon_png_from_rgba};
@@ -373,6 +374,8 @@ struct MetadataShared {
     events: EventBus,
     artwork: SteamGridDb,
     igdb: Igdb,
+    /// Time to beat when IGDB has none; `None` in unit tests, which must not go online.
+    hltb: Option<Hltb>,
     resolver: MetadataResolver,
     http: ureq::Agent,
     interval: Duration,
@@ -419,6 +422,7 @@ impl MetadataFetcher {
             events,
             artwork,
             igdb,
+            hltb: (!cfg!(test)).then(Hltb::new),
             resolver,
             http: http_agent(),
             interval,
@@ -574,6 +578,7 @@ fn fetch_metadata(shared: &MetadataShared, job: &MetadataJob, last_request: &mut
     changed |= measure_install_size(shared, job.game_id);
     if job.igdb {
         changed |= fetch_igdb(shared, job.game_id);
+        changed |= fetch_hltb(shared, job.game_id);
     }
     if changed && let Err(err) = shared.resolver.resolve(job.game_id) {
         tracing::warn!(game = %job.game_id, %err, "could not compute metadata");
@@ -636,6 +641,49 @@ fn fetch_igdb(shared: &MetadataShared, id: Uuid) -> bool {
         }
         Err(err) => {
             tracing::debug!(game = %entry, %err, "IGDB lookup failed");
+            false
+        }
+    }
+}
+
+/// Asks HowLongToBeat for the time to beat when IGDB has none for the entry, and stores the
+/// answer as the entry's `hltb` source. Failures are only logged (the game page then hides the
+/// section). Returns whether data was stored.
+fn fetch_hltb(shared: &MetadataShared, id: Uuid) -> bool {
+    let Some(hltb) = &shared.hltb else {
+        return false;
+    };
+    let Ok(entry) = shared.db.entry_of(id) else {
+        return false;
+    };
+    let from_igdb = shared
+        .db
+        .source_metadata(entry, IGDB_SOURCE)
+        .ok()
+        .flatten()
+        .and_then(|m| m.time_to_beat)
+        .is_some_and(|t| !t.is_empty());
+    if from_igdb {
+        return false;
+    }
+    let Ok(Some(game)) = shared.db.find_game(entry) else {
+        return false;
+    };
+    match hltb.time_to_beat(&game.name, release_year(game.release_date.as_deref())) {
+        Ok(found) => {
+            let meta = found.map(|times| GameMetadata {
+                time_to_beat: Some(times.into()),
+                ..GameMetadata::default()
+            });
+            shared
+                .db
+                .set_source_metadata(entry, HLTB_SOURCE, meta.as_ref(), Utc::now())
+                .inspect_err(|err| tracing::warn!(game = %entry, %err, "could not store HLTB data"))
+                .is_ok()
+                && meta.is_some()
+        }
+        Err(err) => {
+            tracing::debug!(game = %entry, %err, "HowLongToBeat lookup failed");
             false
         }
     }
@@ -1345,6 +1393,7 @@ mod tests {
             events: EventBus::new(),
             artwork: SteamGridDb::new(None),
             igdb: Igdb::new(None, None),
+            hltb: None,
             resolver: MetadataResolver::new(
                 db.clone(),
                 &ProviderRegistry::new(),
@@ -1528,6 +1577,7 @@ mod tests {
             events: EventBus::new(),
             artwork: SteamGridDb::new(None),
             igdb,
+            hltb: None,
             resolver: MetadataResolver::new(
                 db.clone(),
                 &ProviderRegistry::new(),

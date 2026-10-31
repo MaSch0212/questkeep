@@ -27,6 +27,7 @@ use serde_json::json;
 use super::fetcher::http_agent;
 use super::igdb::match_key;
 use crate::error::{CoreError, Result};
+use crate::model::TimeToBeat;
 
 const SITE: &str = "https://howlongtobeat.com/";
 const INIT_URL: &str = "https://howlongtobeat.com/api/search/site/init";
@@ -330,6 +331,16 @@ pub(crate) fn parse_search(body: &str) -> std::result::Result<Vec<Hit>, String> 
             },
         })
         .collect())
+}
+
+impl From<HltbTimes> for TimeToBeat {
+    fn from(times: HltbTimes) -> Self {
+        Self {
+            main: times.main.map(u64::from),
+            extra: times.extra.map(u64::from),
+            complete: times.complete.map(u64::from),
+        }
+    }
 }
 
 impl HltbTimes {

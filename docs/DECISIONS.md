@@ -611,3 +611,14 @@ Short log of choices made while building. Newest at the bottom of each section.
 - **Daily playtime spreads credited time**: the start page's per-day bars split a session's
   `duration_seconds` (which skips system sleep) over the days in proportion to its wall-clock span,
   so the week matches the playtime shown elsewhere without storing time per day.
+- **Game page live data (2026-10-31):** Steam player counts (`GetNumberOfCurrentPlayers`), news
+  (`GetNewsForApp`, `percent` strings, `{}` for none) and global achievement percentages were
+  checked live; `GetSchemaForGame`/`GetPlayerAchievements` need a key or token and follow the
+  documented shapes (API key first, then the store session's token). Xbox achievements use the
+  `achievements.xboxlive.com` v2 contract with the title id from the title history (not verified
+  live). Cached in memory (players 10 min, news 30 min) and on disk (achievements 1 h or until
+  the game was played).
+- **HowLongToBeat (2026-10-31):** the site's search now needs a token from
+  `/api/search/site/init` (bound to IP and User-Agent, Referer required) sent as `x-auth-token`
+  to `POST /api/search/site`; a refused token is renewed once, otherwise the lookup gives up
+  quietly. Asked only when IGDB has no time to beat; never in unit tests.
