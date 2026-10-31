@@ -1,0 +1,5 @@
+{"game":{"gameName":"Portal 2","gameVersion":"13","availableGameStats":{"achievements":[
+{"name":"ACH.SURVIVE_CONTAINER_RIDE","defaultvalue":0,"displayName":"Wake Up Call","hidden":0,"description":"Survive the Aperture Science Container Ride.","icon":"https://cdn.fastly.steamstatic.com/steamcommunity/public/images/apps/620/a.jpg","icongray":"https://cdn.fastly.steamstatic.com/steamcommunity/public/images/apps/620/a_gray.jpg"},
+{"name":"ACH.WAKE_UP","defaultvalue":0,"displayName":"Hi Five","hidden":0,"icon":"https://cdn.fastly.steamstatic.com/steamcommunity/public/images/apps/620/b.jpg","icongray":"https://cdn.fastly.steamstatic.com/steamcommunity/public/images/apps/620/b_gray.jpg"},
+{"name":"ACH.LASER","defaultvalue":0,"displayName":"Secret One","hidden":1,"icon":"ftp://example.com/c.jpg","icongray":""}
+],"stats":[{"name":"x","defaultvalue":0,"displayName":""}]}}}

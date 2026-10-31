@@ -11,6 +11,7 @@ mod account;
 mod categories;
 mod icon;
 mod install_dirs;
+mod live;
 mod local;
 mod scan;
 pub mod vdf;
@@ -21,7 +22,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use questkeep_store_api::auth::AccountAuth;
-use questkeep_store_api::model::{GameMetadata, ImportedGame, PlayAction};
+use questkeep_store_api::model::{Achievements, GameMetadata, GameNews, ImportedGame, PlayAction};
 use questkeep_store_api::settings::{CredentialField, StoreCredentials, StoreSettings};
 use questkeep_store_api::{ImageCandidate, LibraryProvider, ProviderError};
 
@@ -202,6 +203,25 @@ impl LibraryProvider for SteamProvider {
         web::fetch_metadata(app_id)
     }
 
+    fn player_count(&self, app_id: &str) -> Result<Option<u32>, ProviderError> {
+        live::fetch_player_count(app_id)
+    }
+
+    fn news(&self, app_id: &str) -> Result<Option<GameNews>, ProviderError> {
+        live::fetch_news(app_id)
+    }
+
+    /// The user's achievements: with the Web API key when one is configured, else with the store
+    /// sign-in. `Ok(None)` without either (nothing to read them with) or for games without
+    /// achievements.
+    fn achievements(
+        &self,
+        config: &serde_json::Value,
+        app_id: &str,
+    ) -> Result<Option<Achievements>, ProviderError> {
+        self.achievements_for(config, app_id)
+    }
+
     /// Steam's own library cache first (no network), then the store CDN. Cached file layouts:
     /// `librarycache/<id>_library_600x900.jpg` (older clients) and
     /// `librarycache/<id>/library_600x900.jpg`, and `librarycache/<id>/<hash>/library_600x900.jpg`
@@ -362,6 +382,59 @@ impl SteamProvider {
 }
 
 impl SteamProvider {
+    fn achievements_for(
+        &self,
+        config: &serde_json::Value,
+        app_id: &str,
+    ) -> Result<Option<Achievements>, ProviderError> {
+        let rejected = || {
+            ProviderError::NotConfigured(
+                "Steam did not accept the Web API key or sign-in. Check them in Settings.".into(),
+            )
+        };
+        let mut any_rejected = false;
+        // The key first (it needs no network round trip to get a token).
+        if let Some(api_key) = config_text(config, "apiKey") {
+            let steam_id = config_text(config, "steamId").or_else(|| {
+                self.roots
+                    .iter()
+                    .find_map(|r| local::most_recent_steam_id(r))
+            });
+            if let Some(steam_id) = steam_id {
+                match live::fetch_achievements(web::Credential::Key(&api_key), &steam_id, app_id) {
+                    Ok(result) => return Ok(result),
+                    Err(live::AchievementsError::Other(err)) => return Err(err),
+                    Err(live::AchievementsError::Rejected) => any_rejected = true,
+                }
+            }
+        }
+        if let Some(account) = self.account.as_deref().filter(|a| a.is_signed_in()) {
+            let (steam_id, token) = account.web_token(false)?;
+            match live::fetch_achievements(web::Credential::Token(&token), &steam_id, app_id) {
+                Ok(result) => return Ok(result),
+                Err(live::AchievementsError::Other(err)) => return Err(err),
+                Err(live::AchievementsError::Rejected) => {
+                    // An expired token is renewed once.
+                    let (steam_id, token) = account.web_token(true)?;
+                    match live::fetch_achievements(
+                        web::Credential::Token(&token),
+                        &steam_id,
+                        app_id,
+                    ) {
+                        Ok(result) => return Ok(result),
+                        Err(live::AchievementsError::Other(err)) => return Err(err),
+                        Err(live::AchievementsError::Rejected) => any_rejected = true,
+                    }
+                }
+            }
+        }
+        if any_rejected {
+            Err(rejected())
+        } else {
+            Ok(None)
+        }
+    }
+
     /// Owned games with the store session's token; a rejected token is renewed once.
     fn owned_with_session(account: &SteamAccount) -> Result<Vec<ImportedGame>, ProviderError> {
         let (steam_id, token) = account.web_token(false)?;

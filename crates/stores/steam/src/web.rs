@@ -12,12 +12,12 @@ use questkeep_store_api::ProviderError;
 use questkeep_store_api::model::{GameLink, GameMetadata, ImportedGame, PlayAction, Score};
 
 /// Why a request failed, without any URL (which may contain the API key).
-enum HttpFailure {
+pub(crate) enum HttpFailure {
     Status(u16),
     Other(String),
 }
 
-fn http_get(url: &str, secret: Option<&str>) -> Result<String, HttpFailure> {
+pub(crate) fn http_get(url: &str, secret: Option<&str>) -> Result<String, HttpFailure> {
     let http = questkeep_store_api::http_agent();
     let mut response = http.get(url).call().map_err(|e| match e {
         ureq::Error::StatusCode(code) => HttpFailure::Status(code),
@@ -305,7 +305,7 @@ fn icon_urls(app_id: &str, hash: &str) -> Vec<String> {
 }
 
 /// Percent-encodes everything except unreserved characters.
-fn encode(text: &str) -> String {
+pub(crate) fn encode(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for b in text.bytes() {
         if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'~') {
