@@ -4,8 +4,6 @@
 //! DuckDuckGo's image results. A script on the page reads DuckDuckGo's own `i.js` JSON answer and
 //! reports it by navigating to a capture address, which `on_navigation` cancels and hands over.
 //! The window never shows or takes focus: the user may be playing a fullscreen game.
-// Not wired to a command yet.
-#![allow(dead_code)]
 
 use std::path::Path;
 use std::sync::Mutex;
@@ -15,7 +13,7 @@ use std::time::Duration;
 
 use serde::Serialize;
 use tauri::utils::config::BackgroundThrottlingPolicy;
-use tauri::{AppHandle, Manager, Url, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Url, WebviewUrl, WebviewWindowBuilder};
 
 /// How long the hidden window may take to deliver results.
 const TIMEOUT: Duration = Duration::from_secs(20);

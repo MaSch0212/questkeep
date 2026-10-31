@@ -8,8 +8,9 @@ use std::sync::Arc;
 use questkeep_core::auth::AccountStatus;
 use questkeep_core::library::MetadataSourceInfo;
 use questkeep_core::model::{
-    Achievements, Category, CompletionSettings, Game, GameActivity, GameNews, GameQuery,
-    GameUpdate, LibraryView, ListField, NewManualGame, NewView, ScanSummary, SectionOrder,
+    Achievements, Category, CompletionSettings, Game, GameActivity, GameEditInfo, GameEdits,
+    GameNews, GameQuery, GameUpdate, ImageOption, ImageSlot, ImageSource, LaunchProfiles,
+    LibraryView, ListField, NewManualGame, NewView, ProfileInput, ScanSummary, SectionOrder,
     StartPage, SyncTimes, ValueCount, ViewSection, ViewUpdate,
 };
 use questkeep_core::providers::ProviderInfo;
@@ -19,6 +20,7 @@ use tauri::State;
 use uuid::Uuid;
 
 use crate::updates::{UpdateInfo, Updates};
+use crate::websearch::WebImageSize;
 
 use crate::AppState;
 
@@ -160,15 +162,23 @@ pub async fn add_game_with_option(
 }
 
 #[tauri::command]
-/// Plays a game; `copy_id` picks the store's copy of a game owned in several.
+/// Plays a game: a launch profile (`profile_id`), the store's copy (`copy_id`) of a game owned
+/// in several, or else the default profile.
 pub async fn launch_game(
     state: State<'_, Arc<AppState>>,
     id: String,
     copy_id: Option<String>,
+    profile_id: Option<String>,
 ) -> CmdResult<()> {
     blocking(state, move |s| {
-        let copy = copy_id.as_deref().map(parse_id).transpose()?;
-        let game = s.library.play_target(parse_id(&id)?, copy)?;
+        let id = parse_id(&id)?;
+        let game = match copy_id.as_deref().map(parse_id).transpose()? {
+            Some(copy) => s.library.play_target(id, Some(copy))?,
+            None => {
+                let profile = profile_id.as_deref().map(parse_id).transpose()?;
+                s.library.launch_target(id, profile)?
+            }
+        };
         s.launcher.launch(&game)
     })
     .await
@@ -735,4 +745,178 @@ pub async fn game_achievements(
 #[tauri::command]
 pub async fn game_activity(state: State<'_, Arc<AppState>>, id: String) -> CmdResult<GameActivity> {
     blocking(state, move |s| s.library.game_activity(parse_id(&id)?)).await
+}
+
+/// What the Edit dialog needs: the user's edits, the automatic values and all links.
+#[tauri::command]
+pub async fn game_edit_info(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+) -> CmdResult<GameEditInfo> {
+    blocking(state, move |s| s.library.game_edit_info(parse_id(&id)?)).await
+}
+
+#[tauri::command]
+pub async fn save_game_edits(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    edits: GameEdits,
+) -> CmdResult<Game> {
+    blocking(state, move |s| {
+        s.library.save_game_edits(parse_id(&id)?, &edits)
+    })
+    .await
+}
+
+/// Sets a cover, background or icon from a file path or a picked image URL.
+#[tauri::command]
+pub async fn set_user_image(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    slot: ImageSlot,
+    source: String,
+) -> CmdResult<Game> {
+    blocking(state, move |s| {
+        s.library.set_user_image(parse_id(&id)?, slot, &source)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn remove_user_image(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    slot: ImageSlot,
+) -> CmdResult<Game> {
+    blocking(state, move |s| {
+        s.library.remove_user_image(parse_id(&id)?, slot)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn image_sources(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    slot: ImageSlot,
+) -> CmdResult<Vec<ImageSource>> {
+    blocking(state, move |s| {
+        s.library.image_sources(parse_id(&id)?, slot)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn image_options(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    slot: ImageSlot,
+    source: String,
+) -> CmdResult<Vec<ImageOption>> {
+    blocking(state, move |s| {
+        s.library.image_options(parse_id(&id)?, slot, &source)
+    })
+    .await
+}
+
+/// Searches the web (DuckDuckGo) for images in a hidden window.
+#[tauri::command]
+pub async fn search_web_images(
+    app: tauri::AppHandle,
+    state: State<'_, Arc<AppState>>,
+    query: String,
+    large: bool,
+    transparent: bool,
+) -> CmdResult<Vec<ImageOption>> {
+    let profile = state.library.paths().webview_dir().join("websearch");
+    let size = if large {
+        WebImageSize::Large
+    } else {
+        WebImageSize::Any
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::websearch::search_images(&app, &profile, &query, size, transparent, 60)
+    })
+    .await
+    .map_err(|e| format!("Internal error: {e}"))?
+    .map(|images| {
+        images
+            .into_iter()
+            .map(|image| ImageOption {
+                url: image.url,
+                thumbnail: Some(image.thumbnail),
+                width: (image.width > 0).then_some(image.width),
+                height: (image.height > 0).then_some(image.height),
+                label: image.site,
+            })
+            .collect()
+    })
+}
+
+#[tauri::command]
+pub async fn launch_profiles(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+) -> CmdResult<LaunchProfiles> {
+    blocking(state, move |s| s.library.launch_profiles(parse_id(&id)?)).await
+}
+
+/// Adds (`profile_id` none) or changes a launch profile.
+#[tauri::command]
+pub async fn save_launch_profile(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    profile_id: Option<String>,
+    input: ProfileInput,
+) -> CmdResult<LaunchProfiles> {
+    blocking(state, move |s| {
+        let profile = profile_id.as_deref().map(parse_id).transpose()?;
+        s.library
+            .save_launch_profile(parse_id(&id)?, profile, &input)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn delete_launch_profile(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    profile_id: String,
+) -> CmdResult<LaunchProfiles> {
+    blocking(state, move |s| {
+        s.library
+            .delete_launch_profile(parse_id(&id)?, parse_id(&profile_id)?)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn order_launch_profiles(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    order: Vec<String>,
+) -> CmdResult<LaunchProfiles> {
+    blocking(state, move |s| {
+        let order = order
+            .iter()
+            .map(|p| parse_id(p))
+            .collect::<Result<Vec<_>, _>>()?;
+        s.library.order_launch_profiles(parse_id(&id)?, &order)
+    })
+    .await
+}
+
+/// Makes a profile the default; none goes back to automatic.
+#[tauri::command]
+pub async fn set_default_launch_profile(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    profile_id: Option<String>,
+) -> CmdResult<LaunchProfiles> {
+    blocking(state, move |s| {
+        let profile = profile_id.as_deref().map(parse_id).transpose()?;
+        s.library
+            .set_default_launch_profile(parse_id(&id)?, profile)
+    })
+    .await
 }
