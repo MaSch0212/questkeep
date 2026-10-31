@@ -1,6 +1,6 @@
-import { Show } from "solid-js";
+import { Index, Match, Show, Switch } from "solid-js";
 import type { Game } from "../bindings/Game";
-import { formatPlaytime, formatRelativeDate, releaseYear } from "../lib/format";
+import { shownColumns, type ShownColumn } from "../lib/columns";
 import { store } from "../lib/store";
 import { GameIcon } from "./GameIcon";
 import { QuickAction } from "./QuickAction";
@@ -11,6 +11,8 @@ import Star from "lucide-solid/icons/star";
 
 interface GameRowProps {
   game: Game;
+  /** The view's columns after Name; the default ones if not given. */
+  columns?: ShownColumn[];
   /** The keyboard cursor is on this row. */
   selected: boolean;
   /** The details panel is showing this game. */
@@ -23,6 +25,8 @@ interface GameRowProps {
   domKey?: string;
 }
 
+const DEFAULT_SHOWN = shownColumns([]);
+
 export function rowDomId(id: string): string {
   return `row-${id}`;
 }
@@ -31,6 +35,10 @@ export function rowDomId(id: string): string {
 export function GameRow(props: GameRowProps) {
   const running = () => store.isRunning(props.game.id);
   const stores = () => storesOf(props.game);
+  const names = {
+    status: (id: string) => store.completion().statuses.find((s) => s.id === id)?.name,
+    category: (id: string) => store.categories().find((c) => c.id === id)?.name,
+  };
 
   return (
     <div
@@ -67,33 +75,53 @@ export function GameRow(props: GameRowProps) {
           <QuickAction game={props.game} tabbable={props.selected} />
         </div>
       </div>
-      <div class="list-row__cell list-row__source" title={storeNames(props.game)}>
-        <SourceIcons game={props.game} />
-        <Show
-          when={stores().length === 1}
-          fallback={<span class="visually-hidden">{storeNames(props.game)}</span>}
-        >
-          <span class="list-row__text">{sourceName(props.game.source)}</span>
-        </Show>
-      </div>
-      <div class="list-row__cell list-row__state">
-        <Show
-          when={props.game.installed}
-          fallback={
-            <span class="state state--missing">
-              <Download class="icon" aria-hidden="true" />
-              <span>Not installed</span>
-            </span>
-          }
-        >
-          <span classList={{ "state state--running": running() }}>
-            {running() ? "Running" : "Installed"}
-          </span>
-        </Show>
-      </div>
-      <div class="list-row__cell">{formatPlaytime(props.game.playtimeSeconds)}</div>
-      <div class="list-row__cell">{formatRelativeDate(props.game.lastPlayed)}</div>
-      <div class="list-row__cell list-row__year">{releaseYear(props.game.releaseDate) ?? ""}</div>
+      <Index each={props.columns ?? DEFAULT_SHOWN}>
+        {(column) => (
+          <Switch
+            fallback={(() => {
+              const text = () => column().def.text?.(props.game, names) ?? "";
+              return (
+                <div
+                  class="list-row__cell"
+                  classList={{ "list-row__cell--numeric": column().def.numeric === true }}
+                  title={text()}
+                >
+                  {text()}
+                </div>
+              );
+            })()}
+          >
+            <Match when={column().def.id === "source"}>
+              <div class="list-row__cell list-row__source" title={storeNames(props.game)}>
+                <SourceIcons game={props.game} />
+                <Show
+                  when={stores().length === 1}
+                  fallback={<span class="visually-hidden">{storeNames(props.game)}</span>}
+                >
+                  <span class="list-row__text">{sourceName(props.game.source)}</span>
+                </Show>
+              </div>
+            </Match>
+            <Match when={column().def.id === "state"}>
+              <div class="list-row__cell list-row__state">
+                <Show
+                  when={props.game.installed}
+                  fallback={
+                    <span class="state state--missing">
+                      <Download class="icon" aria-hidden="true" />
+                      <span>Not installed</span>
+                    </span>
+                  }
+                >
+                  <span classList={{ "state state--running": running() }}>
+                    {running() ? "Running" : "Installed"}
+                  </span>
+                </Show>
+              </div>
+            </Match>
+          </Switch>
+        )}
+      </Index>
     </div>
   );
 }

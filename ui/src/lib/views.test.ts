@@ -30,6 +30,7 @@ function view(id: string, query: Partial<GameQuery> = {}): LibraryView {
     query: { ...defaultQuery(), ...query },
     layout: "grid",
     group: "none",
+    columns: [],
   };
 }
 
@@ -62,6 +63,7 @@ describe("drafts", () => {
         query: { ...steam.query, search: "zelda", sources: ["gog", "steam"] },
         layout: "grid",
         group: "none",
+        columns: [],
       }),
     ).toBe(false);
     expect(
@@ -69,6 +71,7 @@ describe("drafts", () => {
         query: { ...steam.query, descending: true },
         layout: "grid",
         group: "none",
+        columns: [],
       }),
     ).toBe(true);
     expect(differsFromSaved(steam, { ...savedState(steam), group: "category" })).toBe(true);

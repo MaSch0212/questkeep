@@ -19,6 +19,7 @@ import type { StartPage } from "../bindings/StartPage";
 import type { StartupPage } from "../bindings/StartupPage";
 import type { SyncTimes } from "../bindings/SyncTimes";
 import type { ViewLayout } from "../bindings/ViewLayout";
+import type { ViewColumn } from "../bindings/ViewColumn";
 import type { ValueCount } from "../bindings/ValueCount";
 import type { ViewSection } from "../bindings/ViewSection";
 import type { ViewUiState } from "../bindings/ViewUiState";
@@ -158,7 +159,7 @@ function createAppStore() {
     const view = activeView();
     return view
       ? effectiveState(view, drafts())
-      : { query: defaultQuery(), layout: "grid", group: "none" };
+      : { query: defaultQuery(), layout: "grid", group: "none", columns: [] };
   });
   const query = createMemo<GameQuery>(() => ({ ...viewState().query, search: keyword() }));
   const viewMode = createMemo<ViewMode>(() => viewState().layout);
@@ -400,7 +401,12 @@ function createAppStore() {
     if (!view) return;
     const state = viewState();
     const ok = await editViews(() =>
-      api.updateView(view.id, { query: state.query, layout: state.layout, group: state.group }),
+      api.updateView(view.id, {
+        query: state.query,
+        layout: state.layout,
+        group: state.group,
+        columns: state.columns,
+      }),
     );
     if (ok) setDrafts((current) => withoutDraft(current, view.id));
   }
@@ -419,6 +425,7 @@ function createAppStore() {
         query: state.query,
         layout: state.layout,
         group: state.group,
+        columns: state.columns,
       });
       created = view.id;
     });
@@ -718,6 +725,16 @@ function createAppStore() {
 
   function setGroupBy(group: GroupBy) {
     changeView((state) => ({ ...state, group }));
+  }
+
+  /** Changes the open view's table columns (a draft until saved, like its sort). */
+  function changeColumns(change: (columns: readonly ViewColumn[]) => ViewColumn[]) {
+    const view = activeView();
+    if (!view) return;
+    // Columns don't change which games show: no reload.
+    setDrafts((current) =>
+      withChange(current, view, (state) => ({ ...state, columns: change(state.columns) })),
+    );
   }
 
   function selectGame(id: string | null) {
@@ -1029,6 +1046,9 @@ function createAppStore() {
     setViewMode,
     groupBy,
     setGroupBy,
+    /** The open view's table columns as stored (empty: the defaults). */
+    columns: () => viewState().columns,
+    changeColumns,
     groups,
     collapsedGroups,
     groupJump,

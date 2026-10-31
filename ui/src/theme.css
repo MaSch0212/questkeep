@@ -169,9 +169,15 @@
   --qk-list-row-height: 36px;
   --qk-list-padding: 8px;
   --qk-list-thumb-width: 22px;
-  --qk-list-year-width: 72px;
-  --qk-list-columns: var(--qk-list-thumb-width) minmax(0, 3fr) minmax(0, 1fr) minmax(0, 1.2fr)
-    minmax(0, 1.2fr) minmax(0, 1.2fr) var(--qk-list-year-width);
+  /* Table columns: the list sets --qk-list-columns from the view's columns (lib/columns.ts). */
+  --qk-list-gap: var(--qk-space-3);
+  --qk-list-inline-pad: var(--qk-space-4);
+  --qk-column-name-min: 240px;
+  --qk-column-sm: 96px;
+  --qk-column-md: 140px;
+  --qk-column-lg: 220px;
+  --qk-column-min: 64px;
+  --qk-column-resize-width: 8px;
   --qk-details-hero-height: 170px;
   --qk-details-hero-overlap: 90px;
   --qk-description-clamp-lines: 5;

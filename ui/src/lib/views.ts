@@ -4,7 +4,9 @@ import type { GroupBy } from "../bindings/GroupBy";
 import type { LibraryView } from "../bindings/LibraryView";
 import type { SectionOrder } from "../bindings/SectionOrder";
 import type { ViewLayout } from "../bindings/ViewLayout";
+import type { ViewColumn } from "../bindings/ViewColumn";
 import type { ViewSection } from "../bindings/ViewSection";
+import { sameColumns } from "./columns";
 import { storesOf } from "./copies";
 import { activeTreeCount, emptyGroup, matchesTree, sameTree } from "./filters";
 import { defaultQuery } from "./query";
@@ -14,6 +16,8 @@ export interface ViewState {
   query: GameQuery;
   layout: ViewLayout;
   group: GroupBy;
+  /** Table columns; empty: the default ones. */
+  columns: ViewColumn[];
 }
 
 /** `GameQuery.categories` entry for games without a category (the core's `NO_CATEGORY`). */
@@ -31,6 +35,7 @@ export function exploreView(preset: Partial<GameQuery> = {}): LibraryView {
     query: { ...defaultQuery(), ...preset },
     layout: "list",
     group: "none",
+    columns: [],
   };
 }
 
@@ -39,7 +44,12 @@ export type Drafts = Readonly<Record<string, ViewState>>;
 
 /** The saved state of a view, without the keyword (which a saved query never has). */
 export function savedState(view: LibraryView): ViewState {
-  return { query: { ...view.query, search: null }, layout: view.layout, group: view.group };
+  return {
+    query: { ...view.query, search: null },
+    layout: view.layout,
+    group: view.group,
+    columns: view.columns,
+  };
 }
 
 /** The draft of a view if it has one, else its saved state. */
@@ -70,6 +80,7 @@ export function differsFromSaved(view: LibraryView, state: ViewState): boolean {
   return (
     state.layout !== view.layout ||
     state.group !== view.group ||
+    !sameColumns(state.columns, view.columns) ||
     !sameQuery(state.query, view.query)
   );
 }

@@ -354,6 +354,10 @@ pub(crate) const MIGRATIONS: &[&str] = &[
         state   TEXT NOT NULL
     );
     "#,
+    // 13: table columns of a view (JSON list of ids and widths; empty: the default columns).
+    r#"
+    ALTER TABLE views ADD COLUMN columns TEXT NOT NULL DEFAULT '[]';
+    "#,
 ];
 
 /// Latest schema version this build knows.

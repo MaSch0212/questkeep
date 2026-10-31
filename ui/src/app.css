@@ -41,6 +41,9 @@ select {
   background: var(--qk-color-surface-hover);
   border-radius: var(--qk-radius-pill);
 }
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
 
 h1,
 h2,
@@ -860,14 +863,16 @@ ul {
   display: grid;
   grid-template-columns: var(--qk-list-columns);
   align-items: center;
-  gap: var(--qk-space-3);
-  padding: 0 var(--qk-space-4);
+  gap: var(--qk-list-gap);
+  padding: 0 var(--qk-list-inline-pad);
 }
 .list__header {
   flex: none;
   padding-top: var(--qk-space-2);
   padding-bottom: var(--qk-space-2);
-  padding-right: calc(var(--qk-space-4) + var(--qk-scrollbar-size));
+  padding-right: calc(var(--qk-list-inline-pad) + var(--qk-scrollbar-size));
+  /* Scrolled sideways with the rows (GameList sets scrollLeft). */
+  overflow: hidden;
   border-bottom: 1px solid var(--qk-color-border);
   font-size: var(--qk-font-size-xs);
   font-weight: var(--qk-font-weight-bold);
@@ -878,12 +883,77 @@ ul {
 .list__scroller {
   position: relative;
   flex: 1;
+  overflow-x: auto;
   overflow-y: scroll;
   outline-offset: calc(var(--qk-focus-ring-width) * -1);
 }
 .list__canvas {
   position: relative;
   width: 100%;
+  min-width: var(--qk-list-min-width, 0);
+}
+.list__th {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.list__th--numeric {
+  justify-content: flex-end;
+}
+.list__th--dragging {
+  opacity: var(--qk-dimmed-opacity);
+}
+.list__th-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--qk-space-1);
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.list__th-btn:hover,
+.list__th[aria-sort] .list__th-btn {
+  color: var(--qk-color-text);
+}
+.list__th-btn--static {
+  cursor: default;
+}
+.list__th-btn--static:hover {
+  color: inherit;
+}
+.list__th-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.list__sort {
+  flex: none;
+}
+/* The column edge: centred on the gap after the column. */
+.list__resize {
+  position: absolute;
+  top: calc(var(--qk-space-2) * -1);
+  bottom: calc(var(--qk-space-2) * -1);
+  right: calc((var(--qk-list-gap) + var(--qk-column-resize-width)) / -2);
+  width: var(--qk-column-resize-width);
+  cursor: col-resize;
+  z-index: 1;
+}
+.list__resize:hover,
+.list__resize:focus-visible {
+  background: var(--qk-color-accent-soft);
+  box-shadow: inset 1px 0 0 var(--qk-color-accent);
+  outline: none;
 }
 .list__slot {
   position: absolute;
@@ -958,7 +1028,7 @@ ul {
 .list-row__star {
   color: var(--qk-color-star);
 }
-.list-row__year {
+.list-row__cell--numeric {
   text-align: right;
 }
 .list-row__star {
@@ -4812,4 +4882,20 @@ ul {
 .combine__buttons {
   display: flex;
   gap: var(--qk-space-2);
+}
+
+/* Column picker: drag grips and the always-shown Name */
+.picker__grip {
+  display: inline-flex;
+  flex: none;
+  width: var(--qk-icon-size);
+  color: var(--qk-color-text-faint);
+  cursor: grab;
+}
+.picker__item--disabled {
+  color: var(--qk-color-text-muted);
+  cursor: default;
+}
+.picker__item--dragging {
+  opacity: var(--qk-dimmed-opacity);
 }

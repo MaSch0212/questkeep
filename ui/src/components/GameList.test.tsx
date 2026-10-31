@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@solidjs/testing-library";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../lib/api";
 import { store } from "../lib/store";
+import { defaultQuery } from "../lib/query";
 import { makeGame } from "../test-utils";
 import { GameList } from "./GameList";
 
@@ -105,5 +106,49 @@ describe("GameList", () => {
     });
     await waitFor(() => expect(api.installGame).toHaveBeenCalledTimes(2));
     expect(api.installGame).toHaveBeenCalledWith("g1", null);
+  });
+
+  it("sorts from the header and picks columns from its menu", async () => {
+    vi.mocked(api.listViews).mockResolvedValue([
+      {
+        id: "lib",
+        name: "Library",
+        views: [
+          {
+            id: "all",
+            name: "All",
+            icon: "bookmark",
+            query: defaultQuery(),
+            layout: "list",
+            group: "none",
+            columns: [],
+          },
+        ],
+      },
+    ]);
+    await store.loadViews();
+    await load([makeGame({ id: "a", name: "Alpha", genres: ["RPG"] })]);
+    render(() => <GameList />);
+    const header = screen.getByRole("group", { name: /Columns/ });
+
+    await fireEvent.click(screen.getByRole("button", { name: "Playtime" }));
+    expect(store.query().sort).toBe("playtime");
+    expect(store.query().descending).toBe(true);
+    await fireEvent.click(screen.getByRole("button", { name: "Playtime" }));
+    expect(store.query().descending).toBe(false);
+
+    await fireEvent.contextMenu(header);
+    await fireEvent.click(await screen.findByRole("option", { name: "Genres" }));
+    expect(store.columns().map((c) => c.id)).toContain("genres");
+    expect(screen.getByRole("option", { name: "Alpha" })).toHaveTextContent("RPG");
+    expect(store.hasDraft("all")).toBe(true);
+
+    await fireEvent.keyDown(screen.getByRole("option", { name: "Genres" }), {
+      key: "ArrowUp",
+      altKey: true,
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "Reset to default columns" }));
+    expect(store.columns()).toEqual([]);
+    expect(screen.queryByText("RPG")).toBeNull();
   });
 });

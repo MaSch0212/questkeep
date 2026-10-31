@@ -28,6 +28,8 @@ import { GameRow, rowDomId } from "./GameRow";
 import { GameRowCompact } from "./GameRowCompact";
 import { GroupHeader } from "./GroupHeader";
 import { StickyGroupHeader } from "./StickyGroupHeader";
+import { TableHeader } from "./TableHeader";
+import { columnsMinWidth, columnTemplate, shownColumns } from "../lib/columns";
 import { Logo } from "./Logo";
 
 const FALLBACK_HEIGHT = 700;
@@ -58,6 +60,8 @@ function activateSelected() {
 export function GameList(props: { compact?: boolean }) {
   const mode = () => (props.compact ? "details" : "list");
   let scroller: HTMLDivElement | undefined;
+  let columnHeader: HTMLDivElement | undefined;
+  const shown = createMemo(() => shownColumns(store.columns()));
   const [height, setHeight] = createSignal(FALLBACK_HEIGHT);
   const [scrollTop, setScrollTop] = createSignal(0);
   const [rowHeight, setRowHeight] = createSignal(
@@ -111,6 +115,8 @@ export function GameList(props: { compact?: boolean }) {
     let frame = 0;
     const onScroll = () => {
       if (frame) return;
+      // The header follows the table sideways right away; rows only need the frame's top.
+      if (columnHeader) columnHeader.scrollLeft = element.scrollLeft;
       frame = requestAnimationFrame(() => {
         frame = 0;
         setScrollTop(element.scrollTop);
@@ -213,17 +219,20 @@ export function GameList(props: { compact?: boolean }) {
   }
 
   return (
-    <div class="list" classList={{ "list--compact": props.compact === true }}>
+    <div
+      class="list"
+      classList={{ "list--compact": props.compact === true }}
+      style={
+        props.compact
+          ? undefined
+          : {
+              "--qk-list-columns": columnTemplate(shown()),
+              "--qk-list-min-width": columnsMinWidth(shown()),
+            }
+      }
+    >
       <Show when={!props.compact}>
-        <div class="list__header" aria-hidden="true">
-          <span />
-          <span>Name</span>
-          <span>Source</span>
-          <span>Status</span>
-          <span>Playtime</span>
-          <span>Last played</span>
-          <span class="list-row__year">Released</span>
-        </div>
+        <TableHeader columns={shown()} ref={(el) => (columnHeader = el)} />
       </Show>
       <div
         ref={(el) => (scroller = el)}
@@ -283,6 +292,7 @@ export function GameList(props: { compact?: boolean }) {
                               >
                                 <GameRow
                                   game={slot().game}
+                                  columns={shown()}
                                   domKey={slotKey(slot())}
                                   selected={store.isSelected(slot().game.id)}
                                   open={

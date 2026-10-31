@@ -9,8 +9,8 @@ use uuid::Uuid;
 use super::Database;
 use crate::error::{CoreError, Result};
 use crate::model::{
-    GameQuery, GroupBy, LibraryView, NewView, SectionOrder, SyncTimes, ViewLayout, ViewSection,
-    ViewUiState, ViewUpdate,
+    GameQuery, GroupBy, LibraryView, NewView, SectionOrder, SyncTimes, ViewColumn, ViewLayout,
+    ViewSection, ViewUiState, ViewUpdate,
 };
 
 /// Key of the "sync all" entry in `sync_times`; provider ids never contain a colon.
@@ -65,12 +65,17 @@ fn not_found(what: &str) -> CoreError {
     CoreError::Invalid(format!("That {what} no longer exists."))
 }
 
-const VIEW_COLUMNS: &str = "id, name, icon, query, layout, group_by";
+const VIEW_COLUMNS: &str = "id, name, icon, query, layout, group_by, columns";
+
+fn columns_json(columns: &[ViewColumn]) -> Result<String> {
+    Ok(serde_json::to_string(columns)?)
+}
 
 fn row_to_view(row: &Row<'_>) -> rusqlite::Result<LibraryView> {
     let query: String = row.get(3)?;
     let layout: String = row.get(4)?;
     let group: String = row.get(5)?;
+    let columns: String = row.get(6)?;
     Ok(LibraryView {
         id: row.get(0)?,
         name: row.get(1)?,
@@ -82,6 +87,8 @@ fn row_to_view(row: &Row<'_>) -> rusqlite::Result<LibraryView> {
         }),
         layout: parse_layout(&layout),
         group: parse_group(&group),
+        // Unreadable columns fall back to the default ones.
+        columns: serde_json::from_str(&columns).unwrap_or_default(),
     })
 }
 
@@ -141,10 +148,11 @@ impl Database {
                 return Err(not_found("section"));
             }
             tx.execute(
-                "INSERT INTO views (id, section_id, position, name, icon, query, layout, group_by)
+                "INSERT INTO views
+                     (id, section_id, position, name, icon, query, layout, group_by, columns)
                  VALUES (?1, ?2,
                      (SELECT COALESCE(MAX(position) + 1, 0) FROM views WHERE section_id = ?2),
-                     ?3, ?4, ?5, ?6, ?7)",
+                     ?3, ?4, ?5, ?6, ?7, ?8)",
                 params![
                     id,
                     view.section_id,
@@ -152,7 +160,8 @@ impl Database {
                     view.icon,
                     query_json(&view.query)?,
                     layout_text(view.layout),
-                    group_text(view.group)
+                    group_text(view.group),
+                    columns_json(&view.columns)?
                 ],
             )?;
             tx.commit()?;
@@ -170,16 +179,18 @@ impl Database {
         let query = update.query.as_ref().unwrap_or(&current.query);
         let layout = update.layout.unwrap_or(current.layout);
         let group = update.group.unwrap_or(current.group);
+        let columns = update.columns.as_ref().unwrap_or(&current.columns);
         self.conn().execute(
-            "UPDATE views SET name = ?2, icon = ?3, query = ?4, layout = ?5, group_by = ?6 \
-             WHERE id = ?1",
+            "UPDATE views SET name = ?2, icon = ?3, query = ?4, layout = ?5, group_by = ?6, \
+             columns = ?7 WHERE id = ?1",
             params![
                 id,
                 name,
                 icon,
                 query_json(query)?,
                 layout_text(layout),
-                group_text(group)
+                group_text(group),
+                columns_json(columns)?
             ],
         )?;
         self.get_view(id)
@@ -204,9 +215,10 @@ impl Database {
                 params![section, position],
             )?;
             tx.execute(
-                "INSERT INTO views (id, section_id, position, name, icon, query, layout, group_by)
+                "INSERT INTO views
+                     (id, section_id, position, name, icon, query, layout, group_by, columns)
                  SELECT ?2, section_id, position + 1, name || ' (copy)', icon, query, layout,
-                     group_by
+                     group_by, columns
                  FROM views WHERE id = ?1",
                 params![id, copy],
             )?;
@@ -404,6 +416,7 @@ mod tests {
                 query: GameQuery::default(),
                 layout: ViewLayout::Grid,
                 group: GroupBy::None,
+                columns: Vec::new(),
             })
             .unwrap();
         let mut state = ViewUiState {
@@ -463,6 +476,10 @@ mod tests {
             query: GameQuery::default(),
             layout: ViewLayout::List,
             group: GroupBy::Category,
+            columns: vec![ViewColumn {
+                id: "playtime".into(),
+                width: None,
+            }],
         }
     }
 
@@ -531,6 +548,23 @@ mod tests {
             )
             .unwrap();
         assert_eq!(ungrouped.group, GroupBy::Source);
+        assert_eq!(ungrouped.columns[0].id, "playtime");
+
+        let wide = vec![ViewColumn {
+            id: "criticScore".into(),
+            width: Some(140),
+        }];
+        let resized = db
+            .update_view(
+                &created.id,
+                &ViewUpdate {
+                    columns: Some(wide.clone()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        assert_eq!(resized.columns, wide);
+        assert_eq!(db.duplicate_view(&created.id).unwrap().columns, wide);
         assert_eq!(
             db.duplicate_view(&created.id).unwrap().group,
             GroupBy::Source

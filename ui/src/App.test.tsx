@@ -118,6 +118,7 @@ function mockViews(layout: ViewLayout = "grid") {
           query: defaultQuery(),
           layout,
           group: "none",
+          columns: [],
         },
       ],
     },

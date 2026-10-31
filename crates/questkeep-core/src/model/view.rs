@@ -49,6 +49,18 @@ pub enum GroupBy {
     CriticScore,
 }
 
+/// A column of the table layout. The UI owns the list of columns; an id it no longer knows is
+/// skipped there.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct ViewColumn {
+    pub id: String,
+    /// Width in px set by dragging the column edge; `None` is the column's default width.
+    #[serde(default)]
+    pub width: Option<u32>,
+}
+
 /// A saved view of the library: filters, sort order and layout under a name.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -62,6 +74,8 @@ pub struct LibraryView {
     pub query: GameQuery,
     pub layout: ViewLayout,
     pub group: GroupBy,
+    /// Table columns after Name, in order; empty is the default columns.
+    pub columns: Vec<ViewColumn>,
 }
 
 /// A named group of views in the sidebar, in display order.
@@ -86,6 +100,8 @@ pub struct NewView {
     pub layout: ViewLayout,
     #[serde(default)]
     pub group: GroupBy,
+    #[serde(default)]
+    pub columns: Vec<ViewColumn>,
 }
 
 /// Fields of a view to change; `None` keeps the current value.
@@ -103,6 +119,8 @@ pub struct ViewUpdate {
     pub layout: Option<ViewLayout>,
     #[ts(optional)]
     pub group: Option<GroupBy>,
+    #[ts(optional)]
+    pub columns: Option<Vec<ViewColumn>>,
 }
 
 /// The order of one section and its views, as the sidebar shows them after a drag.

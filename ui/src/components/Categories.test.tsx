@@ -45,6 +45,7 @@ function sections(group: "none" | "category" = "none"): ViewSection[] {
           query: defaultQuery(),
           layout: "grid",
           group,
+          columns: [],
         },
       ],
     },

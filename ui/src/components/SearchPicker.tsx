@@ -1,4 +1,5 @@
 import Check from "lucide-solid/icons/check";
+import GripVertical from "lucide-solid/icons/grip-vertical";
 import Search from "lucide-solid/icons/search";
 import { createMemo, createSignal, For, onMount, Show, type JSX } from "solid-js";
 import { Popover, type PopoverAnchor } from "./Popover";
@@ -14,6 +15,10 @@ export interface PickerItem {
   checked?: boolean;
   /** Shown in italics (the "No …" entry). */
   special?: boolean;
+  /** Shown but not choosable. */
+  disabled?: boolean;
+  /** Can be dragged (or moved with Alt+arrows) among the other movable items. */
+  movable?: boolean;
 }
 
 /**
@@ -30,10 +35,13 @@ export function SearchPicker(props: {
   keepOpen?: boolean;
   /** Shown when nothing matches the search. */
   empty?: string;
+  /** Moves a movable item to the place of another one (drag, Alt+Up/Down). */
+  onMove?: (id: string, to: string) => void;
   footer?: JSX.Element;
 }) {
   const [text, setText] = createSignal("");
   const [active, setActive] = createSignal(0);
+  const [dragged, setDragged] = createSignal<string | null>(null);
   let input: HTMLInputElement | undefined;
   let list: HTMLDivElement | undefined;
 
@@ -56,9 +64,19 @@ export function SearchPicker(props: {
   }
 
   function pick(item: PickerItem | undefined) {
-    if (!item) return;
+    if (!item || item.disabled) return;
     if (!props.keepOpen) props.onClose(true);
     props.onPick(item.id);
+  }
+
+  /** Alt+Up/Down: swaps the active movable item with its movable neighbour. */
+  function moveActive(by: number) {
+    const items = shown();
+    const item = items[active()];
+    const target = items[active() + by];
+    if (!props.onMove || !item?.movable || !target?.movable) return;
+    props.onMove(item.id, target.id);
+    setActive(active() + by);
   }
 
   return (
@@ -69,7 +87,9 @@ export function SearchPicker(props: {
       label={props.label}
       onClose={props.onClose}
       onKeyDown={(event) => {
-        if (event.key === "ArrowDown") move(1);
+        if (event.altKey && event.key === "ArrowDown") moveActive(1);
+        else if (event.altKey && event.key === "ArrowUp") moveActive(-1);
+        else if (event.key === "ArrowDown") move(1);
         else if (event.key === "ArrowUp") move(-1);
         else if (event.key === "Enter") pick(shown()[active()]);
         else return;
@@ -115,12 +135,37 @@ export function SearchPicker(props: {
                 classList={{
                   "picker__item--active": active() === index(),
                   "picker__item--special": item.special,
+                  "picker__item--disabled": item.disabled,
+                  "picker__item--dragging": dragged() === item.id,
                 }}
                 aria-selected={item.checked ?? active() === index()}
+                aria-disabled={item.disabled}
+                draggable={item.movable === true && props.onMove !== undefined}
+                onDragStart={(event) => {
+                  setDragged(item.id);
+                  event.dataTransfer?.setData("text/plain", item.id);
+                }}
+                onDragEnd={() => setDragged(null)}
+                onDragOver={(event) => {
+                  if (item.movable && dragged() !== null) event.preventDefault();
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  const from = dragged();
+                  if (from !== null && from !== item.id) props.onMove?.(from, item.id);
+                  setDragged(null);
+                }}
                 onPointerMove={() => setActive(index())}
                 onPointerDown={(event) => event.preventDefault()}
                 onClick={() => pick(item)}
               >
+                <Show when={props.onMove}>
+                  <span class="picker__grip" aria-hidden="true">
+                    <Show when={item.movable}>
+                      <GripVertical class="icon" />
+                    </Show>
+                  </span>
+                </Show>
                 <Show when={item.checked !== undefined}>
                   <span class="picker__check" classList={{ "picker__check--on": item.checked }}>
                     <Show when={item.checked}>

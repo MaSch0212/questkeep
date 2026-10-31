@@ -24,6 +24,7 @@ const view = (id: string, query: Partial<GameQuery>): LibraryView => ({
   query: { ...defaultQuery(), ...query },
   layout: "grid",
   group: "none",
+  columns: [],
 });
 
 function testSections(): ViewSection[] {
