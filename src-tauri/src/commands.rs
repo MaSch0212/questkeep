@@ -8,9 +8,9 @@ use std::sync::Arc;
 use questkeep_core::auth::AccountStatus;
 use questkeep_core::library::MetadataSourceInfo;
 use questkeep_core::model::{
-    Category, CompletionSettings, Game, GameQuery, GameUpdate, LibraryView, ListField,
-    NewManualGame, NewView, ScanSummary, SectionOrder, StartPage, SyncTimes, ValueCount,
-    ViewSection, ViewUpdate,
+    Achievements, Category, CompletionSettings, Game, GameActivity, GameNews, GameQuery,
+    GameUpdate, LibraryView, ListField, NewManualGame, NewView, ScanSummary, SectionOrder,
+    StartPage, SyncTimes, ValueCount, ViewSection, ViewUpdate,
 };
 use questkeep_core::providers::ProviderInfo;
 use questkeep_core::settings::Settings;
@@ -705,4 +705,34 @@ pub async fn open_launcher(state: State<'_, Arc<AppState>>, provider_id: String)
 #[tauri::command]
 pub fn exit_app(app: tauri::AppHandle) {
     crate::tray::exit(&app);
+}
+
+/// How many people play a game right now (game page; `null` when no store can tell).
+#[tauri::command]
+pub async fn game_player_count(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+) -> CmdResult<Option<u32>> {
+    blocking(state, move |s| s.library.player_count(parse_id(&id)?)).await
+}
+
+/// A game's latest news (game page).
+#[tauri::command]
+pub async fn game_news(state: State<'_, Arc<AppState>>, id: String) -> CmdResult<Option<GameNews>> {
+    blocking(state, move |s| s.library.game_news(parse_id(&id)?)).await
+}
+
+/// The user's achievements in a game (game page).
+#[tauri::command]
+pub async fn game_achievements(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+) -> CmdResult<Option<Achievements>> {
+    blocking(state, move |s| s.library.achievements(parse_id(&id)?)).await
+}
+
+/// A game's playtime per week for the last 12 weeks (game page).
+#[tauri::command]
+pub async fn game_activity(state: State<'_, Arc<AppState>>, id: String) -> CmdResult<GameActivity> {
+    blocking(state, move |s| s.library.game_activity(parse_id(&id)?)).await
 }

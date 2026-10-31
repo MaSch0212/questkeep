@@ -1,13 +1,13 @@
 //! Start page data: the shelves, playtime per day and installed games per store. Also the small
 //! app state the start page needs (the page open last).
 
-use chrono::{DateTime, Days, NaiveDate, TimeZone, Utc};
+use chrono::{DateTime, Datelike, Days, NaiveDate, TimeZone, Utc};
 use rusqlite::{OptionalExtension, params};
 
 use super::Database;
 use super::games::{COLUMNS, attach_copies, row_to_game};
 use crate::error::Result;
-use crate::model::{DayPlaytime, MANUAL_SOURCE, ShelfGame, StoreInstalls};
+use crate::model::{DayPlaytime, MANUAL_SOURCE, ShelfGame, StoreInstalls, WeekPlaytime};
 
 /// `app_state` key of the start page or view that was open last.
 const LAST_PAGE: &str = "lastPage";
@@ -66,13 +66,32 @@ impl Database {
     /// Play sessions that were still running at or after `since`. Unfinished sessions count up
     /// to their last heartbeat.
     pub fn sessions_since(&self, since: DateTime<Utc>) -> Result<Vec<SessionSpan>> {
-        let conn = self.conn();
-        let mut stmt = conn.prepare_cached(
+        self.spans(
             "SELECT started_at, COALESCE(ended_at, last_seen_at), duration_seconds \
              FROM play_sessions WHERE COALESCE(ended_at, last_seen_at) >= ?1",
-        )?;
+            params![since],
+        )
+    }
+
+    /// Like [`sessions_since`](Self::sessions_since), for one library entry (all its copies).
+    pub fn entry_sessions_since(
+        &self,
+        entry: uuid::Uuid,
+        since: DateTime<Utc>,
+    ) -> Result<Vec<SessionSpan>> {
+        self.spans(
+            "SELECT started_at, COALESCE(ended_at, last_seen_at), duration_seconds \
+             FROM play_sessions WHERE COALESCE(ended_at, last_seen_at) >= ?1 \
+             AND game_id IN (SELECT id FROM games WHERE id = ?2 OR merged_into = ?2)",
+            params![since, entry.to_string()],
+        )
+    }
+
+    fn spans(&self, sql: &str, args: impl rusqlite::Params) -> Result<Vec<SessionSpan>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare_cached(sql)?;
         let spans = stmt
-            .query_map([since], |r| {
+            .query_map(args, |r| {
                 let start: DateTime<Utc> = r.get(0)?;
                 let end: DateTime<Utc> = r.get(1)?;
                 let credited = match r.get::<_, Option<i64>>(2)? {
@@ -189,6 +208,25 @@ pub fn playtime_by_day<Tz: TimeZone>(
         .map(|(date, s)| DayPlaytime {
             date,
             seconds: s.round() as u64,
+        })
+        .collect()
+}
+
+/// Credited playtime for each of the `weeks` local weeks (Monday start) ending with the week of
+/// `today`, oldest first. Days are split like [`playtime_by_day`].
+pub fn playtime_by_week<Tz: TimeZone>(
+    sessions: &[SessionSpan],
+    today: NaiveDate,
+    tz: &Tz,
+    weeks: u32,
+) -> Vec<WeekPlaytime> {
+    let since_monday = today.weekday().num_days_from_monday();
+    let days = weeks.saturating_sub(1) * 7 + since_monday + 1;
+    playtime_by_day(sessions, today, tz, days)
+        .chunks(7)
+        .map(|week| WeekPlaytime {
+            start: week.first().map_or(today, |d| d.date),
+            seconds: week.iter().map(|d| d.seconds).sum(),
         })
         .collect()
 }
@@ -375,6 +413,39 @@ mod tests {
             [
                 ("2026-10-03".to_string(), 0),
                 ("2026-10-04".to_string(), 1800),
+                ("2026-10-05".to_string(), 3600),
+            ]
+        );
+    }
+
+    #[test]
+    fn weeks_start_on_monday_and_end_with_the_current_week() {
+        let tz = FixedOffset::east_opt(0).unwrap();
+        // A Wednesday.
+        let today = NaiveDate::from_ymd_opt(2026, 10, 7).unwrap();
+        let span = |start: &str, end: &str| SessionSpan {
+            start: at(start),
+            end: at(end),
+            credited: (at(end) - at(start)).num_seconds() as u64,
+        };
+        let sessions = [
+            // Sunday night into Monday: split over two weeks.
+            span("2026-10-04T23:00:00Z", "2026-10-05T01:00:00Z"),
+            // Last week's Monday.
+            span("2026-09-28T10:00:00Z", "2026-09-28T11:00:00Z"),
+            // Before the window.
+            span("2026-09-01T10:00:00Z", "2026-09-01T11:00:00Z"),
+        ];
+        let weeks = playtime_by_week(&sessions, today, &tz, 3);
+        let got: Vec<(String, u64)> = weeks
+            .iter()
+            .map(|w| (w.start.to_string(), w.seconds))
+            .collect();
+        assert_eq!(
+            got,
+            [
+                ("2026-09-21".to_string(), 0),
+                ("2026-09-28".to_string(), 7200),
                 ("2026-10-05".to_string(), 3600),
             ]
         );

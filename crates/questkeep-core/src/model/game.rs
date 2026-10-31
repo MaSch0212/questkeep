@@ -6,7 +6,8 @@ use ts_rs::TS;
 use uuid::Uuid;
 
 pub use questkeep_store_api::model::{
-    ActionKind, GameLink, GameMetadata, ImportedGame, PlayAction, Score, TimeToBeat, TrackingMode,
+    Achievement, Achievements, ActionKind, GameLink, GameMetadata, GameNews, ImportedGame,
+    NewsItem, PlayAction, Score, TimeToBeat, TrackingMode,
 };
 
 /// Provider id used for games added by hand.

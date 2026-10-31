@@ -46,3 +46,25 @@ pub struct StoreInstalls {
     pub installed: u32,
     pub owned: u32,
 }
+
+/// Credited playtime in one local week (Monday to Sunday).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct WeekPlaytime {
+    /// The week's Monday.
+    pub start: NaiveDate,
+    #[ts(type = "number")]
+    pub seconds: u64,
+}
+
+/// A game's recent play activity (game page).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct GameActivity {
+    /// Oldest first; the last entry is the current week.
+    pub weeks: Vec<WeekPlaytime>,
+    /// Play sessions that ran in these weeks.
+    pub sessions: u32,
+}

@@ -4,24 +4,25 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 
-use chrono::{Local, Utc};
+use chrono::{Local, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use uuid::Uuid;
 
 use crate::auth::{AccountStatus, TokenStore};
-use crate::db::{Database, NewGameRecord, playtime_by_day};
+use crate::db::{Database, NewGameRecord, playtime_by_day, playtime_by_week};
 use crate::error::{CoreError, Result};
 use crate::events::{CoreEvent, EventBus};
 use crate::images::{
     CoverJob, IGDB_CHECKED_KEY, Igdb, ImageCache, ImageKind, MetadataJob, SteamGridDb,
 };
+use crate::live::LiveData;
 use crate::metadata::MetadataResolver;
 use crate::model::{
-    ActionKind, Category, CompletionSettings, Game, GameQuery, GameUpdate, HLTB_SOURCE,
-    HiddenFilter, IGDB_SOURCE, ImportedGame, LibraryView, ListField, MANUAL_SOURCE, NewManualGame,
-    NewView, PlayAction, ScanSummary, SectionOrder, StartPage, SyncTimes, TriState, ValueCount,
-    ViewSection, ViewUpdate, display_name_from_path,
+    Achievements, ActionKind, Category, CompletionSettings, Game, GameActivity, GameNews,
+    GameQuery, GameUpdate, HLTB_SOURCE, HiddenFilter, IGDB_SOURCE, ImportedGame, LibraryView,
+    ListField, MANUAL_SOURCE, NewManualGame, NewView, PlayAction, ScanSummary, SectionOrder,
+    StartPage, SyncTimes, TriState, ValueCount, ViewSection, ViewUpdate, display_name_from_path,
 };
 use crate::paths::DataPaths;
 use crate::providers::{LibraryProvider, ProviderError, ProviderInfo, ProviderRegistry};
@@ -64,6 +65,8 @@ pub struct Library {
     igdb: Igdb,
     /// Shared with the metadata fetcher; `save_settings` keeps its priority current.
     resolver: MetadataResolver,
+    /// Player counts, news and achievements for the game page.
+    live: LiveData,
 }
 
 impl Library {
@@ -100,6 +103,7 @@ impl Library {
         }
         Self {
             resolver,
+            live: LiveData::new(providers.clone(), settings.clone(), paths.cache_dir()),
             images: ImageCache::new(paths.clone()),
             artwork: SteamGridDb::new(loaded.steamgriddb_api_key),
             igdb: Igdb::new(loaded.igdb_client_id, loaded.igdb_client_secret),
@@ -255,6 +259,47 @@ impl Library {
             recently_added: shelf(self.db.recently_added(SHELF_SIZE)?),
             playtime: playtime_by_day(&self.db.sessions_since(since)?, today, &Local, DAYS),
             stores: self.db.installed_by_store()?,
+        })
+    }
+
+    /// How many people play a game right now, if one of its stores can tell (game page).
+    pub fn player_count(&self, id: Uuid) -> Result<Option<u32>> {
+        Ok(self.live.player_count(&self.db.get_game(id)?))
+    }
+
+    /// A game's latest news from its stores (game page).
+    pub fn game_news(&self, id: Uuid) -> Result<Option<GameNews>> {
+        Ok(self.live.news(&self.db.get_game(id)?))
+    }
+
+    /// The user's achievements in a game (game page).
+    pub fn achievements(&self, id: Uuid) -> Result<Option<Achievements>> {
+        Ok(self.live.achievements(&self.db.get_game(id)?))
+    }
+
+    /// A game's playtime per local week for the last 12 weeks and its sessions in them.
+    pub fn game_activity(&self, id: Uuid) -> Result<GameActivity> {
+        const WEEKS: u32 = 12;
+        let today = Local::now().date_naive();
+        let since = Utc::now() - chrono::Duration::weeks(i64::from(WEEKS) + 1);
+        let entry = self.db.entry_of(id)?;
+        let sessions = self.db.entry_sessions_since(entry, since)?;
+        let weeks = playtime_by_week(&sessions, today, &Local, WEEKS);
+        let first = weeks
+            .first()
+            .and_then(|w| {
+                Local
+                    .from_local_datetime(&w.start.and_time(chrono::NaiveTime::MIN))
+                    .earliest()
+            })
+            .map(|t| t.with_timezone(&Utc));
+        let count = sessions
+            .iter()
+            .filter(|s| first.is_none_or(|f| s.end >= f))
+            .count();
+        Ok(GameActivity {
+            weeks,
+            sessions: u32::try_from(count).unwrap_or(u32::MAX),
         })
     }
 
