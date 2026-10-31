@@ -184,6 +184,13 @@ impl SteamAccount {
         Ok(())
     }
 
+    /// SteamID of the signed-in account, without asking the network.
+    pub fn steam_id(&self) -> Option<String> {
+        let mut state = self.lock();
+        self.load(&mut state).ok()?;
+        state.account.as_ref().map(|a| a.steam_id.clone())
+    }
+
     pub fn is_signed_in(&self) -> bool {
         let mut state = self.lock();
         self.load(&mut state).is_ok() && state.account.is_some()

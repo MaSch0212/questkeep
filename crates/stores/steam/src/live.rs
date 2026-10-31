@@ -406,29 +406,45 @@ fn authed_get(
     }
 }
 
-/// The user's achievements in an app; `Ok(None)` when the game has none or they can't be read
-/// (private profile).
-pub fn fetch_achievements(
-    credential: Credential<'_>,
-    steam_id: &str,
-    app_id: &str,
-) -> Result<Option<Achievements>, AchievementsError> {
+/// Where `GetGameAchievements` icon file names live (one folder per app).
+const ACHIEVEMENT_ICONS: &str =
+    "https://shared.fastly.steamstatic.com/community_assets/images/apps";
+
+/// A game's achievements and the share of players (0-100) that have each, by api name.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Definitions {
+    pub achievements: Vec<SchemaAchievement>,
+    pub percents: HashMap<String, f32>,
+}
+
+/// What the game defines, with rarity. Public (`IPlayerService/GetGameAchievements`), so it
+/// needs no key or sign-in. `Ok(None)` when the game has no achievements.
+pub fn fetch_definitions(app_id: &str) -> Result<Option<Definitions>, ProviderError> {
     if !valid_app_id(app_id) {
         return Ok(None);
     }
-    let Some(schema_body) = authed_get(
-        "ISteamUserStats/GetSchemaForGame/v2",
-        &credential,
-        &format!("appid={app_id}&l=english"),
-    )?
-    else {
-        return Ok(None);
+    let url =
+        format!("{API}/IPlayerService/GetGameAchievements/v1/?appid={app_id}&language=english");
+    let body = match http_get(&url, None) {
+        Ok(body) => body,
+        Err(HttpFailure::Status(400 | 404)) => return Ok(None),
+        Err(other) => return Err(failure(other)),
     };
-    let schema = parse_schema(&schema_body)?;
-    if schema.is_empty() {
+    let definitions = parse_game_achievements(&body, app_id)?;
+    Ok((!definitions.achievements.is_empty()).then_some(definitions))
+}
+
+/// The player's unlocks through the Web API (key or sign-in token). `Ok(None)` when Steam has
+/// none to give (no stats for the app, private profile).
+pub fn fetch_unlocks(
+    credential: Credential<'_>,
+    steam_id: &str,
+    app_id: &str,
+) -> Result<Option<Vec<Unlock>>, AchievementsError> {
+    if !valid_app_id(app_id) {
         return Ok(None);
     }
-    let Some(player_body) = authed_get(
+    let Some(body) = authed_get(
         "ISteamUserStats/GetPlayerAchievements/v1",
         &credential,
         &format!("appid={app_id}&steamid={}&l=english", encode(steam_id)),
@@ -436,18 +452,26 @@ pub fn fetch_achievements(
     else {
         return Ok(None);
     };
-    let Some(unlocks) = parse_player_achievements(&player_body)? else {
+    Ok(parse_player_achievements(&body)?)
+}
+
+/// The player's unlocks from their community profile, which needs no key or sign-in when the
+/// profile's game details are public. `Ok(None)` for a private profile.
+pub fn fetch_community_unlocks(
+    steam_id: &str,
+    app_id: &str,
+) -> Result<Option<Vec<Unlock>>, ProviderError> {
+    if !valid_app_id(app_id) || !valid_app_id(steam_id) {
         return Ok(None);
-    };
-    // Rarity is a bonus: the page works without it.
-    let percents = http_get(
-        &format!("{API}/ISteamUserStats/GetGlobalAchievementPercentagesForApp/v2/?gameid={app_id}"),
-        None,
-    )
-    .ok()
-    .and_then(|body| parse_percentages(&body).ok())
-    .unwrap_or_default();
-    Ok(Some(build_achievements(&schema, &unlocks, &percents)))
+    }
+    let url = format!(
+        "https://steamcommunity.com/profiles/{steam_id}/stats/{app_id}/achievements/?xml=1&l=english"
+    );
+    match http_get(&url, None) {
+        Ok(body) => Ok(parse_community_achievements(&body)),
+        Err(HttpFailure::Status(400 | 404)) => Ok(None),
+        Err(other) => Err(failure(other)),
+    }
 }
 
 /// An achievement as the game defines it.
@@ -477,24 +501,95 @@ fn non_empty(value: &Value) -> Option<String> {
         .map(str::to_string)
 }
 
-/// The achievements of a `GetSchemaForGame` response; empty when the game has none.
-pub fn parse_schema(body: &str) -> Result<Vec<SchemaAchievement>, ProviderError> {
+/// The achievements of a `GetGameAchievements` response (empty when the game has none), with
+/// icons as full URLs and the share of players that have each.
+pub fn parse_game_achievements(body: &str, app_id: &str) -> Result<Definitions, ProviderError> {
     let json: Value = serde_json::from_str(body)
-        .map_err(|e| ProviderError::Parse(format!("Steam achievement schema: {e}")))?;
-    let Some(list) = json["game"]["availableGameStats"]["achievements"].as_array() else {
-        return Ok(Vec::new());
+        .map_err(|e| ProviderError::Parse(format!("Steam achievement list: {e}")))?;
+    let Some(list) = json["response"]["achievements"].as_array() else {
+        return Ok(Definitions::default());
     };
-    Ok(list
-        .iter()
-        .filter_map(|a| {
-            Some(SchemaAchievement {
-                api_name: non_empty(&a["name"])?,
-                display_name: non_empty(&a["displayName"]),
-                description: non_empty(&a["description"]),
-                icon: a["icon"].as_str().and_then(http_url),
+    let mut definitions = Definitions::default();
+    for a in list {
+        let Some(api_name) = non_empty(&a["internal_name"]) else {
+            continue;
+        };
+        if let Some(percent) = percent(&a["player_percent_unlocked"]) {
+            definitions.percents.insert(api_name.clone(), percent);
+        }
+        // A bare file name; anything else is not trusted as a path.
+        let icon = non_empty(&a["icon"])
+            .filter(|f| {
+                f.bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'_')
             })
-        })
-        .collect())
+            .map(|f| format!("{ACHIEVEMENT_ICONS}/{app_id}/{f}"));
+        definitions.achievements.push(SchemaAchievement {
+            api_name,
+            display_name: non_empty(&a["localized_name"]),
+            description: non_empty(&a["localized_desc"]),
+            icon,
+        });
+    }
+    Ok(definitions)
+}
+
+/// A percentage Steam sends as a string or a number.
+fn percent(value: &Value) -> Option<f32> {
+    let percent = match value {
+        Value::String(s) => s.trim().parse::<f32>().ok()?,
+        Value::Number(n) => n.as_f64()? as f32,
+        _ => return None,
+    };
+    percent.is_finite().then_some(percent)
+}
+
+/// The unlocked achievements of a community profile's achievements XML (`closed="1"`).
+/// `None` when the page has no achievement list (private profile, unknown game).
+pub fn parse_community_achievements(body: &str) -> Option<Vec<Unlock>> {
+    let list = xml_text(body, "achievements")?;
+    let mut unlocks = Vec::new();
+    for block in list.split("<achievement ").skip(1) {
+        let block = block.split("</achievement>").next().unwrap_or_default();
+        let (attributes, _) = block.split_once('>').unwrap_or_default();
+        if !attributes.contains(r#"closed="1""#) {
+            continue;
+        }
+        let Some(api_name) = xml_text(block, "apiname").filter(|s| !s.is_empty()) else {
+            continue;
+        };
+        unlocks.push(Unlock {
+            api_name,
+            name: xml_text(block, "name").filter(|s| !s.is_empty()),
+            description: xml_text(block, "description").filter(|s| !s.is_empty()),
+            unlocked_at: xml_text(block, "unlockTimestamp")
+                .and_then(|t| t.parse::<i64>().ok())
+                .filter(|t| *t > 0),
+        });
+    }
+    Some(unlocks)
+}
+
+/// The text of the first `<tag>` element in `xml` (CDATA unwrapped, entities decoded).
+fn xml_text(xml: &str, tag: &str) -> Option<String> {
+    let open = format!("<{tag}>");
+    let start = xml.find(&open)? + open.len();
+    let end = start + xml[start..].find(&format!("</{tag}>"))?;
+    let raw = xml[start..end].trim();
+    Some(
+        match raw
+            .strip_prefix("<![CDATA[")
+            .and_then(|r| r.strip_suffix("]]>"))
+        {
+            Some(data) => data.trim().to_string(),
+            None => raw
+                .replace("&lt;", "<")
+                .replace("&gt;", ">")
+                .replace("&quot;", "\"")
+                .replace("&apos;", "'")
+                .replace("&amp;", "&"),
+        },
+    )
 }
 
 /// The unlocked achievements of a `GetPlayerAchievements` response. `Ok(None)` when Steam
@@ -524,41 +619,24 @@ pub fn parse_player_achievements(body: &str) -> Result<Option<Vec<Unlock>>, Prov
     ))
 }
 
-/// Api name -> share of players (0-100) from `GetGlobalAchievementPercentagesForApp`. Steam
-/// sends the percentage as a string in v2 and as a number in some responses.
-pub fn parse_percentages(body: &str) -> Result<HashMap<String, f32>, ProviderError> {
-    let json: Value = serde_json::from_str(body)
-        .map_err(|e| ProviderError::Parse(format!("Steam achievement percentages: {e}")))?;
-    let Some(list) = json["achievementpercentages"]["achievements"].as_array() else {
-        return Ok(HashMap::new());
-    };
-    Ok(list
+/// Joins definitions, rarity and unlocks; unlocked sorted by unlock time, newest first
+/// (unknown times last). Api names match without case (the community XML writes them lowercase).
+pub fn build_achievements(definitions: &Definitions, unlocks: &[Unlock]) -> Achievements {
+    let key = |name: &str| name.to_ascii_lowercase();
+    let by_name: HashMap<String, &SchemaAchievement> = definitions
+        .achievements
         .iter()
-        .filter_map(|a| {
-            let name = a["name"].as_str()?.to_string();
-            let percent = match &a["percent"] {
-                Value::String(s) => s.trim().parse::<f32>().ok()?,
-                Value::Number(n) => n.as_f64()? as f32,
-                _ => return None,
-            };
-            percent.is_finite().then_some((name, percent))
-        })
-        .collect())
-}
-
-/// Joins schema, unlocks and rarity; unlocked sorted by unlock time, newest first (unknown
-/// times last).
-pub fn build_achievements(
-    schema: &[SchemaAchievement],
-    unlocks: &[Unlock],
-    percents: &HashMap<String, f32>,
-) -> Achievements {
-    let by_name: HashMap<&str, &SchemaAchievement> =
-        schema.iter().map(|s| (s.api_name.as_str(), s)).collect();
+        .map(|s| (key(&s.api_name), s))
+        .collect();
+    let percents: HashMap<String, f32> = definitions
+        .percents
+        .iter()
+        .map(|(name, percent)| (key(name), *percent))
+        .collect();
     let mut unlocked: Vec<Achievement> = unlocks
         .iter()
         .map(|u| {
-            let def = by_name.get(u.api_name.as_str());
+            let def = by_name.get(&key(&u.api_name));
             Achievement {
                 name: def
                     .and_then(|d| d.display_name.clone())
@@ -569,13 +647,13 @@ pub fn build_achievements(
                     .or_else(|| u.description.clone()),
                 icon: def.and_then(|d| d.icon.clone()),
                 unlocked_at: u.unlocked_at,
-                percent: percents.get(&u.api_name).copied(),
+                percent: percents.get(&key(&u.api_name)).copied(),
             }
         })
         .collect();
     unlocked.sort_by_key(|a| std::cmp::Reverse(a.unlocked_at));
     Achievements {
-        total: u32::try_from(schema.len()).unwrap_or(u32::MAX),
+        total: u32::try_from(definitions.achievements.len()).unwrap_or(u32::MAX),
         unlocked,
     }
 }
@@ -783,30 +861,63 @@ mod tests {
     }
 
     #[test]
-    fn schema_fixture_parses() {
-        let schema = parse_schema(&fixture("schema_620.json")).unwrap();
-        assert_eq!(schema.len(), 3);
-        assert_eq!(schema[0].display_name.as_deref(), Some("Wake Up Call"));
+    fn game_achievements_parse_with_icons_and_rarity() {
+        let defs =
+            parse_game_achievements(&fixture("game_achievements_1473350.json"), "1473350").unwrap();
+        assert_eq!(defs.achievements.len(), 3);
         assert_eq!(
-            schema[0].description.as_deref(),
-            Some("Survive the Aperture Science Container Ride.")
+            defs.achievements[0].display_name.as_deref(),
+            Some("A gnorp is born")
         );
-        assert!(schema[0].icon.as_deref().unwrap().ends_with("/a.jpg"));
-        assert_eq!(schema[1].description, None);
-        // Only http(s) icons.
-        assert_eq!(schema[2].icon, None);
+        assert_eq!(
+            defs.achievements[0].icon.as_deref(),
+            Some(
+                "https://shared.fastly.steamstatic.com/community_assets/images/apps/1473350/a4b8d6b0f3ab301b832801026de9a7d59b1941d1.jpg"
+            )
+        );
+        // Empty descriptions and unreadable percentages are left out.
+        assert_eq!(defs.achievements[2].description, None);
+        assert_eq!(defs.percents.len(), 2);
+        assert_eq!(defs.percents["GNORP_SLAM"], 19.9);
     }
 
     #[test]
-    fn schema_without_achievements_is_empty() {
-        assert!(parse_schema("{}").unwrap().is_empty());
-        assert!(parse_schema(r#"{"game":{}}"#).unwrap().is_empty());
+    fn game_without_achievements_is_empty() {
         assert!(
-            parse_schema(r#"{"game":{"gameName":"x","availableGameStats":{"stats":[]}}}"#)
+            parse_game_achievements("{}", "1")
                 .unwrap()
+                .achievements
                 .is_empty()
         );
-        assert!(parse_schema("<html>").is_err());
+        assert!(
+            parse_game_achievements(r#"{"response":{}}"#, "1")
+                .unwrap()
+                .achievements
+                .is_empty()
+        );
+        assert!(parse_game_achievements("<html>", "1").is_err());
+        // Icon names that are not plain file names are dropped.
+        let defs = parse_game_achievements(
+            r#"{"response":{"achievements":[{"internal_name":"A","icon":"../x.jpg"}]}}"#,
+            "1",
+        )
+        .unwrap();
+        assert_eq!(defs.achievements[0].icon, None);
+    }
+
+    #[test]
+    fn community_xml_lists_unlocked_achievements() {
+        let unlocks =
+            parse_community_achievements(&fixture("community_achievements_1473350.xml")).unwrap();
+        assert_eq!(unlocks.len(), 2);
+        assert_eq!(unlocks[0].api_name, "first_gnorp");
+        assert_eq!(unlocks[0].unlocked_at, Some(1770142733));
+        assert_eq!(unlocks[1].name.as_deref(), Some("Gnorp Slam & more"));
+        assert_eq!(
+            parse_community_achievements(&fixture("community_achievements_private.xml")),
+            None
+        );
+        assert_eq!(parse_community_achievements("<html></html>"), None);
     }
 
     #[test]
@@ -836,46 +947,32 @@ mod tests {
     }
 
     #[test]
-    fn percentages_accept_strings_and_numbers() {
-        let map = parse_percentages(&fixture("achievement_percentages_620.json")).unwrap();
-        assert_eq!(map.len(), 7);
-        assert_eq!(map["ACH.WAKE_UP"], 64.7);
-        let map = parse_percentages(
-            r#"{"achievementpercentages":{"achievements":[{"name":"A","percent":12.5},{"name":"B","percent":"x"},{"percent":1}]}}"#,
-        )
-        .unwrap();
-        assert_eq!(map.len(), 1);
-        assert_eq!(map["A"], 12.5);
-        assert!(parse_percentages("{}").unwrap().is_empty());
-    }
-
-    #[test]
     fn achievements_are_joined_and_sorted_newest_first() {
-        let schema = parse_schema(&fixture("schema_620.json")).unwrap();
-        let unlocks = parse_player_achievements(&fixture("player_achievements_620.json"))
-            .unwrap()
-            .unwrap();
-        let percents = parse_percentages(&fixture("achievement_percentages_620.json")).unwrap();
-        let result = build_achievements(&schema, &unlocks, &percents);
+        let defs =
+            parse_game_achievements(&fixture("game_achievements_1473350.json"), "1473350").unwrap();
+        let unlocks =
+            parse_community_achievements(&fixture("community_achievements_1473350.xml")).unwrap();
+        let result = build_achievements(&defs, &unlocks);
         assert_eq!(result.total, 3);
         assert_eq!(result.unlocked.len(), 2);
+        // Lowercase api names from the XML still find their definition and rarity.
         let newest = &result.unlocked[0];
-        assert_eq!(newest.name, "Hi Five");
-        assert_eq!(newest.unlocked_at, Some(1600000000));
-        assert_eq!(newest.percent, Some(64.7));
-        assert!(newest.icon.as_deref().unwrap().ends_with("/b.jpg"));
-        let oldest = &result.unlocked[1];
-        assert_eq!(oldest.name, "Wake Up Call");
-        assert_eq!(oldest.percent, Some(74.0));
-        assert_eq!(
-            oldest.description.as_deref(),
-            Some("Survive the Aperture Science Container Ride.")
+        assert_eq!(newest.name, "Gnorp Slam!");
+        assert_eq!(newest.percent, Some(19.9));
+        assert!(
+            newest
+                .icon
+                .as_deref()
+                .unwrap()
+                .ends_with("48f904a33d5823b594262799d86de649af72fa28.jpg")
         );
+        let oldest = &result.unlocked[1];
+        assert_eq!(oldest.name, "A gnorp is born");
+        assert_eq!(oldest.description.as_deref(), Some("Get your first gnorp"));
     }
 
     #[test]
     fn unknown_unlocks_fall_back_and_sort_last() {
-        let schema = vec![];
         let unlocks = vec![
             Unlock {
                 api_name: "NO_TIME".into(),
@@ -890,7 +987,7 @@ mod tests {
                 unlocked_at: Some(10),
             },
         ];
-        let result = build_achievements(&schema, &unlocks, &HashMap::new());
+        let result = build_achievements(&Definitions::default(), &unlocks);
         assert_eq!(result.unlocked[0].name, "Old one");
         assert_eq!(result.unlocked[0].description.as_deref(), Some("d"));
         assert_eq!(result.unlocked[1].name, "NO_TIME");
@@ -902,9 +999,11 @@ mod tests {
         assert_eq!(fetch_player_count("").unwrap(), None);
         assert_eq!(fetch_player_count("12&x=1").unwrap(), None);
         assert_eq!(fetch_news("../1").unwrap(), None);
+        assert_eq!(fetch_definitions("1 2").unwrap(), None);
         assert!(matches!(
-            fetch_achievements(Credential::Key("k"), "1", "1 2"),
+            fetch_unlocks(Credential::Key("k"), "1", "1 2"),
             Ok(None)
         ));
+        assert_eq!(fetch_community_unlocks("1/x", "620").unwrap(), None);
     }
 }

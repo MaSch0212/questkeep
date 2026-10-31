@@ -16,6 +16,12 @@ const SHOWN = 8;
 const loadApps = () =>
   api.listGames({ ...defaultQuery(), kind: "apps", sort: "playtime", descending: true });
 
+// The launcher stays open behind the menu (the menu counts as inside it, see Popover).
+function menu(app: Game, event: MouseEvent) {
+  event.preventDefault();
+  store.openContextMenu(app.id, { x: event.clientX, y: event.clientY }, app);
+}
+
 /**
  * The title bar's apps launcher: find box and app icons (most used first). Click starts an app,
  * right-click opens its menu, "Show all apps" opens Explore filtered to apps.
@@ -42,12 +48,6 @@ export function AppsLauncher(props: {
   function start(app: Game) {
     props.onClose(false);
     void activateGame(app.id);
-  }
-
-  function menu(app: Game, event: MouseEvent) {
-    event.preventDefault();
-    props.onClose(false);
-    store.openContextMenu(app.id, { x: event.clientX, y: event.clientY }, app);
   }
 
   return (

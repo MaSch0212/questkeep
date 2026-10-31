@@ -1,15 +1,20 @@
 import { createSignal, onCleanup, onMount, type JSX } from "solid-js";
 import { Portal } from "solid-js/web";
 
-/** Where a popover opens: under an element (aligned to its start or end), beside it, or at a
- *  point (context menus). */
+/** Where a popover opens: under an element (aligned to its start or end), right below it like a
+ *  combobox list (flipped above when there is no room), beside it, or at a point (context
+ *  menus). */
 export type PopoverAnchor =
-  | { rect: DOMRect; align: "start" | "end" | "center" }
+  | { rect: DOMRect; align: "start" | "end" | "center" | "below" }
   | { rect: DOMRect; align: "beside" }
   | { x: number; y: number };
 
 const GAP = 6; // px; matches --qk-popover-gap, read for the maths only
 const MARGIN = 8; // keeps popovers off the window edge
+const LIST_GAP = 2; // a combobox list sits right at its input
+
+/** Open popovers, oldest first: a popover opened later from inside another one is its child. */
+const openPanels: HTMLElement[] = [];
 
 function place(anchor: PopoverAnchor, width: number, height: number) {
   let left: number;
@@ -21,6 +26,11 @@ function place(anchor: PopoverAnchor, width: number, height: number) {
     left = anchor.rect.right + 2;
     top = anchor.rect.top - GAP;
     if (left + width > window.innerWidth - MARGIN) left = anchor.rect.left - width - 2;
+  } else if (anchor.align === "below") {
+    left = anchor.rect.left;
+    top = anchor.rect.bottom + LIST_GAP;
+    const above = anchor.rect.top - height - LIST_GAP;
+    if (top + height > window.innerHeight - MARGIN && above >= MARGIN) top = above;
   } else {
     top = anchor.rect.bottom + GAP;
     left =
@@ -61,6 +71,7 @@ export function Popover(props: PopoverProps) {
 
   onMount(() => {
     if (!panel) return;
+    openPanels.push(panel);
     const rect = panel.getBoundingClientRect();
     setPosition(place(props.anchor, rect.width, rect.height));
   });
@@ -68,13 +79,19 @@ export function Popover(props: PopoverProps) {
   function onPointerDown(event: PointerEvent) {
     const target = event.target;
     if (!(target instanceof Node) || panel?.contains(target)) return;
-    // A submenu or picker opened from this popover lives in its own portal.
-    if (target instanceof Element && target.closest(".popover")) return;
+    // A submenu or picker opened from this popover lives in its own portal and counts as
+    // inside; a popover this one was opened from does not (a click there closes this one).
+    const index = panel ? openPanels.indexOf(panel) : -1;
+    if (openPanels.slice(index + 1).some((p) => p.contains(target))) return;
     if (props.inside?.().some((el) => el?.contains(target))) return;
     props.onClose(false);
   }
   document.addEventListener("pointerdown", onPointerDown, true);
-  onCleanup(() => document.removeEventListener("pointerdown", onPointerDown, true));
+  onCleanup(() => {
+    document.removeEventListener("pointerdown", onPointerDown, true);
+    const index = panel ? openPanels.indexOf(panel) : -1;
+    if (index >= 0) openPanels.splice(index, 1);
+  });
 
   return (
     <Portal>

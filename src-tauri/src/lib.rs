@@ -13,7 +13,7 @@ mod window;
 use std::sync::Arc;
 
 use questkeep_core::Library;
-use questkeep_core::auth::KeyringTokenStore;
+use questkeep_core::auth::{AuthError, KeyringTokenStore, TokenStore};
 use questkeep_core::events::EventBus;
 use std::time::Duration;
 
@@ -155,7 +155,13 @@ fn build_state(app: &tauri::AppHandle) -> Result<(AppState, Option<WorkerGuard>)
         }
     });
 
-    let keyring: Arc<KeyringTokenStore> = Arc::new(KeyringTokenStore::new());
+    // A hidden test instance shares the keyring with the developer's app but has its own
+    // webview profile, where store sessions look signed out: it must never delete their sign-ins.
+    let keyring: Arc<dyn TokenStore> = if window::keep_hidden() {
+        Arc::new(NoDeleteTokenStore(KeyringTokenStore::new()))
+    } else {
+        Arc::new(KeyringTokenStore::new())
+    };
     let providers = ProviderRegistry::with_stores(questkeep_stores::builtin(
         keyring.clone(),
         Some(&paths.cache_dir()),
@@ -212,6 +218,24 @@ fn spawn_startup_tasks(state: Arc<AppState>) {
         }
         state.queue_downloads();
     });
+}
+
+/// A token store that keeps every entry: deleting is logged and skipped (hidden test runs).
+struct NoDeleteTokenStore(KeyringTokenStore);
+
+impl TokenStore for NoDeleteTokenStore {
+    fn load(&self, provider: &str) -> Result<Option<String>, AuthError> {
+        self.0.load(provider)
+    }
+
+    fn save(&self, provider: &str, secret: &str) -> Result<(), AuthError> {
+        self.0.save(provider, secret)
+    }
+
+    fn delete(&self, provider: &str) -> Result<(), AuthError> {
+        tracing::warn!(provider, "hidden test run: keyring entry kept");
+        Ok(())
+    }
 }
 
 /// Only the main window may call app commands. Store login windows load remote pages and must

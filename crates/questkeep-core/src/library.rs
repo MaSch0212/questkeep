@@ -2,7 +2,8 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Condvar, Mutex, PoisonError};
+use std::time::Duration;
 
 use chrono::{Local, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
@@ -73,6 +74,8 @@ pub struct Library {
     live: LiveData,
     /// Whether a backup runs, and how to cancel it.
     backup_run: BackupRun,
+    /// Running scans; the automatic backup waits for them.
+    scans: ScanCount,
 }
 
 impl Library {
@@ -132,6 +135,7 @@ impl Library {
             providers,
             events,
             backup_run: BackupRun::default(),
+            scans: ScanCount::default(),
         }
     }
 
@@ -193,11 +197,17 @@ impl Library {
         result
     }
 
-    /// Runs the automatic backup when it is due (see the backup settings).
+    /// Runs the automatic backup when it is due (see the backup settings), after a running sync
+    /// finished (waiting at most [`SYNC_WAIT`]).
     pub fn backup_if_due(&self) -> Option<Result<BackupInfo>> {
         let settings = self.settings().backups;
-        backup::is_due(&settings, &settings.folder(&self.paths), Utc::now())
-            .then(|| self.run_backup())
+        if !backup::is_due(&settings, &settings.folder(&self.paths), Utc::now()) {
+            return None;
+        }
+        if !self.scans.wait_idle(SYNC_WAIT) {
+            tracing::info!("the sync still runs; backing up anyway");
+        }
+        Some(self.run_backup())
     }
 
     pub fn backup_running(&self) -> bool {
@@ -997,6 +1007,7 @@ impl Library {
     /// scanned. Announced as `ScanStarted`, then `LibraryScanned` or `ScanFailed`, so the UI can
     /// show one sync status for all scans.
     pub fn scan(&self, provider_id: &str) -> Result<ScanSummary> {
+        let _running = self.scans.enter();
         self.events.publish(CoreEvent::ScanStarted {
             provider: provider_id.to_string(),
         });
@@ -1114,6 +1125,8 @@ impl Library {
 
     /// Scans every provider that supports scanning; failures are logged, not fatal.
     pub fn scan_all(&self) -> Vec<(String, Result<ScanSummary>)> {
+        // Counts as one run, so a waiting backup does not start between two stores.
+        let _running = self.scans.enter();
         // Stores whose client is missing are skipped unless an account reads their owned games.
         let scannable: Vec<_> = self
             .provider_infos()
@@ -1506,6 +1519,51 @@ fn merge_owned(mut installed: Vec<ImportedGame>, owned: Vec<ImportedGame>) -> Ve
         }
     }
     installed
+}
+
+/// How long the automatic backup waits for a running sync.
+const SYNC_WAIT: Duration = Duration::from_secs(30 * 60);
+
+/// Counts running scans so the automatic backup can wait until none runs.
+#[derive(Default)]
+struct ScanCount {
+    running: Mutex<usize>,
+    idle: Condvar,
+}
+
+impl ScanCount {
+    fn enter(&self) -> ScanRunning<'_> {
+        *self.running.lock().unwrap_or_else(PoisonError::into_inner) += 1;
+        ScanRunning(self)
+    }
+
+    /// Blocks until no scan runs; false when `timeout` passed first.
+    fn wait_idle(&self, timeout: Duration) -> bool {
+        let running = self.running.lock().unwrap_or_else(PoisonError::into_inner);
+        let (running, result) = self
+            .idle
+            .wait_timeout_while(running, timeout, |n| *n > 0)
+            .unwrap_or_else(PoisonError::into_inner);
+        drop(running);
+        !result.timed_out()
+    }
+}
+
+/// Marks a scan as running until dropped.
+struct ScanRunning<'a>(&'a ScanCount);
+
+impl Drop for ScanRunning<'_> {
+    fn drop(&mut self) {
+        let mut running = self
+            .0
+            .running
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        *running = running.saturating_sub(1);
+        if *running == 0 {
+            self.0.idle.notify_all();
+        }
+    }
 }
 
 #[cfg(test)]
@@ -2488,5 +2546,27 @@ mod tests {
             std::path::PathBuf::from(r"C:\Games\Known")
         );
         assert!(lib.install_folder(id("Unknown")).is_err());
+    }
+}
+
+#[cfg(test)]
+mod scan_count_tests {
+    use super::*;
+
+    #[test]
+    fn waits_until_the_last_scan_ends() {
+        let count = Arc::new(ScanCount::default());
+        assert!(count.wait_idle(Duration::ZERO));
+        let outer = count.enter();
+        let inner = count.enter();
+        assert!(!count.wait_idle(Duration::from_millis(10)));
+        drop(inner);
+        assert!(!count.wait_idle(Duration::from_millis(10)));
+        let waiter = {
+            let count = Arc::clone(&count);
+            std::thread::spawn(move || count.wait_idle(Duration::from_secs(10)))
+        };
+        drop(outer);
+        assert!(waiter.join().unwrap());
     }
 }

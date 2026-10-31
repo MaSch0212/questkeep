@@ -208,9 +208,10 @@ describe("Command bar", () => {
     );
     await fireEvent.contextMenu(await within(launcher).findByRole("button", { name: /Blender/ }));
     expect(store.contextMenu()?.game.id).toBe("b");
+    // The launcher stays open behind the menu.
+    expect(screen.getByRole("dialog", { name: "Apps" })).toBeInTheDocument();
     store.closeContextMenu(false);
 
-    await fireEvent.click(screen.getByRole("button", { name: "Apps" }));
     await fireEvent.click(await screen.findByRole("button", { name: "Show all apps" }));
     expect(store.query().kind).toBe("apps");
     expect(screen.queryByRole("dialog", { name: "Apps" })).toBeNull();

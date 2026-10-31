@@ -35,12 +35,16 @@ function LinkIcon(props: { link: GameLink }) {
   );
 }
 
+/** Links that must fit with their names before the row shows names. */
+const MIN_NAMED = 3;
+
 /**
- * The game's links on one row. Links that don't fit collapse into "+N more" (a menu). In the
- * narrow layout the chips show only their icon (CSS), with the name as tooltip and label.
+ * The game's links on one row, with their names when at least a few fit, else as icons (the
+ * name is the tooltip and label). Links that don't fit collapse into "+N more" (a menu).
  */
 export function GameLinks(props: { links: GameLink[] }) {
   const [visible, setVisible] = createSignal(Number.POSITIVE_INFINITY);
+  const [labels, setLabels] = createSignal(false);
   const [menu, setMenu] = createSignal<PopoverAnchor | null>(null);
   let row: HTMLDivElement | undefined;
   let measure: HTMLDivElement | undefined;
@@ -48,17 +52,19 @@ export function GameLinks(props: { links: GameLink[] }) {
 
   // A hidden copy of the row with every link gives their widths at the current layout.
   function fit() {
-    if (!row || !measure) return;
-    const items = [...measure.querySelectorAll<HTMLElement>("[data-link]")];
-    const moreItem = measure.querySelector<HTMLElement>("[data-more]");
+    const copy = measure;
+    if (!row || !copy) return;
+    const widths = (selector: string) =>
+      [...copy.querySelectorAll<HTMLElement>(selector)].map((i) => i.offsetWidth);
+    const moreItem = copy.querySelector<HTMLElement>("[data-more]");
     const gap = Number.parseFloat(getComputedStyle(row).columnGap) || 0;
+    const moreWidth = moreItem?.offsetWidth ?? 0;
+    const named = linksThatFit(widths("[data-named]"), row.clientWidth, moreWidth, gap);
+    // Names unless too few would fit; icons alone tell links of one kind apart poorly.
+    const withNames = named >= Math.min(MIN_NAMED, props.links.length);
+    setLabels(withNames);
     setVisible(
-      linksThatFit(
-        items.map((i) => i.offsetWidth),
-        row.clientWidth,
-        moreItem?.offsetWidth ?? 0,
-        gap,
-      ),
+      withNames ? named : linksThatFit(widths("[data-icon]"), row.clientWidth, moreWidth, gap),
     );
   }
 
@@ -75,7 +81,13 @@ export function GameLinks(props: { links: GameLink[] }) {
   return (
     <Show when={props.links.length > 0}>
       <div class="game-links-wrap">
-        <div ref={(el) => (row = el)} class="game-links" role="list" aria-label="Links">
+        <div
+          ref={(el) => (row = el)}
+          class="game-links"
+          classList={{ "game-links--labels": labels() }}
+          role="list"
+          aria-label="Links"
+        >
           <For each={shown()}>
             {(link) => (
               <a
@@ -113,9 +125,16 @@ export function GameLinks(props: { links: GameLink[] }) {
         <div ref={(el) => (measure = el)} class="game-links game-links--measure" aria-hidden="true">
           <For each={props.links}>
             {(link) => (
-              <span class="game-link" data-link>
+              <span class="game-link" data-named>
                 <LinkIcon link={link} />
                 <span class="game-link__name">{link.name}</span>
+              </span>
+            )}
+          </For>
+          <For each={props.links}>
+            {(link) => (
+              <span class="game-link" data-icon>
+                <LinkIcon link={link} />
               </span>
             )}
           </For>

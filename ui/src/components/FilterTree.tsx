@@ -231,7 +231,8 @@ function ListRow(props: { filter: ListFilter; path: Path; change: (c: Change) =>
             items={[
               ...(store.valueLists()[props.filter.field] ?? []).map((value) => ({
                 id: value.key,
-                label: value.name,
+                // Store ids, category and status ids show by their names.
+                label: name(value.key),
                 hint: String(value.count),
                 checked: props.filter.values.includes(value.key),
               })),

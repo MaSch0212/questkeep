@@ -103,7 +103,16 @@ export function MultiSelectPanel(props: {
             )}
           </For>
           <Show when={count() > fan().shown}>
-            <span class="multi__more">+{count() - fan().shown}</span>
+            {/* At the corner of the last cover, above all of them. */}
+            <span
+              class="multi__more"
+              style={{
+                left: `${(fan().shown - 1) * fan().step + sizes().cover}px`,
+                "z-index": fan().shown + 1,
+              }}
+            >
+              +{count() - fan().shown}
+            </span>
           </Show>
         </div>
         <div class="multi__head">

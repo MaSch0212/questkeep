@@ -394,54 +394,59 @@ impl SteamProvider {
 }
 
 impl SteamProvider {
+    /// The definitions come from Steam's public list. The unlocks: with the Web API key first,
+    /// then from the public community profile (no credentials), then with the sign-in token,
+    /// whose renewal loads a store page and so comes last.
     fn achievements_for(
         &self,
         config: &serde_json::Value,
         app_id: &str,
     ) -> Result<Option<Achievements>, ProviderError> {
-        let rejected = || {
-            ProviderError::NotConfigured(
-                "Steam did not accept the Web API key or sign-in. Check them in Settings.".into(),
-            )
+        let Some(definitions) = live::fetch_definitions(app_id)? else {
+            return Ok(None);
         };
-        let mut any_rejected = false;
-        // The key first (it needs no network round trip to get a token).
-        if let Some(api_key) = config_text(config, "apiKey") {
-            let steam_id = config_text(config, "steamId").or_else(|| {
+        let done =
+            |unlocks: Vec<live::Unlock>| Ok(Some(live::build_achievements(&definitions, &unlocks)));
+        let account = self.account.as_deref().filter(|a| a.is_signed_in());
+        let steam_id = config_text(config, "steamId")
+            .or_else(|| account.and_then(|a| a.steam_id()))
+            .or_else(|| {
                 self.roots
                     .iter()
                     .find_map(|r| local::most_recent_steam_id(r))
             });
-            if let Some(steam_id) = steam_id {
-                match live::fetch_achievements(web::Credential::Key(&api_key), &steam_id, app_id) {
-                    Ok(result) => return Ok(result),
-                    Err(live::AchievementsError::Other(err)) => return Err(err),
-                    Err(live::AchievementsError::Rejected) => any_rejected = true,
-                }
+        let mut any_rejected = false;
+        if let (Some(api_key), Some(steam_id)) = (config_text(config, "apiKey"), &steam_id) {
+            match live::fetch_unlocks(web::Credential::Key(&api_key), steam_id, app_id) {
+                Ok(Some(unlocks)) => return done(unlocks),
+                Ok(None) => {}
+                Err(live::AchievementsError::Rejected) => any_rejected = true,
+                Err(live::AchievementsError::Other(err)) => return Err(err),
             }
         }
-        if let Some(account) = self.account.as_deref().filter(|a| a.is_signed_in()) {
-            let (steam_id, token) = account.web_token(false)?;
-            match live::fetch_achievements(web::Credential::Token(&token), &steam_id, app_id) {
-                Ok(result) => return Ok(result),
-                Err(live::AchievementsError::Other(err)) => return Err(err),
-                Err(live::AchievementsError::Rejected) => {
+        if let Some(steam_id) = &steam_id {
+            match live::fetch_community_unlocks(steam_id, app_id) {
+                Ok(Some(unlocks)) => return done(unlocks),
+                Ok(None) => {}
+                Err(err) => tracing::debug!(%err, app_id, "community achievements failed"),
+            }
+        }
+        if let Some(account) = account {
+            for renew in [false, true] {
+                let (steam_id, token) = account.web_token(renew)?;
+                match live::fetch_unlocks(web::Credential::Token(&token), &steam_id, app_id) {
+                    Ok(Some(unlocks)) => return done(unlocks),
+                    Ok(None) => break,
                     // An expired token is renewed once.
-                    let (steam_id, token) = account.web_token(true)?;
-                    match live::fetch_achievements(
-                        web::Credential::Token(&token),
-                        &steam_id,
-                        app_id,
-                    ) {
-                        Ok(result) => return Ok(result),
-                        Err(live::AchievementsError::Other(err)) => return Err(err),
-                        Err(live::AchievementsError::Rejected) => any_rejected = true,
-                    }
+                    Err(live::AchievementsError::Rejected) => any_rejected |= renew,
+                    Err(live::AchievementsError::Other(err)) => return Err(err),
                 }
             }
         }
         if any_rejected {
-            Err(rejected())
+            Err(ProviderError::NotConfigured(
+                "Steam did not accept the Web API key or sign-in. Check them in Settings.".into(),
+            ))
         } else {
             Ok(None)
         }

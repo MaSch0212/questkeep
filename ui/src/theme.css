@@ -127,6 +127,9 @@
   --qk-settings-content-width: 720px;
   --qk-settings-select-width: 300px;
   --qk-settings-number-width: 80px;
+  /* Height of the values in the game page's stat row (fits the status button). */
+  --qk-stat-value-height: 26px;
+  --qk-combobox-max-height: 280px;
   --qk-icon-stroke: 2;
   --qk-tile-min-width: 170px;
   --qk-tile-aspect-ratio: 2 / 3;
@@ -236,6 +239,7 @@
   --qk-picker-check-icon: 10px;
   --qk-pill-height: 26px;
   --qk-source-order-width: 460px;
+  --qk-source-nav-width: 200px;
   --qk-field-order-label-width: 140px;
   --qk-status-count-width: 72px;
   --qk-disabled-opacity: 0.4;
@@ -282,6 +286,7 @@
   --qk-stack-tilt: 2deg;
   --qk-stack-height: 200px;
   --qk-multi-row-label-width: 140px;
+  --qk-multi-content-width: 760px;
   /* Combine screen. */
   --qk-combine-thumb-width: 48px;
   --qk-combine-field-width: 150px;

@@ -1,6 +1,6 @@
 import ChevronDown from "lucide-solid/icons/chevron-down";
-import ChevronRight from "lucide-solid/icons/chevron-right";
 import ChevronUp from "lucide-solid/icons/chevron-up";
+import GripVertical from "lucide-solid/icons/grip-vertical";
 import RefreshCw from "lucide-solid/icons/refresh-cw";
 import { createResource, createSignal, For, onCleanup, Show } from "solid-js";
 import type { MetadataField } from "../../bindings/MetadataField";
@@ -21,13 +21,14 @@ import type { SettingsModel } from "./useSettings";
 /** Saving re-resolves every game, so moves are saved once they stop for a moment. */
 const SAVE_DELAY_MS = 700;
 
-/** An ordered list of sources, moved with the arrow buttons or Alt+Up/Down. */
+/** An ordered list of sources, moved by dragging, with the arrow buttons or Alt+Up/Down. */
 function OrderList(props: {
   label: string;
   order: string[];
   name: (id: string) => string;
   onChange: (order: string[]) => void;
 }) {
+  const [dragged, setDragged] = createSignal<string | null>(null);
   let list: HTMLOListElement | undefined;
   function move(id: string, by: number) {
     props.onChange(moveSource(props.order, id, by));
@@ -42,8 +43,28 @@ function OrderList(props: {
         {(id, index) => (
           <li
             class="source-order__row"
+            classList={{ "source-order__row--dragging": dragged() === id }}
             data-source={id}
             tabIndex={0}
+            draggable={true}
+            onDragStart={(event) => {
+              setDragged(id);
+              event.dataTransfer?.setData("text/plain", id);
+            }}
+            onDragEnd={() => setDragged(null)}
+            onDragOver={(event) => {
+              const from = dragged();
+              if (from === null) return;
+              event.preventDefault();
+              // The list follows the pointer, so the drop needs no target marker.
+              if (from !== id) {
+                props.onChange(moveSource(props.order, from, index() - props.order.indexOf(from)));
+              }
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              setDragged(null);
+            }}
             onKeyDown={(event) => {
               if (!event.altKey) return;
               if (event.key === "ArrowUp") move(id, -1);
@@ -52,6 +73,7 @@ function OrderList(props: {
               event.preventDefault();
             }}
           >
+            <GripVertical class="icon source-order__grip" aria-hidden="true" />
             <span class="source-order__rank">{index() + 1}</span>
             <span class="source-order__name">{props.name(id)}</span>
             <button
@@ -135,72 +157,89 @@ export function SourcePriority(props: { model: SettingsModel }) {
         come first; data from before this version comes last until it is refreshed.
       </p>
       <Show when={sources()} fallback={<p class="muted">Loading…</p>}>
-        <OrderList
-          label="Source order for all fields"
-          order={effectiveOrder(priority(), null, ids())}
-          name={name}
-          onChange={(order) => change(withGlobalOrder(priority(), order))}
-        />
-        <div class="field-orders">
-          <p class="field__hint">Fields can use their own order:</p>
-          <For each={PRIORITY_FIELDS}>
-            {(field) => {
-              const own = () => hasOwnOrder(priority(), field.id);
-              const order = () => effectiveOrder(priority(), field.id, ids());
-              const expanded = () => open() === field.id;
-              return (
-                <div class="field-order">
-                  <button
-                    type="button"
-                    class="field-order__head"
-                    aria-expanded={expanded()}
-                    onClick={() => setOpen(expanded() ? null : field.id)}
-                  >
-                    <Show
-                      when={expanded()}
-                      fallback={<ChevronRight class="icon" aria-hidden="true" />}
-                    >
-                      <ChevronDown class="icon" aria-hidden="true" />
-                    </Show>
-                    <span class="field-order__label">{field.label}</span>
-                    <span class="field-order__summary">
-                      {own() ? "Own order: " : ""}
-                      {order().slice(0, 3).map(name).join(" › ")}
-                      {order().length > 3 ? " › …" : ""}
-                    </span>
-                  </button>
-                  <Show when={expanded()}>
-                    <div class="field-order__body">
-                      <label class="check">
-                        <input
-                          type="checkbox"
-                          checked={own()}
-                          onChange={(event) =>
-                            change(
-                              withFieldOrder(
-                                priority(),
-                                field.id,
-                                event.currentTarget.checked ? order() : null,
-                              ),
-                            )
-                          }
-                        />
-                        Use its own order
-                      </label>
-                      <Show when={own()}>
-                        <OrderList
-                          label={`Source order for ${field.label.toLowerCase()}`}
-                          order={order()}
-                          name={name}
-                          onChange={(next) => change(withFieldOrder(priority(), field.id, next))}
-                        />
-                      </Show>
-                    </div>
+        <div class="source-priority">
+          <nav class="source-priority__nav" aria-label="Fields">
+            <button
+              type="button"
+              class="source-priority__field"
+              aria-current={open() === null ? "true" : undefined}
+              onClick={() => setOpen(null)}
+            >
+              <span class="source-priority__label">All fields</span>
+              <span class="source-priority__note">Default</span>
+            </button>
+            <For each={PRIORITY_FIELDS}>
+              {(field) => (
+                <button
+                  type="button"
+                  class="source-priority__field"
+                  aria-current={open() === field.id ? "true" : undefined}
+                  onClick={() => setOpen(field.id)}
+                >
+                  <span class="source-priority__label">{field.label}</span>
+                  <Show when={hasOwnOrder(priority(), field.id)}>
+                    <span class="source-priority__note">Own order</span>
                   </Show>
-                </div>
-              );
-            }}
-          </For>
+                </button>
+              )}
+            </For>
+          </nav>
+          <div class="source-priority__order">
+            <Show
+              when={PRIORITY_FIELDS.find((f) => f.id === open())}
+              fallback={
+                <>
+                  <p class="field__hint">Used by every field without its own order.</p>
+                  <OrderList
+                    label="Source order for all fields"
+                    order={effectiveOrder(priority(), null, ids())}
+                    name={name}
+                    onChange={(order) => change(withGlobalOrder(priority(), order))}
+                  />
+                </>
+              }
+            >
+              {(field) => {
+                const own = () => hasOwnOrder(priority(), field().id);
+                const order = () => effectiveOrder(priority(), field().id, ids());
+                return (
+                  <>
+                    <label class="check">
+                      <input
+                        type="checkbox"
+                        checked={own()}
+                        onChange={(event) =>
+                          change(
+                            withFieldOrder(
+                              priority(),
+                              field().id,
+                              event.currentTarget.checked ? order() : null,
+                            ),
+                          )
+                        }
+                      />
+                      {field().label}: use its own order
+                    </label>
+                    <Show
+                      when={own()}
+                      fallback={
+                        <p class="field__hint">
+                          Uses the default order: {order().map(name).join(" › ")}
+                        </p>
+                      }
+                    >
+                      <OrderList
+                        label={`Source order for ${field().label.toLowerCase()}`}
+                        order={order()}
+                        name={name}
+                        onChange={(next) => change(withFieldOrder(priority(), field().id, next))}
+                      />
+                    </Show>
+                  </>
+                );
+              }}
+            </Show>
+          </div>
         </div>
       </Show>
       <div class="form__actions form__actions--start">

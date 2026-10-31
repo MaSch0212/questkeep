@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?><playerstats>
+	<privacyState>public</privacyState>
+	<visibilityState>3</visibilityState>
+	<game>
+		<gameFriendlyName><![CDATA[1473350]]></gameFriendlyName>
+		<gameName><![CDATA[(the) Gnorp Apologue]]></gameName>
+	</game>
+	<player>
+		<steamID64>76561197960287930</steamID64>
+		<customURL><![CDATA[]]></customURL>
+	</player>
+	<stats>
+		<hoursPlayed>0</hoursPlayed>
+	</stats>
+	<achievements>
+		<achievement closed="1">
+			<iconClosed><![CDATA[https://shared.fastly.steamstatic.com/community_assets/images/apps/1473350/a4b8d6b0f3ab301b832801026de9a7d59b1941d1.jpg]]></iconClosed>
+			<iconOpen><![CDATA[https://shared.fastly.steamstatic.com/community_assets/images/apps/1473350/dee7c746b18df1582dc0c97be613e3cb6cf312c3.jpg]]></iconOpen>
+			<name><![CDATA[A gnorp is born]]></name>
+			<apiname><![CDATA[first_gnorp]]></apiname>
+			<description><![CDATA[Get your first gnorp]]></description>
+			<unlockTimestamp>1770142733</unlockTimestamp>
+		</achievement>
+		<achievement closed="1">
+			<iconClosed><![CDATA[https://shared.fastly.steamstatic.com/community_assets/images/apps/1473350/48f904a33d5823b594262799d86de649af72fa28.jpg]]></iconClosed>
+			<name><![CDATA[Gnorp Slam & more]]></name>
+			<apiname><![CDATA[gnorp_slam]]></apiname>
+			<description><![CDATA[Have 100 slammers]]></description>
+			<unlockTimestamp>1770200000</unlockTimestamp>
+		</achievement>
+		<achievement closed="0">
+			<name><![CDATA[Coax it]]></name>
+			<apiname><![CDATA[coax_it]]></apiname>
+			<description><![CDATA[]]></description>
+		</achievement>
+	</achievements>
+</playerstats>

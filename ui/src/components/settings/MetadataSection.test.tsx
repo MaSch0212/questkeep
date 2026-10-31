@@ -116,3 +116,37 @@ describe("MetadataSection", () => {
     expect(screen.getByRole("button", { name: "Save metadata settings" })).not.toBeDisabled();
   });
 });
+
+describe("SourcePriority", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    store.reset();
+    vi.mocked(api.saveSettings).mockResolvedValue(undefined);
+    vi.mocked(api.metadataSources).mockResolvedValue([
+      { id: "igdb", name: "IGDB" },
+      { id: "steam", name: "Steam" },
+      { id: "gog", name: "GOG" },
+    ]);
+  });
+
+  it("gives a field its own order and moves a source in it", async () => {
+    vi.mocked(api.getSettings).mockResolvedValue(makeSettings());
+    render(() => <Harness />);
+    // The default order shows first; a field shows it until it gets its own.
+    expect(await screen.findByRole("list", { name: "Source order for all fields" })).toBeVisible();
+    await fireEvent.click(screen.getByRole("button", { name: "Genres" }));
+    expect(screen.getByText(/Uses the default order: IGDB › Steam › GOG/)).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole("checkbox", { name: /Genres: use its own order/ }));
+    await fireEvent.click(screen.getByRole("button", { name: "Move GOG up" }));
+    await waitFor(
+      () =>
+        expect(api.saveSettings).toHaveBeenLastCalledWith(
+          makeSettings({
+            metadataPriority: { order: [], fields: { genres: ["igdb", "gog", "steam"] } },
+          }),
+        ),
+      { timeout: 2000 },
+    );
+    expect(screen.getByRole("button", { name: /Genres/ })).toHaveTextContent("Own order");
+  });
+});

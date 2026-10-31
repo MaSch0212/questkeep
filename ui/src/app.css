@@ -1292,6 +1292,9 @@ ul {
   color: var(--qk-color-text-muted);
 }
 .details__stat dd {
+  display: flex;
+  align-items: center;
+  min-height: var(--qk-stat-value-height);
   margin: 0;
   font-weight: var(--qk-font-weight-bold);
 }
@@ -1411,9 +1414,6 @@ ul {
   }
   .details__cards .details-card {
     order: 0;
-  }
-  .game-link__name {
-    display: inline;
   }
   .details__stats .details__stat--stores {
     display: block;
@@ -1625,6 +1625,25 @@ ul {
   outline: none;
   color: inherit;
   font: inherit;
+}
+.chip-input__popover {
+  padding: 0;
+}
+.chip-input__list {
+  max-height: var(--qk-combobox-max-height);
+  margin: 0;
+  padding: var(--qk-space-1);
+  overflow-y: auto;
+  list-style: none;
+}
+.chip-input__option {
+  padding: var(--qk-space-1) var(--qk-space-2);
+  border-radius: var(--qk-radius-sm);
+  font-size: var(--qk-font-size-md);
+  cursor: pointer;
+}
+.chip-input__option--active {
+  background: var(--qk-color-surface-hover);
 }
 .chip-input__text::placeholder {
   color: var(--qk-color-text-faint);
@@ -4094,46 +4113,66 @@ ul {
 .source-order__name {
   flex: 1;
 }
-.field-orders {
+.source-order__row[draggable="true"] {
+  cursor: grab;
+}
+.source-order__row--dragging {
+  opacity: var(--qk-dimmed-opacity);
+}
+.source-order__grip {
+  color: var(--qk-color-text-faint);
+}
+/* Fields on the left, the chosen field's order on the right. */
+.source-priority {
+  display: grid;
+  grid-template-columns: var(--qk-source-nav-width) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--qk-space-4);
+}
+.source-priority__nav {
   display: flex;
   flex-direction: column;
-  max-width: var(--qk-source-order-width);
+  gap: var(--qk-space-1);
 }
-.field-order__head {
+.source-priority__field {
   display: flex;
   align-items: center;
   gap: var(--qk-space-2);
-  width: 100%;
   padding: var(--qk-space-1) var(--qk-space-2);
   background: transparent;
   border: 0;
   border-radius: var(--qk-radius-sm);
-  color: var(--qk-color-text);
+  color: var(--qk-color-text-muted);
   font: inherit;
   text-align: left;
   cursor: pointer;
 }
-.field-order__head:hover {
+.source-priority__field:hover {
   background: var(--qk-color-surface-hover);
+  color: var(--qk-color-text);
 }
-.field-order__label {
-  width: var(--qk-field-order-label-width);
-  flex: none;
+.source-priority__field[aria-current="true"] {
+  background: var(--qk-color-accent-soft);
+  color: var(--qk-color-text);
 }
-.field-order__summary {
+.source-priority__label {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--qk-color-text-muted);
-  font-size: var(--qk-font-size-sm);
 }
-.field-order__body {
+.source-priority__note {
+  color: var(--qk-color-text-faint);
+  font-size: var(--qk-font-size-xs);
+}
+.source-priority__order {
+  position: sticky;
+  top: 0;
   display: flex;
   flex-direction: column;
   gap: var(--qk-space-2);
-  padding: var(--qk-space-2) var(--qk-space-2) var(--qk-space-3) var(--qk-space-6);
+  min-width: 0;
+}
+.source-priority__order .source-order {
+  max-width: none;
 }
 .status-list__name {
   flex: 1;
@@ -4226,9 +4265,13 @@ ul {
   background: var(--qk-color-surface-hover);
   color: var(--qk-color-text);
 }
-/* Narrow: icons only; the name is the tooltip and the accessible label. */
+/* Icons only unless every link fits with its name; the name is the tooltip and the label. */
 .game-link__name {
   display: none;
+}
+.game-links--labels .game-link__name,
+.game-links--measure .game-link__name {
+  display: inline;
 }
 .game-link--more {
   color: var(--qk-color-accent);
@@ -4759,10 +4802,16 @@ ul {
   box-shadow: var(--qk-shadow-tile);
   transform-origin: bottom center;
 }
+/* Wide panes: the content keeps a readable width instead of stretching. */
+.multi .details__scroll > * {
+  width: 100%;
+  max-width: var(--qk-multi-content-width);
+  margin-inline: auto;
+}
 .multi__more {
   position: absolute;
-  right: 0;
-  bottom: 0;
+  bottom: var(--qk-space-2);
+  transform: translateX(-75%);
   padding: var(--qk-space-1) var(--qk-space-3);
   background: var(--qk-color-surface-raised);
   border: 1px solid var(--qk-color-border);
