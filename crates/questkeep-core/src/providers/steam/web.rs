@@ -89,6 +89,66 @@ pub fn fetch_metadata(app_id: &str) -> Result<Option<GameMetadata>, ProviderErro
     }
 }
 
+/// Hosts of Steam's community image CDN, tried in order for an app icon.
+const ICON_HOSTS: [&str; 2] = [
+    "cdn.cloudflare.steamstatic.com",
+    "cdn.akamai.steamstatic.com",
+];
+
+/// URLs of the app's small square icon (the one Steam shows in its library list), best first.
+/// Its file name is a hash that only the store knows, so it is looked up through the keyless
+/// `IStoreBrowseService/GetItems` API. Empty when the store has no icon for the app.
+pub fn fetch_icon_urls(app_id: &str) -> Result<Vec<String>, ProviderError> {
+    if app_id.is_empty() || !app_id.bytes().all(|b| b.is_ascii_digit()) {
+        return Ok(Vec::new());
+    }
+    let input = format!(
+        r#"{{"ids":[{{"appid":{app_id}}}],"context":{{"language":"english","country_code":"US"}},"data_request":{{"include_assets":true}}}}"#
+    );
+    let url = format!(
+        "https://api.steampowered.com/IStoreBrowseService/GetItems/v1/?input_json={}",
+        encode(&input)
+    );
+    match http_get(&url, None) {
+        Ok(body) => Ok(parse_community_icon(app_id, &body)
+            .map(|hash| icon_urls(app_id, &hash))
+            .unwrap_or_default()),
+        Err(HttpFailure::Status(code)) => Err(ProviderError::Network(format!(
+            "Steam store returned HTTP {code}"
+        ))),
+        Err(HttpFailure::Other(message)) => Err(ProviderError::Network(message)),
+    }
+}
+
+/// The `community_icon` hash of `app_id` from a `GetItems` response; `None` when missing or not a
+/// plain hex hash (it becomes part of a URL).
+pub fn parse_community_icon(app_id: &str, body: &str) -> Option<String> {
+    let json: Value = serde_json::from_str(body).ok()?;
+    json.get("response")?
+        .get("store_items")?
+        .as_array()?
+        .iter()
+        .find(|item| {
+            item.get("appid")
+                .and_then(Value::as_u64)
+                .map(|id| id.to_string())
+                .as_deref()
+                == Some(app_id)
+        })?
+        .get("assets")?
+        .get("community_icon")?
+        .as_str()
+        .filter(|hash| !hash.is_empty() && hash.bytes().all(|b| b.is_ascii_hexdigit()))
+        .map(str::to_ascii_lowercase)
+}
+
+fn icon_urls(app_id: &str, hash: &str) -> Vec<String> {
+    ICON_HOSTS
+        .iter()
+        .map(|host| format!("https://{host}/steamcommunity/public/images/apps/{app_id}/{hash}.jpg"))
+        .collect()
+}
+
 /// Percent-encodes everything except unreserved characters.
 fn encode(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
@@ -483,6 +543,36 @@ mod tests {
             None
         );
         assert!(parse_app_details("9", "nope").is_err());
+    }
+
+    #[test]
+    fn community_icon_becomes_cdn_urls() {
+        let body = r#"{"response":{"store_items":[
+            {"appid":1,"assets":{"community_icon":"ffff"}},
+            {"appid":252950,"success":1,"assets":{"header":"x/header.jpg","community_icon":"9AD6dd3d173523354385955b5fb2af87639c4163"}}
+        ]}}"#;
+        let hash = parse_community_icon("252950", body).unwrap();
+        assert_eq!(hash, "9ad6dd3d173523354385955b5fb2af87639c4163");
+        assert_eq!(
+            icon_urls("252950", &hash)[0],
+            "https://cdn.cloudflare.steamstatic.com/steamcommunity/public/images/apps/252950/9ad6dd3d173523354385955b5fb2af87639c4163.jpg"
+        );
+        assert_eq!(parse_community_icon("2", body), None);
+        assert_eq!(
+            parse_community_icon(
+                "3",
+                r#"{"response":{"store_items":[{"appid":3,"assets":{"community_icon":"../x"}}]}}"#
+            ),
+            None
+        );
+        assert_eq!(
+            parse_community_icon(
+                "3",
+                r#"{"response":{"store_items":[{"appid":3,"success":2}]}}"#
+            ),
+            None
+        );
+        assert_eq!(parse_community_icon("3", "<html>"), None);
     }
 
     #[test]

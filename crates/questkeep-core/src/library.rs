@@ -759,6 +759,19 @@ impl Library {
             .collect())
     }
 
+    /// Games that have no icon yet, for the icon fetcher. Icons are otherwise only made after a
+    /// game's first metadata download or when the tray lists it, so games fetched before a new
+    /// icon source existed would never get one.
+    pub fn missing_icon_ids(&self) -> Result<Vec<Uuid>> {
+        Ok(self
+            .db
+            .games_without_icon()?
+            .into_iter()
+            .filter(|(_, source)| !is_fake_source(source))
+            .map(|(id, _)| id)
+            .collect())
+    }
+
     /// Prepares fetching a game's cover and background from SteamGridDB again, replacing the
     /// current ones: clears the "nothing found" markers and returns the job for the cover
     /// fetcher (which also handles the background). Fails when no API key is configured.
@@ -1849,6 +1862,33 @@ mod tests {
         let err = lib.scan("fake").unwrap_err().to_string();
         assert_eq!(err, "Fake scan failed: Fake store not installed");
         assert_eq!(lib.scan_all().len(), 1);
+    }
+
+    #[test]
+    fn games_without_icons_are_listed_for_the_icon_fetcher() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (lib, _) = library(tmp.path(), ProviderRegistry::new());
+        lib.seed_fake_library(5).unwrap();
+        let exe = tmp.path().join("x.exe");
+        std::fs::write(&exe, b"").unwrap();
+        let game = lib
+            .add_manual_game(&NewManualGame {
+                name: Some("A".into()),
+                executable: exe.display().to_string(),
+                args: None,
+                working_dir: None,
+                cover_image: None,
+            })
+            .unwrap();
+        assert_eq!(
+            lib.missing_icon_ids().unwrap(),
+            [game.id],
+            "fake games skipped"
+        );
+        lib.db
+            .set_icon_path(game.id, Some("images/icons/a.png"))
+            .unwrap();
+        assert!(lib.missing_icon_ids().unwrap().is_empty());
     }
 
     #[test]

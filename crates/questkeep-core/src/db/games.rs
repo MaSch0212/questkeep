@@ -663,6 +663,26 @@ impl Database {
         Ok(out)
     }
 
+    /// Library entries (not merged copies) without an icon, installed games first, with their
+    /// source.
+    pub fn games_without_icon(&self) -> Result<Vec<(Uuid, String)>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT id, source FROM games \
+             WHERE icon_path IS NULL AND merged_into IS NULL \
+             ORDER BY installed DESC, sorting_name",
+        )?;
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+        let mut out = Vec::new();
+        for row in rows {
+            let (id, source) = row?;
+            if let Ok(id) = Uuid::parse_str(&id) {
+                out.push((id, source));
+            }
+        }
+        Ok(out)
+    }
+
     /// Games without a description or without genres (the fields IGDB can fill), manual ones
     /// included.
     pub fn games_missing_metadata(&self) -> Result<Vec<GameMissingMetadata>> {

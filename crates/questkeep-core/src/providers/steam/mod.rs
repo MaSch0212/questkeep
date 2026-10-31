@@ -30,19 +30,26 @@ pub struct SteamProvider {
     roots: Vec<PathBuf>,
     /// Store sign-in for owned games, when the app supplies one.
     account: Option<Arc<SteamAccount>>,
+    /// Whether icons missing from the local cache are looked up in the store (network).
+    store_icons: bool,
 }
 
 impl SteamProvider {
     /// Uses the Steam installations found on this machine.
     pub fn detect() -> Self {
-        Self::with_roots(crate::platform::steam_install_dirs())
+        Self {
+            store_icons: true,
+            ..Self::with_roots(crate::platform::steam_install_dirs())
+        }
     }
 
-    /// Uses the given Steam root directories (the ones containing `steamapps`).
+    /// Uses the given Steam root directories (the ones containing `steamapps`). Icons come from
+    /// the local cache only.
     pub fn with_roots(roots: Vec<PathBuf>) -> Self {
         Self {
             roots,
             account: None,
+            store_icons: false,
         }
     }
 
@@ -183,19 +190,31 @@ impl LibraryProvider for SteamProvider {
         candidates
     }
 
-    /// The small square icon from Steam's local library cache (see [`icon`]). There is no CDN
-    /// fallback: the icon's file name is a hash that only the client knows.
+    /// The small square icon from Steam's local library cache (see [`icon`]). Games the client
+    /// never showed (often owned but not installed) have none there; for those the icon's hash is
+    /// looked up in the store and the icon comes from the community CDN, as Playnite does with
+    /// the app info's `clienticon`/`icon`.
     fn icon_candidates(&self, app_id: &str) -> Vec<ImageCandidate> {
         if !is_app_id(app_id) {
             return Vec::new();
         }
-        self.roots
+        let local: Vec<PathBuf> = self
+            .roots
             .iter()
             .flat_map(|root| {
                 icon::icon_candidates(&root.join("appcache").join("librarycache"), app_id)
             })
-            .map(ImageCandidate::File)
-            .collect()
+            .filter(|path| path.is_file())
+            .collect();
+        let mut candidates: Vec<ImageCandidate> =
+            local.into_iter().map(ImageCandidate::File).collect();
+        if self.store_icons && candidates.is_empty() {
+            match web::fetch_icon_urls(app_id) {
+                Ok(urls) => candidates.extend(urls.into_iter().map(ImageCandidate::Url)),
+                Err(err) => tracing::debug!("Steam icon lookup for {app_id} failed: {err}"),
+            }
+        }
+        candidates
     }
 
     /// Wide hero art: the local library cache, then the CDN; the small store header only last.
@@ -581,7 +600,7 @@ mod tests {
     }
 
     #[test]
-    fn icon_candidates_come_from_the_local_cache_only() {
+    fn icon_candidates_come_from_existing_local_files_without_store_lookup() {
         let tmp = tempfile::tempdir().unwrap();
         let app = tmp.path().join("appcache/librarycache/123");
         fs::create_dir_all(&app).unwrap();

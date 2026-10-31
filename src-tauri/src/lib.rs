@@ -76,10 +76,25 @@ impl AppState {
         }
     }
 
+    /// Queues icon jobs for games without an icon. Each game is tried once per run; the jobs
+    /// share the metadata worker and run after the metadata queued before them.
+    pub fn queue_missing_icons(&self) {
+        match self.library.missing_icon_ids() {
+            Ok(ids) => {
+                let queued = self.metadata.enqueue_icons(ids);
+                if queued > 0 {
+                    tracing::info!(queued, "queued icon jobs");
+                }
+            }
+            Err(err) => tracing::warn!(%err, "could not list games without icons"),
+        }
+    }
+
     /// Follow-up downloads after the library changed (a scan or startup).
     pub fn queue_downloads(&self) {
         self.queue_missing_covers();
         self.queue_missing_metadata();
+        self.queue_missing_icons();
     }
 }
 
