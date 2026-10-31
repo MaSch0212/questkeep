@@ -12,6 +12,7 @@ import { SettingsPage } from "./components/settings/SettingsPage";
 import { Sidebar } from "./components/Sidebar";
 import { TitleBar } from "./components/TitleBar";
 import { Toasts } from "./components/Toasts";
+import { FilterPills } from "./components/FilterPills";
 import { TopBar } from "./components/TopBar";
 import type { CommandBarHandle } from "./components/CommandBar";
 import type { KeywordFilterHandle } from "./components/KeywordFilter";
@@ -121,6 +122,7 @@ export function App() {
         {/* Stays mounted (just hidden) on other pages so the filter box keeps its text. */}
         <div hidden={store.page() !== "library"}>
           <TopBar keywordRef={(handle) => (keywordFilter = handle)} />
+          <FilterPills />
         </div>
         <Show
           when={store.page() === "library"}

@@ -11,6 +11,7 @@ import {
   stickyHeader,
   visibleRowRange,
   type GameGroup,
+  type GroupContext,
 } from "./grouping";
 import { NO_CATEGORY } from "./views";
 
@@ -22,6 +23,7 @@ const category = (id: string, name: string): Category => ({
 });
 const categories = [category("c2", "co-op"), category("c1", "RPG"), category("c3", "Empty")];
 const sourceName = (id: string) => ({ steam: "Steam", epic: "Epic Games" })[id] ?? id;
+const ctx = (list: Category[]): GroupContext => ({ categories: list, sourceName, statuses: [] });
 
 const hades = makeGame({ id: "h", name: "Hades", source: "steam", categories: ["c1", "c2"] });
 const celeste = makeGame({ id: "c", name: "Celeste", source: "epic", categories: ["c1"] });
@@ -33,25 +35,65 @@ const names = (groups: GameGroup[]) =>
 
 describe("groupGames", () => {
   it("puts a game into each of its categories, in the categories' order, uncategorized last", () => {
-    const groups = groupGames(games, "category", categories, sourceName);
+    const groups = groupGames(games, "category", ctx(categories));
     expect(names(groups)).toEqual(["co-op: Hades", "RPG: Celeste, Hades", "No category: Doom"]);
     expect(groups.at(-1)?.key).toBe(NO_CATEGORY);
-    const reordered = groupGames(games, "category", categories.toReversed(), sourceName);
+    const reordered = groupGames(games, "category", ctx(categories.toReversed()));
     expect(names(reordered)).toEqual(["RPG: Celeste, Hades", "co-op: Hades", "No category: Doom"]);
   });
 
+  it("groups by list values once per spelling, by name, games without one last", () => {
+    const a = makeGame({ id: "a", name: "A", tags: ["Co-op", "Roguelike"] });
+    const b = makeGame({ id: "b", name: "B", tags: ["co-op", "CO OP"] });
+    const c = makeGame({ id: "c", name: "C" });
+    expect(names(groupGames([a, b, c], "tag", ctx([])))).toEqual([
+      "Co-op: A, B",
+      "Roguelike: A",
+      "None: C",
+    ]);
+  });
+
+  it("orders statuses by the list, years newest first, buckets in their order", () => {
+    const statuses = [
+      { id: "s1", name: "Not Played", gameCount: 0 },
+      { id: "s2", name: "Beaten", gameCount: 0 },
+    ];
+    const a = makeGame({ id: "a", name: "A", completionStatus: "s2", releaseDate: "2019-05-01" });
+    const b = makeGame({ id: "b", name: "B", completionStatus: "s1", releaseDate: "2021" });
+    const c = makeGame({ id: "c", name: "C", completionStatus: null, playtimeSeconds: 40000 });
+    const byStatus = groupGames([a, b, c], "completionStatus", { ...ctx([]), statuses });
+    expect(names(byStatus)).toEqual(["Not Played: B", "Beaten: A", "No status: C"]);
+    expect(names(groupGames([a, b, c], "releaseYear", ctx([])))).toEqual([
+      "2021: B",
+      "2019: A",
+      "None: C",
+    ]);
+    expect(names(groupGames([a, b, c], "playtime", ctx([])))).toEqual([
+      "Never played: A, B",
+      "10–50 hours: C",
+    ]);
+    const now = Date.parse("2026-10-31T12:00:00Z");
+    const recent = makeGame({ id: "r", name: "R", lastPlayed: "2026-10-31T08:00:00Z" });
+    const old = makeGame({ id: "o", name: "O", lastPlayed: "2024-01-01T00:00:00Z" });
+    expect(names(groupGames([old, recent, c], "lastPlayed", { ...ctx([]), now }))).toEqual([
+      "Today: R",
+      "Over a year ago: O",
+      "Never played: C",
+    ]);
+  });
+
   it("groups by store name and leaves ungrouped views as one group", () => {
-    const bySource = groupGames(games, "source", categories, sourceName);
+    const bySource = groupGames(games, "source", ctx(categories));
     expect(names(bySource)).toEqual(["Epic Games: Celeste", "Steam: Doom, Hades"]);
     expect(bySource[1]?.source).toBe("steam");
-    const none = groupGames(games, "none", categories, sourceName);
+    const none = groupGames(games, "none", ctx(categories));
     expect(none).toHaveLength(1);
     expect(none[0]?.key).toBe("");
   });
 });
 
 describe("layoutGroups", () => {
-  const groups = groupGames(games, "category", categories, sourceName);
+  const groups = groupGames(games, "category", ctx(categories));
   const options = {
     columns: 2,
     rowHeight: 100,
@@ -91,7 +133,7 @@ describe("layoutGroups", () => {
       "games",
     ]);
     expect(collapsed.slots.map((s) => s.game.name)).toEqual(["Hades", "Doom"]);
-    const flat = layoutGroups(groupGames(games, "none", [], sourceName), {
+    const flat = layoutGroups(groupGames(games, "none", ctx([])), {
       ...options,
       headers: false,
     });
@@ -114,7 +156,7 @@ describe("layoutGroups", () => {
 });
 
 describe("navigateSlots", () => {
-  const groups = groupGames(games, "category", categories, sourceName);
+  const groups = groupGames(games, "category", ctx(categories));
   const layout = layoutGroups(groups, {
     columns: 2,
     rowHeight: 100,
@@ -142,7 +184,7 @@ describe("navigateSlots", () => {
 
   it("matches the plain grid navigation when ungrouped", () => {
     const many = Array.from({ length: 11 }, (_, i) => makeGame({ id: `g${i}`, name: `G${i}` }));
-    const flat = layoutGroups(groupGames(many, "none", [], sourceName), {
+    const flat = layoutGroups(groupGames(many, "none", ctx([])), {
       ...layoutOptions(),
       columns: 4,
       headers: false,
@@ -202,7 +244,7 @@ describe("stickyHeader", () => {
   });
 
   it("pins nothing in an ungrouped view", () => {
-    const flat = layoutGroups(groupGames(games, "none", categories, sourceName), {
+    const flat = layoutGroups(groupGames(games, "none", ctx(categories)), {
       columns: 4,
       rowHeight: 100,
       headerHeight: 40,

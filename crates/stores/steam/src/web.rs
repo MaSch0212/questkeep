@@ -2,11 +2,14 @@
 //! store metadata. Fetching
 //! and parsing are separate so the parsers are tested with fixtures and never touch the network.
 
+use std::collections::HashMap;
+use std::sync::Mutex;
+
 use chrono::DateTime;
 use serde_json::Value;
 
 use questkeep_store_api::ProviderError;
-use questkeep_store_api::model::{GameMetadata, ImportedGame, PlayAction};
+use questkeep_store_api::model::{GameLink, GameMetadata, ImportedGame, PlayAction, Score};
 
 /// Why a request failed, without any URL (which may contain the API key).
 enum HttpFailure {
@@ -73,21 +76,173 @@ pub fn fetch_owned(
     }
 }
 
-/// Fetches store metadata; `Ok(None)` when the store has no data for the app.
+/// Fetches store metadata; `Ok(None)` when the store has no data for the app. The app details
+/// decide the result; tags and the review score are best effort (a failure only leaves them out).
 pub fn fetch_metadata(app_id: &str) -> Result<Option<GameMetadata>, ProviderError> {
     if app_id.is_empty() || !app_id.bytes().all(|b| b.is_ascii_digit()) {
         return Ok(None);
     }
     let url = format!("https://store.steampowered.com/api/appdetails?appids={app_id}&l=english");
+    let parsed = match http_get(&url, None) {
+        Ok(body) => parse_app_details(app_id, &body)?,
+        Err(HttpFailure::Status(429)) => {
+            return Err(ProviderError::Network("rate limited".into()));
+        }
+        Err(HttpFailure::Status(code)) => {
+            return Err(ProviderError::Network(format!(
+                "Steam store returned HTTP {code}"
+            )));
+        }
+        Err(HttpFailure::Other(message)) => return Err(ProviderError::Network(message)),
+    };
+    let Some(mut meta) = parsed else {
+        return Ok(None);
+    };
+    match fetch_store_item(app_id) {
+        Ok(Some(item)) => {
+            meta.community_score = item.community_score;
+            if !item.tag_ids.is_empty() {
+                meta.tags = tag_names(&item.tag_ids);
+            }
+        }
+        Ok(None) => {}
+        Err(e) => tracing::debug!("Steam tags and reviews for {app_id} unavailable: {e}"),
+    }
+    Ok(Some(meta))
+}
+
+/// What `IStoreBrowseService/GetItems` adds to the app details.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct StoreItem {
+    /// Tag ids, most voted first.
+    pub tag_ids: Vec<u32>,
+    pub community_score: Option<Score>,
+}
+
+fn fetch_store_item(app_id: &str) -> Result<Option<StoreItem>, ProviderError> {
+    let input = format!(
+        r#"{{"ids":[{{"appid":{app_id}}}],"context":{{"language":"english","country_code":"US"}},"data_request":{{"include_reviews":true,"include_tag_count":20}}}}"#
+    );
+    let url = format!(
+        "https://api.steampowered.com/IStoreBrowseService/GetItems/v1/?input_json={}",
+        encode(&input)
+    );
     match http_get(&url, None) {
-        Ok(body) => parse_app_details(app_id, &body),
-        Err(HttpFailure::Status(429)) => Err(ProviderError::Network("rate limited".into())),
+        Ok(body) => Ok(parse_store_item(app_id, &body)),
         Err(HttpFailure::Status(code)) => Err(ProviderError::Network(format!(
             "Steam store returned HTTP {code}"
         ))),
         Err(HttpFailure::Other(message)) => Err(ProviderError::Network(message)),
     }
 }
+
+/// Tag id to name, fetched once per process (it only changes when Steam adds tags).
+static TAG_NAMES: Mutex<Option<HashMap<u32, String>>> = Mutex::new(None);
+
+fn tag_names(ids: &[u32]) -> Vec<String> {
+    let Ok(mut cache) = TAG_NAMES.lock() else {
+        return Vec::new();
+    };
+    if cache.is_none() {
+        let url = "https://api.steampowered.com/IStoreService/GetTagList/v1/?language=english";
+        match http_get(url, None) {
+            Ok(body) => {
+                let names = parse_tag_list(&body);
+                if !names.is_empty() {
+                    *cache = Some(names);
+                }
+            }
+            Err(HttpFailure::Status(code)) => {
+                tracing::debug!("Steam tag list returned HTTP {code}");
+            }
+            Err(HttpFailure::Other(message)) => {
+                tracing::debug!("Steam tag list unavailable: {message}");
+            }
+        }
+    }
+    cache
+        .as_ref()
+        .map(|names| resolve_tags(ids, names))
+        .unwrap_or_default()
+}
+
+/// Tag names for ids, in order; unknown ids are skipped.
+pub fn resolve_tags(ids: &[u32], names: &HashMap<u32, String>) -> Vec<String> {
+    ids.iter().filter_map(|id| names.get(id).cloned()).collect()
+}
+
+/// Maps a `GetTagList` response to tag id and name.
+pub fn parse_tag_list(body: &str) -> HashMap<u32, String> {
+    let Ok(json) = serde_json::from_str::<Value>(body) else {
+        return HashMap::new();
+    };
+    json.get("response")
+        .and_then(|r| r.get("tags"))
+        .and_then(Value::as_array)
+        .map(|tags| {
+            tags.iter()
+                .filter_map(|t| {
+                    let id = u32::try_from(t.get("tagid")?.as_u64()?).ok()?;
+                    let name = t.get("name")?.as_str()?.trim();
+                    (!name.is_empty()).then(|| (id, name.to_string()))
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Tags and review summary of `app_id` from a `GetItems` response (asked with `include_reviews`
+/// and `include_tag_count`). `None` when the item is missing or unsuccessful. The review summary
+/// comes from here because the `appreviews` endpoint now redirects to the store front page.
+pub fn parse_store_item(app_id: &str, body: &str) -> Option<StoreItem> {
+    let json: Value = serde_json::from_str(body).ok()?;
+    let item = json
+        .get("response")?
+        .get("store_items")?
+        .as_array()?
+        .iter()
+        .find(|item| {
+            item.get("appid")
+                .and_then(Value::as_u64)
+                .map(|id| id.to_string())
+                .as_deref()
+                == Some(app_id)
+        })?;
+    if item.get("success").and_then(Value::as_u64) != Some(1) {
+        return None;
+    }
+    let as_id = |v: &Value| v.as_u64().and_then(|id| u32::try_from(id).ok());
+    let tag_ids = match item.get("tagids").and_then(Value::as_array) {
+        Some(ids) => ids.iter().filter_map(as_id).collect(),
+        None => item
+            .get("tags")
+            .and_then(Value::as_array)
+            .map(|tags| {
+                tags.iter()
+                    .filter_map(|t| t.get("tagid").and_then(as_id))
+                    .collect()
+            })
+            .unwrap_or_default(),
+    };
+    let community_score = item
+        .get("reviews")
+        .and_then(|r| r.get("summary_filtered"))
+        .and_then(|summary| {
+            let count = summary.get("review_count")?.as_u64()?;
+            let percent = u8::try_from(summary.get("percent_positive")?.as_u64()?).ok()?;
+            (count >= MIN_REVIEWS && percent <= 100).then(|| Score {
+                value: percent,
+                source: "Steam reviews".into(),
+            })
+        });
+    Some(StoreItem {
+        tag_ids,
+        community_score,
+    })
+}
+
+/// Fewer reviews than this say nothing about a game.
+const MIN_REVIEWS: u64 = 10;
 
 /// Hosts of Steam's community image CDN, tried in order for an app icon.
 const ICON_HOSTS: [&str; 2] = [
@@ -271,14 +426,115 @@ pub fn parse_app_details(app_id: &str, body: &str) -> Result<Option<GameMetadata
         })
         .unwrap_or_default();
 
+    let mut features: Vec<String> = Vec::new();
+    for name in data
+        .get("categories")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|c| c.get("description").and_then(Value::as_str))
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        if !features.iter().any(|f| f == name) {
+            features.push(name.to_string());
+        }
+    }
+    let platforms = [("windows", "Windows"), ("mac", "macOS"), ("linux", "Linux")]
+        .into_iter()
+        .filter(|(key, _)| {
+            data.get("platforms")
+                .and_then(|p| p.get(*key))
+                .and_then(Value::as_bool)
+                == Some(true)
+        })
+        .map(|(_, name)| name.to_string())
+        .collect();
+    let critic_score = data
+        .get("metacritic")
+        .and_then(|m| m.get("score"))
+        .and_then(Value::as_u64)
+        .and_then(|s| u8::try_from(s).ok())
+        .filter(|&s| s <= 100)
+        .map(|value| Score {
+            value,
+            source: "Metacritic".into(),
+        });
+    let has_achievements = data
+        .get("achievements")
+        .and_then(|a| a.get("total"))
+        .and_then(Value::as_u64)
+        .is_some_and(|t| t > 0);
+    let has_workshop = features.iter().any(|f| f == "Steam Workshop");
+    let website = data
+        .get("website")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|w| w.starts_with("http://") || w.starts_with("https://"));
+    let links = steam_links(app_id, has_achievements, has_workshop, website);
+
     Ok(Some(GameMetadata {
         description,
         release_date,
         developers: strings("developers"),
         publishers: strings("publishers"),
         genres,
+        features,
+        platforms,
+        critic_score,
+        links,
         ..GameMetadata::default()
     }))
+}
+
+fn steam_links(
+    app_id: &str,
+    achievements: bool,
+    workshop: bool,
+    website: Option<&str>,
+) -> Vec<GameLink> {
+    let mut links = vec![
+        GameLink::new(
+            "Steam store page",
+            format!("https://store.steampowered.com/app/{app_id}"),
+        ),
+        GameLink::new(
+            "Community hub",
+            format!("https://steamcommunity.com/app/{app_id}"),
+        ),
+        GameLink::new(
+            "Discussions",
+            format!("https://steamcommunity.com/app/{app_id}/discussions/"),
+        ),
+        GameLink::new(
+            "Guides",
+            format!("https://steamcommunity.com/app/{app_id}/guides/"),
+        ),
+        GameLink::new(
+            "News",
+            format!("https://store.steampowered.com/news/app/{app_id}"),
+        ),
+        GameLink::new(
+            "PCGamingWiki",
+            format!("https://pcgamingwiki.com/api/appid.php?appid={app_id}"),
+        ),
+    ];
+    if achievements {
+        links.push(GameLink::new(
+            "Achievements",
+            format!("https://steamcommunity.com/stats/{app_id}/achievements"),
+        ));
+    }
+    if workshop {
+        links.push(GameLink::new(
+            "Workshop",
+            format!("https://steamcommunity.com/app/{app_id}/workshop/"),
+        ));
+    }
+    if let Some(site) = website {
+        links.push(GameLink::new("Official website", site));
+    }
+    links
 }
 
 /// Longest description taken from `about_the_game` when there is no short one.
@@ -513,6 +769,92 @@ mod tests {
         assert_eq!(meta.developers, ["Valve"]);
         assert_eq!(meta.publishers, ["Valve"]);
         assert_eq!(meta.genres, ["Action", "Adventure"]);
+    }
+
+    #[test]
+    fn app_details_fixture_gives_features_platforms_scores_and_links() {
+        let body = include_str!("../fixtures/appdetails_620.json");
+        let meta = parse_app_details("620", body).unwrap().unwrap();
+        assert_eq!(meta.features[0], "Single-player");
+        assert_eq!(
+            meta.features
+                .iter()
+                .filter(|f| *f == "Steam Workshop")
+                .count(),
+            1
+        );
+        assert_eq!(meta.platforms, ["Windows", "Linux"]);
+        assert_eq!(
+            meta.critic_score,
+            Some(Score {
+                value: 95,
+                source: "Metacritic".into()
+            })
+        );
+        let names: Vec<_> = meta.links.iter().map(|l| l.name.as_str()).collect();
+        assert_eq!(
+            names,
+            [
+                "Steam store page",
+                "Community hub",
+                "Discussions",
+                "Guides",
+                "News",
+                "PCGamingWiki",
+                "Achievements",
+                "Workshop",
+                "Official website"
+            ]
+        );
+        assert_eq!(meta.links[0].url, "https://store.steampowered.com/app/620");
+        assert_eq!(meta.links[8].url, "http://www.thinkwithportals.com/");
+    }
+
+    #[test]
+    fn app_details_links_skip_missing_extras() {
+        let body = r#"{"5":{"success":true,"data":{"short_description":"x",
+            "categories":[{"id":2,"description":"Single-player"}],
+            "platforms":{"windows":true,"mac":true,"linux":false},
+            "metacritic":{"score":250},"achievements":{"total":0},"website":""}}}"#;
+        let meta = parse_app_details("5", body).unwrap().unwrap();
+        assert_eq!(meta.platforms, ["Windows", "macOS"]);
+        assert_eq!(meta.critic_score, None);
+        assert_eq!(meta.links.len(), 6);
+        assert!(meta.links.iter().all(|l| l.name != "Achievements"));
+    }
+
+    #[test]
+    fn store_item_gives_tags_and_review_score() {
+        let body = include_str!("../fixtures/store_items_620.json");
+        let item = parse_store_item("620", body).unwrap();
+        assert_eq!(item.tag_ids, [4182, 1625, 1664, 3839, 5923]);
+        let score = item.community_score.unwrap();
+        assert_eq!((score.value, score.source.as_str()), (98, "Steam reviews"));
+        assert_eq!(parse_store_item("621", body), None);
+        assert_eq!(parse_store_item("620", "<html>"), None);
+    }
+
+    #[test]
+    fn store_item_edge_cases() {
+        let few = r#"{"response":{"store_items":[{"appid":7,"success":1,
+            "tags":[{"tagid":9,"weight":1},{"tagid":19,"weight":0}],
+            "reviews":{"summary_filtered":{"review_count":9,"percent_positive":100}}}]}}"#;
+        let item = parse_store_item("7", few).unwrap();
+        assert_eq!(item.tag_ids, [9, 19]);
+        assert_eq!(item.community_score, None);
+        let failed = r#"{"response":{"store_items":[{"appid":7,"success":2}]}}"#;
+        assert_eq!(parse_store_item("7", failed), None);
+    }
+
+    #[test]
+    fn tag_list_resolves_names_in_order() {
+        let names = parse_tag_list(include_str!("../fixtures/tag_list.json"));
+        assert_eq!(names.get(&1664).map(String::as_str), Some("Puzzle"));
+        assert_eq!(
+            resolve_tags(&[4182, 99999, 1625], &names),
+            ["Singleplayer", "Platformer"]
+        );
+        assert!(parse_tag_list("nope").is_empty());
     }
 
     #[test]

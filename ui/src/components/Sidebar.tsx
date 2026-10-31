@@ -1,3 +1,4 @@
+import Compass from "lucide-solid/icons/compass";
 import Copy from "lucide-solid/icons/copy";
 import House from "lucide-solid/icons/house";
 import Pencil from "lucide-solid/icons/pencil";
@@ -164,6 +165,22 @@ export function Sidebar() {
             </div>
           )}
         </For>
+        {/* Explore: an unsaved view that always opens fresh; stays at the bottom. */}
+        <ul class="sidebar__list sidebar__explore">
+          <li>
+            <button
+              type="button"
+              class="nav-item nav-item--icon view-item"
+              classList={{ "nav-item--active": store.page() === "library" && store.isExplore() }}
+              aria-current={store.page() === "library" && store.isExplore() ? "page" : undefined}
+              title="Browse the whole library with any filter, sort or grouping, without saving"
+              onClick={() => store.openExplore()}
+            >
+              <Compass class="icon" aria-hidden="true" />
+              <span class="nav-item__text">Explore</span>
+            </button>
+          </li>
+        </ul>
       </Show>
       <Show when={menu()}>
         {(target) => (

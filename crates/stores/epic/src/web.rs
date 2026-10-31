@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use questkeep_store_api::ProviderError;
-use questkeep_store_api::model::GameMetadata;
+use questkeep_store_api::model::{GameLink, GameMetadata};
 
 /// One entry of the account's library (an owned asset).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -236,6 +236,20 @@ impl CatalogItem {
         out
     }
 
+    /// The store page URL from the `com.epicgames.app.productSlug` attribute (`some-game`, or
+    /// `some-game/home` for older listings). Only plain URL path characters are accepted.
+    fn store_page(&self) -> Option<String> {
+        let slug = self.attribute("com.epicgames.app.productSlug")?;
+        let slug = slug.trim_matches('/');
+        let slug = slug.strip_suffix("/home").unwrap_or(slug);
+        let ok = !slug.is_empty()
+            && slug
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'/'))
+            && !slug.contains("//");
+        ok.then(|| format!("https://store.epicgames.com/p/{slug}"))
+    }
+
     pub fn metadata(&self) -> GameMetadata {
         let text = |s: &Option<String>| {
             s.as_deref()
@@ -266,6 +280,11 @@ impl CatalogItem {
             developers,
             publishers: self.attribute("publisherName").into_iter().collect(),
             genres: self.genres(),
+            links: self
+                .store_page()
+                .map(|url| GameLink::new("Epic store page", url))
+                .into_iter()
+                .collect(),
             ..GameMetadata::default()
         }
     }
@@ -399,6 +418,33 @@ mod tests {
         assert_eq!(sparse.description.as_deref(), Some("Long text."));
         assert_eq!(sparse.release_date.as_deref(), Some("2019-01-01"));
         assert_eq!(CatalogItem::default().metadata(), GameMetadata::default());
+    }
+
+    #[test]
+    fn store_page_link_comes_from_the_product_slug() {
+        let item = |slug: &str| -> CatalogItem {
+            serde_json::from_str(&format!(
+                r#"{{"id":"x","title":"T","customAttributes":{{"com.epicgames.app.productSlug":{{"type":"STRING","value":"{slug}"}}}}}}"#
+            ))
+            .unwrap()
+        };
+        let link = |slug: &str| item(slug).metadata().links;
+        assert_eq!(
+            link("sugar-game"),
+            [GameLink::new(
+                "Epic store page",
+                "https://store.epicgames.com/p/sugar-game"
+            )]
+        );
+        assert_eq!(
+            link("/fortnite/home")[0].url,
+            "https://store.epicgames.com/p/fortnite"
+        );
+        assert!(link("").is_empty());
+        assert!(link("a b?x=1").is_empty());
+        assert!(link("../x").is_empty());
+        let items = parse_catalog(CATALOG).unwrap();
+        assert!(items["sugar-item"].metadata().links.is_empty());
     }
 
     #[test]

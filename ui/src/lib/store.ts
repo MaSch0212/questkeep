@@ -4,10 +4,13 @@ import { batch, createEffect, createMemo, createRoot, createSignal, on, onCleanu
 import { createStore } from "solid-js/store";
 import type { AppInfo } from "../bindings/AppInfo";
 import type { Category } from "../bindings/Category";
+import type { CompletionSettings } from "../bindings/CompletionSettings";
 import type { CoreEvent } from "../bindings/CoreEvent";
 import type { Game } from "../bindings/Game";
 import type { GameQuery } from "../bindings/GameQuery";
 import type { GroupBy } from "../bindings/GroupBy";
+import type { LibraryView } from "../bindings/LibraryView";
+import type { ListField } from "../bindings/ListField";
 import type { ProviderInfo } from "../bindings/ProviderInfo";
 import type { Settings } from "../bindings/Settings";
 import type { SortField } from "../bindings/SortField";
@@ -15,6 +18,7 @@ import type { StartPage } from "../bindings/StartPage";
 import type { StartupPage } from "../bindings/StartupPage";
 import type { SyncTimes } from "../bindings/SyncTimes";
 import type { ViewLayout } from "../bindings/ViewLayout";
+import type { ValueCount } from "../bindings/ValueCount";
 import type { ViewSection } from "../bindings/ViewSection";
 import * as api from "./api";
 import { errorMessage } from "./errors";
@@ -23,6 +27,8 @@ import { defaultDescending, defaultQuery, mergeSources } from "./query";
 import {
   allViews,
   effectiveState,
+  EXPLORE_ID,
+  exploreView,
   findView,
   sectionOrder,
   viewForGame,
@@ -79,6 +85,13 @@ function createAppStore() {
   const [syncTimes, setSyncTimes] = createSignal<SyncTimes>({ all: null, providers: {} });
   const [launchers, setLaunchers] = createSignal<string[]>([]);
   const [categories, setCategories] = createSignal<Category[]>([]);
+  const [completion, setCompletion] = createSignal<CompletionSettings>({
+    statuses: [],
+    newGame: null,
+    firstStart: null,
+  });
+  // Values of list fields with game counts, loaded when a filter needs them.
+  const [valueLists, setValueLists] = createSignal<Partial<Record<ListField, ValueCount[]>>>({});
   // Collapsed groups per view id, until the app closes.
   const [collapsed, setCollapsed] = createSignal<Readonly<Record<string, readonly string[]>>>({});
   // A game opened from the command bar that no view contains; its details show anyway.
@@ -105,7 +118,11 @@ function createAppStore() {
   const [syncState, setSyncState] = createSignal<SyncState>(IDLE_SYNC);
   const [backgroundWork, setBackgroundWork] = createSignal<BackgroundWork>(IDLE_WORK);
 
-  const activeView = createMemo(() => findView(sections(), activeViewId()));
+  // Explore's starting point; its changes are an ordinary draft on top.
+  const [explore, setExplore] = createSignal<LibraryView>(exploreView());
+  const activeView = createMemo(() =>
+    activeViewId() === EXPLORE_ID ? explore() : findView(sections(), activeViewId()),
+  );
   const viewState = createMemo<ViewState>(() => {
     const view = activeView();
     return view
@@ -138,7 +155,11 @@ function createAppStore() {
   const sources = createMemo(() => mergeSources(providers(), seenSources()));
   const groups = createMemo(() => {
     const names = new Map(sources().map((s) => [s.id, s.name]));
-    return groupGames(games(), groupBy(), categories(), (id) => names.get(id) ?? id);
+    return groupGames(games(), groupBy(), {
+      categories: categories(),
+      sourceName: (id) => names.get(id) ?? id,
+      statuses: completion().statuses,
+    });
   });
   const collapsedGroups = createMemo<ReadonlySet<string>>(
     () => new Set(collapsed()[activeViewId() ?? ""] ?? []),
@@ -280,11 +301,22 @@ function createAppStore() {
     }
     batch(() => {
       setSections(list);
-      const ids = new Set(allViews(list).map((v) => v.id));
+      const ids = new Set([...allViews(list).map((v) => v.id), EXPLORE_ID]);
       setDrafts((current) =>
         Object.fromEntries(Object.entries(current).filter(([id]) => ids.has(id))),
       );
       if (!ids.has(activeViewId() ?? "")) setActiveViewId(allViews(list)[0]?.id ?? null);
+    });
+  }
+
+  /** Opens Explore fresh (nothing kept from before), optionally preset with filters. */
+  function openExplore(preset: Partial<GameQuery> = {}) {
+    batch(() => {
+      setExplore(exploreView(preset));
+      setDrafts((current) => withoutDraft(current, EXPLORE_ID));
+      setCollapsed((current) => ({ ...current, [EXPLORE_ID]: [] }));
+      setActiveViewId(null);
+      selectView(EXPLORE_ID);
     });
   }
 
@@ -418,7 +450,8 @@ function createAppStore() {
     on([started, page, activeViewId], ([ready, current, viewId]) => {
       if (!ready || current === "settings") return;
       const value = current === "home" ? HOME_PAGE : viewId;
-      if (value === null) return;
+      // Explore always starts fresh, so it is never reopened at startup.
+      if (value === null || value === EXPLORE_ID) return;
       void Promise.resolve()
         .then(() => api.setLastPage(value))
         .catch(() => undefined);
@@ -453,6 +486,58 @@ function createAppStore() {
       setCategories((await api.listCategories()) ?? []);
     } catch (error) {
       pushToast("error", errorMessage(error));
+    }
+  }
+
+  async function loadCompletion() {
+    const settings = await optional(api.completionSettings);
+    if (settings) setCompletion(settings);
+  }
+
+  /** Saves the completion statuses; games of removed ones get `replacements[id]`. */
+  async function saveCompletion(
+    settings: CompletionSettings,
+    replacements: Record<string, string | null>,
+  ): Promise<boolean> {
+    try {
+      setCompletion(await api.setCompletionSettings(settings, replacements));
+      return true;
+    } catch (error) {
+      pushToast("error", errorMessage(error));
+      return false;
+    }
+  }
+
+  /** Sets the completion status of games and shows the result right away. */
+  async function setCompletionStatus(ids: string[], status: string | null) {
+    try {
+      await api.setCompletionStatus(ids, status);
+      for (const game of await Promise.all(ids.map((id) => api.getGame(id)))) {
+        upsertGame(game);
+        if (pinnedGame()?.id === game.id) setPinnedGame(game);
+      }
+    } catch (error) {
+      pushToast("error", errorMessage(error));
+    }
+  }
+
+  /** Loads (again) the values of a list field for the filters. */
+  async function loadValues(field: ListField) {
+    const list = await optional(() => api.listValues(field));
+    if (list) setValueLists((current) => ({ ...current, [field]: list }));
+  }
+
+  /** The name of a list filter value, from what is loaded (else the key itself). */
+  function valueName(field: ListField, key: string): string {
+    switch (field) {
+      case "source":
+        return sources().find((s) => s.id === key)?.name ?? key;
+      case "category":
+        return categories().find((c) => c.id === key)?.name ?? key;
+      case "completionStatus":
+        return completion().statuses.find((s) => s.id === key)?.name ?? key;
+      default:
+        return valueLists()[field]?.find((v) => v.key === key)?.name ?? key;
     }
   }
 
@@ -673,6 +758,7 @@ function createAppStore() {
     ]);
     const loads = Promise.allSettled([
       loadProviders(),
+      loadCompletion(),
       api.appInfo().then(setAppInfo),
       api.runningGames().then((ids) => setRunning(new Set(ids))),
       // The list needs the open view first; the startup page needs the views and settings.
@@ -770,6 +856,14 @@ function createAppStore() {
     groups,
     collapsedGroups,
     toggleGroup,
+    // completion statuses and filter values
+    completion,
+    loadCompletion,
+    saveCompletion,
+    setCompletionStatus,
+    valueLists,
+    loadValues,
+    valueName,
     // categories
     categories,
     loadCategories,
@@ -808,6 +902,8 @@ function createAppStore() {
     editingViews,
     setEditingViews,
     selectView,
+    openExplore,
+    isExplore: () => activeViewId() === EXPLORE_ID,
     loadViews,
     resetView: () => {
       const view = activeView();

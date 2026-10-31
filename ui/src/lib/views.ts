@@ -6,6 +6,8 @@ import type { SectionOrder } from "../bindings/SectionOrder";
 import type { ViewLayout } from "../bindings/ViewLayout";
 import type { ViewSection } from "../bindings/ViewSection";
 import { storesOf } from "./copies";
+import { activeTreeCount, emptyGroup, matchesTree, sameTree } from "./filters";
+import { defaultQuery } from "./query";
 
 /** What a view shows right now: its saved state or the unsaved changes made to it. */
 export interface ViewState {
@@ -16,6 +18,21 @@ export interface ViewState {
 
 /** `GameQuery.categories` entry for games without a category (the core's `NO_CATEGORY`). */
 export const NO_CATEGORY = ":none";
+
+/** Id of Explore, the unsaved view at the bottom of the sidebar (never stored in the core). */
+export const EXPLORE_ID = "explore";
+
+/** Explore as it opens: table layout, nothing filtered, sorted or grouped, plus a preset. */
+export function exploreView(preset: Partial<GameQuery> = {}): LibraryView {
+  return {
+    id: EXPLORE_ID,
+    name: "Explore",
+    icon: "compass",
+    query: { ...defaultQuery(), ...preset },
+    layout: "list",
+    group: "none",
+  };
+}
 
 /** Unsaved changes per view id, kept until the app closes. */
 export type Drafts = Readonly<Record<string, ViewState>>;
@@ -43,7 +60,8 @@ function sameQuery(a: GameQuery, b: GameQuery): boolean {
     a.hidden === b.hidden &&
     a.played === b.played &&
     sameSet(a.sources, b.sources) &&
-    sameSet(a.categories, b.categories)
+    sameSet(a.categories, b.categories) &&
+    sameTree(a.filter, b.filter)
   );
 }
 
@@ -82,7 +100,8 @@ export function activeFilterCount(query: GameQuery): number {
     (query.favorite !== "any" ? 1 : 0) +
     (query.installed !== "any" ? 1 : 0) +
     (query.played !== "any" ? 1 : 0) +
-    (query.hidden !== "visible" ? 1 : 0)
+    (query.hidden !== "visible" ? 1 : 0) +
+    activeTreeCount(query.filter)
   );
 }
 
@@ -96,6 +115,7 @@ export function clearedFilters(query: GameQuery): GameQuery {
     installed: "any",
     played: "any",
     hidden: "visible",
+    filter: emptyGroup(),
   };
 }
 
@@ -120,7 +140,7 @@ export function matchesFilters(query: GameQuery, game: Game): boolean {
     )
   )
     return false;
-  return true;
+  return matchesTree(query.filter, game);
 }
 
 export function allViews(sections: readonly ViewSection[]): LibraryView[] {

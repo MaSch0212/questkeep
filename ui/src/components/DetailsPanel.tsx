@@ -50,6 +50,7 @@ import {
 import { store } from "../lib/store";
 import { CategoryEditor } from "./CategoryEditor";
 import { CombinePicker } from "./CombinePicker";
+import { CompletionPicker } from "./CompletionPicker";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { Cover } from "./Cover";
 import { EditGameDialog } from "./EditGameDialog";
@@ -388,6 +389,12 @@ export function DetailsPanel(props: DetailsPanelProps) {
                 <div class="details__stat">
                   <dt>Playtime</dt>
                   <dd>{formatPlaytime(props.game.playtimeSeconds)}</dd>
+                </div>
+                <div class="details__stat">
+                  <dt>Status</dt>
+                  <dd>
+                    <CompletionPicker game={props.game} />
+                  </dd>
                 </div>
                 <div class="details__stat">
                   <dt>{combined() ? "Stores" : "Store"}</dt>

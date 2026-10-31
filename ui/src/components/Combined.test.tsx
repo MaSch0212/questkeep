@@ -65,7 +65,11 @@ describe("copies", () => {
     const query = { ...defaultQuery(), sources: ["epic"] };
     expect(matchesFilters(query, game)).toBe(true);
     expect(matchesFilters({ ...query, sources: ["gog"] }, game)).toBe(false);
-    const groups = groupGames([game], "source", [], (id) => id);
+    const groups = groupGames([game], "source", {
+      categories: [],
+      sourceName: (id) => id,
+      statuses: [],
+    });
     expect(groups.map((g) => g.key)).toEqual(["epic", "steam"]);
   });
 

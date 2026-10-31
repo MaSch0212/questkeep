@@ -3,9 +3,12 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { AccountStatus } from "../bindings/AccountStatus";
 import type { AppInfo } from "../bindings/AppInfo";
 import type { Category } from "../bindings/Category";
+import type { CompletionSettings } from "../bindings/CompletionSettings";
 import type { Game } from "../bindings/Game";
 import type { GameQuery } from "../bindings/GameQuery";
 import type { GameUpdate } from "../bindings/GameUpdate";
+import type { ListField } from "../bindings/ListField";
+import type { MetadataSourceInfo } from "../bindings/MetadataSourceInfo";
 import type { NewManualGame } from "../bindings/NewManualGame";
 import type { ProviderInfo } from "../bindings/ProviderInfo";
 import type { ScanSummary } from "../bindings/ScanSummary";
@@ -16,6 +19,7 @@ import type { StartPage } from "../bindings/StartPage";
 import type { Settings } from "../bindings/Settings";
 import type { SyncTimes } from "../bindings/SyncTimes";
 import type { ViewSection } from "../bindings/ViewSection";
+import type { ValueCount } from "../bindings/ValueCount";
 import type { ViewUpdate } from "../bindings/ViewUpdate";
 
 /** The only module that talks to the Rust core. Every command may reject with a string. */
@@ -95,6 +99,21 @@ export const dismissDuplicates = (ids: string[]) => invoke<void>("dismiss_duplic
 export const addGameWithOption = (providerId: string, optionId: string) =>
   invoke<void>("add_game_with_option", { providerId, optionId });
 export const refreshMetadata = (id: string) => invoke<void>("refresh_metadata", { id });
+/** Queues a metadata refresh of every game; resolves to the number of queued jobs. */
+export const refreshAllMetadata = () => invoke<number>("refresh_all_metadata");
+/** The values of a list field with how many games have each (for filter value lists). */
+export const listValues = (field: ListField) => invoke<ValueCount[]>("list_values", { field });
+/** The metadata sources the user can order in settings. */
+export const metadataSources = () => invoke<MetadataSourceInfo[]>("metadata_sources");
+export const completionSettings = () => invoke<CompletionSettings>("completion_settings");
+/** Saves the completion statuses; games of removed statuses get `replacements[id]` (or none). */
+export const setCompletionSettings = (
+  settings: CompletionSettings,
+  replacements: Record<string, string | null>,
+) => invoke<CompletionSettings>("set_completion_settings", { settings, replacements });
+/** Sets (or with `null` clears) the completion status of games. */
+export const setCompletionStatus = (ids: string[], status: string | null) =>
+  invoke<void>("set_completion_status", { ids, status });
 export const runningGames = () => invoke<string[]>("running_games");
 export const appInfo = () => invoke<AppInfo>("app_info");
 /** Messages the app queued for the UI (each returned once), e.g. after a second start. */

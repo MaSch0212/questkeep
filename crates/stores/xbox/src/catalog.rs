@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use serde::Deserialize;
 
 use questkeep_store_api::auth::{Http, HttpRequest, url_encode};
-use questkeep_store_api::model::GameMetadata;
+use questkeep_store_api::model::{GameLink, GameMetadata};
 use questkeep_store_api::{ImageCandidate, ProviderError};
 
 const LOOKUP_URL: &str = "https://displaycatalog.mp.microsoft.com/v7.0/products/lookup";
@@ -64,6 +64,24 @@ struct RawLocalized {
 struct RawMarket {
     #[serde(default)]
     original_release_date: Option<String>,
+    #[serde(default)]
+    content_ratings: Vec<RawRating>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+#[serde(rename_all = "PascalCase")]
+struct RawRating {
+    #[serde(default)]
+    rating_system: Option<String>,
+    #[serde(default)]
+    rating_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+#[serde(rename_all = "PascalCase")]
+struct RawAttribute {
+    #[serde(default)]
+    name: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -73,6 +91,8 @@ struct RawProperties {
     category: Option<String>,
     #[serde(default)]
     categories: Option<Vec<String>>,
+    #[serde(default)]
+    attributes: Option<Vec<RawAttribute>>,
 }
 
 #[derive(Debug, Deserialize, Default, Clone)]
@@ -244,6 +264,40 @@ pub fn parse_lookup(body: &str) -> Result<Option<CatalogProduct>, ProviderError>
         localized.and_then(|l| clean(&l.publisher_name)),
     );
 
+    let mut features = Vec::new();
+    for attribute in raw.properties.attributes.iter().flatten() {
+        let name = match attribute.name.as_deref() {
+            Some("XblLocalMultiPlayer") => "Local multiplayer",
+            Some("XblOnlineMultiPlayer") => "Online multiplayer",
+            Some("XblCrossPlatformMultiPlayer") => "Cross-platform multiplayer",
+            Some("XblAchievements") => "Achievements",
+            Some("XblCloudSaves") => "Cloud saves",
+            Some("XPA") => "Xbox Play Anywhere",
+            _ => continue,
+        };
+        push_unique(&mut features, Some(name.to_string()));
+    }
+    let mut age_ratings = Vec::new();
+    for system in ["PEGI", "ESRB", "USK"] {
+        let rating = raw
+            .market_properties
+            .iter()
+            .flat_map(|m| &m.content_ratings)
+            .filter(|r| r.rating_system.as_deref() == Some(system))
+            .find_map(|r| age_rating(system, r.rating_id.as_deref()?));
+        push_unique(&mut age_ratings, rating);
+    }
+    let links = clean(&raw.product_id)
+        .filter(|id| id.bytes().all(|b| b.is_ascii_alphanumeric()))
+        .map(|id| {
+            GameLink::new(
+                "Microsoft Store page",
+                format!("https://www.microsoft.com/store/productId/{id}"),
+            )
+        })
+        .into_iter()
+        .collect();
+
     Ok(Some(CatalogProduct {
         store_id: clean(&raw.product_id),
         title: localized.and_then(|l| clean(&l.product_title)),
@@ -257,9 +311,29 @@ pub fn parse_lookup(body: &str) -> Result<Option<CatalogProduct>, ProviderError>
             developers,
             publishers,
             genres,
+            features,
+            age_ratings,
+            links,
             ..GameMetadata::default()
         },
     }))
+}
+
+/// "PEGI 16", "ESRB Teen", "USK 12" from a catalog rating id like `PEGI:16` or `ESRB:T`.
+fn age_rating(system: &str, id: &str) -> Option<String> {
+    let value = id.split_once(':')?.1.trim();
+    let label = match (system, value) {
+        ("ESRB", "EC") => "Early Childhood",
+        ("ESRB", "E") => "Everyone",
+        ("ESRB", "E10") => "Everyone 10+",
+        ("ESRB", "T") => "Teen",
+        ("ESRB", "M") => "Mature 17+",
+        ("ESRB", "AO") => "Adults Only 18+",
+        ("ESRB", _) => return None,
+        (_, v) if !v.is_empty() && v.bytes().all(|b| b.is_ascii_digit()) => v,
+        _ => return None,
+    };
+    Some(format!("{system} {label}"))
 }
 
 /// A package family name is safe to put into a URL when it only holds these characters.
@@ -396,11 +470,41 @@ mod tests {
         assert_eq!(meta.developers, ["343 Industries"]);
         assert_eq!(meta.publishers, ["Xbox Game Studios"]);
         assert_eq!(meta.genres, ["Shooter"]);
+        assert_eq!(meta.age_ratings, ["PEGI 16", "ESRB Teen", "USK 16"]);
+        assert_eq!(
+            meta.features,
+            [
+                "Local multiplayer",
+                "Online multiplayer",
+                "Achievements",
+                "Cloud saves",
+                "Xbox Play Anywhere"
+            ]
+        );
+        assert_eq!(
+            meta.links,
+            [GameLink::new(
+                "Microsoft Store page",
+                "https://www.microsoft.com/store/productId/9PP5G1F0C2B6"
+            )]
+        );
         assert!(
             meta.description
                 .as_deref()
                 .is_some_and(|d| d.starts_with("Free-to-Play Multiplayer:"))
         );
+    }
+
+    #[test]
+    fn age_ratings_are_formatted_per_system() {
+        assert_eq!(age_rating("PEGI", "PEGI:3").as_deref(), Some("PEGI 3"));
+        assert_eq!(
+            age_rating("ESRB", "ESRB:E10").as_deref(),
+            Some("ESRB Everyone 10+")
+        );
+        assert_eq!(age_rating("ESRB", "ESRB:RP"), None);
+        assert_eq!(age_rating("USK", "USK:x"), None);
+        assert_eq!(age_rating("PEGI", "16"), None);
     }
 
     #[test]

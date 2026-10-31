@@ -1,0 +1,55 @@
+{
+  "response": {
+    "store_items": [
+      {
+        "appid": 620,
+        "id": 620,
+        "name": "Portal 2",
+        "success": 1,
+        "tagids": [
+          4182,
+          1625,
+          1664,
+          3839,
+          5923
+        ],
+        "tags": [
+          {
+            "tagid": 4182,
+            "weight": 604
+          },
+          {
+            "tagid": 1625,
+            "weight": 588
+          },
+          {
+            "tagid": 1664,
+            "weight": 586
+          },
+          {
+            "tagid": 3839,
+            "weight": 560
+          },
+          {
+            "tagid": 5923,
+            "weight": 557
+          }
+        ],
+        "reviews": {
+          "summary_filtered": {
+            "review_count": 392557,
+            "percent_positive": 98,
+            "review_score": 9,
+            "review_score_label": "Overwhelmingly Positive"
+          },
+          "summary_language_specific": {
+            "review_count": 174723,
+            "percent_positive": 98,
+            "review_score": 9,
+            "review_score_label": "Overwhelmingly Positive"
+          }
+        }
+      }
+    ]
+  }
+}

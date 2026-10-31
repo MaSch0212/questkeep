@@ -11,20 +11,22 @@ import { createSignal, For, Show } from "solid-js";
 import type { GroupBy } from "../bindings/GroupBy";
 import type { SortField } from "../bindings/SortField";
 import { store } from "../lib/store";
+import {
+  GAME_GROUPS,
+  groupLabel,
+  GROUPS,
+  MORE_SORTS,
+  NUMBER_GROUPS,
+  sortLabel,
+  SORTS,
+} from "../lib/viewOptions";
 import { activeFilterCount } from "../lib/views";
 import type { ViewMode } from "../lib/viewMode";
 import { FilterPanel } from "./FilterPanel";
 import { KeywordFilter, type KeywordFilterHandle } from "./KeywordFilter";
-import { Menu } from "./Menu";
+import { Menu, type MenuEntry } from "./Menu";
 import type { PopoverAnchor } from "./Popover";
 import { SaveViewDialog } from "./SaveViewDialog";
-
-const SORTS: { id: SortField; label: string }[] = [
-  { id: "name", label: "Name" },
-  { id: "lastPlayed", label: "Last played" },
-  { id: "playtime", label: "Playtime" },
-  { id: "dateAdded", label: "Date added" },
-];
 
 const LAYOUTS: { id: ViewMode; label: string; icon: typeof List }[] = [
   { id: "grid", label: "Grid view", icon: LayoutGrid },
@@ -32,21 +34,28 @@ const LAYOUTS: { id: ViewMode; label: string; icon: typeof List }[] = [
   { id: "details", label: "Details view", icon: PanelLeft },
 ];
 
-const GROUPS: { id: GroupBy; label: string }[] = [
-  { id: "none", label: "Don't group" },
-  { id: "category", label: "Category" },
-  { id: "source", label: "Store" },
-];
+const sortEntry = (sort: { id: SortField; label: string }): MenuEntry => ({
+  label: sort.label,
+  checked: store.query().sort === sort.id,
+  keepOpen: true,
+  onSelect: () => store.setSortField(sort.id),
+});
+
+const groupEntry = (group: { id: GroupBy; label: string }): MenuEntry => ({
+  label: group.label,
+  checked: store.groupBy() === group.id,
+  onSelect: () => store.setGroupBy(group.id),
+});
 
 type Open = "filters" | "sort" | "group" | "save" | null;
 
 const filters = () => activeFilterCount(store.query());
-const sortName = () => SORTS.find((s) => s.id === store.query().sort)?.label ?? "";
-const sortLabel = () =>
+const sortName = () => sortLabel(store.query().sort);
+const sortButtonLabel = () =>
   `Sort: ${sortName()}, ${store.query().descending ? "descending" : "ascending"}`;
-const groupLabel = () => {
-  const group = GROUPS.find((g) => g.id === store.groupBy());
-  return store.groupBy() === "none" ? "Group by" : `Grouped by ${group?.label.toLowerCase()}`;
+const groupButtonLabel = () => {
+  const group = store.groupBy();
+  return group === "none" ? "Group by" : `Grouped by ${groupLabel(group).toLowerCase()}`;
 };
 const viewName = () => store.activeView()?.name ?? "view";
 const changed = () => {
@@ -112,8 +121,8 @@ export function TopBar(props: { keywordRef?: (handle: KeywordFilterHandle) => vo
         type="button"
         class="tool-btn"
         classList={{ "tool-btn--open": open() === "sort" }}
-        aria-label={sortLabel()}
-        title={sortLabel()}
+        aria-label={sortButtonLabel()}
+        title={sortButtonLabel()}
         aria-haspopup="menu"
         aria-expanded={open() === "sort"}
         onClick={() => toggle("sort", "start")}
@@ -133,15 +142,21 @@ export function TopBar(props: { keywordRef?: (handle: KeywordFilterHandle) => vo
           "tool-btn--open": open() === "group",
           "tool-btn--on": store.groupBy() !== "none",
         }}
-        aria-label={groupLabel()}
-        title={groupLabel()}
+        aria-label={groupButtonLabel()}
+        title={groupButtonLabel()}
         aria-haspopup="menu"
         aria-expanded={open() === "group"}
         onClick={() => toggle("group", "start")}
       >
         <Group class="icon" aria-hidden="true" />
       </button>
-      <Show when={changed()}>
+      <Show when={store.isExplore()}>
+        <button type="button" class="btn topbar__save" onClick={() => setSaving(true)}>
+          <BookmarkPlus class="icon" aria-hidden="true" />
+          Save as view…
+        </button>
+      </Show>
+      <Show when={changed() && !store.isExplore()}>
         <div class="view-actions" role="group" aria-label={`Unsaved changes to ${viewName()}`}>
           <span class="view-actions__label">
             <span class="view-actions__dot" aria-hidden="true" />
@@ -206,11 +221,20 @@ export function TopBar(props: { keywordRef?: (handle: KeywordFilterHandle) => vo
             onClose={close}
             entries={[
               { kind: "heading", label: "Group by" },
-              ...GROUPS.map((group) => ({
-                label: group.label,
-                checked: store.groupBy() === group.id,
-                onSelect: () => store.setGroupBy(group.id),
-              })),
+              ...GROUPS.map(groupEntry),
+              { kind: "separator" },
+              {
+                kind: "submenu",
+                label: "About the game",
+                hint: GAME_GROUPS.find((g) => g.id === store.groupBy())?.label,
+                entries: () => GAME_GROUPS.map(groupEntry),
+              },
+              {
+                kind: "submenu",
+                label: "Time and numbers",
+                hint: NUMBER_GROUPS.find((g) => g.id === store.groupBy())?.label,
+                entries: () => NUMBER_GROUPS.map(groupEntry),
+              },
             ]}
           />
         )}
@@ -223,6 +247,14 @@ export function TopBar(props: { keywordRef?: (handle: KeywordFilterHandle) => vo
             inside={() => [buttons.sort]}
             onClose={close}
             entries={[
+              ...SORTS.map(sortEntry),
+              {
+                kind: "submenu",
+                label: "More",
+                hint: MORE_SORTS.find((s) => s.id === store.query().sort)?.label,
+                entries: () => MORE_SORTS.map(sortEntry),
+              },
+              { kind: "separator" },
               {
                 label: "Ascending",
                 checked: !store.query().descending,
@@ -235,13 +267,6 @@ export function TopBar(props: { keywordRef?: (handle: KeywordFilterHandle) => vo
                 keepOpen: true,
                 onSelect: () => store.setDescending(true),
               },
-              { kind: "separator" },
-              ...SORTS.map((sort) => ({
-                label: sort.label,
-                checked: store.query().sort === sort.id,
-                keepOpen: true,
-                onSelect: () => store.setSortField(sort.id),
-              })),
             ]}
           />
         )}

@@ -1,5 +1,7 @@
 import { createSignal, For, Show } from "solid-js";
+import { treePills } from "../lib/filters";
 import { store } from "../lib/store";
+import { groupLabel, sortLabel } from "../lib/viewOptions";
 import { activeFilterCount, NO_CATEGORY } from "../lib/views";
 import { IconPicker } from "./IconPicker";
 import { Modal } from "./Modal";
@@ -7,15 +9,7 @@ import type { PopoverAnchor } from "./Popover";
 import { sourceName } from "./SourceIcon";
 import { ViewIcon } from "./ViewIcon";
 
-const SORT_NAMES: Record<string, string> = {
-  name: "Name",
-  lastPlayed: "Last played",
-  playtime: "Playtime",
-  dateAdded: "Date added",
-};
-
 const LAYOUT_NAMES: Record<string, string> = { grid: "Grid", list: "List", details: "Details" };
-const GROUP_NAMES: Record<string, string> = { category: "category", source: "store" };
 
 function categoryName(id: string): string {
   if (id === NO_CATEGORY) return "No category";
@@ -35,6 +29,10 @@ function filterSummary(): string {
   if (q.played !== "any") parts.push(q.played === "played" ? "Played" : "Never played");
   if (q.hidden === "all") parts.push("Including hidden");
   if (q.hidden === "hidden") parts.push("Only hidden");
+  for (const pill of treePills(q.filter, store.valueName)) {
+    const text = pill.parts.map((p) => (p.value ? `${p.label}: ${p.value}` : p.label));
+    parts.push(pill.grouped ? `(${text.join(` ${pill.joiner} `)})` : text.join(", "));
+  }
   return activeFilterCount(q) === 0 ? "None" : parts.join(" · ");
 }
 
@@ -114,13 +112,14 @@ export function SaveViewDialog(props: { onClose: () => void }) {
           <dd>{filterSummary()}</dd>
           <dt>Sort</dt>
           <dd>
-            {SORT_NAMES[store.query().sort]},{" "}
-            {store.query().descending ? "descending" : "ascending"}
+            {sortLabel(store.query().sort)}, {store.query().descending ? "descending" : "ascending"}
           </dd>
           <dt>Layout</dt>
           <dd>
             {LAYOUT_NAMES[store.viewMode()]}
-            {store.groupBy() === "none" ? "" : `, grouped by ${GROUP_NAMES[store.groupBy()]}`}
+            {store.groupBy() === "none"
+              ? ""
+              : `, grouped by ${groupLabel(store.groupBy()).toLowerCase()}`}
           </dd>
         </dl>
         <div class="form__actions">

@@ -76,7 +76,25 @@
       ],
       "MarketProperties": [
         {
-          "OriginalReleaseDate": "2021-11-15T18:00:00Z"
+          "OriginalReleaseDate": "2021-11-15T18:00:00Z",
+          "ContentRatings": [
+            {
+              "RatingSystem": "ESRB",
+              "RatingId": "ESRB:T"
+            },
+            {
+              "RatingSystem": "CERO",
+              "RatingId": "CERO:D"
+            },
+            {
+              "RatingSystem": "PEGI",
+              "RatingId": "PEGI:16"
+            },
+            {
+              "RatingSystem": "USK",
+              "RatingId": "USK:16"
+            }
+          ]
         }
       ],
       "Properties": {
@@ -84,7 +102,44 @@
         "Categories": [
           "Shooter"
         ],
-        "PackageFamilyName": "Microsoft.254428597CFE2_8wekyb3d8bbwe"
+        "PackageFamilyName": "Microsoft.254428597CFE2_8wekyb3d8bbwe",
+        "Attributes": [
+          {
+            "Name": "XblLocalMultiPlayer",
+            "Minimum": 2,
+            "Maximum": 24
+          },
+          {
+            "Name": "XblOnlineMultiPlayer",
+            "Minimum": 2,
+            "Maximum": 24
+          },
+          {
+            "Name": "BroadcastSupport",
+            "Minimum": null,
+            "Maximum": null
+          },
+          {
+            "Name": "Capability4k",
+            "Minimum": null,
+            "Maximum": null
+          },
+          {
+            "Name": "XblAchievements",
+            "Minimum": null,
+            "Maximum": null
+          },
+          {
+            "Name": "XblCloudSaves",
+            "Minimum": null,
+            "Maximum": null
+          },
+          {
+            "Name": "XPA",
+            "Minimum": null,
+            "Maximum": null
+          }
+        ]
       },
       "ProductId": "9PP5G1F0C2B6"
     }

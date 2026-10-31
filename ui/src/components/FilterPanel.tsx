@@ -5,7 +5,8 @@ import type { PlayedFilter } from "../bindings/PlayedFilter";
 import type { TriState } from "../bindings/TriState";
 import { toggleSource } from "../lib/query";
 import { store } from "../lib/store";
-import { clearedFilters, NO_CATEGORY } from "../lib/views";
+import { activeFilterCount, clearedFilters, NO_CATEGORY } from "../lib/views";
+import { FilterTree } from "./FilterTree";
 import { Popover, type PopoverAnchor } from "./Popover";
 import { SourceIcon } from "./SourceIcon";
 
@@ -70,104 +71,112 @@ export function FilterPanel(props: {
       inside={props.inside}
       onClose={props.onClose}
     >
-      <h2 class="filters__title">Filters</h2>
-      <div class="filters__grid">
-        <span class="filters__label" id="filter-stores">
-          Store
+      <div class="filters__head">
+        <h2 class="filters__title">Filters</h2>
+        <span class="filters__summary">
+          {activeFilterCount(query())} active · {store.games().length}{" "}
+          {store.games().length === 1 ? "game" : "games"}
         </span>
-        <div class="filters__stores" role="group" aria-labelledby="filter-stores">
-          <For each={store.sources()}>
-            {(source) => {
-              const on = () => query().sources.includes(source.id);
-              return (
-                <button
-                  type="button"
-                  class="chip"
-                  classList={{ "chip--on": on() }}
-                  aria-pressed={on()}
-                  onClick={() => set({ sources: toggleSource(query().sources, source.id) })}
-                >
-                  <SourceIcon source={source.id} />
-                  {source.name}
-                </button>
-              );
-            }}
-          </For>
-        </div>
-        <span class="filters__label" id="filter-categories">
-          Category
-        </span>
-        <Show
-          when={store.categories().length > 0}
-          fallback={<p class="filters__hint">No categories yet. Add them on a game's page.</p>}
-        >
-          <div class="filters__stores" role="group" aria-labelledby="filter-categories">
-            <For each={[...store.categories(), { id: NO_CATEGORY, name: "No category" }]}>
-              {(category) => {
-                const on = () => query().categories.includes(category.id);
+      </div>
+      <div class="filters__body">
+        <div class="filters__grid">
+          <span class="filters__label" id="filter-stores">
+            Store
+          </span>
+          <div class="filters__stores" role="group" aria-labelledby="filter-stores">
+            <For each={store.sources()}>
+              {(source) => {
+                const on = () => query().sources.includes(source.id);
                 return (
                   <button
                     type="button"
                     class="chip"
-                    classList={{ "chip--on": on(), "chip--none": category.id === NO_CATEGORY }}
+                    classList={{ "chip--on": on() }}
                     aria-pressed={on()}
-                    onClick={() =>
-                      set({ categories: toggleSource(query().categories, category.id) })
-                    }
+                    onClick={() => set({ sources: toggleSource(query().sources, source.id) })}
                   >
-                    {category.name}
+                    <SourceIcon source={source.id} />
+                    {source.name}
                   </button>
                 );
               }}
             </For>
           </div>
-        </Show>
-        <Choice
-          label="Installed"
-          value={query().installed}
-          options={YES_NO}
-          onChange={(installed) => set({ installed })}
-        />
-        <Choice
-          label="Favorite"
-          value={query().favorite}
-          options={YES_NO}
-          onChange={(favorite) => set({ favorite })}
-        />
-        <Choice<PlayedFilter>
-          label="Played"
-          value={query().played}
-          options={[
-            ["any", "Any"],
-            ["played", "Played"],
-            ["never", "Never"],
-          ]}
-          onChange={(played) => set({ played })}
-        />
-        <Choice<HiddenFilter>
-          label="Hidden games"
-          value={query().hidden}
-          options={[
-            ["visible", "Leave out"],
-            ["all", "Include"],
-            ["hidden", "Only"],
-          ]}
-          onChange={(hidden) => set({ hidden })}
-        />
+          <span class="filters__label" id="filter-categories">
+            Category
+          </span>
+          <Show
+            when={store.categories().length > 0}
+            fallback={<p class="filters__hint">No categories yet. Add them on a game's page.</p>}
+          >
+            <div class="filters__stores" role="group" aria-labelledby="filter-categories">
+              <For each={[...store.categories(), { id: NO_CATEGORY, name: "No category" }]}>
+                {(category) => {
+                  const on = () => query().categories.includes(category.id);
+                  return (
+                    <button
+                      type="button"
+                      class="chip"
+                      classList={{ "chip--on": on(), "chip--none": category.id === NO_CATEGORY }}
+                      aria-pressed={on()}
+                      onClick={() =>
+                        set({ categories: toggleSource(query().categories, category.id) })
+                      }
+                    >
+                      {category.name}
+                    </button>
+                  );
+                }}
+              </For>
+            </div>
+          </Show>
+          <Choice
+            label="Installed"
+            value={query().installed}
+            options={YES_NO}
+            onChange={(installed) => set({ installed })}
+          />
+          <Choice
+            label="Favorite"
+            value={query().favorite}
+            options={YES_NO}
+            onChange={(favorite) => set({ favorite })}
+          />
+          <Choice<PlayedFilter>
+            label="Played"
+            value={query().played}
+            options={[
+              ["any", "Any"],
+              ["played", "Played"],
+              ["never", "Never"],
+            ]}
+            onChange={(played) => set({ played })}
+          />
+          <Choice<HiddenFilter>
+            label="Hidden games"
+            value={query().hidden}
+            options={[
+              ["visible", "Leave out"],
+              ["all", "Include"],
+              ["hidden", "Only"],
+            ]}
+            onChange={(hidden) => set({ hidden })}
+          />
+        </div>
+        <FilterTree tree={query().filter} onChange={(filter) => set({ filter })} />
       </div>
       <div class="filters__footer">
         <button
           type="button"
           class="btn btn--ghost"
           onClick={() => {
-            const cleared = clearedFilters(query());
-            set({
-              sources: cleared.sources,
-              favorite: cleared.favorite,
-              installed: cleared.installed,
-              played: cleared.played,
-              hidden: cleared.hidden,
-            });
+            const {
+              sort: _sort,
+              descending: _descending,
+              search: _search,
+              ...cleared
+            } = clearedFilters(query());
+            set(cleared);
           }}
         >
           Clear filters

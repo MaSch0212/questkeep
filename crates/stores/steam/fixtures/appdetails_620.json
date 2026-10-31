@@ -1,0 +1,91 @@
+{
+  "620": {
+    "success": true,
+    "data": {
+      "short_description": "The &quot;Perpetual Testing Initiative&quot; has been expanded to allow you to design co-op puzzles for you and your friends!",
+      "release_date": {
+        "coming_soon": false,
+        "date": "Apr 18, 2011"
+      },
+      "developers": [
+        "Valve"
+      ],
+      "publishers": [
+        "Valve"
+      ],
+      "genres": [
+        {
+          "id": "1",
+          "description": "Action"
+        },
+        {
+          "id": "25",
+          "description": "Adventure"
+        }
+      ],
+      "categories": [
+        {
+          "id": 2,
+          "description": "Single-player"
+        },
+        {
+          "id": 1,
+          "description": "Multi-player"
+        },
+        {
+          "id": 9,
+          "description": "Co-op"
+        },
+        {
+          "id": 38,
+          "description": "Online Co-op"
+        },
+        {
+          "id": 39,
+          "description": "Shared/Split Screen Co-op"
+        },
+        {
+          "id": 24,
+          "description": "Shared/Split Screen"
+        },
+        {
+          "id": 22,
+          "description": "Steam Achievements"
+        },
+        {
+          "id": 28,
+          "description": "Full controller support"
+        },
+        {
+          "id": 29,
+          "description": "Steam Trading Cards"
+        },
+        {
+          "id": 13,
+          "description": "Captions available"
+        },
+        {
+          "id": 51,
+          "description": "Steam Workshop"
+        },
+        {
+          "id": 30,
+          "description": "Steam Workshop"
+        }
+      ],
+      "platforms": {
+        "windows": true,
+        "mac": false,
+        "linux": true
+      },
+      "metacritic": {
+        "score": 95,
+        "url": "https://www.metacritic.com/game/pc/portal-2?ftag=MCD-06-10aaa1f"
+      },
+      "achievements": {
+        "total": 51
+      },
+      "website": "http://www.thinkwithportals.com/"
+    }
+  }
+}

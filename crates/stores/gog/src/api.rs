@@ -7,7 +7,7 @@ use std::time::Duration;
 use serde::Deserialize;
 
 use questkeep_store_api::ProviderError;
-use questkeep_store_api::model::GameMetadata;
+use questkeep_store_api::model::{GameLink, GameMetadata};
 
 const API_BASE: &str = "https://api.gog.com/v2/games";
 
@@ -36,6 +36,12 @@ struct Links {
     icon_square: Option<Href>,
     #[serde(default)]
     icon: Option<Href>,
+    #[serde(default)]
+    store: Option<Href>,
+    #[serde(default)]
+    forum: Option<Href>,
+    #[serde(default)]
+    support: Option<Href>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
@@ -45,6 +51,7 @@ struct Href {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct Embedded {
     #[serde(default)]
     product: Option<Product>,
@@ -54,11 +61,50 @@ struct Embedded {
     publishers: Vec<Named>,
     #[serde(default)]
     tags: Vec<Named>,
+    /// User tags ("Story Rich", "Great Soundtrack", ...).
+    #[serde(default)]
+    properties: Vec<Named>,
+    #[serde(default)]
+    features: Vec<Named>,
+    #[serde(default)]
+    series: Option<Named>,
+    #[serde(default)]
+    supported_operating_systems: Vec<SupportedOs>,
+    #[serde(default)]
+    esrb_rating: Option<Rating>,
+    #[serde(default)]
+    pegi_rating: Option<Rating>,
+    #[serde(default)]
+    usk_rating: Option<Rating>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SupportedOs {
+    #[serde(default)]
+    operating_system: Option<OsName>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+struct OsName {
+    #[serde(default)]
+    name: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Rating {
+    #[serde(default)]
+    age_rating: Option<u32>,
+    #[serde(default)]
+    category: Option<Named>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Product {
+    #[serde(default)]
+    id: Option<u64>,
     #[serde(default)]
     global_release_date: Option<String>,
     #[serde(default)]
@@ -103,8 +149,77 @@ impl StoreGame {
             developers: names(&self.embedded.developers),
             publishers: names(&self.embedded.publishers),
             genres: names(&self.embedded.tags),
+            tags: names(&self.embedded.properties),
+            features: names(&self.embedded.features),
+            series: self
+                .embedded
+                .series
+                .iter()
+                .map(|n| n.name.trim().to_string())
+                .filter(|n| !n.is_empty())
+                .collect(),
+            age_ratings: self.age_ratings(),
+            platforms: self
+                .embedded
+                .supported_operating_systems
+                .iter()
+                .filter_map(|os| match os.operating_system.as_ref()?.name.as_str() {
+                    "windows" => Some("Windows".to_string()),
+                    "osx" => Some("macOS".to_string()),
+                    "linux" => Some("Linux".to_string()),
+                    _ => None,
+                })
+                .collect(),
+            links: self.game_links(),
             ..GameMetadata::default()
         }
+    }
+
+    /// "ESRB Mature 17+", "PEGI 18", "USK 18" for the ratings that are present.
+    fn age_ratings(&self) -> Vec<String> {
+        let e = &self.embedded;
+        let mut out = Vec::new();
+        if let Some(name) = e
+            .esrb_rating
+            .as_ref()
+            .and_then(|r| r.category.as_ref())
+            .map(|c| c.name.trim())
+            .filter(|n| !n.is_empty())
+        {
+            out.push(format!("ESRB {name}"));
+        }
+        for (label, rating) in [("PEGI", &e.pegi_rating), ("USK", &e.usk_rating)] {
+            if let Some(age) = rating.as_ref().and_then(|r| r.age_rating) {
+                out.push(format!("{label} {age}"));
+            }
+        }
+        out
+    }
+
+    fn game_links(&self) -> Vec<GameLink> {
+        let href = |h: &Option<Href>| {
+            h.as_ref()
+                .map(|h| h.href.trim())
+                .filter(|h| h.starts_with("https://"))
+                .map(str::to_string)
+        };
+        let mut links = Vec::new();
+        if let Some(url) = href(&self.links.store) {
+            links.push(GameLink::new("GOG store page", url));
+        }
+        if let Some(id) = self.embedded.product.as_ref().and_then(|p| p.id) {
+            links.push(GameLink::new(
+                "PCGamingWiki",
+                format!("https://pcgamingwiki.com/api/gog.php?page={id}"),
+            ));
+        }
+        if let Some(url) = href(&self.links.forum) {
+            links.push(GameLink::new("GOG forum", url));
+        }
+        if let Some(url) = href(&self.links.support) {
+            links.push(GameLink::new("GOG support", url));
+        }
+        links
     }
 
     /// Portrait box art.
@@ -412,6 +527,29 @@ mod tests {
         assert_eq!(meta.developers, ["CD PROJEKT RED"]);
         assert_eq!(meta.publishers, ["CD PROJEKT RED"]);
         assert_eq!(meta.genres, ["Role-playing", "Action", "Fantasy"]);
+        assert_eq!(meta.features, ["Cloud saves", "Single-player"]);
+        assert_eq!(meta.series, ["The Witcher"]);
+        assert_eq!(meta.platforms, ["Windows", "macOS"]);
+        assert_eq!(meta.age_ratings, ["ESRB Mature 17+", "PEGI 18", "USK 18"]);
+        assert_eq!(meta.tags.len(), 6);
+        assert_eq!(meta.tags[0], "Action");
+        let links: Vec<_> = meta
+            .links
+            .iter()
+            .map(|l| (l.name.as_str(), l.url.as_str()))
+            .collect();
+        assert_eq!(
+            links,
+            [
+                ("GOG store page", "https://www.gog.com/en/game/the_witcher"),
+                (
+                    "PCGamingWiki",
+                    "https://pcgamingwiki.com/api/gog.php?page=1207658924"
+                ),
+                ("GOG forum", "https://www.gog.com/forum/the_witcher"),
+                ("GOG support", "https://www.gog.com/support/the_witcher"),
+            ]
+        );
     }
 
     #[test]

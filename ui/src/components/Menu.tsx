@@ -19,7 +19,14 @@ export type MenuEntry =
       keepOpen?: boolean;
       onSelect: () => void;
     }
-  | { kind: "submenu"; label: string; icon?: () => JSX.Element; entries: () => MenuEntry[] }
+  | {
+      kind: "submenu";
+      label: string;
+      icon?: () => JSX.Element;
+      /** Small text before the arrow (the chosen entry inside). */
+      hint?: string;
+      entries: () => MenuEntry[];
+    }
   | { kind: "separator" }
   | { kind: "heading"; label: string };
 
@@ -134,6 +141,9 @@ export function Menu(props: MenuProps) {
                   >
                     <span class="menu__icon">{sub().icon?.()}</span>
                     <span class="menu__label">{sub().label}</span>
+                    <Show when={sub().hint}>
+                      <span class="menu__hint">{sub().hint}</span>
+                    </Show>
                     <ChevronRight class="icon menu__arrow" aria-hidden="true" />
                   </button>
                   <Show when={openSub() === index && buttons[index]}>

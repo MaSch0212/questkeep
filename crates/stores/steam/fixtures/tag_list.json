@@ -1,0 +1,35 @@
+{
+  "response": {
+    "version_hash": "711684454",
+    "tags": [
+      {
+        "tagid": 19,
+        "name": "Action"
+      },
+      {
+        "tagid": 21,
+        "name": "Adventure"
+      },
+      {
+        "tagid": 1625,
+        "name": "Platformer"
+      },
+      {
+        "tagid": 1664,
+        "name": "Puzzle"
+      },
+      {
+        "tagid": 3839,
+        "name": "First-Person"
+      },
+      {
+        "tagid": 4182,
+        "name": "Singleplayer"
+      },
+      {
+        "tagid": 5923,
+        "name": "Dark Humor"
+      }
+    ]
+  }
+}
