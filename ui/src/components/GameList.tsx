@@ -21,6 +21,7 @@ import {
   visibleRowRange,
 } from "../lib/grouping";
 import { createSlotCursor } from "../lib/slotCursor";
+import { followGroupJumps } from "../lib/groupJump";
 import { store } from "../lib/store";
 import { GameRow, rowDomId } from "./GameRow";
 import { GameRowCompact } from "./GameRowCompact";
@@ -75,6 +76,7 @@ export function GameList(props: { compact?: boolean }) {
     }),
   );
   const { cursor, place, moveTo } = createSlotCursor(layout);
+  followGroupJumps({ layout, scroller: () => scroller, setScrollTop, moveTo });
   // Primitive row indices: <For> keeps each row's DOM while it stays in the window.
   const rows = createMemo(() => {
     const { start, end } = visibleRowRange(layout(), scrollTop(), height(), OVERSCAN_ROWS);

@@ -99,6 +99,9 @@ function createAppStore() {
   const [valueLists, setValueLists] = createSignal<Partial<Record<ListField, ValueCount[]>>>({});
   // A game opened from the command bar that no view contains; its details show anyway.
   const [pinnedGame, setPinnedGame] = createSignal<Game | null>(null);
+  /** A request to scroll the open grid or list to a group (`seq` makes repeats distinct). */
+  const [groupJump, setGroupJump] = createSignal<{ key: string; seq: number } | null>(null);
+  let jumpSeq = 0;
   const [games, setGames] = createSignal<Game[]>([]);
   const [loading, setLoading] = createSignal(false);
   /** What each view remembers (panel, selection, collapsed groups); Explore's is never saved. */
@@ -611,6 +614,21 @@ function createAppStore() {
     updateUi(activeViewId(), (state) => toggleCollapsed(state, groupBy(), key));
   }
 
+  /** Expands a group if needed and asks the open grid or list to scroll to it. */
+  function jumpToGroup(key: string) {
+    if (collapsedGroups().has(key)) toggleGroup(key);
+    setGroupJump({ key, seq: ++jumpSeq });
+  }
+
+  /** Collapses (or expands) every group of the open view's grouping. */
+  function setAllGroupsCollapsed(collapse: boolean) {
+    const keys = collapse ? groups().map((g) => g.key) : [];
+    updateUi(activeViewId(), (state) => ({
+      ...state,
+      collapsed: { ...state.collapsed, [groupBy()]: keys },
+    }));
+  }
+
   /** Loads what each view remembers. Changes made before it arrived win. */
   async function loadViewUi() {
     const loaded = (await api.viewUiStates()) ?? {};
@@ -933,6 +951,9 @@ function createAppStore() {
     setGroupBy,
     groups,
     collapsedGroups,
+    groupJump,
+    jumpToGroup,
+    setAllGroupsCollapsed,
     /** The details panel floats over the list in the open view (grid and table). */
     panelFloating: () => activeUi().panelFloating,
     setPanelFloating: (floating: boolean) =>

@@ -412,3 +412,24 @@ export function stickyHeader(
   }
   return current ? { row: current, offset: 0 } : null;
 }
+
+/** A group header's short summary: "41 installed · 2,310h", "12 installed", "None installed". */
+export function groupSummary(games: readonly Game[]): string {
+  const installed = games.filter((g) => g.installed).length;
+  const hours = Math.round(games.reduce((sum, g) => sum + g.playtimeSeconds, 0) / 3600);
+  const installedText = installed === 0 ? "None installed" : `${installed} installed`;
+  return hours > 0 ? `${installedText} · ${hours.toLocaleString()}h` : installedText;
+}
+
+/**
+ * Where a group starts: the offset of its header row and the slot of its first game (-1 when it
+ * shows none, e.g. collapsed). Null when the layout has no header for that key.
+ */
+export function groupStart(
+  layout: GroupedLayout,
+  key: string,
+): { top: number; slot: number } | null {
+  const header = layout.rows.find((row) => row.kind === "header" && row.group.key === key);
+  if (!header) return null;
+  return { top: header.top, slot: layout.slots.findIndex((slot) => slot.groupKey === key) };
+}

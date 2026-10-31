@@ -20,6 +20,8 @@
   --qk-color-accent-contrast: #0e1220;
   --qk-color-accent-divider: #0e122055;
   --qk-color-accent-soft: #232c4a;
+  --qk-color-group-band: #1e2433;
+  --qk-color-group-band-hover: #252d40;
   --qk-color-edited-border: #7c9cff88;
   --qk-color-overlay: #000000aa;
   --qk-color-danger: #ff7a85;
@@ -94,6 +96,7 @@
   --qk-shadow-tile: 0 2px 8px #00000066;
   --qk-shadow-tile-hover: 0 10px 24px #000000aa;
   --qk-shadow-panel: -12px 0 32px #00000066;
+  --qk-shadow-sticky-group: 0 6px 12px #00000088;
   --qk-shadow-dialog: 0 24px 64px #000000aa;
   --qk-shadow-badge: 0 1px 4px #00000099;
   --qk-shadow-toast: 0 8px 24px #00000088;
@@ -246,8 +249,10 @@
   --qk-game-icon-size: 22px;
   --qk-game-icon-radius: 5px;
   --qk-dragged-opacity: 0.4;
-  --qk-group-header-height: 40px;
-  --qk-list-group-height: 32px;
+  --qk-group-header-height: 52px;
+  --qk-group-band-height: 40px;
+  --qk-group-bar-width: 3px;
+  --qk-list-group-height: 46px;
   --qk-category-picker-width: 280px;
   --qk-combine-picker-width: 340px;
   --qk-dialog-wide-width: 900px;

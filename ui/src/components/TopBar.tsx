@@ -5,9 +5,10 @@ import Funnel from "lucide-solid/icons/funnel";
 import Group from "lucide-solid/icons/group";
 import LayoutGrid from "lucide-solid/icons/layout-grid";
 import List from "lucide-solid/icons/list";
+import ListTree from "lucide-solid/icons/list-tree";
 import PanelLeft from "lucide-solid/icons/panel-left";
 import Undo2 from "lucide-solid/icons/undo-2";
-import { createSignal, For, Show } from "solid-js";
+import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import type { GroupBy } from "../bindings/GroupBy";
 import type { SortField } from "../bindings/SortField";
 import { store } from "../lib/store";
@@ -27,6 +28,7 @@ import { KeywordFilter, type KeywordFilterHandle } from "./KeywordFilter";
 import { Menu, type MenuEntry } from "./Menu";
 import type { PopoverAnchor } from "./Popover";
 import { SaveViewDialog } from "./SaveViewDialog";
+import { SearchPicker } from "./SearchPicker";
 
 const LAYOUTS: { id: ViewMode; label: string; icon: typeof List }[] = [
   { id: "grid", label: "Grid view", icon: LayoutGrid },
@@ -47,7 +49,7 @@ const groupEntry = (group: { id: GroupBy; label: string }): MenuEntry => ({
   onSelect: () => store.setGroupBy(group.id),
 });
 
-type Open = "filters" | "sort" | "group" | "save" | null;
+type Open = "filters" | "sort" | "group" | "jump" | "save" | null;
 
 const filters = () => activeFilterCount(store.query());
 const sortName = () => sortLabel(store.query().sort);
@@ -94,6 +96,19 @@ export function TopBar(props: { keywordRef?: (handle: KeywordFilterHandle) => vo
     setOpen(null);
     if (returnFocus && which) buttons[which]?.focus();
   }
+
+  /** Ctrl+G opens "Jump to group" while the library is grouped. */
+  function onWindowKeyDown(event: KeyboardEvent) {
+    if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "g") return;
+    if (store.page() !== "library" || store.groupBy() === "none") return;
+    event.preventDefault();
+    if (open() !== "jump") toggle("jump", "start");
+  }
+
+  onMount(() => {
+    window.addEventListener("keydown", onWindowKeyDown);
+    onCleanup(() => window.removeEventListener("keydown", onWindowKeyDown));
+  });
 
   return (
     <header class="topbar">
@@ -150,6 +165,21 @@ export function TopBar(props: { keywordRef?: (handle: KeywordFilterHandle) => vo
       >
         <Group class="icon" aria-hidden="true" />
       </button>
+      <Show when={store.groupBy() !== "none"}>
+        <button
+          ref={(el) => (buttons.jump = el)}
+          type="button"
+          class="tool-btn"
+          classList={{ "tool-btn--open": open() === "jump" }}
+          aria-label="Jump to group"
+          title="Jump to group (Ctrl+G)"
+          aria-haspopup="dialog"
+          aria-expanded={open() === "jump"}
+          onClick={() => toggle("jump", "start")}
+        >
+          <ListTree class="icon" aria-hidden="true" />
+        </button>
+      </Show>
       <Show when={store.isExplore()}>
         <button type="button" class="btn topbar__save" onClick={() => setSaving(true)}>
           <BookmarkPlus class="icon" aria-hidden="true" />
@@ -211,6 +241,47 @@ export function TopBar(props: { keywordRef?: (handle: KeywordFilterHandle) => vo
       </div>
       <Show when={open() === "filters" && anchor()}>
         {(at) => <FilterPanel anchor={at()} onClose={close} inside={() => [buttons.filters]} />}
+      </Show>
+      <Show when={open() === "jump" && anchor()}>
+        {(at) => (
+          <SearchPicker
+            anchor={at()}
+            label="Jump to group"
+            placeholder="Type to find a group"
+            empty="No group matches"
+            items={store.groups().map((group) => ({
+              id: group.key,
+              label: group.label,
+              hint: String(group.games.length),
+            }))}
+            onPick={(key) => store.jumpToGroup(key)}
+            onClose={(returnFocus) => close(returnFocus)}
+            footer={
+              <div class="picker__footer">
+                <button
+                  type="button"
+                  class="btn btn--small btn--ghost"
+                  onClick={() => {
+                    store.setAllGroupsCollapsed(true);
+                    close(true);
+                  }}
+                >
+                  Collapse all
+                </button>
+                <button
+                  type="button"
+                  class="btn btn--small btn--ghost"
+                  onClick={() => {
+                    store.setAllGroupsCollapsed(false);
+                    close(true);
+                  }}
+                >
+                  Expand all
+                </button>
+              </div>
+            }
+          />
+        )}
       </Show>
       <Show when={open() === "group" && anchor()}>
         {(at) => (

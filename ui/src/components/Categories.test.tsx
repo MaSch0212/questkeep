@@ -71,10 +71,10 @@ describe("grouping", () => {
   it("shows a game once per category, under a header per group", () => {
     render(() => <GameGrid />);
     const headers = screen.getAllByRole("button", { expanded: true });
-    expect(headers.map((h) => h.textContent)).toEqual([
-      "Co-op1 game",
-      "RPG2 games",
-      "No category1 game",
+    expect(headers.map((h) => h.getAttribute("aria-label"))).toEqual([
+      "Co-op, 1 game",
+      "RPG, 2 games",
+      "No category, 1 game",
     ]);
     expect(tiles()).toEqual(["Hades", "Celeste", "Hades", "Doom"]);
     expect(new Set(screen.getAllByRole("gridcell").map((t) => t.id)).size).toBe(4);
@@ -90,6 +90,31 @@ describe("grouping", () => {
     await fireEvent.keyDown(grid, { key: "ArrowDown" });
     expect(store.selectedId()).toBe("d");
     expect(grid.getAttribute("aria-activedescendant")).toBe("tile-d::none");
+  });
+
+  it("jumps to a group (Ctrl+G), expanding it, and collapses or expands all", async () => {
+    render(() => (
+      <>
+        <TopBar />
+        <GameGrid />
+      </>
+    ));
+    await fireEvent.click(screen.getByRole("button", { name: /^No category/ }));
+    expect(tiles()).toEqual(["Hades", "Celeste", "Hades"]);
+    await fireEvent.keyDown(window, { key: "g", ctrlKey: true });
+    const picker = screen.getByRole("dialog", { name: "Jump to group" });
+    await fireEvent.input(within(picker).getByRole("textbox"), { target: { value: "categ" } });
+    await fireEvent.click(within(picker).getByRole("option", { name: /No category/ }));
+    expect(tiles()).toEqual(["Hades", "Celeste", "Hades", "Doom"]);
+    expect(store.selectedId()).toBe("d");
+    expect(document.activeElement).toBe(screen.getByRole("grid"));
+
+    await fireEvent.click(screen.getByRole("button", { name: "Jump to group" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Collapse all" }));
+    expect(screen.queryAllByRole("gridcell")).toEqual([]);
+    await fireEvent.click(screen.getByRole("button", { name: "Jump to group" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
+    expect(tiles()).toEqual(["Hades", "Celeste", "Hades", "Doom"]);
   });
 
   it("groups the list too", () => {

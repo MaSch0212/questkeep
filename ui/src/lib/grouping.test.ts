@@ -4,6 +4,8 @@ import { makeGame } from "../test-utils";
 import { nextIndex, type NavKey } from "./gridNav";
 import {
   groupGames,
+  groupStart,
+  groupSummary,
   layoutGroups,
   navigateSlots,
   scrollTopForRow,
@@ -253,5 +255,47 @@ describe("stickyHeader", () => {
       collapsed: new Set(),
     });
     expect(stickyHeader(flat, 500)).toBeNull();
+  });
+});
+
+describe("groupSummary", () => {
+  it("counts installed games and adds up playtime in hours", () => {
+    expect(
+      groupSummary([
+        makeGame({ id: "1", installed: true, playtimeSeconds: 3600 * 1500 }),
+        makeGame({ id: "2", installed: true, playtimeSeconds: 3600 * 810 + 1700 }),
+        makeGame({ id: "3", installed: false, playtimeSeconds: 0 }),
+      ]),
+    ).toBe(`2 installed · ${(2310).toLocaleString()}h`);
+    expect(groupSummary([makeGame({ id: "1", installed: true, playtimeSeconds: 0 })])).toBe(
+      "1 installed",
+    );
+    expect(groupSummary([makeGame({ id: "1", installed: false, playtimeSeconds: 7200 })])).toBe(
+      "None installed · 2h",
+    );
+  });
+});
+
+describe("groupStart", () => {
+  it("finds a group's header offset and first game", () => {
+    const a = makeGame({ id: "a", name: "A", source: "steam" });
+    const b = makeGame({ id: "b", name: "B", source: "gog" });
+    const groups: GameGroup[] = [
+      { key: "gog", label: "GOG", source: "gog", games: [b] },
+      { key: "steam", label: "Steam", source: "steam", games: [a] },
+    ];
+    const options = {
+      columns: 1,
+      rowHeight: 30,
+      headerHeight: 40,
+      padding: 8,
+      headers: true,
+      collapsed: new Set<string>(),
+    };
+    const layout = layoutGroups(groups, options);
+    expect(groupStart(layout, "steam")).toEqual({ top: 8 + 40 + 30, slot: 1 });
+    expect(groupStart(layout, "missing")).toBeNull();
+    const folded = layoutGroups(groups, { ...options, collapsed: new Set(["steam"]) });
+    expect(groupStart(folded, "steam")).toEqual({ top: 8 + 40 + 30, slot: -1 });
   });
 });
