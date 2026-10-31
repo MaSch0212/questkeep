@@ -19,12 +19,17 @@ pub struct OpenSession {
 impl Database {
     /// Starts a session row for `game_id`.
     pub fn begin_session(&self, game_id: Uuid, now: DateTime<Utc>) -> Result<i64> {
-        let conn = self.conn();
-        conn.execute(
-            "INSERT INTO play_sessions (game_id, started_at, last_seen_at) VALUES (?1, ?2, ?2)",
-            params![game_id.to_string(), now],
-        )?;
-        Ok(conn.last_insert_rowid())
+        let id = {
+            let conn = self.conn();
+            conn.execute(
+                "INSERT INTO play_sessions (game_id, started_at, last_seen_at) VALUES (?1, ?2, ?2)",
+                params![game_id.to_string(), now],
+            )?;
+            conn.last_insert_rowid()
+        };
+        // The first start moves a new game to the "played" status (if the user keeps that rule).
+        self.apply_first_start(game_id)?;
+        Ok(id)
     }
 
     /// Records that the game was still running at `now`.

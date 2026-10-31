@@ -5,9 +5,10 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-/// Store metadata for one game, as returned by a provider.
+/// Store metadata for one game, as returned by a provider. Every field is optional: a store fills
+/// what it knows, the library picks per field from the sources in the user's priority order.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", default)]
 #[ts(export)]
 pub struct GameMetadata {
     /// Plain text (providers strip HTML).
@@ -17,6 +18,75 @@ pub struct GameMetadata {
     pub developers: Vec<String>,
     pub publishers: Vec<String>,
     pub genres: Vec<String>,
+    /// User or store tags ("Roguelike", "Great Soundtrack", ...).
+    pub tags: Vec<String>,
+    /// What the game supports: "Single-player", "Co-op", "Controller support", "Cloud saves", ...
+    pub features: Vec<String>,
+    /// Franchise or series names.
+    pub series: Vec<String>,
+    /// "PEGI 16", "ESRB Teen", "USK 12", ...
+    pub age_ratings: Vec<String>,
+    /// "Windows", "macOS", "Linux", console names.
+    pub platforms: Vec<String>,
+    pub game_modes: Vec<String>,
+    pub themes: Vec<String>,
+    pub perspectives: Vec<String>,
+    /// Press score, 0-100.
+    pub critic_score: Option<Score>,
+    /// Player score, 0-100 (e.g. the share of positive reviews).
+    pub community_score: Option<Score>,
+    #[ts(type = "number | null")]
+    pub install_size: Option<u64>,
+    pub time_to_beat: Option<TimeToBeat>,
+    /// Pages about the game (store page, wiki, community, socials). Merged across sources.
+    pub links: Vec<GameLink>,
+}
+
+/// A 0-100 score and who gave it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct Score {
+    pub value: u8,
+    /// Shown next to the score, e.g. `Metacritic` or `Steam reviews`.
+    pub source: String,
+}
+
+/// How long the game takes, in seconds.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", default)]
+#[ts(export)]
+pub struct TimeToBeat {
+    #[ts(type = "number | null")]
+    pub main: Option<u64>,
+    #[ts(type = "number | null")]
+    pub extra: Option<u64>,
+    #[ts(type = "number | null")]
+    pub complete: Option<u64>,
+}
+
+impl TimeToBeat {
+    pub fn is_empty(&self) -> bool {
+        self.main.is_none() && self.extra.is_none() && self.complete.is_none()
+    }
+}
+
+/// A web page about a game.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct GameLink {
+    pub name: String,
+    pub url: String,
+}
+
+impl GameLink {
+    pub fn new(name: impl Into<String>, url: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            url: url.into(),
+        }
+    }
 }
 
 /// How a game is started.

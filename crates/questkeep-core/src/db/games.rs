@@ -7,16 +7,18 @@ use rusqlite::{OptionalExtension, Row, ToSql, params};
 use uuid::Uuid;
 
 use super::Database;
+use super::metadata::Details;
 use crate::error::{CoreError, Result};
 use crate::model::{
-    Game, GameCopy, GameMetadata, GameQuery, GameUpdate, HiddenFilter, ImportedGame, NO_CATEGORY,
-    PlayAction, PlayedFilter, ScanSummary, SortField, TriState, sorting_name,
+    FilterGroup, FilterNode, Game, GameCopy, GameQuery, GameUpdate, HiddenFilter, ImportedGame,
+    ListField, ListFilter, ListMode, MatchMode, MetadataField, NO_CATEGORY, NO_VALUE, PlayAction,
+    PlayedFilter, RangeField, RangeFilter, ScanSummary, SortField, TriState, sorting_name,
 };
 
 pub(super) const COLUMNS: &str = "id, name, sorting_name, source, source_game_id, installed, install_dir, \
     play_action, playtime_seconds, play_count, last_played, date_added, favorite, hidden, \
     cover_path, icon_path, background_path, description, release_date, developers, publishers, \
-    genres, metadata_updated_at, extra, \
+    genres, metadata_updated_at, extra, details, completion_status, user_score, notes, \
     COALESCE((SELECT detect_launches FROM game_tracking \
         WHERE game_id = COALESCE(games.merged_into, games.id)), 1) AS detect_launches, \
     (SELECT ignored_processes FROM game_tracking \
@@ -125,6 +127,7 @@ fn query_filter(query: &GameQuery) -> (String, Vec<Box<dyn ToSql>>) {
         }
         clauses.push(format!("({})", any.join(" OR ")));
     }
+    clauses.extend(group_sql(&query.filter, &mut args));
 
     let where_sql = if clauses.is_empty() {
         String::new()
@@ -134,10 +137,161 @@ fn query_filter(query: &GameQuery) -> (String, Vec<Box<dyn ToSql>>) {
     (where_sql, args)
 }
 
+/// SQL for a filter group, `None` when it filters nothing (no items, or only empty ones).
+fn group_sql(group: &FilterGroup, args: &mut Vec<Box<dyn ToSql>>) -> Option<String> {
+    let parts: Vec<String> = group
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            FilterNode::Group(inner) => group_sql(inner, args),
+            FilterNode::List(list) => list_sql(list, args),
+            FilterNode::Range(range) => range_sql(range, args),
+        })
+        .collect();
+    if parts.is_empty() {
+        return None;
+    }
+    let joiner = match group.mode {
+        MatchMode::All => " AND ",
+        MatchMode::Any => " OR ",
+    };
+    Some(format!("({})", parts.join(joiner)))
+}
+
+fn push_arg(args: &mut Vec<Box<dyn ToSql>>, value: impl ToSql + 'static) -> String {
+    args.push(Box::new(value));
+    format!("?{}", args.len())
+}
+
+/// SQL for a list filter, `None` without values.
+fn list_sql(filter: &ListFilter, args: &mut Vec<Box<dyn ToSql>>) -> Option<String> {
+    if filter.values.is_empty() {
+        return None;
+    }
+    let mut preds = Vec::new();
+    for value in &filter.values {
+        let pred = if value == NO_VALUE {
+            match filter.field.metadata_field() {
+                Some(field) => {
+                    let f = push_arg(args, field.key());
+                    format!(
+                        "NOT EXISTS (SELECT 1 FROM game_meta_values gv JOIN meta_values v \
+                         ON v.id = gv.value_id WHERE gv.game_id = games.id AND v.field = {f})"
+                    )
+                }
+                None => match filter.field {
+                    ListField::Category => "NOT EXISTS (SELECT 1 FROM game_category_links gc \
+                        WHERE gc.game_id = games.id)"
+                        .to_string(),
+                    ListField::CompletionStatus => "completion_status IS NULL".to_string(),
+                    // Every game has a store.
+                    _ => "0".to_string(),
+                },
+            }
+        } else {
+            let v = push_arg(args, value.clone());
+            match filter.field.metadata_field() {
+                Some(field) => {
+                    let f = push_arg(args, field.key());
+                    format!(
+                        "EXISTS (SELECT 1 FROM game_meta_values gv JOIN meta_values v \
+                         ON v.id = gv.value_id WHERE gv.game_id = games.id AND v.field = {f} \
+                         AND v.key = {v})"
+                    )
+                }
+                None => match filter.field {
+                    ListField::Source => format!(
+                        "(source = {v} OR EXISTS (SELECT 1 FROM games m \
+                         WHERE m.merged_into = games.id AND m.source = {v}))"
+                    ),
+                    ListField::Category => format!(
+                        "EXISTS (SELECT 1 FROM game_category_links gc \
+                         WHERE gc.game_id = games.id AND gc.category_id = {v})"
+                    ),
+                    _ => format!("completion_status = {v}"),
+                },
+            }
+        };
+        preds.push(pred);
+    }
+    Some(match filter.mode {
+        ListMode::Any => format!("({})", preds.join(" OR ")),
+        ListMode::All => format!("({})", preds.join(" AND ")),
+        ListMode::None => format!("NOT ({})", preds.join(" OR ")),
+    })
+}
+
+/// The column (or expression) behind a range field.
+fn range_expr(field: RangeField) -> &'static str {
+    match field {
+        RangeField::ReleaseYear => "release_year",
+        RangeField::Playtime => "playtime_seconds",
+        RangeField::PlayCount => "play_count",
+        RangeField::LastPlayed => "CAST(strftime('%s', last_played) AS INTEGER)",
+        RangeField::DateAdded => "CAST(strftime('%s', date_added) AS INTEGER)",
+        RangeField::CriticScore => "critic_score",
+        RangeField::CommunityScore => "community_score",
+        RangeField::UserScore => "user_score",
+        RangeField::TimeToBeat => "ttb_main",
+        RangeField::InstallSize => "install_size",
+    }
+}
+
+/// SQL for a range filter, `None` without bounds.
+fn range_sql(filter: &RangeFilter, args: &mut Vec<Box<dyn ToSql>>) -> Option<String> {
+    let expr = range_expr(filter.field);
+    let mut parts = vec![format!("{expr} IS NOT NULL")];
+    if let Some(min) = filter.min.filter(|v| v.is_finite()) {
+        parts.push(format!("{expr} >= {}", push_arg(args, min)));
+    }
+    if let Some(max) = filter.max.filter(|v| v.is_finite()) {
+        parts.push(format!("{expr} <= {}", push_arg(args, max)));
+    }
+    (parts.len() > 1).then(|| format!("({})", parts.join(" AND ")))
+}
+
+/// The first value of a list field, for sorting by it.
+fn first_value_sql(field: MetadataField) -> String {
+    format!(
+        "(SELECT v.name FROM game_meta_values gv JOIN meta_values v ON v.id = gv.value_id \
+         WHERE gv.game_id = games.id AND v.field = '{}' ORDER BY gv.position LIMIT 1)",
+        field.key()
+    )
+}
+
+/// `ORDER BY` for a query: games without a value go last in both directions, ties by name.
+fn order_sql(query: &GameQuery) -> String {
+    let dir = if query.descending { "DESC" } else { "ASC" };
+    let by_name = "sorting_name COLLATE NOCASE ASC, id ASC";
+    let nulls_last = |expr: &str| format!("{expr} IS NULL ASC, {expr} {dir}, {by_name}");
+    match query.sort {
+        SortField::Name => format!("sorting_name COLLATE NOCASE {dir}, id {dir}"),
+        SortField::LastPlayed => nulls_last("last_played"),
+        SortField::Playtime => format!("playtime_seconds {dir}, {by_name}"),
+        SortField::DateAdded => format!("date_added {dir}, {by_name}"),
+        SortField::ReleaseDate => nulls_last("release_date"),
+        SortField::PlayCount => format!("play_count {dir}, {by_name}"),
+        SortField::CriticScore => nulls_last("critic_score"),
+        SortField::CommunityScore => nulls_last("community_score"),
+        SortField::UserScore => nulls_last("user_score"),
+        SortField::TimeToBeat => nulls_last("ttb_main"),
+        SortField::InstallSize => nulls_last("install_size"),
+        SortField::CompletionStatus => nulls_last(
+            "(SELECT position FROM completion_statuses s WHERE s.id = games.completion_status)",
+        ),
+        SortField::Developer => nulls_last(&first_value_sql(MetadataField::Developers)),
+        SortField::Publisher => nulls_last(&first_value_sql(MetadataField::Publishers)),
+        SortField::Series => nulls_last(&first_value_sql(MetadataField::Series)),
+    }
+}
+
 pub(super) fn row_to_game(row: &Row<'_>) -> rusqlite::Result<Game> {
     let id: String = row.get("id")?;
     let play_action: Option<String> = row.get("play_action")?;
     let extra: String = row.get("extra")?;
+    let details: Details =
+        serde_json::from_str(&row.get::<_, String>("details")?).unwrap_or_default();
+    let meta = details.meta;
     let as_u64 = |v: i64| u64::try_from(v).unwrap_or_default();
     Ok(Game {
         id: Uuid::parse_str(&id).map_err(|e| {
@@ -170,6 +324,25 @@ pub(super) fn row_to_game(row: &Row<'_>) -> rusqlite::Result<Game> {
         developers: string_list(row.get("developers")?),
         publishers: string_list(row.get("publishers")?),
         genres: string_list(row.get("genres")?),
+        tags: meta.tags,
+        features: meta.features,
+        series: meta.series,
+        age_ratings: meta.age_ratings,
+        platforms: meta.platforms,
+        game_modes: meta.game_modes,
+        themes: meta.themes,
+        perspectives: meta.perspectives,
+        critic_score: meta.critic_score,
+        community_score: meta.community_score,
+        install_size: meta.install_size,
+        time_to_beat: meta.time_to_beat,
+        links: meta.links,
+        field_sources: details.sources,
+        completion_status: row.get("completion_status")?,
+        user_score: row
+            .get::<_, Option<i64>>("user_score")?
+            .and_then(|s| u8::try_from(s).ok()),
+        notes: row.get("notes")?,
         categories: row
             .get::<_, Option<String>>("category_ids")?
             .map(|ids| ids.split('\u{1f}').map(str::to_string).collect())
@@ -263,8 +436,9 @@ impl Database {
         let id = Uuid::new_v4();
         self.conn().execute(
             "INSERT INTO games (id, name, sorting_name, search_key, source, source_game_id, \
-             install_dir, play_action, date_added, cover_path) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+             install_dir, play_action, date_added, cover_path, completion_status) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, (SELECT value FROM app_state \
+             WHERE key = 'completion.newGame'))",
             params![
                 id.to_string(),
                 record.name,
@@ -360,17 +534,7 @@ impl Database {
     /// Lists games matching `query`, sorted as requested.
     pub fn list_games(&self, query: &GameQuery) -> Result<Vec<Game>> {
         let (where_sql, args) = query_filter(query);
-        let dir = if query.descending { "DESC" } else { "ASC" };
-        let by_name = "sorting_name COLLATE NOCASE ASC, id ASC";
-        let order = match query.sort {
-            SortField::Name => format!("sorting_name COLLATE NOCASE {dir}, id {dir}"),
-            // Never-played games go last in both directions.
-            SortField::LastPlayed => {
-                format!("last_played IS NULL ASC, last_played {dir}, {by_name}")
-            }
-            SortField::Playtime => format!("playtime_seconds {dir}, {by_name}"),
-            SortField::DateAdded => format!("date_added {dir}, {by_name}"),
-        };
+        let order = order_sql(query);
         let sql =
             format!("SELECT {COLUMNS} FROM library_entries AS games {where_sql} ORDER BY {order}");
 
@@ -625,7 +789,9 @@ impl Database {
                 None => {
                     let id = Uuid::new_v4();
                     tx.execute(
-                        "INSERT INTO games (id, name, sorting_name, search_key, source,                          source_game_id, installed, install_dir, play_action, date_added,                          playtime_seconds, last_played)                          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                        "INSERT INTO games (id, name, sorting_name, search_key, source,                          source_game_id, installed, install_dir, play_action, date_added,                          playtime_seconds, last_played, completion_status) \
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, \
+                         (SELECT value FROM app_state WHERE key = 'completion.newGame'))",
                         params![
                             id.to_string(),
                             game.name,
@@ -659,27 +825,6 @@ impl Database {
 
         tx.commit()?;
         Ok(summary)
-    }
-
-    /// Stores fetched metadata and marks the game as checked.
-    pub fn set_metadata(&self, id: Uuid, meta: &GameMetadata, now: DateTime<Utc>) -> Result<()> {
-        let changed = self.conn().execute(
-            "UPDATE games SET description = ?2, release_date = ?3, developers = ?4, \
-             publishers = ?5, genres = ?6, metadata_updated_at = ?7 WHERE id = ?1",
-            params![
-                id.to_string(),
-                meta.description,
-                meta.release_date,
-                list_json(&meta.developers)?,
-                list_json(&meta.publishers)?,
-                list_json(&meta.genres)?,
-                now
-            ],
-        )?;
-        if changed == 0 {
-            return Err(CoreError::GameNotFound(id));
-        }
-        Ok(())
     }
 
     /// Marks metadata as checked without data (the store had none), so it isn't re-fetched on
@@ -1407,14 +1552,18 @@ mod tests {
             .unwrap();
         let g = db.list_games(&GameQuery::default()).unwrap().remove(0);
         assert_eq!(db.games_needing_metadata().unwrap().len(), 1);
-        let meta = GameMetadata {
+        let meta = crate::model::GameMetadata {
             description: Some("A game.".into()),
             release_date: Some("2020-05-01".into()),
             developers: vec!["Dev".into()],
             publishers: vec!["Pub".into()],
             genres: vec!["Action".into(), "Indie".into()],
+            ..crate::model::GameMetadata::default()
         };
-        db.set_metadata(g.id, &meta, now).unwrap();
+        db.set_source_metadata(g.id, "steam", Some(&meta), now)
+            .unwrap();
+        db.resolve_entry(g.id, &Default::default(), &["steam".into()])
+            .unwrap();
         db.set_background_path(g.id, Some("images/backgrounds/x.jpg"))
             .unwrap();
         let g = db.get_game(g.id).unwrap();

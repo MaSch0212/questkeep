@@ -1,13 +1,16 @@
 //! Tauri commands. Each one is a thin wrapper that runs a core call on the blocking pool and turns
 //! errors into user-readable strings. All logic lives in `questkeep-core`.
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use questkeep_core::auth::AccountStatus;
+use questkeep_core::library::MetadataSourceInfo;
 use questkeep_core::model::{
-    Category, Game, GameQuery, GameUpdate, LibraryView, NewManualGame, NewView, ScanSummary,
-    SectionOrder, StartPage, SyncTimes, ViewSection, ViewUpdate,
+    Category, CompletionSettings, Game, GameQuery, GameUpdate, LibraryView, ListField,
+    NewManualGame, NewView, ScanSummary, SectionOrder, StartPage, SyncTimes, ValueCount,
+    ViewSection, ViewUpdate,
 };
 use questkeep_core::providers::ProviderInfo;
 use questkeep_core::settings::Settings;
@@ -254,9 +257,72 @@ pub async fn dismiss_duplicates(
 #[tauri::command]
 pub async fn refresh_metadata(state: State<'_, Arc<AppState>>, id: String) -> CmdResult<()> {
     blocking(state, move |s| {
-        let job = s.library.metadata_job(parse_id(&id)?)?;
-        s.metadata.enqueue([job]);
+        let jobs = s.library.metadata_jobs(parse_id(&id)?)?;
+        s.metadata.enqueue(jobs);
         Ok(())
+    })
+    .await
+}
+
+/// Re-downloads metadata for every game in the background (Settings → Metadata). Returns how
+/// many jobs were queued.
+#[tauri::command]
+pub async fn refresh_all_metadata(state: State<'_, Arc<AppState>>) -> CmdResult<usize> {
+    blocking(state, move |s| {
+        let jobs = s.library.all_metadata_jobs()?;
+        Ok(s.metadata.enqueue(jobs))
+    })
+    .await
+}
+
+/// The values of a list field with game counts, for a filter's value list.
+#[tauri::command]
+pub async fn list_values(
+    state: State<'_, Arc<AppState>>,
+    field: ListField,
+) -> CmdResult<Vec<ValueCount>> {
+    blocking(state, move |s| s.library.list_values(field)).await
+}
+
+/// The metadata sources the user can order in settings.
+#[tauri::command]
+pub async fn metadata_sources(
+    state: State<'_, Arc<AppState>>,
+) -> CmdResult<Vec<MetadataSourceInfo>> {
+    blocking(state, move |s| Ok(s.library.metadata_sources())).await
+}
+
+#[tauri::command]
+pub async fn completion_settings(state: State<'_, Arc<AppState>>) -> CmdResult<CompletionSettings> {
+    blocking(state, move |s| s.library.completion_settings()).await
+}
+
+/// Saves the completion status list; games of removed statuses get `replacements[id]`.
+#[tauri::command]
+pub async fn set_completion_settings(
+    state: State<'_, Arc<AppState>>,
+    settings: CompletionSettings,
+    replacements: BTreeMap<String, Option<String>>,
+) -> CmdResult<CompletionSettings> {
+    blocking(state, move |s| {
+        s.library.set_completion_settings(&settings, &replacements)
+    })
+    .await
+}
+
+/// Sets (or clears) the completion status of games.
+#[tauri::command]
+pub async fn set_completion_status(
+    state: State<'_, Arc<AppState>>,
+    ids: Vec<String>,
+    status: Option<String>,
+) -> CmdResult<()> {
+    blocking(state, move |s| {
+        let ids = ids
+            .iter()
+            .map(|id| parse_id(id))
+            .collect::<Result<Vec<_>, _>>()?;
+        s.library.set_completion_status(&ids, status.as_deref())
     })
     .await
 }

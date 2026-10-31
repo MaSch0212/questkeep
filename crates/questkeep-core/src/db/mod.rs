@@ -4,6 +4,7 @@ mod backup;
 mod categories;
 mod combine;
 mod games;
+mod metadata;
 pub mod migrations;
 mod sessions;
 mod start;

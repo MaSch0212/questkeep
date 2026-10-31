@@ -257,6 +257,7 @@ pub fn parse_lookup(body: &str) -> Result<Option<CatalogProduct>, ProviderError>
             developers,
             publishers,
             genres,
+            ..GameMetadata::default()
         },
     }))
 }

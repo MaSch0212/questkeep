@@ -277,6 +277,7 @@ pub fn parse_app_details(app_id: &str, body: &str) -> Result<Option<GameMetadata
         developers: strings("developers"),
         publishers: strings("publishers"),
         genres,
+        ..GameMetadata::default()
     }))
 }
 

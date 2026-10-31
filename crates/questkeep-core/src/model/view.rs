@@ -24,10 +24,31 @@ pub enum GroupBy {
     None,
     Category,
     Source,
+    CompletionStatus,
+    Genre,
+    Tag,
+    Feature,
+    Series,
+    Platform,
+    AgeRating,
+    Developer,
+    Publisher,
+    GameMode,
+    Theme,
+    Perspective,
+    ReleaseYear,
+    /// Playtime ranges.
+    Playtime,
+    /// Time since last played, in buckets.
+    LastPlayed,
+    /// Install size ranges.
+    InstallSize,
+    /// Critic score ranges.
+    CriticScore,
 }
 
 /// A saved view of the library: filters, sort order and layout under a name.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct LibraryView {
@@ -42,7 +63,7 @@ pub struct LibraryView {
 }
 
 /// A named group of views in the sidebar, in display order.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct ViewSection {
@@ -52,7 +73,7 @@ pub struct ViewSection {
 }
 
 /// A view to create at the end of a section.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct NewView {
@@ -66,7 +87,7 @@ pub struct NewView {
 }
 
 /// Fields of a view to change; `None` keeps the current value.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", default)]
 #[ts(export)]
 pub struct ViewUpdate {

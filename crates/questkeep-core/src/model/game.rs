@@ -1,10 +1,12 @@
+use std::collections::BTreeMap;
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use uuid::Uuid;
 
 pub use questkeep_store_api::model::{
-    ActionKind, GameMetadata, ImportedGame, PlayAction, TrackingMode,
+    ActionKind, GameLink, GameMetadata, ImportedGame, PlayAction, Score, TimeToBeat, TrackingMode,
 };
 
 /// Provider id used for games added by hand.
@@ -55,6 +57,28 @@ pub struct Game {
     pub developers: Vec<String>,
     pub publishers: Vec<String>,
     pub genres: Vec<String>,
+    pub tags: Vec<String>,
+    pub features: Vec<String>,
+    pub series: Vec<String>,
+    pub age_ratings: Vec<String>,
+    pub platforms: Vec<String>,
+    pub game_modes: Vec<String>,
+    pub themes: Vec<String>,
+    pub perspectives: Vec<String>,
+    pub critic_score: Option<Score>,
+    pub community_score: Option<Score>,
+    #[ts(type = "number | null")]
+    pub install_size: Option<u64>,
+    pub time_to_beat: Option<TimeToBeat>,
+    /// Pages about the game from all sources.
+    pub links: Vec<GameLink>,
+    /// Metadata field key (see [`super::MetadataField`]) -> id of the source its value came from.
+    pub field_sources: BTreeMap<String, String>,
+    /// Id of the user's completion status (see [`super::CompletionStatus`]); `None` for none.
+    pub completion_status: Option<String>,
+    /// The user's own 0-100 score.
+    pub user_score: Option<u8>,
+    pub notes: Option<String>,
     /// Ids of the game's categories, in no particular order.
     pub categories: Vec<String>,
     /// The stores this game is in: its own row first unless reordered, then the copies combined

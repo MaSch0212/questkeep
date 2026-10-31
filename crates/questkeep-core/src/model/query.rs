@@ -11,6 +11,156 @@ pub enum SortField {
     LastPlayed,
     Playtime,
     DateAdded,
+    ReleaseDate,
+    PlayCount,
+    CriticScore,
+    CommunityScore,
+    UserScore,
+    TimeToBeat,
+    InstallSize,
+    CompletionStatus,
+    Developer,
+    Publisher,
+    Series,
+}
+
+/// A field filtered by a list of values.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum ListField {
+    /// Values are provider ids; a combined game matches with any of its stores.
+    Source,
+    /// Values are category ids.
+    Category,
+    /// Values are completion status ids.
+    CompletionStatus,
+    Genre,
+    Tag,
+    Feature,
+    Series,
+    Platform,
+    AgeRating,
+    Developer,
+    Publisher,
+    GameMode,
+    Theme,
+    Perspective,
+}
+
+impl ListField {
+    /// The metadata field behind a value list field (`None` for store, category and status).
+    pub fn metadata_field(self) -> Option<super::MetadataField> {
+        use super::MetadataField as F;
+        Some(match self {
+            Self::Source | Self::Category | Self::CompletionStatus => return None,
+            Self::Genre => F::Genres,
+            Self::Tag => F::Tags,
+            Self::Feature => F::Features,
+            Self::Series => F::Series,
+            Self::Platform => F::Platforms,
+            Self::AgeRating => F::AgeRatings,
+            Self::Developer => F::Developers,
+            Self::Publisher => F::Publishers,
+            Self::GameMode => F::GameModes,
+            Self::Theme => F::Themes,
+            Self::Perspective => F::Perspectives,
+        })
+    }
+}
+
+/// How a list filter's values combine.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum ListMode {
+    /// The game has at least one of the values.
+    #[default]
+    Any,
+    /// The game has every value.
+    All,
+    /// The game has none of the values.
+    None,
+}
+
+/// `ListFilter::values` entry that stands for "the game has no value at all".
+pub const NO_VALUE: &str = ":none";
+
+/// Games by the values of a list field.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct ListFilter {
+    pub field: ListField,
+    #[serde(default)]
+    pub mode: ListMode,
+    /// Value keys (see [`super::ValueCount::key`]), or [`NO_VALUE`].
+    #[serde(default)]
+    pub values: Vec<String>,
+}
+
+/// A field filtered by a range of numbers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum RangeField {
+    ReleaseYear,
+    /// Seconds.
+    Playtime,
+    PlayCount,
+    /// Unix time in seconds.
+    LastPlayed,
+    /// Unix time in seconds.
+    DateAdded,
+    CriticScore,
+    CommunityScore,
+    UserScore,
+    /// Main story, seconds.
+    TimeToBeat,
+    /// Bytes.
+    InstallSize,
+}
+
+/// Games whose value lies in `[min, max]`; a missing bound is open. Games without a value never
+/// match, except that a playtime or play count of 0 is a value.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct RangeFilter {
+    pub field: RangeField,
+    #[serde(default)]
+    pub min: Option<f64>,
+    #[serde(default)]
+    pub max: Option<f64>,
+}
+
+/// Whether a group needs all or any of its items.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum MatchMode {
+    #[default]
+    All,
+    Any,
+}
+
+/// Filters combined with "and" (all) or "or" (any). Groups nest.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", default)]
+#[ts(export)]
+pub struct FilterGroup {
+    pub mode: MatchMode,
+    pub items: Vec<FilterNode>,
+}
+
+/// One entry of a [`FilterGroup`].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+#[ts(export)]
+pub enum FilterNode {
+    Group(FilterGroup),
+    List(ListFilter),
+    Range(RangeFilter),
 }
 
 /// Which games to show with respect to the hidden flag.
@@ -61,7 +211,7 @@ pub enum PlayedFilter {
 }
 
 /// Filter and sort options for listing games.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", default)]
 #[ts(export)]
 pub struct GameQuery {
@@ -78,4 +228,6 @@ pub struct GameQuery {
     /// Category ids; a game matches when it has any of them ([`NO_CATEGORY`](super::NO_CATEGORY)
     /// matches games without one). Empty means all.
     pub categories: Vec<String>,
+    /// Further filters, combined with "and" with the ones above.
+    pub filter: FilterGroup,
 }

@@ -240,6 +240,93 @@ pub(crate) const MIGRATIONS: &[&str] = &[
         value TEXT NOT NULL
     );
     "#,
+    // 10: metadata per source, the values the library shows (picked by source priority, see
+    // model::metadata), shared list values for filtering, user fields and completion statuses.
+    // The metadata stored so far becomes the "previous" source. `metadata.resolve` asks the
+    // library to compute the shown values once after this step.
+    r#"
+    CREATE TABLE metadata_sources (
+        game_id    TEXT NOT NULL REFERENCES games (id) ON DELETE CASCADE,
+        source     TEXT NOT NULL,
+        data       TEXT,
+        checked_at TEXT NOT NULL,
+        PRIMARY KEY (game_id, source)
+    );
+    INSERT INTO metadata_sources (game_id, source, data, checked_at)
+        SELECT id, 'previous',
+            json_object('description', description, 'releaseDate', release_date,
+                'developers', json(developers), 'publishers', json(publishers),
+                'genres', json(genres)),
+            COALESCE(metadata_updated_at, date_added)
+        FROM games
+        WHERE description IS NOT NULL OR release_date IS NOT NULL OR developers != '[]'
+            OR publishers != '[]' OR genres != '[]';
+
+    ALTER TABLE games ADD COLUMN details TEXT NOT NULL DEFAULT '{}';
+    ALTER TABLE games ADD COLUMN release_year INTEGER;
+    ALTER TABLE games ADD COLUMN critic_score INTEGER;
+    ALTER TABLE games ADD COLUMN community_score INTEGER;
+    ALTER TABLE games ADD COLUMN install_size INTEGER;
+    ALTER TABLE games ADD COLUMN ttb_main INTEGER;
+    ALTER TABLE games ADD COLUMN completion_status TEXT;
+    ALTER TABLE games ADD COLUMN user_score INTEGER;
+    ALTER TABLE games ADD COLUMN notes TEXT;
+
+    CREATE TABLE meta_values (
+        id    INTEGER PRIMARY KEY,
+        field TEXT NOT NULL,
+        key   TEXT NOT NULL,
+        name  TEXT NOT NULL,
+        UNIQUE (field, key)
+    );
+    CREATE TABLE game_meta_values (
+        game_id  TEXT NOT NULL REFERENCES games (id) ON DELETE CASCADE,
+        value_id INTEGER NOT NULL REFERENCES meta_values (id) ON DELETE CASCADE,
+        position INTEGER NOT NULL,
+        PRIMARY KEY (game_id, value_id)
+    );
+    CREATE INDEX game_meta_values_value ON game_meta_values (value_id);
+
+    CREATE TABLE completion_statuses (
+        id       TEXT PRIMARY KEY NOT NULL,
+        name     TEXT NOT NULL,
+        position INTEGER NOT NULL
+    );
+    INSERT INTO completion_statuses (id, name, position) VALUES
+        ('not-played', 'Not Played', 0), ('played', 'Played', 1), ('beaten', 'Beaten', 2);
+    INSERT OR REPLACE INTO app_state (key, value) VALUES
+        ('completion.newGame', 'not-played'), ('completion.firstStart', 'played'),
+        ('metadata.resolve', '1');
+    UPDATE games SET completion_status = CASE
+        WHEN playtime_seconds > 0 OR play_count > 0 OR EXISTS
+            (SELECT 1 FROM games m WHERE m.merged_into = games.id
+                AND (m.playtime_seconds > 0 OR m.play_count > 0))
+        THEN 'played' ELSE 'not-played' END
+        WHERE merged_into IS NULL;
+
+    DROP VIEW library_entries;
+    CREATE VIEW library_entries AS
+    SELECT g.id, g.name, g.sorting_name, g.search_key, g.source, g.source_game_id,
+        (g.installed OR EXISTS
+            (SELECT 1 FROM games m WHERE m.merged_into = g.id AND m.installed)) AS installed,
+        g.install_dir, g.play_action,
+        g.playtime_seconds + COALESCE(
+            (SELECT SUM(m.playtime_seconds) FROM games m WHERE m.merged_into = g.id), 0)
+            AS playtime_seconds,
+        g.play_count + COALESCE(
+            (SELECT SUM(m.play_count) FROM games m WHERE m.merged_into = g.id), 0) AS play_count,
+        COALESCE(
+            MAX(g.last_played,
+                (SELECT MAX(m.last_played) FROM games m WHERE m.merged_into = g.id)),
+            g.last_played,
+            (SELECT MAX(m.last_played) FROM games m WHERE m.merged_into = g.id)) AS last_played,
+        g.date_added, g.favorite, g.hidden, g.cover_path, g.icon_path, g.background_path,
+        g.description, g.release_date, g.developers, g.publishers, g.genres,
+        g.metadata_updated_at, g.extra, g.merged_into, g.copy_position,
+        g.details, g.release_year, g.critic_score, g.community_score, g.install_size, g.ttb_main,
+        g.completion_status, g.user_score, g.notes
+    FROM games g WHERE g.merged_into IS NULL;
+    "#,
 ];
 
 /// Latest schema version this build knows.

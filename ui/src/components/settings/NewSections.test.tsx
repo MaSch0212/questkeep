@@ -313,6 +313,7 @@ function makeSettings(overrides: Partial<Settings> = {}): Settings {
     detectExternalLaunches: true,
     showStartPage: true,
     startupPage: { kind: "start" },
+    metadataPriority: { order: [], fields: {} },
     providers: { epic: { token: "keep-me" }, steam: { apiKey: "K" } },
     ...overrides,
   };

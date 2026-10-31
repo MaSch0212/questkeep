@@ -4,4 +4,4 @@
  * How a view splits its games into groups. A game with several categories appears in each of
  * their groups.
  */
-export type GroupBy = "none" | "category" | "source";
+export type GroupBy = "none" | "category" | "source" | "completionStatus" | "genre" | "tag" | "feature" | "series" | "platform" | "ageRating" | "developer" | "publisher" | "gameMode" | "theme" | "perspective" | "releaseYear" | "playtime" | "lastPlayed" | "installSize" | "criticScore";

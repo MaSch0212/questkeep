@@ -32,20 +32,15 @@ fn parse_layout(text: &str) -> ViewLayout {
     }
 }
 
-fn group_text(group: GroupBy) -> &'static str {
-    match group {
-        GroupBy::None => "none",
-        GroupBy::Category => "category",
-        GroupBy::Source => "source",
+fn group_text(group: GroupBy) -> String {
+    match serde_json::to_value(group) {
+        Ok(serde_json::Value::String(text)) => text,
+        _ => "none".into(),
     }
 }
 
 fn parse_group(text: &str) -> GroupBy {
-    match text {
-        "category" => GroupBy::Category,
-        "source" => GroupBy::Source,
-        _ => GroupBy::None,
-    }
+    serde_json::from_value(serde_json::Value::String(text.into())).unwrap_or_default()
 }
 
 /// The query as stored: without the keyword filter, which is never saved.

@@ -266,6 +266,7 @@ impl CatalogItem {
             developers,
             publishers: self.attribute("publisherName").into_iter().collect(),
             genres: self.genres(),
+            ..GameMetadata::default()
         }
     }
 }

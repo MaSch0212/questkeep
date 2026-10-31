@@ -20,7 +20,7 @@ use serde::Deserialize;
 use super::fetcher::http_agent;
 use super::steamgriddb::encode;
 use crate::error::{CoreError, Result};
-use crate::model::GameMetadata;
+use crate::model::{GameLink, GameMetadata, Score, TimeToBeat};
 
 const TOKEN_URL: &str = "https://id.twitch.tv/oauth2/token";
 const GAMES_URL: &str = "https://api.igdb.com/v4/games";
@@ -29,7 +29,10 @@ const MIN_INTERVAL: Duration = Duration::from_millis(300);
 /// A token is renewed this long before it expires.
 const TOKEN_MARGIN: Duration = Duration::from_secs(60);
 const FIELDS: &str = "name,summary,first_release_date,genres.name,\
-    involved_companies.developer,involved_companies.publisher,involved_companies.company.name";
+    involved_companies.developer,involved_companies.publisher,involved_companies.company.name,\
+    game_modes.name,themes.name,player_perspectives.name,franchises.name,collections.name,\
+    platforms.name,age_ratings.organization.name,age_ratings.rating_category.rating,\
+    aggregated_rating,rating,websites.url";
 
 const REJECTED: &str = "The IGDB (Twitch) Client ID or Client Secret was rejected.";
 
@@ -217,8 +220,8 @@ impl Igdb {
         Ok(value)
     }
 
-    /// POSTs an Apicalypse `body` to the games endpoint. Renews the token once on 401.
-    fn query(&self, body: &str) -> Result<String> {
+    /// POSTs an Apicalypse `body` to an endpoint. Renews the token once on 401.
+    fn query(&self, url: &str, body: &str) -> Result<String> {
         let credentials = self.credentials().ok_or_else(|| {
             CoreError::Invalid("Add IGDB (Twitch) credentials in the settings first.".into())
         })?;
@@ -231,7 +234,7 @@ impl Igdb {
             let result = self
                 .inner
                 .http
-                .post(&self.inner.games_url)
+                .post(url)
                 .header("Client-ID", &credentials.client_id)
                 .header("Authorization", format!("Bearer {token}"))
                 .header("Accept", "application/json")
@@ -274,8 +277,30 @@ impl Igdb {
             return Ok(None);
         }
         let body = search_body(lookup.name);
-        let hits = parse_games(&self.query(&body)?)?;
-        Ok(best_match(&hits, lookup).and_then(to_metadata))
+        let hits = parse_games(&self.query(&self.inner.games_url, &body)?)?;
+        let Some(game) = best_match(&hits, lookup) else {
+            return Ok(None);
+        };
+        let mut meta = to_metadata(game).unwrap_or_default();
+        if let Some(id) = game.id {
+            // A missing time to beat must not lose the rest.
+            match self.query(
+                &self.ttb_url(),
+                &format!("fields hastily,normally,completely; where game_id = {id};"),
+            ) {
+                Ok(text) => meta.time_to_beat = parse_time_to_beat(&text),
+                Err(err) => tracing::debug!(%err, "IGDB time to beat failed"),
+            }
+        }
+        Ok((meta != GameMetadata::default()).then_some(meta))
+    }
+
+    /// The time-to-beat endpoint next to the games endpoint.
+    fn ttb_url(&self) -> String {
+        match self.inner.games_url.strip_suffix("/games") {
+            Some(base) => format!("{base}/game_time_to_beats"),
+            None => format!("{}_time_to_beats", self.inner.games_url),
+        }
     }
 }
 
@@ -329,8 +354,10 @@ fn parse_token(body: &str) -> Result<(String, Duration)> {
     Ok((reply.access_token, Duration::from_secs(reply.expires_in)))
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 pub(crate) struct Game {
+    #[serde(default)]
+    pub id: Option<u64>,
     #[serde(default)]
     pub name: String,
     #[serde(default)]
@@ -342,6 +369,145 @@ pub(crate) struct Game {
     pub genres: Vec<Named>,
     #[serde(default)]
     pub involved_companies: Vec<InvolvedCompany>,
+    #[serde(default)]
+    pub game_modes: Vec<Named>,
+    #[serde(default)]
+    pub themes: Vec<Named>,
+    #[serde(default)]
+    pub player_perspectives: Vec<Named>,
+    #[serde(default)]
+    pub franchises: Vec<Named>,
+    #[serde(default)]
+    pub collections: Vec<Named>,
+    #[serde(default)]
+    pub platforms: Vec<Named>,
+    #[serde(default)]
+    pub age_ratings: Vec<AgeRating>,
+    /// Critics, 0-100.
+    #[serde(default)]
+    pub aggregated_rating: Option<f64>,
+    /// IGDB users, 0-100.
+    #[serde(default)]
+    pub rating: Option<f64>,
+    #[serde(default)]
+    pub websites: Vec<Website>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+pub(crate) struct AgeRating {
+    #[serde(default)]
+    pub organization: Option<Named>,
+    #[serde(default)]
+    pub rating_category: Option<RatingCategory>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+pub(crate) struct RatingCategory {
+    #[serde(default)]
+    pub rating: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+pub(crate) struct Website {
+    #[serde(default)]
+    pub url: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+struct TimeToBeatReply {
+    /// Seconds.
+    #[serde(default)]
+    hastily: Option<u64>,
+    #[serde(default)]
+    normally: Option<u64>,
+    #[serde(default)]
+    completely: Option<u64>,
+}
+
+/// The first time-to-beat record of a reply; `None` when it has no durations.
+fn parse_time_to_beat(body: &str) -> Option<TimeToBeat> {
+    let replies: Vec<TimeToBeatReply> = serde_json::from_str(body).ok()?;
+    let reply = replies.into_iter().next()?;
+    let ttb = TimeToBeat {
+        main: reply.hastily.filter(|v| *v > 0),
+        extra: reply.normally.filter(|v| *v > 0),
+        complete: reply.completely.filter(|v| *v > 0),
+    };
+    (!ttb.is_empty()).then_some(ttb)
+}
+
+/// "PEGI 16", "ESRB Teen", "USK 12".
+fn age_rating_name(rating: &AgeRating) -> Option<String> {
+    let org = rating.organization.as_ref()?.name.trim().to_string();
+    let value = rating.rating_category.as_ref()?.rating.trim().to_string();
+    if org.is_empty() || value.is_empty() {
+        return None;
+    }
+    // IGDB repeats the organization in some ratings ("PEGI 16" style is built here).
+    let value = value
+        .strip_prefix(&org)
+        .map(str::trim)
+        .unwrap_or(&value)
+        .to_string();
+    let value = if org.eq_ignore_ascii_case("ESRB") {
+        match value.as_str() {
+            "E" => "Everyone".to_string(),
+            "E10" | "E10+" => "Everyone 10+".to_string(),
+            "T" => "Teen".to_string(),
+            "M" => "Mature".to_string(),
+            "AO" => "Adults Only".to_string(),
+            "RP" => "Rating Pending".to_string(),
+            "EC" => "Early Childhood".to_string(),
+            other => other.to_string(),
+        }
+    } else {
+        value
+    };
+    Some(format!("{org} {value}"))
+}
+
+/// A readable name for a website by its address.
+pub(crate) fn website_name(url: &str) -> String {
+    let host = url
+        .split("://")
+        .nth(1)
+        .unwrap_or(url)
+        .split('/')
+        .next()
+        .unwrap_or_default()
+        .trim_start_matches("www.")
+        .to_lowercase();
+    let known: &[(&str, &str)] = &[
+        ("wikipedia.org", "Wikipedia"),
+        ("fandom.com", "Fandom wiki"),
+        ("wikia.com", "Fandom wiki"),
+        ("pcgamingwiki.com", "PCGamingWiki"),
+        ("reddit.com", "Reddit"),
+        ("discord.gg", "Discord"),
+        ("discord.com", "Discord"),
+        ("twitter.com", "X (Twitter)"),
+        ("x.com", "X (Twitter)"),
+        ("facebook.com", "Facebook"),
+        ("instagram.com", "Instagram"),
+        ("youtube.com", "YouTube"),
+        ("twitch.tv", "Twitch"),
+        ("bsky.app", "Bluesky"),
+        ("store.steampowered.com", "Steam store page"),
+        ("steamcommunity.com", "Steam community"),
+        ("gog.com", "GOG store page"),
+        ("epicgames.com", "Epic store page"),
+        ("itch.io", "itch.io"),
+        ("apps.apple.com", "App Store"),
+        ("play.google.com", "Google Play"),
+        ("xbox.com", "Xbox store page"),
+        ("playstation.com", "PlayStation store page"),
+        ("nintendo.com", "Nintendo store page"),
+    ];
+    known
+        .iter()
+        .find(|(domain, _)| host == *domain || host.ends_with(&format!(".{domain}")))
+        .map(|(_, name)| (*name).to_string())
+        .unwrap_or_else(|| "Official website".to_string())
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
@@ -423,7 +589,50 @@ pub(crate) fn to_metadata(game: &Game) -> Option<GameMetadata> {
             genres.push(name);
         }
     }
+    let names = |list: &[Named]| {
+        let mut out: Vec<String> = Vec::new();
+        for item in list {
+            let name = clean(&item.name);
+            if !name.is_empty() && !out.contains(&name) {
+                out.push(name);
+            }
+        }
+        out
+    };
+    let score = |value: Option<f64>, source: &str| {
+        value.filter(|v| v.is_finite()).map(|v| Score {
+            value: v.round().clamp(0.0, 100.0) as u8,
+            source: source.to_string(),
+        })
+    };
+    let mut series = names(&game.franchises);
+    for name in names(&game.collections) {
+        if !series.contains(&name) {
+            series.push(name);
+        }
+    }
+    let mut age_ratings: Vec<String> = Vec::new();
+    for name in game.age_ratings.iter().filter_map(age_rating_name) {
+        if !age_ratings.contains(&name) {
+            age_ratings.push(name);
+        }
+    }
+    let links = game
+        .websites
+        .iter()
+        .filter(|w| w.url.starts_with("http"))
+        .map(|w| GameLink::new(website_name(&w.url), w.url.trim()))
+        .collect();
     let meta = GameMetadata {
+        game_modes: names(&game.game_modes),
+        themes: names(&game.themes),
+        perspectives: names(&game.player_perspectives),
+        series,
+        platforms: names(&game.platforms),
+        age_ratings,
+        critic_score: score(game.aggregated_rating, "IGDB critics"),
+        community_score: score(game.rating, "IGDB users"),
+        links,
         description: game.summary.as_deref().map(clean).filter(|s| !s.is_empty()),
         release_date: game
             .first_release_date
@@ -432,6 +641,7 @@ pub(crate) fn to_metadata(game: &Game) -> Option<GameMetadata> {
         developers: companies(|c| c.developer),
         publishers: companies(|c| c.publisher),
         genres,
+        ..GameMetadata::default()
     };
     (meta != GameMetadata::default()).then_some(meta)
 }
@@ -602,6 +812,39 @@ mod tests {
     }
 
     #[test]
+    fn parses_the_richer_fields() {
+        let games = parse_games(
+            r#"[{"id":7,"name":"Hades","game_modes":[{"name":"Single player"}],
+               "themes":[{"name":"Action"}],"player_perspectives":[{"name":"Bird view / Isometric"}],
+               "franchises":[{"name":"Hades"}],"collections":[{"name":"Hades"}],
+               "platforms":[{"name":"PC (Microsoft Windows)"}],
+               "age_ratings":[{"organization":{"name":"PEGI"},"rating_category":{"rating":"12"}},
+                                {"organization":{"name":"ESRB"},"rating_category":{"rating":"T"}}],
+               "aggregated_rating":93.4,"rating":91.2,
+               "websites":[{"url":"https://www.supergiantgames.com/games/hades"},
+                             {"url":"https://hades.fandom.com/wiki"},{"url":"not a url"}]}]"#,
+        )
+        .unwrap();
+        let meta = to_metadata(&games[0]).unwrap();
+        assert_eq!(meta.game_modes, ["Single player"]);
+        assert_eq!(meta.series, ["Hades"]);
+        assert_eq!(meta.age_ratings, ["PEGI 12", "ESRB Teen"]);
+        assert_eq!(meta.critic_score.as_ref().map(|s| s.value), Some(93));
+        assert_eq!(meta.community_score.as_ref().map(|s| s.value), Some(91));
+        let links: Vec<&str> = meta.links.iter().map(|l| l.name.as_str()).collect();
+        assert_eq!(links, ["Official website", "Fandom wiki"]);
+        assert_eq!(
+            parse_time_to_beat(r#"[{"hastily":0,"normally":7200}]"#),
+            Some(TimeToBeat {
+                main: None,
+                extra: Some(7200),
+                complete: None
+            })
+        );
+        assert_eq!(parse_time_to_beat("[]"), None);
+    }
+
+    #[test]
     fn parses_games_into_metadata() {
         let games = parse_games(WITCHER).unwrap();
         assert_eq!(games.len(), 2);
@@ -727,18 +970,35 @@ mod tests {
 
     #[test]
     fn fetches_with_the_right_requests_and_reuses_the_token() {
-        let server = serve(vec![(200, TOKEN), (200, WITCHER), (200, "[]")]);
+        let server = serve(vec![
+            (200, TOKEN),
+            (200, WITCHER),
+            (
+                200,
+                r#"[{"hastily":90000,"normally":180000,"completely":360000}]"#,
+            ),
+            (200, "[]"),
+        ]);
         let igdb = client(&server.base);
         let meta = igdb
             .fetch_metadata(&lookup("The Witcher 3: Wild Hunt"))
             .unwrap()
             .unwrap();
         assert_eq!(meta.developers, vec!["CD Projekt RED"]);
+        assert_eq!(
+            meta.time_to_beat.as_ref().and_then(|t| t.complete),
+            Some(360000)
+        );
         // An empty result list is "no data", not an error; the token is reused.
         assert_eq!(igdb.fetch_metadata(&lookup("Nothing")).unwrap(), None);
 
         let requests = server.requests.lock().unwrap();
-        assert_eq!(requests.len(), 3, "one token request, two searches");
+        assert_eq!(
+            requests.len(),
+            4,
+            "one token request, two searches, one time to beat"
+        );
+        assert_eq!(requests[2].path, "/game_time_to_beats");
         assert_eq!(requests[0].path, "/token");
         assert_eq!(
             requests[0].body,
@@ -761,6 +1021,7 @@ mod tests {
             (401, "{}"),
             (200, TOKEN2),
             (200, WITCHER),
+            (200, "[]"),
         ]);
         let igdb = client(&server.base);
         let found = igdb
@@ -768,7 +1029,7 @@ mod tests {
             .unwrap();
         assert!(found.is_some());
         let requests = server.requests.lock().unwrap();
-        assert_eq!(requests.len(), 4);
+        assert_eq!(requests.len(), 5);
         assert_eq!(requests[3].header("authorization"), Some("Bearer tok2"));
         assert!(igdb.is_configured());
     }

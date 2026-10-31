@@ -10,6 +10,7 @@ pub mod events;
 pub mod images;
 pub mod launcher;
 pub mod library;
+pub mod metadata;
 pub mod model;
 pub mod paths;
 pub mod platform;

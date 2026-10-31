@@ -103,6 +103,7 @@ impl StoreGame {
             developers: names(&self.embedded.developers),
             publishers: names(&self.embedded.publishers),
             genres: names(&self.embedded.tags),
+            ..GameMetadata::default()
         }
     }
 

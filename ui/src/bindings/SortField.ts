@@ -3,4 +3,4 @@
 /**
  * Field used to order the library.
  */
-export type SortField = "name" | "lastPlayed" | "playtime" | "dateAdded";
+export type SortField = "name" | "lastPlayed" | "playtime" | "dateAdded" | "releaseDate" | "playCount" | "criticScore" | "communityScore" | "userScore" | "timeToBeat" | "installSize" | "completionStatus" | "developer" | "publisher" | "series";

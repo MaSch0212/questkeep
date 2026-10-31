@@ -14,6 +14,7 @@ use ts_rs::TS;
 
 use crate::auth::TokenStore;
 use crate::error::{CoreError, Result};
+use crate::model::MetadataPriority;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", default)]
@@ -54,6 +55,8 @@ pub struct Settings {
     pub show_start_page: bool,
     /// The page Questkeep opens on.
     pub startup_page: StartupPage,
+    /// Which metadata source wins per field.
+    pub metadata_priority: MetadataPriority,
 }
 
 /// The page Questkeep shows when it opens.
@@ -94,6 +97,7 @@ impl Default for Settings {
             detect_external_launches: true,
             show_start_page: true,
             startup_page: StartupPage::Start,
+            metadata_priority: MetadataPriority::default(),
         }
     }
 }
@@ -402,6 +406,10 @@ mod tests {
             detect_external_launches: false,
             show_start_page: false,
             startup_page: StartupPage::View { id: "fav".into() },
+            metadata_priority: crate::model::MetadataPriority {
+                order: vec!["steam".into()],
+                ..Default::default()
+            },
         };
         store.save(&custom).unwrap();
         let raw = std::fs::read_to_string(&path).unwrap();

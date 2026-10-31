@@ -188,6 +188,7 @@ fn build_state(app: &tauri::AppHandle) -> Result<(AppState, Option<WorkerGuard>)
         events,
         library.artwork().clone(),
         library.igdb().clone(),
+        library.resolver().clone(),
         METADATA_INTERVAL,
     );
     Ok((
@@ -314,6 +315,12 @@ pub fn run() {
         })
         .invoke_handler(main_window_only(tauri::generate_handler![
             commands::list_games,
+            commands::list_values,
+            commands::metadata_sources,
+            commands::completion_settings,
+            commands::set_completion_settings,
+            commands::set_completion_status,
+            commands::refresh_all_metadata,
             commands::get_game,
             commands::add_manual_game,
             commands::update_game,

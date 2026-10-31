@@ -1,5 +1,6 @@
 //! `Library`: the facade the Tauri shell talks to. Wires database, providers, images and events.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -15,9 +16,11 @@ use crate::events::{CoreEvent, EventBus};
 use crate::images::{
     CoverJob, IGDB_CHECKED_KEY, Igdb, ImageCache, ImageKind, MetadataJob, SteamGridDb,
 };
+use crate::metadata::MetadataResolver;
 use crate::model::{
-    ActionKind, Category, Game, GameQuery, GameUpdate, ImportedGame, LibraryView, MANUAL_SOURCE,
-    NewManualGame, NewView, PlayAction, ScanSummary, SectionOrder, StartPage, SyncTimes, TriState,
+    ActionKind, Category, CompletionSettings, Game, GameQuery, GameUpdate, HLTB_SOURCE,
+    HiddenFilter, IGDB_SOURCE, ImportedGame, LibraryView, ListField, MANUAL_SOURCE, NewManualGame,
+    NewView, PlayAction, ScanSummary, SectionOrder, StartPage, SyncTimes, TriState, ValueCount,
     ViewSection, ViewUpdate, display_name_from_path,
 };
 use crate::paths::DataPaths;
@@ -25,6 +28,15 @@ use crate::providers::{LibraryProvider, ProviderError, ProviderInfo, ProviderReg
 use crate::seed::is_fake_source;
 use crate::settings::{Settings, SettingsStore};
 use crate::tray::{self, TrayGames};
+
+/// A metadata source the user can put in order (settings).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct MetadataSourceInfo {
+    pub id: String,
+    pub name: String,
+}
 
 /// Static information about the running app, shown in settings.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -50,6 +62,8 @@ pub struct Library {
     artwork: SteamGridDb,
     /// Shared with the metadata fetcher; `save_settings` keeps its credentials current.
     igdb: Igdb,
+    /// Shared with the metadata fetcher; `save_settings` keeps its priority current.
+    resolver: MetadataResolver,
 }
 
 impl Library {
@@ -77,7 +91,15 @@ impl Library {
         let settings =
             SettingsStore::new(paths.settings_file(), secrets, providers.secret_settings());
         let loaded = settings.load();
+        let resolver = MetadataResolver::new(db.clone(), &providers, loaded.metadata_priority);
+        if db.resolve_pending().unwrap_or(false) {
+            match resolver.resolve_all() {
+                Ok(n) => tracing::info!(entries = n, "computed metadata from its sources"),
+                Err(err) => tracing::error!(%err, "could not compute metadata"),
+            }
+        }
         Self {
+            resolver,
             images: ImageCache::new(paths.clone()),
             artwork: SteamGridDb::new(loaded.steamgriddb_api_key),
             igdb: Igdb::new(loaded.igdb_client_id, loaded.igdb_client_secret),
@@ -165,7 +187,20 @@ impl Library {
             settings.igdb_client_id.clone(),
             settings.igdb_client_secret.clone(),
         );
+        if self
+            .resolver
+            .set_priority(settings.metadata_priority.clone())
+        {
+            self.resolver.resolve_all()?;
+            let ids = self.db.entry_ids()?;
+            self.events.publish(CoreEvent::GamesChanged { ids });
+        }
         Ok(())
+    }
+
+    /// Computes shown metadata from its sources; handed to the metadata fetcher.
+    pub fn resolver(&self) -> &MetadataResolver {
+        &self.resolver
     }
 
     /// The IGDB client, to hand to the metadata fetcher.
@@ -410,10 +445,65 @@ impl Library {
         Ok(self.play_target(id, Some(copy))?.id)
     }
 
+    /// The values of a list field with how many games have each (for filter value lists).
+    pub fn list_values(&self, field: ListField) -> Result<Vec<ValueCount>> {
+        self.db.list_values(field)
+    }
+
+    /// The metadata sources the user can order: every store, IGDB and HowLongToBeat.
+    pub fn metadata_sources(&self) -> Vec<MetadataSourceInfo> {
+        self.resolver
+            .sources()
+            .iter()
+            .map(|id| MetadataSourceInfo {
+                id: id.clone(),
+                name: match id.as_str() {
+                    IGDB_SOURCE => "IGDB".to_string(),
+                    HLTB_SOURCE => "HowLongToBeat".to_string(),
+                    store => self
+                        .providers
+                        .get(store)
+                        .map(|p| p.name().to_string())
+                        .unwrap_or_else(|| store.to_string()),
+                },
+            })
+            .collect()
+    }
+
+    pub fn completion_settings(&self) -> Result<CompletionSettings> {
+        self.db.completion_settings()
+    }
+
+    /// Replaces the completion status list and rules (see
+    /// [`Database::set_completion_settings`]).
+    pub fn set_completion_settings(
+        &self,
+        settings: &CompletionSettings,
+        replacements: &BTreeMap<String, Option<String>>,
+    ) -> Result<CompletionSettings> {
+        let saved = self.db.set_completion_settings(settings, replacements)?;
+        let ids = self.db.entry_ids()?;
+        self.events.publish(CoreEvent::GamesChanged { ids });
+        Ok(saved)
+    }
+
+    /// Sets the completion status of games (`None` clears it).
+    pub fn set_completion_status(&self, ids: &[Uuid], status: Option<&str>) -> Result<()> {
+        self.db.set_completion_status(ids, status)?;
+        let entries = ids
+            .iter()
+            .filter_map(|id| self.db.entry_of(*id).ok())
+            .collect();
+        self.events
+            .publish(CoreEvent::GamesChanged { ids: entries });
+        Ok(())
+    }
+
     /// Combines other entries into `into`'s entry (one game owned in several stores) and
     /// returns the combined entry.
     pub fn combine_games(&self, into: Uuid, others: &[Uuid]) -> Result<Game> {
         let combined = self.db.combine_games(into, others)?;
+        self.resolver.resolve(combined.entry)?;
         for id in &combined.absorbed {
             self.events.publish(CoreEvent::GameRemoved { id: *id });
         }
@@ -427,6 +517,8 @@ impl Library {
     /// Takes a store's copy out of its entry again and returns the remaining entry.
     pub fn separate_copy(&self, copy: Uuid) -> Result<Game> {
         let entry = self.db.separate_copy(copy)?;
+        self.resolver.resolve(entry)?;
+        self.resolver.resolve(copy)?;
         self.events.publish(CoreEvent::GamesChanged {
             ids: vec![entry, copy],
         });
@@ -834,10 +926,11 @@ impl Library {
         })
     }
 
-    /// Metadata jobs for store games whose metadata was never fetched and, when IGDB is
-    /// configured, for every game without a description or genres that IGDB was not asked about
-    /// yet (manual games, stores without metadata or without genres, such as Epic). Those jobs
-    /// carry no store id: the store was asked already (or there is none), so only IGDB is asked.
+    /// Metadata jobs for store games whose metadata was never fetched (new games; IGDB is asked
+    /// about them too) and, when IGDB is configured, for every game without a description or
+    /// genres that IGDB was not asked about yet (manual games, stores without metadata or without
+    /// genres, such as Epic). Those jobs carry no store id: the store was asked already (or there
+    /// is none), so only IGDB is asked.
     pub fn missing_metadata_jobs(&self) -> Result<Vec<MetadataJob>> {
         let mut jobs: Vec<MetadataJob> = self
             .db
@@ -848,6 +941,7 @@ impl Library {
                 game_id,
                 source,
                 source_game_id: Some(source_game_id),
+                igdb: true,
             })
             .collect();
         if self.igdb.is_configured() {
@@ -865,33 +959,69 @@ impl Library {
                         game_id: g.id,
                         source: g.source,
                         source_game_id: None,
+                        igdb: true,
                     }),
             );
         }
         Ok(jobs)
     }
 
-    /// Metadata job for one game (to refresh it on demand). A refresh also lets IGDB look at the
-    /// game again, so its "nothing found" marker is cleared. An error for games that neither a
-    /// store nor IGDB can serve (readable, so the UI can say why nothing happens).
-    pub fn metadata_job(&self, id: Uuid) -> Result<MetadataJob> {
-        let game = self.db.get_game(id)?;
-        if is_fake_source(&game.source) {
+    /// Metadata jobs that refresh one library entry on demand: every store copy, and IGDB (whose
+    /// "nothing found" marker is cleared). An error for games that neither a store nor IGDB can
+    /// serve (readable, so the UI can say why nothing happens).
+    pub fn metadata_jobs(&self, id: Uuid) -> Result<Vec<MetadataJob>> {
+        let entry = self.db.get_entry(self.db.entry_of(id)?)?;
+        if is_fake_source(&entry.source) {
             return Err(CoreError::Invalid("Fake games don't get metadata.".into()));
         }
-        let from_store =
-            game.source_game_id.is_some() && self.providers.get(&game.source).is_some();
-        if !from_store && !self.igdb.is_configured() {
+        let jobs = self.entry_jobs(&entry);
+        if jobs.iter().all(|j| j.source_game_id.is_none()) && !self.igdb.is_configured() {
             return Err(CoreError::Invalid(
                 "Add IGDB credentials in Settings → Metadata to get metadata for this game.".into(),
             ));
         }
-        self.db.set_extra_value(id, IGDB_CHECKED_KEY, None)?;
-        Ok(MetadataJob {
-            game_id: id,
-            source: game.source,
-            source_game_id: game.source_game_id,
-        })
+        self.db.set_extra_value(entry.id, IGDB_CHECKED_KEY, None)?;
+        Ok(jobs)
+    }
+
+    /// Metadata jobs that refresh every game in the library ("Refresh metadata for all games").
+    pub fn all_metadata_jobs(&self) -> Result<Vec<MetadataJob>> {
+        let entries = self.db.list_games(&GameQuery {
+            hidden: HiddenFilter::All,
+            ..GameQuery::default()
+        })?;
+        let mut jobs = Vec::new();
+        for entry in entries.iter().filter(|e| !is_fake_source(&e.source)) {
+            self.db.set_extra_value(entry.id, IGDB_CHECKED_KEY, None)?;
+            jobs.extend(self.entry_jobs(entry));
+        }
+        Ok(jobs)
+    }
+
+    /// One job per store copy of an entry (the first also asks IGDB), or one IGDB job for an
+    /// entry without a store.
+    fn entry_jobs(&self, entry: &Game) -> Vec<MetadataJob> {
+        let mut jobs: Vec<MetadataJob> = entry
+            .copies
+            .iter()
+            .filter(|c| c.source_game_id.is_some() && self.providers.get(&c.source).is_some())
+            .map(|c| MetadataJob {
+                game_id: c.id,
+                source: c.source.clone(),
+                source_game_id: c.source_game_id.clone(),
+                igdb: false,
+            })
+            .collect();
+        match jobs.first_mut() {
+            Some(first) => first.igdb = true,
+            None => jobs.push(MetadataJob {
+                game_id: entry.id,
+                source: entry.source.clone(),
+                source_game_id: None,
+                igdb: true,
+            }),
+        }
+        jobs
     }
 
     /// The store action that installs a game that is owned but not installed. The caller opens
@@ -1544,7 +1674,7 @@ mod tests {
         let jobs = lib.missing_metadata_jobs().unwrap();
         assert_eq!(jobs.len(), 2);
         assert_eq!(jobs[0].game_id, installed.id, "installed games first");
-        assert!(lib.metadata_job(owned.id).is_ok());
+        assert!(lib.metadata_jobs(owned.id).is_ok());
     }
 
     /// A store with an account: owned games appear after signing in with the right code.
@@ -1809,7 +1939,7 @@ mod tests {
         assert!(lib.missing_cover_jobs().unwrap().is_empty());
         assert!(lib.missing_metadata_jobs().unwrap().is_empty());
         let fake = lib.database().list_games(&Default::default()).unwrap()[0].clone();
-        assert!(lib.metadata_job(fake.id).is_err());
+        assert!(lib.metadata_jobs(fake.id).is_err());
         assert!(lib.refetch_artwork(fake.id).is_err());
     }
 
@@ -1834,8 +1964,9 @@ mod tests {
             ..Default::default()
         };
         lib.database()
-            .set_metadata(game.id, &store, Utc::now())
+            .set_source_metadata(game.id, "epic", Some(&store), Utc::now())
             .unwrap();
+        lib.resolver().resolve(game.id).unwrap();
         let mut settings = lib.settings();
         settings.igdb_client_id = Some("id".into());
         settings.igdb_client_secret = Some("secret".into());
@@ -1862,7 +1993,7 @@ mod tests {
             })
             .unwrap();
         assert!(lib.missing_metadata_jobs().unwrap().is_empty());
-        assert!(lib.metadata_job(game.id).is_err());
+        assert!(lib.metadata_jobs(game.id).is_err());
 
         let mut settings = lib.settings();
         settings.igdb_client_id = Some("id".into());
@@ -1883,7 +2014,7 @@ mod tests {
             .set_extra_value(game.id, IGDB_CHECKED_KEY, Some("x".into()))
             .unwrap();
         assert!(lib.missing_metadata_jobs().unwrap().is_empty());
-        assert!(lib.metadata_job(game.id).is_ok());
+        assert!(lib.metadata_jobs(game.id).is_ok());
         assert_eq!(
             lib.missing_metadata_jobs().unwrap().len(),
             1,
