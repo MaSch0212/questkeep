@@ -14,10 +14,14 @@ const tr = translator(gameChrome);
  */
 export type PanelPin = "docked" | "floating" | null;
 
-/** The details panel's top bar: dock/unpin, and close while it floats. */
-export function PanelHeader(props: { pin: PanelPin; onClose: () => void }) {
+/**
+ * The details panel's top bar: dock/unpin on the left (it stays put when the close button comes
+ * and goes), close on the right while it floats. `overlay` lays it over the game's background
+ * image instead of giving it a row of its own.
+ */
+export function PanelHeader(props: { pin: PanelPin; onClose: () => void; overlay?: boolean }) {
   return (
-    <div class="details__header">
+    <div class="details__header" classList={{ "details__header--overlay": props.overlay }}>
       <Show when={props.pin}>
         {(pin) => (
           <button
@@ -25,7 +29,12 @@ export function PanelHeader(props: { pin: PanelPin; onClose: () => void }) {
             class="icon-btn"
             aria-label={pin() === "docked" ? tr("unpinPanel") : tr("dockPanel")}
             title={pin() === "docked" ? tr("unpinTitle") : tr("dockTitle")}
-            onClick={() => store.setPanelFloating(pin() === "docked")}
+            onClick={() => {
+              const unpin = pin() === "docked";
+              store.setPanelFloating(unpin);
+              // The game stays in view, now in the floating panel.
+              if (unpin) store.openDetails();
+            }}
           >
             <Show when={pin() === "docked"} fallback={<Pin class="icon" aria-hidden="true" />}>
               <PinOff class="icon" aria-hidden="true" />
@@ -36,7 +45,7 @@ export function PanelHeader(props: { pin: PanelPin; onClose: () => void }) {
       <Show when={props.pin !== "docked"}>
         <button
           type="button"
-          class="icon-btn"
+          class="icon-btn details__close"
           aria-label={tr("closeDetails")}
           title={tr("closeTitle")}
           onClick={() => props.onClose()}

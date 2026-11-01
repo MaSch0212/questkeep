@@ -54,6 +54,9 @@
   --qk-color-tile-title-fade: #0b0d12f2;
   --qk-color-tile-quick-scrim: #0b0d1233;
   --qk-color-running-ring: #6fd6a055;
+  /* Buttons laid over a game's background image (details panel header) */
+  --qk-color-hero-button: #0b0d12cc;
+  --qk-color-hero-button-hover: #0b0d12f0;
 
   /* Placeholder cover gradients: hue is set per tile, the rest comes from here */
   --qk-placeholder-saturation: 38%;

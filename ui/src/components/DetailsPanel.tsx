@@ -445,7 +445,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
       aria-label={tr("gameDetails")}
     >
       <Show when={!isPage()}>
-        <PanelHeader pin={props.pin ?? null} onClose={props.onClose} />
+        <PanelHeader pin={props.pin ?? null} onClose={props.onClose} overlay={heroUrl() !== null} />
       </Show>
 
       <div class="details__scroll">

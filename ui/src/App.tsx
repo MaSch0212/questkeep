@@ -1,4 +1,4 @@
-import { createSignal, onCleanup, onMount, Show } from "solid-js";
+import { createEffect, createSignal, on, onCleanup, onMount, Show } from "solid-js";
 import {
   DEFAULT_SPLIT_BREAKPOINT,
   isSplitWidth,
@@ -84,6 +84,13 @@ export function App() {
   // Wide window: the panel can dock beside the library; narrow: it overlays it as a flyout.
   const split = () => isSplitWidth(contentWidth(), breakpoint());
   const docked = () => isPanelView() && split() && !store.panelFloating();
+  // Unpinning swaps the docked panel for the floating one in place, so that one doesn't slide in.
+  // The next time the panel opens it slides in again.
+  const [unpinned, setUnpinned] = createSignal(false);
+  createEffect(on(docked, (now, before) => before === true && !now && setUnpinned(true)));
+  createEffect(() => {
+    if (!store.detailsOpen() && !store.isMulti()) setUnpinned(false);
+  });
   /** Dock/unpin only makes sense where the window is wide enough to dock. */
   const pin = (): PanelPin => (docked() ? "docked" : split() ? "floating" : null);
   const panelWidth = () =>
@@ -178,6 +185,7 @@ export function App() {
         >
           <div
             class="app__content"
+            classList={{ "app__content--unpinned": unpinned() }}
             ref={observeContent}
             style={{ "--qk-panel-width": `${panelWidth()}px` }}
           >

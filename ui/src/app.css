@@ -1169,6 +1169,10 @@ ul {
   box-shadow: var(--qk-shadow-panel);
   animation: qk-slide-in var(--qk-duration-normal) var(--qk-easing);
 }
+/* Unpinning turns the docked panel into the floating one where it is: no slide-in. */
+.app__content--unpinned > .details {
+  animation: none;
+}
 /* Wide window: the panel is a regular flex child next to the library. */
 .details--split {
   position: relative;
@@ -1197,8 +1201,29 @@ ul {
 }
 .details__header {
   display: flex;
-  justify-content: flex-end;
+  gap: var(--qk-space-1);
   padding: var(--qk-space-2);
+}
+.details__close {
+  margin-left: auto;
+}
+/* Over the game's background image: takes no height, the buttons get a dark backing. */
+.details__header--overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  /* The bar covers the top of the scrollbar: only its buttons take clicks. */
+  pointer-events: none;
+}
+.details__header--overlay .icon-btn {
+  pointer-events: auto;
+  background: var(--qk-color-hero-button);
+  color: var(--qk-color-text);
+}
+.details__header--overlay .icon-btn:hover {
+  background: var(--qk-color-hero-button-hover);
 }
 .details__scroll {
   --qk-details-pad: var(--qk-space-5);
