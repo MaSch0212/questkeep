@@ -3234,7 +3234,7 @@ checksum = "d55d956fa96f5ec02be2e13af0e20391a5aa83d6a074e3ad368959d0fab299ea"
 
 [[package]]
 name = "questkeep"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "chrono",
  "questkeep-core",
@@ -3258,7 +3258,7 @@ dependencies = [
 
 [[package]]
 name = "questkeep-core"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "chrono",
  "dirs 7.0.0",
@@ -3281,7 +3281,7 @@ dependencies = [
 
 [[package]]
 name = "questkeep-imaging"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "image",
  "tempfile",
@@ -3289,7 +3289,7 @@ dependencies = [
 
 [[package]]
 name = "questkeep-store-amazon"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "base64 0.22.1",
  "dirs 7.0.0",
@@ -3307,7 +3307,7 @@ dependencies = [
 
 [[package]]
 name = "questkeep-store-api"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "chrono",
  "keyring",
@@ -3326,7 +3326,7 @@ dependencies = [
 
 [[package]]
 name = "questkeep-store-battlenet"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "chrono",
  "questkeep-store-api",
@@ -3338,7 +3338,7 @@ dependencies = [
 
 [[package]]
 name = "questkeep-store-ea"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "questkeep-store-api",
  "serde_json",
@@ -3348,7 +3348,7 @@ dependencies = [
 
 [[package]]
 name = "questkeep-store-epic"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "questkeep-store-api",
  "questkeep-store-heroic",
@@ -3361,7 +3361,7 @@ dependencies = [
 
 [[package]]
 name = "questkeep-store-gog"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "chrono",
  "questkeep-store-api",
@@ -3378,7 +3378,7 @@ dependencies = [
 
 [[package]]
 name = "questkeep-store-heroic"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "dirs 7.0.0",
  "questkeep-store-api",
@@ -3389,7 +3389,7 @@ dependencies = [
 
 [[package]]
 name = "questkeep-store-lutris"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "chrono",
  "dirs 7.0.0",
@@ -3402,7 +3402,7 @@ dependencies = [
 
 [[package]]
 name = "questkeep-store-prism"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "chrono",
  "dirs 7.0.0",
@@ -3413,7 +3413,7 @@ dependencies = [
 
 [[package]]
 name = "questkeep-store-steam"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -3431,7 +3431,7 @@ dependencies = [
 
 [[package]]
 name = "questkeep-store-ubisoft"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "dirs 7.0.0",
  "questkeep-store-api",
@@ -3443,7 +3443,7 @@ dependencies = [
 
 [[package]]
 name = "questkeep-store-xbox"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "chrono",
  "questkeep-store-api",
@@ -3455,7 +3455,7 @@ dependencies = [
 
 [[package]]
 name = "questkeep-stores"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "questkeep-store-amazon",
  "questkeep-store-api",
@@ -3474,7 +3474,7 @@ dependencies = [
 
 [[package]]
 name = "questkeep-tray-popup"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "accesskit",
  "accesskit_windows",
