@@ -145,10 +145,12 @@ describe("toolbar", () => {
   it("filters by category", async () => {
     render(() => <TopBar />);
     await fireEvent.click(screen.getByRole("button", { name: "Filters" }));
-    await fireEvent.click(screen.getByRole("button", { name: "RPG" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Category Any" }));
+    await fireEvent.click(screen.getByRole("option", { name: /RPG/ }));
     expect(store.query().categories).toEqual(["c1"]);
-    await fireEvent.click(screen.getByRole("button", { name: "No category" }));
+    await fireEvent.click(screen.getByRole("option", { name: /No category/ }));
     expect(store.query().categories).toEqual(["c1", ":none"]);
+    expect(screen.getByRole("button", { name: "Category RPG, No category" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Filters (1 active)" })).toBeInTheDocument();
   });
 });

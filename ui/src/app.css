@@ -2927,29 +2927,37 @@ ul {
 .filters__label {
   color: var(--qk-color-text-muted);
 }
-.filters__stores {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--qk-space-1);
-}
-.filters__stores .chip {
+/* Stores and categories: one line, the list opens in a searchable picker. */
+.filters__pick {
   display: inline-flex;
   align-items: center;
-  gap: var(--qk-space-1);
-  padding: 2px var(--qk-space-2) 2px var(--qk-space-1);
+  justify-content: space-between;
+  gap: var(--qk-space-2);
+  width: 100%;
+  min-width: 0;
+  padding: var(--qk-space-1) var(--qk-space-2) var(--qk-space-1) var(--qk-space-3);
   background: transparent;
   border: 1px solid var(--qk-color-border);
+  border-radius: var(--qk-radius-sm);
   color: var(--qk-color-text-muted);
+  font: inherit;
+  font-size: var(--qk-font-size-sm);
+  text-align: start;
   cursor: pointer;
 }
-.filters__stores .chip:hover {
+.filters__pick:hover,
+.filters__pick[aria-expanded="true"] {
   background: var(--qk-color-surface-hover);
 }
-.filters__stores .chip--on,
-.filters__stores .chip--on:hover {
+.filters__pick--on {
   background: var(--qk-color-accent-soft);
   border-color: var(--qk-color-accent);
   color: var(--qk-color-text);
+}
+.filters__pick-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .filters__footer {
   display: flex;
@@ -3204,9 +3212,6 @@ ul {
 .filters__hint {
   font-size: var(--qk-font-size-sm);
   color: var(--qk-color-text-faint);
-}
-.filters__stores .chip--none {
-  font-style: italic;
 }
 
 /* A game's categories (details page) */

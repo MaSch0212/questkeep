@@ -1,4 +1,5 @@
-import { For, onMount, Show, type JSX } from "solid-js";
+import ChevronDown from "lucide-solid/icons/chevron-down";
+import { createSignal, For, onMount, Show, type JSX } from "solid-js";
 import type { GameQuery } from "../bindings/GameQuery";
 import type { HiddenFilter } from "../bindings/HiddenFilter";
 import type { KindFilter } from "../bindings/KindFilter";
@@ -8,12 +9,13 @@ import { translator } from "../i18n";
 import { libraryCommon } from "../i18n/libraryCommon";
 import { libraryFilterPanel } from "../i18n/libraryFilterPanel";
 import { libraryFilters } from "../i18n/libraryFilters";
+import { pickedNames } from "../lib/filters";
 import { toggleSource } from "../lib/query";
 import { store } from "../lib/store";
 import { activeFilterCount, clearedFilters, NO_CATEGORY } from "../lib/views";
 import { FilterTree } from "./FilterTree";
 import { Popover, type PopoverAnchor } from "./Popover";
-import { SourceIcon } from "./SourceIcon";
+import { SearchPicker, type PickerItem } from "./SearchPicker";
 
 const tr = translator(libraryFilterPanel);
 const trCommon = translator(libraryCommon);
@@ -47,6 +49,70 @@ function Choice<T extends string>(props: {
           )}
         </For>
       </div>
+    </>
+  );
+}
+
+/**
+ * A row whose values are picked from a searchable list (stores, categories): one line however many
+ * there are, the button names what is picked.
+ */
+function PickRow(props: {
+  id: string;
+  label: string;
+  choose: string;
+  placeholder: string;
+  items: PickerItem[];
+  onPick: (id: string) => void;
+}) {
+  const [anchor, setAnchor] = createSignal<PopoverAnchor | null>(null);
+  let button: HTMLButtonElement | undefined;
+  const picked = () => props.items.filter((item) => item.checked).map((item) => item.label);
+  const text = () => {
+    const { shown, more } = pickedNames(picked());
+    if (shown === "") return tr("any");
+    return more > 0 ? tr("andMore", { names: shown, count: more }) : shown;
+  };
+
+  return (
+    <>
+      <span class="filters__label" id={`filter-${props.id}`}>
+        {props.label}
+      </span>
+      <button
+        ref={(el) => (button = el)}
+        type="button"
+        class="filters__pick"
+        classList={{ "filters__pick--on": picked().length > 0 }}
+        aria-labelledby={`filter-${props.id} filter-${props.id}-value`}
+        aria-haspopup="dialog"
+        aria-expanded={anchor() !== null}
+        onClick={() => {
+          const rect = button?.getBoundingClientRect();
+          setAnchor(anchor() || !rect ? null : { rect, align: "start" });
+        }}
+      >
+        <span class="filters__pick-text" id={`filter-${props.id}-value`}>
+          {text()}
+        </span>
+        <ChevronDown class="icon" aria-hidden="true" />
+      </button>
+      <Show when={anchor()}>
+        {(at) => (
+          <SearchPicker
+            anchor={at()}
+            label={props.choose}
+            placeholder={props.placeholder}
+            keepOpen
+            items={props.items}
+            onPick={props.onPick}
+            onClose={(returnFocus) => {
+              setAnchor(null);
+              if (returnFocus) button?.focus();
+            }}
+          />
+        )}
+      </Show>
     </>
   );
 }
@@ -91,57 +157,47 @@ export function FilterPanel(props: {
       </div>
       <div class="filters__body">
         <div class="filters__grid">
-          <span class="filters__label" id="filter-stores">
-            {trFilters("source")}
-          </span>
-          <div class="filters__stores" role="group" aria-labelledby="filter-stores">
-            <For each={store.sources()}>
-              {(source) => {
-                const on = () => query().sources.includes(source.id);
-                return (
-                  <button
-                    type="button"
-                    class="chip"
-                    classList={{ "chip--on": on() }}
-                    aria-pressed={on()}
-                    onClick={() => set({ sources: toggleSource(query().sources, source.id) })}
-                  >
-                    <SourceIcon source={source.id} />
-                    {source.name}
-                  </button>
-                );
-              }}
-            </For>
-          </div>
-          <span class="filters__label" id="filter-categories">
-            {trFilters("category")}
-          </span>
+          <PickRow
+            id="stores"
+            label={trFilters("source")}
+            choose={tr("chooseStores")}
+            placeholder={tr("searchStores")}
+            items={store.sources().map((source) => ({
+              id: source.id,
+              label: source.name,
+              checked: query().sources.includes(source.id),
+            }))}
+            onPick={(id) => set({ sources: toggleSource(query().sources, id) })}
+          />
           <Show
             when={store.categories().length > 0}
-            fallback={<p class="filters__hint">{tr("noCategories")}</p>}
+            fallback={
+              <>
+                <span class="filters__label">{trFilters("category")}</span>
+                <p class="filters__hint">{tr("noCategories")}</p>
+              </>
+            }
           >
-            <div class="filters__stores" role="group" aria-labelledby="filter-categories">
-              <For
-                each={[...store.categories(), { id: NO_CATEGORY, name: trCommon("noCategory") }]}
-              >
-                {(category) => {
-                  const on = () => query().categories.includes(category.id);
-                  return (
-                    <button
-                      type="button"
-                      class="chip"
-                      classList={{ "chip--on": on(), "chip--none": category.id === NO_CATEGORY }}
-                      aria-pressed={on()}
-                      onClick={() =>
-                        set({ categories: toggleSource(query().categories, category.id) })
-                      }
-                    >
-                      {category.name}
-                    </button>
-                  );
-                }}
-              </For>
-            </div>
+            <PickRow
+              id="categories"
+              label={trFilters("category")}
+              choose={tr("chooseCategories")}
+              placeholder={tr("searchCategories")}
+              items={[
+                ...store.categories().map((category) => ({
+                  id: category.id,
+                  label: category.name,
+                  checked: query().categories.includes(category.id),
+                })),
+                {
+                  id: NO_CATEGORY,
+                  label: trCommon("noCategory"),
+                  special: true,
+                  checked: query().categories.includes(NO_CATEGORY),
+                },
+              ]}
+              onPick={(id) => set({ categories: toggleSource(query().categories, id) })}
+            />
           </Show>
           <Choice<KindFilter>
             label={tr("type")}

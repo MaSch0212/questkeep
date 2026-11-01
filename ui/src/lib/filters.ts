@@ -585,3 +585,8 @@ export function treePills(
 export function joinerWord(joiner: "and" | "or"): string {
   return tr(joiner).trim();
 }
+
+/** What a picker button shows: the first `max` picked names, and how many more are picked. */
+export function pickedNames(names: readonly string[], max = 2): { shown: string; more: number } {
+  return { shown: names.slice(0, max).join(", "), more: Math.max(0, names.length - max) };
+}

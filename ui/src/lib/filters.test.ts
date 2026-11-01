@@ -4,6 +4,7 @@ import type { FilterNode } from "../bindings/FilterNode";
 import { makeGame } from "../test-utils";
 import {
   activeTreeCount,
+  pickedNames,
   appendTo,
   describeRange,
   duplicateAt,
@@ -155,5 +156,16 @@ describe("treePills", () => {
       },
       { index: 1, joiner: "and", grouped: false, parts: [{ label: "Playtime", value: "2 h +" }] },
     ]);
+  });
+});
+
+describe("pickedNames", () => {
+  it("shows the first names and counts the rest", () => {
+    expect(pickedNames([])).toEqual({ shown: "", more: 0 });
+    expect(pickedNames(["Steam", "GOG"])).toEqual({ shown: "Steam, GOG", more: 0 });
+    expect(pickedNames(["Steam", "GOG", "Xbox", "EA app"])).toEqual({
+      shown: "Steam, GOG",
+      more: 2,
+    });
   });
 });
