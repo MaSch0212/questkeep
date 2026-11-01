@@ -34,6 +34,39 @@ export function linksThatFit(
   return count;
 }
 
+/** How many rows wrapped items of these widths take in `available` pixels. */
+function wrappedRows(widths: readonly number[], available: number, gap: number): number {
+  let rows = 0;
+  let used = 0;
+  for (const width of widths) {
+    if (rows === 0 || used + gap + width > available) {
+      rows += 1;
+      used = width;
+    } else {
+      used += gap + width;
+    }
+  }
+  return rows;
+}
+
+/**
+ * How many chips fit in `rows` wrapped rows of `available` pixels, keeping room for a "+N" chip
+ * (`moreWidth`) at the end whenever some are left out.
+ */
+export function chipsThatFit(
+  widths: readonly number[],
+  available: number,
+  moreWidth: number,
+  gap: number,
+  rows: number,
+): number {
+  if (wrappedRows(widths, available, gap) <= rows) return widths.length;
+  for (let count = widths.length - 1; count > 0; count--) {
+    if (wrappedRows([...widths.slice(0, count), moreWidth], available, gap) <= rows) return count;
+  }
+  return 0;
+}
+
 export interface TtbSegment {
   key: "main" | "extra" | "complete";
   label: string;

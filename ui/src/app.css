@@ -4348,9 +4348,24 @@ ul {
   color: var(--qk-color-accent);
 }
 .chip-group {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--qk-space-2);
+}
+/* Every chip in one hidden line, only to measure their widths (ChipGroup). */
+.chips--measure {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 0;
+  flex-wrap: nowrap;
+  overflow: hidden;
+  visibility: hidden;
+}
+.chips--measure > * {
+  flex: none;
 }
 .chip--link {
   border: 1px solid transparent;

@@ -3,6 +3,7 @@ import {
   activitySummary,
   exploreFor,
   formatHours,
+  chipsThatFit,
   linksThatFit,
   rarestUnlocked,
   ttbBar,
@@ -96,5 +97,22 @@ describe("linkKind", () => {
       "community",
     );
     expect(linkKind("Official website", "https://example.com")).toBe("web");
+  });
+});
+
+describe("chipsThatFit", () => {
+  it("keeps every chip when they wrap into the allowed rows", () => {
+    // 100 px rows, 5 px gap: [40, 40] [40, 40] fit two rows.
+    expect(chipsThatFit([40, 40, 40, 40], 100, 20, 5, 2)).toBe(4);
+  });
+
+  it("ends the last row with the more chip", () => {
+    // Two rows of 100 px: [40, 40] [40, more 20] — the fourth and fifth chip are left out.
+    expect(chipsThatFit([40, 40, 40, 40, 40], 100, 20, 5, 2)).toBe(3);
+  });
+
+  it("gives a chip wider than the row a row of its own", () => {
+    // [150] [40, 40] [40]: three rows; [150] [40, more] fits.
+    expect(chipsThatFit([150, 40, 40, 40], 100, 20, 5, 2)).toBe(2);
   });
 });

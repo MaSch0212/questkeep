@@ -40,6 +40,7 @@ import {
   updateGame,
 } from "../lib/actions";
 import { copiesOf, playCopy } from "../lib/copies";
+import { chipsThatFit } from "../lib/gamePage";
 import {
   formatDate,
   formatPlaytime,
@@ -89,23 +90,58 @@ function isLongText(text: string): boolean {
   return text.length > DESCRIPTION_CLAMP_CHARS || text.split("\n").length > DESCRIPTION_CLAMP_LINES;
 }
 
-/** A labeled row of filter chips; long rows show `limit` chips and a "+N" toggle. */
-function ChipGroup(props: {
-  label: string;
-  field: ListField;
-  values: string[];
-  plain?: boolean;
-  limit?: number;
-}) {
+/** Rows of chips a chip group shows until it is expanded. */
+const CHIP_ROWS = 2;
+
+/**
+ * A labeled group of filter chips: as many as fit in two rows, then a "+N" toggle that shows
+ * them all. A hidden copy of every chip gives their widths at the current layout.
+ */
+function ChipGroup(props: { label: string; field: ListField; values: string[]; plain?: boolean }) {
   const [all, setAll] = createSignal(false);
-  const shown = () =>
-    props.limit !== undefined && !all() ? props.values.slice(0, props.limit) : props.values;
+  const [fit, setFit] = createSignal(Number.POSITIVE_INFINITY);
+  let list: HTMLUListElement | undefined;
+  let measure: HTMLDivElement | undefined;
+
+  function refit() {
+    if (!list || !measure) return;
+    const widths = [...measure.querySelectorAll<HTMLElement>("[data-chip]")].map(
+      (chip) => chip.offsetWidth,
+    );
+    const more = measure.querySelector<HTMLElement>("[data-more]")?.offsetWidth ?? 0;
+    const gap = Number.parseFloat(getComputedStyle(list).columnGap) || 0;
+    setFit(chipsThatFit(widths, list.clientWidth, more, gap, CHIP_ROWS));
+  }
+
+  onMount(() => {
+    refit();
+    // The list's width, and the copy's: other values or language change what fits.
+    const observer = new ResizeObserver(() => refit());
+    if (list) observer.observe(list);
+    if (measure) observer.observe(measure);
+    onCleanup(() => observer.disconnect());
+  });
+  createEffect(on(() => props.values, refit, { defer: true }));
+
+  const shown = () => (all() ? props.values : props.values.slice(0, fit()));
   const rest = () => props.values.length - shown().length;
   return (
     <Show when={props.values.length > 0}>
       <div class="chip-group">
         <h4 class="details-card__subtitle">{props.label}</h4>
-        <ul class="chips" aria-label={props.label}>
+        <div ref={(el) => (measure = el)} class="chips chips--measure" aria-hidden="true">
+          <For each={props.values}>
+            {(value) => (
+              <span data-chip>
+                <FilterChip field={props.field} value={value} plain={props.plain} />
+              </span>
+            )}
+          </For>
+          <span data-more class="chip chip--plain chip--link">
+            +{props.values.length}
+          </span>
+        </div>
+        <ul ref={(el) => (list = el)} class="chips" aria-label={props.label}>
           <For each={shown()}>
             {(value) => (
               <li>
@@ -635,19 +671,8 @@ export function DetailsPanel(props: DetailsPanelProps) {
                   </div>
                 </Show>
                 <ChipGroup label={tr("genres")} field="genre" values={props.game.genres} />
-                <ChipGroup
-                  label={tr("features")}
-                  field="feature"
-                  values={props.game.features}
-                  limit={10}
-                />
-                <ChipGroup
-                  label={tr("tags")}
-                  field="tag"
-                  values={props.game.tags}
-                  plain
-                  limit={12}
-                />
+                <ChipGroup label={tr("features")} field="feature" values={props.game.features} />
+                <ChipGroup label={tr("tags")} field="tag" values={props.game.tags} plain />
               </Card>
             </Show>
             <NewsCard news={news()} />
