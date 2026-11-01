@@ -37,6 +37,7 @@ import {
   EXPLORE_ID,
   exploreView,
   findView,
+  sameFilters,
   sectionOrder,
   viewForGame,
   withChange,
@@ -1206,6 +1207,13 @@ function createAppStore() {
     selectView,
     openExplore,
     isExplore: () => activeViewId() === EXPLORE_ID,
+    /** Whether the open view filters differently from how it was saved (Explore always does). */
+    filtersChanged: () => {
+      const view = activeView();
+      return (
+        activeViewId() === EXPLORE_ID || (!!view && !sameFilters(viewState().query, view.query))
+      );
+    },
     loadViews,
     resetView: () => {
       const view = activeView();

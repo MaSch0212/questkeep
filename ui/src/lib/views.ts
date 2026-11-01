@@ -80,9 +80,12 @@ function sameSet(a: readonly string[], b: readonly string[]): boolean {
 }
 
 function sameQuery(a: GameQuery, b: GameQuery): boolean {
+  return a.sort === b.sort && a.descending === b.descending && sameFilters(a, b);
+}
+
+/** Whether two queries filter the same games (sort order and keyword aside). */
+export function sameFilters(a: GameQuery, b: GameQuery): boolean {
   return (
-    a.sort === b.sort &&
-    a.descending === b.descending &&
     a.favorite === b.favorite &&
     a.installed === b.installed &&
     a.kind === b.kind &&

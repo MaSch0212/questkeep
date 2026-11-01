@@ -6,6 +6,7 @@ import type { ViewSection } from "../bindings/ViewSection";
 import { makeGame } from "../test-utils";
 import { defaultQuery } from "./query";
 import {
+  sameFilters,
   shownName,
   activeFilterCount,
   applyDrop,
@@ -208,5 +209,15 @@ describe("shownName", () => {
     expect(shownName({ id: "library", name: "Library" })).toBe("Bibliothek");
     expect(shownName({ id: "all", name: "Everything" })).toBe("Everything");
     expect(shownName({ id: "custom", name: "Favorites" })).toBe("Favorites");
+  });
+});
+
+describe("sameFilters", () => {
+  it("ignores sort order and keyword but not filters", () => {
+    const saved = { ...defaultQuery(), installed: "yes" } as GameQuery;
+    expect(sameFilters(saved, { ...saved, sort: "playtime", descending: true, search: "x" })).toBe(
+      true,
+    );
+    expect(sameFilters(saved, { ...saved, installed: "any" })).toBe(false);
   });
 });

@@ -103,7 +103,11 @@ const describe = (parts: PillPart[]) =>
 const quick = () => quickPills(store.query());
 const tree = () => treePills(store.query().filter, store.valueName);
 
-/** The open view's active filters under the toolbar, each removable, then "Clear all". */
+/**
+ * The open view's active filters under the toolbar, each removable, then "Clear all". Shown on
+ * Explore and once a view's filters were changed; a saved view's own filters show only as the
+ * count on the Filters button.
+ */
 export function FilterPills() {
   // Names of list values come from the loaded value lists.
   createEffect(() => {
@@ -121,7 +125,7 @@ export function FilterPills() {
   });
 
   return (
-    <Show when={quick().length + tree().length > 0}>
+    <Show when={store.filtersChanged() && quick().length + tree().length > 0}>
       <div class="filter-pills" role="list" aria-label={tr("activeFilters")}>
         <For each={quick()}>
           {(pill) => (
