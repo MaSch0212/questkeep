@@ -19,7 +19,7 @@ beforeEach(() => {
   store.reset();
 });
 
-async function loadProviders(canUninstall: boolean) {
+async function loadProviders(canUninstall: boolean, launcherPages = false) {
   vi.mocked(api.listProviders).mockResolvedValue([
     {
       id: "steam",
@@ -28,6 +28,7 @@ async function loadProviders(canUninstall: boolean) {
       canScan: true,
       canScanOwned: true,
       canUninstall,
+      launcherPages,
       installed: true,
       syncable: true,
       addGameOptions: [],
@@ -337,6 +338,23 @@ describe("DetailsPanel", () => {
     // Another game: the confirmation closes.
     setGame(makeGame({ id: "g2" }));
     expect(screen.queryByRole("dialog", { name: "Remove game" })).toBeNull();
+  });
+
+  describe("Show in the launcher", () => {
+    it("opens the game's page in its store's launcher", async () => {
+      vi.mocked(api.openLauncherPage).mockResolvedValue(undefined);
+      await loadProviders(false, true);
+      render(() => <DetailsPanel game={steamGame()} onClose={vi.fn<() => void>()} />);
+      await chooseMore("Show in Steam");
+      await waitFor(() => expect(api.openLauncherPage).toHaveBeenCalledWith("g1", "g1"));
+    });
+
+    it("is hidden for stores without launcher pages", async () => {
+      await loadProviders(true);
+      render(() => <DetailsPanel game={steamGame()} onClose={vi.fn<() => void>()} />);
+      const menu = await openMore();
+      expect(within(menu).queryByRole("menuitem", { name: /Show in/ })).toBeNull();
+    });
   });
 
   describe("Uninstall", () => {

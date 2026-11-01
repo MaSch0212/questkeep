@@ -247,6 +247,16 @@ impl LibraryProvider for XboxProvider {
         cfg!(windows)
     }
 
+    fn has_launcher_pages(&self) -> bool {
+        cfg!(windows)
+    }
+
+    /// The game's Microsoft Store page (the Xbox app has no link to a game by package name).
+    fn launcher_page(&self, source_game_id: &str) -> Option<PlayAction> {
+        self.install_action(source_game_id)
+            .filter(|_| self.has_launcher_pages())
+    }
+
     /// Opens Windows' "Installed apps" settings page; the user picks the game there and Windows
     /// asks for confirmation. Nothing is uninstalled silently.
     fn uninstall_action(&self, source_game_id: &str) -> Option<PlayAction> {
@@ -365,6 +375,22 @@ mod tests {
         assert_eq!(p.name(), "Xbox");
         assert!(!p.can_scan_owned());
         assert_eq!(p.can_scan(), cfg!(windows));
+    }
+
+    #[test]
+    fn launcher_page_is_the_store_page() {
+        let p = provider(Vec::new);
+        assert_eq!(p.has_launcher_pages(), cfg!(windows));
+        let page = p.launcher_page("Contoso.Racer_8wekyb3d8bbwe");
+        if cfg!(windows) {
+            assert_eq!(
+                page.unwrap().target,
+                "ms-windows-store://pdp/?PFN=Contoso.Racer_8wekyb3d8bbwe"
+            );
+        } else {
+            assert!(page.is_none());
+        }
+        assert!(p.launcher_page("a&b=c").is_none());
     }
 
     #[test]

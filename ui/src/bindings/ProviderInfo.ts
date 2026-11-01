@@ -11,6 +11,10 @@ export type ProviderInfo = { id: string, name: string,
  */
 icon: string, canScan: boolean, canScanOwned: boolean, canUninstall: boolean, 
 /**
+ * Games can be shown in the store's launcher (see [`LibraryProvider::launcher_page`]).
+ */
+launcherPages: boolean, 
+/**
  * The store's client is on this PC (see [`LibraryProvider::is_installed`]).
  */
 installed: boolean, 

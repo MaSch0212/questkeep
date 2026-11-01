@@ -192,6 +192,16 @@ impl LibraryProvider for SteamProvider {
         is_app_id(app_id).then(|| PlayAction::uri(format!("steam://uninstall/{app_id}")))
     }
 
+    fn has_launcher_pages(&self) -> bool {
+        !self.roots.is_empty()
+    }
+
+    /// The game's page in the Steam library (`steam://nav/games/details/<appid>`).
+    fn launcher_page(&self, app_id: &str) -> Option<PlayAction> {
+        (self.has_launcher_pages() && is_app_id(app_id))
+            .then(|| PlayAction::uri(format!("steam://nav/games/details/{app_id}")))
+    }
+
     fn metadata(&self, app_id: &str) -> Result<Option<GameMetadata>, ProviderError> {
         web::fetch_metadata(app_id)
     }
@@ -881,6 +891,22 @@ mod tests {
             .owned_credentials(&serde_json::json!({ "apiKey": "k", "steamId": "42" }))
             .unwrap();
         assert_eq!(explicit.1, "42");
+    }
+
+    #[test]
+    fn launcher_page_is_the_library_page() {
+        assert!(
+            !SteamProvider::default().has_launcher_pages(),
+            "no Steam found"
+        );
+        assert_eq!(SteamProvider::default().launcher_page("440"), None);
+        let p = SteamProvider::with_roots(vec![PathBuf::from("C:/Steam")]);
+        assert!(p.has_launcher_pages());
+        assert_eq!(
+            p.launcher_page("440"),
+            Some(PlayAction::uri("steam://nav/games/details/440"))
+        );
+        assert_eq!(p.launcher_page("../x"), None);
     }
 
     #[test]

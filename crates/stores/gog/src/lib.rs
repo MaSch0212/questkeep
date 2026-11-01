@@ -333,6 +333,17 @@ impl LibraryProvider for GogProvider {
         !matches!(self.installs, Installs::Heroic(_))
     }
 
+    /// GOG Galaxy is on this PC (Heroic has no game pages).
+    fn has_launcher_pages(&self) -> bool {
+        self.launcher().is_some()
+    }
+
+    /// The game's view in GOG Galaxy (`goggalaxy://openGameView/<id>`).
+    fn launcher_page(&self, source_game_id: &str) -> Option<PlayAction> {
+        (self.has_launcher_pages() && api::is_product_id(source_game_id))
+            .then(|| PlayAction::uri(format!("goggalaxy://openGameView/{source_game_id}")))
+    }
+
     /// Starts the game's own GOG uninstaller (the `UninstallString` of its `Uninstall\<id>_is1`
     /// key, else `unins000.exe` in the install folder), which asks for confirmation. Galaxy's
     /// protocol has no uninstall command.
@@ -444,6 +455,21 @@ mod tests {
         assert_eq!(action.kind, ActionKind::File);
         assert_eq!(action.target, client.to_string_lossy());
         assert!(GogProvider::with_records(vec![], None).launcher().is_none());
+    }
+
+    #[test]
+    fn launcher_page_is_the_galaxy_game_view() {
+        let tmp = tempfile::tempdir().unwrap();
+        let client = tmp.path().join("GalaxyClient.exe");
+        fs::write(&client, "x").unwrap();
+        let p = GogProvider::with_records(vec![], Some(client));
+        assert!(p.has_launcher_pages());
+        let action = p.launcher_page("1207658924").unwrap();
+        assert_eq!(action.target, "goggalaxy://openGameView/1207658924");
+        assert!(p.launcher_page("1/../x").is_none());
+        let without_galaxy = GogProvider::with_records(vec![], None);
+        assert!(!without_galaxy.has_launcher_pages());
+        assert!(without_galaxy.launcher_page("1207658924").is_none());
     }
 
     #[test]

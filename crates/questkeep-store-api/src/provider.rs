@@ -76,6 +76,16 @@ pub trait LibraryProvider: Send + Sync {
     fn uninstall_action(&self, _source_game_id: &str) -> Option<PlayAction> {
         None
     }
+    /// Whether [`launcher_page`](Self::launcher_page) can work on this machine (the UI only
+    /// offers "Show in <store>" for such providers). Must be cheap.
+    fn has_launcher_pages(&self) -> bool {
+        false
+    }
+    /// Opens the game's own page in the store's launcher (e.g. its Steam library page), usually a
+    /// store URI. `None` when the store has no such page for this game.
+    fn launcher_page(&self, _source_game_id: &str) -> Option<PlayAction> {
+        None
+    }
     /// The user's own grouping of games in the store (Steam collections, GOG Galaxy tags, Lutris
     /// categories): store game id -> category names. Called after every scan with the same
     /// `config` as [`scan_owned`](Self::scan_owned). `Ok(None)` (the default) means the store has

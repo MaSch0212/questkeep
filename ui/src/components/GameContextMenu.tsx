@@ -11,12 +11,14 @@ import RefreshCw from "lucide-solid/icons/refresh-cw";
 import Star from "lucide-solid/icons/star";
 import Trash from "lucide-solid/icons/trash";
 import Download from "lucide-solid/icons/download";
+import ExternalLink from "lucide-solid/icons/external-link";
 import { createResource, createSignal, Show } from "solid-js";
 import type { Game } from "../bindings/Game";
 import {
   activateGame,
   launchGame,
   openInstallFolder,
+  openLauncherPage,
   refreshMetadata,
   removeGame,
   uninstallGame,
@@ -25,14 +27,14 @@ import {
 import { translator } from "../i18n";
 import { shellMenus } from "../i18n/shellMenus";
 import { launchProfiles } from "../lib/api";
-import { playCopy } from "../lib/copies";
+import { launcherPageCopies, playCopy } from "../lib/copies";
 import { store } from "../lib/store";
 import { CombinePicker } from "./CombinePicker";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { EditGameDialog } from "./EditGameDialog";
 import { Menu, type MenuEntry } from "./Menu";
 import type { PopoverAnchor } from "./Popover";
-import { SourceIcon } from "./SourceIcon";
+import { SourceIcon, sourceName } from "./SourceIcon";
 
 const tr = translator(shellMenus);
 
@@ -209,6 +211,11 @@ export function GameContextMenu(props: {
             onSelect: () => void report(openInstallFolder(game().id)),
           },
         ]),
+    ...launcherPageCopies(game(), store.providers()).map((copy) => ({
+      label: tr("showIn", { store: sourceName(copy.source) }),
+      icon: iconOf(ExternalLink),
+      onSelect: () => void report(openLauncherPage(game().id, copy.id)),
+    })),
     ...(canUninstall()
       ? [
           {

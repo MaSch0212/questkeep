@@ -119,6 +119,7 @@ export function makeProvider(overrides: Partial<ProviderInfo> & { id: string }):
     canScan: true,
     canScanOwned: false,
     canUninstall: false,
+    launcherPages: false,
     installed: true,
     syncable: true,
     addGameOptions: [],

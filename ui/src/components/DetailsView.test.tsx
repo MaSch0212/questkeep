@@ -91,6 +91,7 @@ describe("DetailsView", () => {
         canScan: true,
         canScanOwned: true,
         canUninstall: true,
+        launcherPages: false,
         installed: true,
         syncable: true,
         addGameOptions: [],

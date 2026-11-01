@@ -4,6 +4,7 @@ import Combine from "lucide-solid/icons/combine";
 import Ellipsis from "lucide-solid/icons/ellipsis";
 import EyeOff from "lucide-solid/icons/eye-off";
 import Eye from "lucide-solid/icons/eye";
+import ExternalLink from "lucide-solid/icons/external-link";
 import FolderOpen from "lucide-solid/icons/folder-open";
 import ImageDown from "lucide-solid/icons/image-down";
 import PackageMinus from "lucide-solid/icons/package-minus";
@@ -31,6 +32,7 @@ import {
   installGame,
   launchGame,
   openInstallFolder,
+  openLauncherPage,
   preferCopy,
   refetchArtwork,
   refreshMetadata,
@@ -39,7 +41,7 @@ import {
   uninstallGame,
   updateGame,
 } from "../lib/actions";
-import { copiesOf, playCopy } from "../lib/copies";
+import { copiesOf, launcherPageCopies, playCopy } from "../lib/copies";
 import { chipsThatFit } from "../lib/gamePage";
 import {
   formatDate,
@@ -397,6 +399,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
             onSelect: () => void run(() => openInstallFolder(props.game.id)),
           },
         ]),
+    ...launcherPageCopies(props.game, store.providers()).map(showInLauncher),
     { kind: "separator" },
     ...(canUninstall()
       ? [
@@ -416,6 +419,12 @@ export function DetailsPanel(props: DetailsPanelProps) {
     },
   ];
 
+  const showInLauncher = (copy: GameCopy): MenuEntry => ({
+    label: tr("showIn", { store: sourceName(copy.source) }),
+    icon: () => <ExternalLink class="icon" aria-hidden="true" />,
+    onSelect: () => void run(() => openLauncherPage(props.game.id, copy.id)),
+  });
+
   const copyEntries = (copy: GameCopy): MenuEntry[] => [
     ...(copy.id === copies()[0]?.id
       ? []
@@ -432,6 +441,9 @@ export function DetailsPanel(props: DetailsPanelProps) {
       icon: () => <Unlink class="icon" aria-hidden="true" />,
       onSelect: () => void run(() => separateCopy(copy.id)),
     },
+    ...launcherPageCopies(props.game, store.providers())
+      .filter((c) => c.id === copy.id)
+      .map(showInLauncher),
   ];
 
   async function install(copyId: string | null = null) {

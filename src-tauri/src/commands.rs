@@ -229,6 +229,20 @@ pub async fn install_game(
     .await
 }
 
+/// Shows the game on its page in its store's launcher.
+#[tauri::command]
+pub async fn open_launcher_page(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    copy_id: Option<String>,
+) -> CmdResult<()> {
+    blocking(state, move |s| {
+        let copy = copy_id.as_deref().map(parse_id).transpose()?;
+        s.library.open_launcher_page(parse_id(&id)?, copy)
+    })
+    .await
+}
+
 /// Hands the uninstall to the store client or the game's uninstaller, which asks the user.
 #[tauri::command]
 pub async fn uninstall_game(

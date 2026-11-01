@@ -89,6 +89,7 @@ const info = (id: string, name: string, installed: boolean, syncable: boolean) =
   canScan: true,
   canScanOwned: true,
   canUninstall: false,
+  launcherPages: false,
   installed,
   syncable,
   addGameOptions: [],

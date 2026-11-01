@@ -1455,6 +1455,42 @@ impl Library {
             .map_err(|err| CoreError::Launch(format!("Could not start the uninstall: {err}")))
     }
 
+    /// The store action that shows a game on its page in the store's launcher.
+    pub fn launcher_page_action(&self, id: Uuid) -> Result<PlayAction> {
+        let game = self.db.get_game(id)?;
+        let no_page = || {
+            CoreError::Invalid(format!(
+                "'{}' has no page in its store's launcher.",
+                game.name
+            ))
+        };
+        let provider = self.providers.get(&game.source).ok_or_else(no_page)?;
+        let source_game_id = game.source_game_id.as_deref().ok_or_else(no_page)?;
+        if !provider.has_launcher_pages() {
+            return Err(no_page());
+        }
+        provider.launcher_page(source_game_id).ok_or_else(no_page)
+    }
+
+    /// Shows the game on its page in the store's launcher (e.g. `steam://nav/games/details/440`).
+    /// `copy` picks the store for a game owned in several; by default the first copy (in play
+    /// order) whose store has such a page.
+    pub fn open_launcher_page(&self, id: Uuid, copy: Option<Uuid>) -> Result<()> {
+        let action = match copy {
+            Some(copy) => self.launcher_page_action(self.copy_of(id, copy)?)?,
+            None => {
+                let entry = self.db.get_entry(id)?;
+                entry
+                    .copies
+                    .iter()
+                    .find_map(|c| self.launcher_page_action(c.id).ok())
+                    .map_or_else(|| self.launcher_page_action(entry.id), Ok)?
+            }
+        };
+        run_store_action(&action)
+            .map_err(|err| CoreError::Launch(format!("Could not open the launcher: {err}")))
+    }
+
     /// Starts one of a provider's extra ways to add games (e.g. Prism Launcher's "new instance"
     /// dialog) and returns the ids its installed scan sees now, for [`Self::wait_for_new_games`].
     pub fn run_add_game_option(
@@ -2033,6 +2069,12 @@ mod tests {
         fn uninstall_action(&self, id: &str) -> Option<PlayAction> {
             (id == "1").then(|| PlayAction::uri(format!("acct://uninstall/{id}")))
         }
+        fn has_launcher_pages(&self) -> bool {
+            true
+        }
+        fn launcher_page(&self, id: &str) -> Option<PlayAction> {
+            Some(PlayAction::uri(format!("acct://page/{id}")))
+        }
     }
 
     #[test]
@@ -2067,6 +2109,10 @@ mod tests {
         assert_eq!(
             lib.uninstall_action(installed.id).unwrap().target,
             "acct://uninstall/1"
+        );
+        assert_eq!(
+            lib.launcher_page_action(owned.id).unwrap().target,
+            "acct://page/2"
         );
         let not_installed = lib.uninstall_action(owned.id).unwrap_err().to_string();
         assert!(not_installed.contains("not installed"), "{not_installed}");

@@ -27,6 +27,8 @@ pub struct ProviderInfo {
     pub can_scan: bool,
     pub can_scan_owned: bool,
     pub can_uninstall: bool,
+    /// Games can be shown in the store's launcher (see [`LibraryProvider::launcher_page`]).
+    pub launcher_pages: bool,
     /// The store's client is on this PC (see [`LibraryProvider::is_installed`]).
     pub installed: bool,
     /// Syncing does something: the client is installed or owned games can be read without it.
@@ -100,6 +102,7 @@ impl ProviderRegistry {
                     can_scan: p.can_scan(),
                     can_scan_owned: p.can_scan_owned(),
                     can_uninstall: p.can_uninstall(),
+                    launcher_pages: p.has_launcher_pages(),
                     installed,
                     syncable: p.can_scan() && (installed || p.has_owned_source(&config(p.id()))),
                     add_game_options: if installed {
@@ -156,6 +159,7 @@ mod tests {
                 can_scan: true,
                 can_scan_owned: false,
                 can_uninstall: false,
+                launcher_pages: false,
                 installed: false,
                 syncable: false,
                 add_game_options: Vec::new(),

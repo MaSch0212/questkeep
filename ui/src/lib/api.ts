@@ -142,6 +142,8 @@ export const installGame = (id: string, copyId: string | null = null) =>
   invoke<void>("install_game", { id, copyId });
 export const uninstallGame = (id: string, copyId: string | null = null) =>
   invoke<void>("uninstall_game", { id, copyId });
+export const openLauncherPage = (id: string, copyId: string | null = null) =>
+  invoke<void>("open_launcher_page", { id, copyId });
 /** Combines other games into `into` (the same game in several stores); returns the entry. */
 export const combineGames = (into: string, others: string[]) =>
   invoke<Game>("combine_games", { into, others });

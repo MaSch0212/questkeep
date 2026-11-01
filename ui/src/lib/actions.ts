@@ -40,6 +40,11 @@ export function installGame(id: string, copyId: string | null = null): Promise<s
   return attempt(() => api.installGame(id, copyId));
 }
 
+/** Shows the game on its page in its store's launcher. Resolves to an error message, or null. */
+export function openLauncherPage(id: string, copyId: string | null = null): Promise<string | null> {
+  return attempt(() => api.openLauncherPage(id, copyId));
+}
+
 /**
  * Hands the uninstall to the store client or the game's uninstaller, which asks the user to
  * confirm. Resolves to an error message, or null on success.

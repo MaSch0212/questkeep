@@ -386,6 +386,7 @@ pub fn run() {
             commands::scan_all_libraries,
             commands::launch_game,
             commands::install_game,
+            commands::open_launcher_page,
             commands::uninstall_game,
             commands::combine_games,
             commands::separate_copy,
