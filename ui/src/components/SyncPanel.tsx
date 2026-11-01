@@ -1,4 +1,6 @@
 import RefreshCw from "lucide-solid/icons/refresh-cw";
+import TriangleAlert from "lucide-solid/icons/triangle-alert";
+import X from "lucide-solid/icons/x";
 import { For, onMount, Show } from "solid-js";
 import * as api from "../lib/api";
 import { errorMessage } from "../lib/errors";
@@ -34,7 +36,10 @@ export function SyncPanel(props: {
   inside: () => (Element | undefined)[];
 }) {
   let allButton: HTMLButtonElement | undefined;
-  onMount(() => queueMicrotask(() => allButton?.focus()));
+  onMount(() => {
+    queueMicrotask(() => allButton?.focus());
+    void store.loadAccountWarnings();
+  });
 
   return (
     <Popover
@@ -59,6 +64,41 @@ export function SyncPanel(props: {
           <RefreshCw class="icon" aria-hidden="true" /> Sync all
         </button>
       </div>
+      <Show when={store.accountWarnings().length > 0}>
+        <ul class="sync-panel__warnings" aria-label="Accounts signed out">
+          <For each={store.accountWarnings()}>
+            {(warning) => (
+              <li class="sync-panel__warning">
+                <TriangleAlert class="icon sync-panel__warning-icon" aria-hidden="true" />
+                <span class="sync-panel__warning-text">
+                  {warning.name}
+                  {warning.displayName ? ` (${warning.displayName})` : ""} is signed out, so its
+                  owned games and achievements don't update.
+                </span>
+                <button
+                  type="button"
+                  class="btn btn--small"
+                  onClick={() => {
+                    props.onClose(false);
+                    store.showSettingsSection("stores");
+                  }}
+                >
+                  Sign in…
+                </button>
+                <button
+                  type="button"
+                  class="icon-btn icon-btn--small"
+                  aria-label={`Dismiss the warning about ${warning.name}`}
+                  title="Dismiss (until you sign in again)"
+                  onClick={() => void store.dismissAccountWarning(warning.provider)}
+                >
+                  <X class="icon" aria-hidden="true" />
+                </button>
+              </li>
+            )}
+          </For>
+        </ul>
+      </Show>
       <ul class="sync-panel__list">
         <For each={stores()}>
           {(provider) => {

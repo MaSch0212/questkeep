@@ -343,6 +343,8 @@ pub fn run() {
         })
         .invoke_handler(main_window_only(tauri::generate_handler![
             commands::list_games,
+            commands::account_warnings,
+            commands::dismiss_account_warning,
             commands::list_backups,
             commands::backup_folder,
             commands::backup_now,

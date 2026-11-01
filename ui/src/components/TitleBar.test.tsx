@@ -217,3 +217,24 @@ describe("Command bar", () => {
     expect(screen.queryByRole("dialog", { name: "Apps" })).toBeNull();
   });
 });
+
+describe("Signed-out accounts", () => {
+  it("show a badge and a dismissable warning in the sync panel", async () => {
+    vi.mocked(api.accountWarnings).mockResolvedValue([
+      { provider: "steam", name: "Steam", displayName: "Ada" },
+    ]);
+    vi.mocked(api.dismissAccountWarning).mockResolvedValue(undefined);
+    await store.loadAccountWarnings();
+    render(() => <TitleBar onAdd={() => undefined} />);
+    const sync = screen.getByRole("button", { name: /1 account signed out/ });
+    expect(document.querySelector(".titlebar__sync-warn")).not.toBeNull();
+    await fireEvent.click(sync);
+    const panel = await screen.findByRole("dialog", { name: "Library sync" });
+    expect(within(panel).getByText(/Steam \(Ada\) is signed out/)).toBeInTheDocument();
+    await fireEvent.click(
+      within(panel).getByRole("button", { name: "Dismiss the warning about Steam" }),
+    );
+    expect(api.dismissAccountWarning).toHaveBeenCalledWith("steam");
+    await vi.waitFor(() => expect(document.querySelector(".titlebar__sync-warn")).toBeNull());
+  });
+});

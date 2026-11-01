@@ -75,8 +75,15 @@ const syncEntries = (): MenuEntry[] => [
 
 // Background downloads (covers, details, icons) show on the sync button too, as a sync does.
 const downloading = () => store.backgroundWorkLabel() !== null;
-const syncButtonLabel = () =>
-  store.syncBusy() ? syncLabel(store.syncState()) : (store.backgroundWorkLabel() ?? "Sync");
+const warningCount = () => store.accountWarnings().length;
+const syncButtonLabel = () => {
+  const label = store.syncBusy()
+    ? syncLabel(store.syncState())
+    : (store.backgroundWorkLabel() ?? "Sync");
+  const count = warningCount();
+  if (count === 0) return label;
+  return `${label} (${count} ${count === 1 ? "account" : "accounts"} signed out)`;
+};
 
 type Open = "app" | "add" | "launch" | "apps" | "sync" | null;
 
@@ -258,6 +265,9 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
           ))}
           <Show when={store.syncBusy() || downloading()}>
             <span class="titlebar__sync-dot" aria-hidden="true" />
+          </Show>
+          <Show when={warningCount() > 0}>
+            <span class="titlebar__sync-warn" aria-hidden="true" />
           </Show>
         </span>
       </div>

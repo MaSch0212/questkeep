@@ -129,6 +129,8 @@
   --qk-settings-number-width: 80px;
   /* Height of the values in the game page's stat row (fits the status button). */
   --qk-stat-value-height: 26px;
+  /* Ring around small badges so they stand off the icon below. */
+  --qk-badge-ring: 2px;
   --qk-combobox-max-height: 280px;
   --qk-icon-stroke: 2;
   --qk-tile-min-width: 170px;

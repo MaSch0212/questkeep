@@ -1,5 +1,6 @@
 //! SQLite persistence: connection handling, migrations and repositories.
 
+mod accounts;
 mod backup;
 mod bulk;
 mod categories;
@@ -21,6 +22,7 @@ use rusqlite::Connection;
 
 use crate::error::{CoreError, Result};
 
+pub use accounts::KnownAccount;
 pub use combine::{Combined, duplicate_key};
 pub use games::{DetectionDir, GameMissingMetadata, NewGameRecord};
 pub use profiles::ProfileRow;

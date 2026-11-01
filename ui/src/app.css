@@ -2390,6 +2390,18 @@ ul {
   border-radius: var(--qk-radius-pill);
   pointer-events: none;
 }
+/* A store account is signed out (details in the sync panel). */
+.titlebar__sync-warn {
+  position: absolute;
+  top: var(--qk-space-1);
+  right: var(--qk-space-1);
+  width: var(--qk-titlebar-dot-size);
+  height: var(--qk-titlebar-dot-size);
+  background: var(--qk-color-warn);
+  border-radius: var(--qk-radius-pill);
+  box-shadow: 0 0 0 var(--qk-badge-ring) var(--qk-color-surface);
+  pointer-events: none;
+}
 .titlebar__separator {
   width: 1px;
   height: var(--qk-space-4);
@@ -3017,6 +3029,35 @@ ul {
   border-top: 1px solid var(--qk-color-border);
   font-size: var(--qk-font-size-sm);
   color: var(--qk-color-text-muted);
+}
+.sync-panel__warnings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-1);
+  margin: var(--qk-space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.sync-panel__warning {
+  display: flex;
+  align-items: center;
+  gap: var(--qk-space-2);
+  padding: var(--qk-space-2);
+  background: var(--qk-color-warn-soft);
+  border: 1px solid var(--qk-color-warn-border);
+  border-radius: var(--qk-radius-md);
+  font-size: var(--qk-font-size-sm);
+}
+.sync-panel__warning-icon {
+  flex: none;
+  color: var(--qk-color-warn);
+}
+.sync-panel__warning-text {
+  flex: 1;
+  min-width: 0;
+}
+.sync-panel__warning .btn {
+  flex: none;
 }
 .sync-panel__row {
   display: flex;

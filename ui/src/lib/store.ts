@@ -2,6 +2,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { batch, createEffect, createMemo, createRoot, createSignal, on, onCleanup } from "solid-js";
 import { createStore } from "solid-js/store";
+import type { AccountWarning } from "../bindings/AccountWarning";
 import type { AppInfo } from "../bindings/AppInfo";
 import type { Category } from "../bindings/Category";
 import type { CompletionSettings } from "../bindings/CompletionSettings";
@@ -157,6 +158,8 @@ function createAppStore() {
   );
   /** Counts finished backups, so the backup list reloads. */
   const [backupsChanged, setBackupsChanged] = createSignal(0);
+  /** Store accounts whose sign-in ended without the user signing out (sync panel). */
+  const [accountWarnings, setAccountWarnings] = createSignal<AccountWarning[]>([]);
   /** A quit waits for the running backup: the quit dialog shows. */
   const [quitDuringBackup, setQuitDuringBackup] = createSignal(false);
 
@@ -853,6 +856,7 @@ function createAppStore() {
         syncTracker.handle(event);
         scheduleRefresh();
         void loadSyncTimes();
+        void loadAccountWarnings();
         break;
       case "gameStarted":
         setRunningState(event.id, true);
@@ -886,6 +890,21 @@ function createAppStore() {
       case "quitDuringBackup":
         setQuitDuringBackup(true);
         break;
+    }
+  }
+
+  /** A sign-in can end during a scan (an expired session) or be renewed in settings. */
+  async function loadAccountWarnings() {
+    const warnings = await optional(api.accountWarnings);
+    if (warnings) setAccountWarnings(warnings);
+  }
+
+  async function dismissAccountWarning(provider: string) {
+    try {
+      await api.dismissAccountWarning(provider);
+      setAccountWarnings((list) => list.filter((w) => w.provider !== provider));
+    } catch (error) {
+      pushToast("error", errorMessage(error));
     }
   }
 
@@ -982,6 +1001,7 @@ function createAppStore() {
       loadCategories(),
       loadUpdate(),
       loadSetup(),
+      loadAccountWarnings(),
     ]).then((results) => {
       for (const r of results)
         if (r.status === "rejected") pushToast("error", errorMessage(r.reason));
@@ -1011,6 +1031,9 @@ function createAppStore() {
     requestSeq++;
     batch(() => {
       setSections([]);
+      setAccountWarnings([]);
+      setBackupProgress(null);
+      setQuitDuringBackup(false);
       setActiveViewId(null);
       setDrafts({});
       setKeyword(null);
@@ -1139,6 +1162,9 @@ function createAppStore() {
     /** "Downloading …" while covers or details are queued, else null. */
     backgroundWorkLabel: () => backupLabel(backupProgress()) ?? workLabel(backgroundWork()),
     backupRunning: () => backupProgress() !== null,
+    accountWarnings,
+    loadAccountWarnings,
+    dismissAccountWarning,
     backupsChanged,
     quitDuringBackup,
     setQuitDuringBackup,

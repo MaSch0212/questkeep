@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use questkeep_core::auth::AccountStatus;
 use questkeep_core::backup::BackupInfo;
-use questkeep_core::library::MetadataSourceInfo;
+use questkeep_core::library::{AccountWarning, MetadataSourceInfo};
 use questkeep_core::model::{
     Achievements, BulkChange, Category, CombinePlan, CompletionSettings, Game, GameActivity,
     GameEditInfo, GameEdits, GameNews, GameQuery, GameUpdate, ImageOption, ImageSlot, ImageSource,
@@ -1051,4 +1051,19 @@ pub async fn finish_quit(app: tauri::AppHandle, wait: bool) -> CmdResult<()> {
 #[tauri::command]
 pub fn cancel_quit(app: tauri::AppHandle) {
     crate::backups::cancel_quit(&app);
+}
+
+/// Store accounts that were signed in and no longer are (not dismissed).
+#[tauri::command]
+pub async fn account_warnings(state: State<'_, Arc<AppState>>) -> CmdResult<Vec<AccountWarning>> {
+    blocking(state, |s| s.library.account_warnings()).await
+}
+
+/// Hides a signed-out account's warning until it is signed in again.
+#[tauri::command]
+pub async fn dismiss_account_warning(
+    state: State<'_, Arc<AppState>>,
+    provider: String,
+) -> CmdResult<()> {
+    blocking(state, move |s| s.library.dismiss_account_warning(&provider)).await
 }

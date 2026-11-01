@@ -44,6 +44,20 @@ pub struct MetadataSourceInfo {
     pub name: String,
 }
 
+/// A store account that was signed in and no longer is (an expired session), shown in the
+/// sync panel until the user signs in again or dismisses it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AccountWarning {
+    /// Provider id, e.g. `steam`.
+    pub provider: String,
+    /// Store name, e.g. `Steam`.
+    pub name: String,
+    /// The account's name when it was last signed in.
+    pub display_name: Option<String>,
+}
+
 /// Static information about the running app, shown in settings.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -963,6 +977,38 @@ impl Library {
             .collect()
     }
 
+    /// Accounts that were signed in and no longer are, unless dismissed. Also remembers the
+    /// accounts signed in now (which ends a dismissal: a later expiry warns again).
+    pub fn account_warnings(&self) -> Result<Vec<AccountWarning>> {
+        let mut warnings = Vec::new();
+        for status in self.account_statuses() {
+            let known = self.db.known_account(&status.provider)?;
+            if status.signed_in {
+                let now = crate::db::KnownAccount {
+                    display_name: status.display_name.clone(),
+                    dismissed: false,
+                };
+                if known.as_ref() != Some(&now) {
+                    self.db.set_known_account(&status.provider, &now)?;
+                }
+            } else if let Some(known) = known.filter(|k| !k.dismissed) {
+                warnings.push(AccountWarning {
+                    provider: status.provider,
+                    name: status.name,
+                    display_name: known.display_name,
+                });
+            }
+        }
+        Ok(warnings)
+    }
+
+    /// Hides the warning about a signed-out account until it was signed in again.
+    pub fn dismiss_account_warning(&self, provider_id: &str) -> Result<()> {
+        let mut known = self.db.known_account(provider_id)?.unwrap_or_default();
+        known.dismissed = true;
+        self.db.set_known_account(provider_id, &known)
+    }
+
     /// The page the in-app login window opens for a provider, and how that window behaves.
     pub fn login(&self, provider_id: &str) -> Result<(String, crate::auth::LoginWindow)> {
         let provider = self.account_provider(provider_id)?;
@@ -999,6 +1045,10 @@ impl Library {
             return Err(CoreError::UnknownProvider(provider_id.to_string()));
         };
         account.sign_out()?;
+        // Signed out on purpose: no warning about it.
+        if let Err(err) = self.db.forget_known_account(provider_id) {
+            tracing::warn!(%err, "could not forget the account");
+        }
         Ok(account.status())
     }
 
@@ -2135,6 +2185,43 @@ mod tests {
                 label: "New thing".into(),
             }]
         }
+    }
+
+    #[test]
+    fn an_expired_sign_in_warns_until_dismissed_or_signed_in_again() {
+        use std::sync::atomic::Ordering;
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Arc::new(SignInStore {
+            signed_in: false.into(),
+        });
+        let mut providers = ProviderRegistry::new();
+        providers.register(Arc::new(SignInProvider(store.clone())));
+        let (lib, _) = library(tmp.path(), providers);
+        // Never signed in: nothing to warn about.
+        assert!(lib.account_warnings().unwrap().is_empty());
+
+        store.signed_in.store(true, Ordering::SeqCst);
+        assert!(lib.account_warnings().unwrap().is_empty());
+        // The session ends without the user signing out.
+        store.signed_in.store(false, Ordering::SeqCst);
+        let warnings = lib.account_warnings().unwrap();
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(warnings[0].provider, "acct");
+        assert_eq!(warnings[0].name, "Account");
+
+        lib.dismiss_account_warning("acct").unwrap();
+        assert!(lib.account_warnings().unwrap().is_empty(), "dismissed");
+        // Signing in again ends the dismissal; the next expiry warns again.
+        store.signed_in.store(true, Ordering::SeqCst);
+        assert!(lib.account_warnings().unwrap().is_empty());
+        store.signed_in.store(false, Ordering::SeqCst);
+        assert_eq!(lib.account_warnings().unwrap().len(), 1);
+
+        // Signing out on purpose is no warning.
+        store.signed_in.store(true, Ordering::SeqCst);
+        lib.account_warnings().unwrap();
+        lib.sign_out("acct").unwrap();
+        assert!(lib.account_warnings().unwrap().is_empty());
     }
 
     #[test]

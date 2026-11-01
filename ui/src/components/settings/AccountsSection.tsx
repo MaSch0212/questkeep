@@ -83,6 +83,8 @@ export function AccountsSection(props: { model: SettingsModel }) {
   async function refresh() {
     try {
       setAccounts(await api.accountStatus());
+      // Signing in again ends a "signed out" warning in the sync panel.
+      void store.loadAccountWarnings();
     } catch (error) {
       store.pushToast("error", errorMessage(error));
       setAccounts((current) => current ?? []);

@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { AccountStatus } from "../bindings/AccountStatus";
+import type { AccountWarning } from "../bindings/AccountWarning";
 import type { Achievements } from "../bindings/Achievements";
 import type { BackupInfo } from "../bindings/BackupInfo";
 import type { BulkChange } from "../bindings/BulkChange";
@@ -93,6 +94,11 @@ export const listLaunchers = () => invoke<string[]>("list_launchers");
 export const openLauncher = (providerId: string) => invoke<void>("open_launcher", { providerId });
 /** Quits Questkeep, even when it would otherwise keep running in the tray. */
 export const exitApp = () => invoke<void>("exit_app");
+/** Store accounts that were signed in and no longer are (not dismissed). */
+export const accountWarnings = () => invoke<AccountWarning[]>("account_warnings");
+/** Hides a signed-out account's warning until it is signed in again. */
+export const dismissAccountWarning = (provider: string) =>
+  invoke<void>("dismiss_account_warning", { provider });
 /** The backups in the backup folder, newest first. */
 export const listBackups = () => invoke<BackupInfo[]>("list_backups");
 /** The folder backups go to (the configured one or the default). */
