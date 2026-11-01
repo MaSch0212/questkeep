@@ -191,8 +191,8 @@ export function App() {
                 />
               }
             >
-              <Show when={store.viewMode() === "list"} fallback={<GameGrid />}>
-                <GameList />
+              <Show when={store.viewMode() === "list"} fallback={<GameGrid docked={docked()} />}>
+                <GameList docked={docked()} />
               </Show>
             </Show>
             <Show when={docked()}>

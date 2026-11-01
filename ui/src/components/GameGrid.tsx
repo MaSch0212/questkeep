@@ -81,7 +81,8 @@ function activateSelected() {
  * In a grouped view a game shows once per group it belongs to. One focusable region with
  * `aria-activedescendant` for keyboard navigation.
  */
-export function GameGrid() {
+/** `docked`: the details panel beside the grid shows the selected game. */
+export function GameGrid(props: { docked?: boolean }) {
   let scroller: HTMLDivElement | undefined;
   const [size, setSize] = createSignal({ width: 0, height: 0 });
   const [scrollTop, setScrollTop] = createSignal(0);
@@ -295,7 +296,7 @@ export function GameGrid() {
                                   selected={store.isSelected(slot().game.id)}
                                   open={
                                     store.isSelected(slot().game.id) &&
-                                    (store.isMulti() || store.detailsOpen())
+                                    (props.docked || store.isMulti() || store.detailsOpen())
                                   }
                                   onSelect={(_, event) => onSelect(slotIndex, event)}
                                   onContextMenu={(event) => onContextMenu(slotIndex, event)}

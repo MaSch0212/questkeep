@@ -59,9 +59,10 @@ function activateSelected() {
  * navigation.
  *
  * `compact` is the narrow list of the details view: no column header, smaller rows, and selecting
- * a game shows it on the page beside the list instead of opening the details panel.
+ * a game shows it on the page beside the list instead of opening the details panel. `docked`:
+ * the details panel beside the list shows the selected game.
  */
-export function GameList(props: { compact?: boolean }) {
+export function GameList(props: { compact?: boolean; docked?: boolean }) {
   const mode = () => (props.compact ? "details" : "list");
   let scroller: HTMLDivElement | undefined;
   let columnHeader: HTMLDivElement | undefined;
@@ -301,7 +302,7 @@ export function GameList(props: { compact?: boolean }) {
                                   selected={store.isSelected(slot().game.id)}
                                   open={
                                     store.isSelected(slot().game.id) &&
-                                    (store.isMulti() || store.detailsOpen())
+                                    (props.docked || store.isMulti() || store.detailsOpen())
                                   }
                                   onSelect={(_, event) => onSelect(games().first, event)}
                                   onContextMenu={(event) => onContextMenu(games().first, event)}
