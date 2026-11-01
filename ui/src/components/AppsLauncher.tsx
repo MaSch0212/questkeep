@@ -2,12 +2,16 @@ import ExternalLink from "lucide-solid/icons/external-link";
 import Search from "lucide-solid/icons/search";
 import { createMemo, createResource, createSignal, For, onMount, Show } from "solid-js";
 import type { Game } from "../bindings/Game";
+import { translator } from "../i18n";
+import { shellApps } from "../i18n/shellApps";
 import { activateGame } from "../lib/actions";
 import * as api from "../lib/api";
 import { defaultQuery } from "../lib/query";
 import { store } from "../lib/store";
 import { GameIcon } from "./GameIcon";
 import { Popover, type PopoverAnchor } from "./Popover";
+
+const tr = translator(shellApps);
 
 /** At most two rows of four. */
 const SHOWN = 8;
@@ -55,7 +59,7 @@ export function AppsLauncher(props: {
       anchor={props.anchor}
       class="apps"
       role="dialog"
-      label="Apps"
+      label={tr("apps")}
       inside={props.inside}
       onClose={props.onClose}
     >
@@ -65,8 +69,8 @@ export function AppsLauncher(props: {
           ref={(el) => (input = el)}
           type="text"
           value={text()}
-          placeholder="Find an app"
-          aria-label="Find an app"
+          placeholder={tr("findApp")}
+          aria-label={tr("findApp")}
           onInput={(event) => setText(event.currentTarget.value)}
           onKeyDown={(event) => {
             const first = shown()[0];
@@ -81,11 +85,7 @@ export function AppsLauncher(props: {
         when={shown().length > 0}
         fallback={
           <p class="apps__empty">
-            {apps.loading
-              ? "Loading…"
-              : text().trim() !== ""
-                ? "No app matches."
-                : "No apps yet. Mark a game as an app from its right-click menu."}
+            {apps.loading ? tr("loading") : text().trim() !== "" ? tr("noMatch") : tr("noApps")}
           </p>
         }
       >
@@ -95,7 +95,11 @@ export function AppsLauncher(props: {
               <button
                 type="button"
                 class="apps__app"
-                title={app.installed ? `Start ${app.name}` : `${app.name} (not installed)`}
+                title={
+                  app.installed
+                    ? tr("start", { name: app.name })
+                    : tr("notInstalled", { name: app.name })
+                }
                 onClick={() => start(app)}
                 onContextMenu={(event) => menu(app, event)}
               >
@@ -109,7 +113,7 @@ export function AppsLauncher(props: {
         </div>
       </Show>
       <div class="apps__foot">
-        <span class="muted">Click to start · right-click for more</span>
+        <span class="muted">{tr("hint")}</span>
         <button
           type="button"
           class="link-btn"
@@ -118,7 +122,7 @@ export function AppsLauncher(props: {
             store.openExplore({ kind: "apps" });
           }}
         >
-          Show all apps
+          {tr("showAll")}
           <ExternalLink class="icon" aria-hidden="true" />
         </button>
       </div>

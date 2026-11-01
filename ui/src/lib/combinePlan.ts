@@ -3,6 +3,10 @@ import type { CompletionStatus } from "../bindings/CompletionStatus";
 import type { Game } from "../bindings/Game";
 import type { GameEditInfo } from "../bindings/GameEditInfo";
 import type { LaunchProfiles } from "../bindings/LaunchProfiles";
+import { translator } from "../i18n";
+import { shellCombine } from "../i18n/shellCombine";
+
+const tr = translator(shellCombine);
 
 /** One game on the combine screen with what the screen shows about it. */
 export interface CombineSource {
@@ -32,8 +36,10 @@ export type CombineRow =
   | { kind: "favorite"; label: string; section: "you"; values: (string | null)[] }
   | { kind: "multi"; key: Multi; label: string; section: "you"; values: (string | null)[] };
 
-/** "ageRatings" -> "Age ratings". */
+/** "ageRatings" -> "Age ratings" (translated for the known metadata fields). */
 export function fieldLabel(field: string): string {
+  const key = `field_${field}`;
+  if (key in shellCombine.en) return tr(key as "field_tags");
   const words = field.replace(/([A-Z])/g, " $1").toLowerCase();
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
@@ -94,82 +100,82 @@ export function combineRows(
     {
       kind: "single",
       key: "nameFrom",
-      label: "Name",
+      label: tr("rowName"),
       section: "game",
       values: values((s) => s.game.name),
     },
     {
       kind: "single",
       key: "imagesFrom",
-      label: "Cover and images",
+      label: tr("rowImages"),
       section: "game",
       values: values((s) =>
         s.game.coverPath === null
           ? null
           : s.edits?.userImages.cover
-            ? `Your image (${names.source(s.game.source)})`
-            : `From ${names.source(s.game.source)}`,
+            ? tr("yourImage", { source: names.source(s.game.source) })
+            : tr("fromSource", { source: names.source(s.game.source) }),
       ),
     },
     {
       kind: "single",
       key: "detailsFrom",
-      label: "Edited details",
+      label: tr("rowDetails"),
       section: "game",
       values: values((s) => list(s.edits?.edits.edited.map(fieldLabel) ?? [])),
     },
     {
       kind: "single",
       key: "statusFrom",
-      label: "Completion status",
+      label: tr("rowStatus"),
       section: "you",
       values: values((s) => names.status(s.game.completionStatus)),
     },
     {
       kind: "single",
       key: "scoreFrom",
-      label: "Your score",
+      label: tr("rowScore"),
       section: "you",
       values: values((s) => (s.game.userScore === null ? null : String(s.game.userScore))),
     },
     {
       kind: "favorite",
-      label: "Favorite",
+      label: tr("rowFavorite"),
       section: "you",
-      values: values((s) => (s.game.favorite ? "Yes" : "No")),
+      values: values((s) => (s.game.favorite ? tr("yes") : tr("no"))),
     },
     {
       kind: "multi",
       key: "categoriesFrom",
-      label: "Categories",
+      label: tr("rowCategories"),
       section: "you",
       values: values((s) => list(s.game.categories.map(names.category))),
     },
     {
       kind: "multi",
       key: "notesFrom",
-      label: "Notes",
+      label: tr("rowNotes"),
       section: "you",
       values: values((s) => s.game.notes?.trim() || null),
     },
     {
       kind: "multi",
       key: "linksFrom",
-      label: "Your links",
+      label: tr("rowLinks"),
       section: "you",
       values: values((s) => list(s.edits?.edits.meta.links.map((l) => l.name) ?? [])),
     },
     {
       kind: "multi",
       key: "profilesFrom",
-      label: "Launch profiles",
+      label: tr("rowProfiles"),
       section: "you",
       values: values((s) => list(ownProfiles(s).map((p) => p.name))),
     },
     {
       kind: "single",
       key: "profileFrom",
-      label: "Default profile",
+      label: tr("rowDefaultProfile"),
       section: "you",
       values: values((s) => {
         const chosen = s.profiles?.profiles.find((p) => p.id === s.profiles?.defaultId);

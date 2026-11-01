@@ -2,9 +2,13 @@ import Download from "lucide-solid/icons/download";
 import { createSignal, Show } from "solid-js";
 import type { UpdateInfo } from "../lib/api";
 import * as api from "../lib/api";
+import { translator } from "../i18n";
+import { shellDialogs } from "../i18n/shellDialogs";
 import { errorMessage } from "../lib/errors";
 import { store } from "../lib/store";
 import { Modal } from "./Modal";
+
+const tr = translator(shellDialogs);
 
 /** Offers the update found after start: install it now (the app restarts) or later. */
 export function UpdateDialog(props: { update: UpdateInfo; onClose: () => void }) {
@@ -23,12 +27,13 @@ export function UpdateDialog(props: { update: UpdateInfo; onClose: () => void })
   }
 
   return (
-    <Modal title="Update available" onClose={props.onClose}>
+    <Modal title={tr("updateTitle")} onClose={props.onClose}>
       <div class="form">
         <p>
-          Questkeep {props.update.version} is available
-          <Show when={store.appInfo()?.version}>{(current) => <> (you have {current()})</>}</Show>.
-          Installing it restarts Questkeep.
+          {tr("updateMessage", {
+            version: props.update.version,
+            current: store.appInfo()?.version ?? null,
+          })}
         </p>
         <Show when={props.update.notes}>{(notes) => <p class="update-notes">{notes()}</p>}</Show>
         <Show when={error()}>
@@ -38,7 +43,7 @@ export function UpdateDialog(props: { update: UpdateInfo; onClose: () => void })
         </Show>
         <div class="form__actions">
           <button type="button" class="btn" onClick={props.onClose}>
-            Later
+            {tr("later")}
           </button>
           <button
             type="button"
@@ -48,7 +53,7 @@ export function UpdateDialog(props: { update: UpdateInfo; onClose: () => void })
             onClick={() => void install()}
           >
             <Download class="icon" aria-hidden="true" />{" "}
-            {installing() ? "Installing…" : "Install and restart"}
+            {installing() ? tr("installing") : tr("installAndRestart")}
           </button>
         </div>
       </div>

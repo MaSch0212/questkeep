@@ -1,10 +1,12 @@
 import type { BulkChange } from "../bindings/BulkChange";
 import type { Game } from "../bindings/Game";
+import { translator } from "../i18n";
+import { shellCommon } from "../i18n/shellCommon";
 import * as api from "./api";
 import { errorMessage } from "./errors";
 import { store } from "./store";
 
-const plural = (n: number) => `${n} ${n === 1 ? "game" : "games"}`;
+const tr = translator(shellCommon);
 
 /** Changes all `games` at once (one transaction), then shows the result. */
 export async function changeAll(games: readonly Game[], change: BulkChange): Promise<void> {
@@ -37,21 +39,21 @@ export async function installAll(games: readonly Game[]): Promise<void> {
     Promise.resolve(),
   );
   if (failures.length > 0) store.pushToast("error", failures.join("\n"));
-  else store.pushToast("info", `Install of ${plural(missing.length)} handed to the store clients`);
+  else store.pushToast("info", tr("installAllHanded", { count: missing.length }));
 }
 
 export async function refreshAll(games: readonly Game[]): Promise<void> {
   const results = await Promise.allSettled(games.map((g) => api.refreshMetadata(g.id)));
   const failed = results.filter((r) => r.status === "rejected").length;
-  if (failed > 0) store.pushToast("error", `Could not refresh ${plural(failed)}`);
-  else store.pushToast("info", `Refreshing metadata for ${plural(games.length)}…`);
+  if (failed > 0) store.pushToast("error", tr("refreshFailed", { count: failed }));
+  else store.pushToast("info", tr("refreshing", { count: games.length }));
 }
 
 export async function removeAll(games: readonly Game[]): Promise<void> {
   try {
     await api.removeGames(games.map((g) => g.id));
     store.clearSelection();
-    store.pushToast("info", `Removed ${plural(games.length)}`);
+    store.pushToast("info", tr("removedGames", { count: games.length }));
   } catch (error) {
     store.pushToast("error", errorMessage(error));
   }

@@ -1,5 +1,7 @@
 import { For, onMount, type Component } from "solid-js";
 import { Dynamic } from "solid-js/web";
+import { translator } from "../../i18n";
+import { settingsPage } from "../../i18n/settingsPage";
 import { store } from "../../lib/store";
 import { AboutSection } from "./AboutSection";
 import { AccountsSection } from "./AccountsSection";
@@ -13,9 +15,21 @@ import { MetadataSection } from "./MetadataSection";
 import { UpdatesSection } from "./UpdatesSection";
 import { createSettingsModel, type SettingsModel } from "./useSettings";
 
+const tr = translator(settingsPage);
+
 interface SectionDef {
   id: string;
-  title: string;
+  title:
+    | "general"
+    | "stores"
+    | "categories"
+    | "completion"
+    | "artwork"
+    | "metadata"
+    | "developer"
+    | "backups"
+    | "updates"
+    | "about";
   /** Hidden sections are left out of the page and the section nav. */
   visible?: () => boolean;
   component: Component<{ model: SettingsModel }>;
@@ -23,21 +37,21 @@ interface SectionDef {
 
 /** To add a settings section: write one component and add one entry here. */
 const SECTIONS: SectionDef[] = [
-  { id: "general", title: "General", component: GeneralSection },
-  { id: "stores", title: "Stores and accounts", component: AccountsSection },
-  { id: "categories", title: "Categories", component: CategoriesSection },
-  { id: "completion", title: "Completion statuses", component: CompletionSection },
-  { id: "artwork", title: "Artwork", component: ArtworkSection },
-  { id: "metadata", title: "Metadata", component: MetadataSection },
+  { id: "general", title: "general", component: GeneralSection },
+  { id: "stores", title: "stores", component: AccountsSection },
+  { id: "categories", title: "categories", component: CategoriesSection },
+  { id: "completion", title: "completion", component: CompletionSection },
+  { id: "artwork", title: "artwork", component: ArtworkSection },
+  { id: "metadata", title: "metadata", component: MetadataSection },
   {
     id: "developer",
-    title: "Developer",
+    title: "developer",
     visible: () => store.appInfo()?.devTools === true,
     component: DeveloperSection,
   },
-  { id: "backups", title: "Backups", component: BackupsSection },
-  { id: "updates", title: "Updates", component: UpdatesSection },
-  { id: "about", title: "About", component: AboutSection },
+  { id: "backups", title: "backups", component: BackupsSection },
+  { id: "updates", title: "updates", component: UpdatesSection },
+  { id: "about", title: "about", component: AboutSection },
 ];
 
 const sectionDomId = (id: string) => `settings-${id}`;
@@ -56,18 +70,18 @@ export function SettingsPage() {
   });
 
   return (
-    <section class="settings" aria-label="Settings">
+    <section class="settings" aria-label={tr("settings")}>
       <header class="topbar">
-        <h1 class="topbar__title">Settings</h1>
+        <h1 class="topbar__title">{tr("settings")}</h1>
       </header>
       <div class="settings__body">
-        <nav class="settings__nav" aria-label="Settings sections">
+        <nav class="settings__nav" aria-label={tr("sections")}>
           <ul>
             <For each={visibleSections()}>
               {(section) => (
                 <li>
                   <button type="button" class="nav-item" onClick={() => jumpTo(section.id)}>
-                    {section.title}
+                    {tr(section.title)}
                   </button>
                 </li>
               )}
@@ -84,7 +98,7 @@ export function SettingsPage() {
                   aria-labelledby={`${sectionDomId(section.id)}-heading`}
                 >
                   <h2 id={`${sectionDomId(section.id)}-heading`} class="settings-section__title">
-                    {section.title}
+                    {tr(section.title)}
                   </h2>
                   <Dynamic component={section.component} model={model} />
                 </section>

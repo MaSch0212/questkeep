@@ -1,9 +1,13 @@
+import { translator } from "../i18n";
+import { gameChrome } from "../i18n/gameChrome";
 import ChevronDown from "lucide-solid/icons/chevron-down";
 import { createSignal, Show } from "solid-js";
 import type { Game } from "../bindings/Game";
 import { store } from "../lib/store";
 import { Menu } from "./Menu";
 import type { PopoverAnchor } from "./Popover";
+
+const tr = translator(gameChrome);
 
 const statuses = () => store.completion().statuses;
 
@@ -20,7 +24,7 @@ export function CompletionPicker(props: { game: Game }) {
         ref={(el) => (button = el)}
         type="button"
         class="status-btn"
-        aria-label={`Completion status: ${current()?.name ?? "none"}`}
+        aria-label={tr("completionAria", { status: current()?.name ?? tr("none") })}
         aria-haspopup="menu"
         aria-expanded={anchor() !== null}
         onClick={() => {
@@ -28,14 +32,16 @@ export function CompletionPicker(props: { game: Game }) {
           setAnchor(anchor() || !rect ? null : { rect, align: "start" });
         }}
       >
-        <span classList={{ "status-btn__none": !current() }}>{current()?.name ?? "No status"}</span>
+        <span classList={{ "status-btn__none": !current() }}>
+          {current()?.name ?? tr("noStatus")}
+        </span>
         <ChevronDown class="icon" aria-hidden="true" />
       </button>
       <Show when={anchor()}>
         {(at) => (
           <Menu
             anchor={at()}
-            label="Completion status"
+            label={tr("completionStatus")}
             inside={() => [button]}
             onClose={(returnFocus) => {
               setAnchor(null);
@@ -49,7 +55,7 @@ export function CompletionPicker(props: { game: Game }) {
               })),
               { kind: "separator" as const },
               {
-                label: "No status",
+                label: tr("noStatus"),
                 checked: props.game.completionStatus === null,
                 onSelect: () => set(null),
               },

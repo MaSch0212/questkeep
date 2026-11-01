@@ -1,3 +1,5 @@
+import { translator } from "../i18n";
+import { libraryList } from "../i18n/libraryList";
 import { For, Show } from "solid-js";
 import type { Game } from "../bindings/Game";
 import { store } from "../lib/store";
@@ -25,6 +27,8 @@ interface GameTileProps {
   /** A short date shown on the cover (the start page shelves). */
   date?: string;
 }
+
+const tr = translator(libraryList);
 
 export function tileDomId(id: string): string {
   return `tile-${id}`;
@@ -55,7 +59,9 @@ export function GameTile(props: GameTileProps) {
         "tile--missing": !props.game.installed,
       }}
       aria-selected={props.selected}
-      aria-label={props.game.installed ? props.game.name : `${props.game.name} (not installed)`}
+      aria-label={
+        props.game.installed ? props.game.name : tr("notInstalledName", { name: props.game.name })
+      }
       onClick={(event) => props.onSelect(props.game.id, event)}
       onContextMenu={(event) => {
         if (!props.onContextMenu) return;
@@ -82,22 +88,25 @@ export function GameTile(props: GameTileProps) {
           </div>
           <div class="tile__states">
             <Show when={props.game.favorite}>
-              <span class="tile__state tile__state--star" title="Favorite">
+              <span class="tile__state tile__state--star" title={tr("favorite")}>
                 <Star class="icon icon--filled" aria-hidden="true" />
               </span>
             </Show>
             <Show when={props.game.hidden}>
-              <span class="tile__state" title="Hidden">
+              <span class="tile__state" title={tr("hidden")}>
                 <EyeOff class="icon" aria-hidden="true" />
               </span>
             </Show>
             <Show when={running()}>
-              <span class="tile__state tile__state--ring tile__state--running" title="Running">
+              <span
+                class="tile__state tile__state--ring tile__state--running"
+                title={tr("running")}
+              >
                 <Play class="icon icon--filled" aria-hidden="true" />
               </span>
             </Show>
             <Show when={!props.game.installed}>
-              <span class="tile__state tile__state--ring" title="Not installed">
+              <span class="tile__state tile__state--ring" title={tr("notInstalled")}>
                 <CloudDownload class="icon" aria-hidden="true" />
               </span>
             </Show>

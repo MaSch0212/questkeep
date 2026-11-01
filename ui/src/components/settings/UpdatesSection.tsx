@@ -3,7 +3,11 @@ import RefreshCw from "lucide-solid/icons/refresh-cw";
 import { createSignal, Show } from "solid-js";
 import * as api from "../../lib/api";
 import { errorMessage } from "../../lib/errors";
+import { translator } from "../../i18n";
+import { settingsPage } from "../../i18n/settingsPage";
 import { store } from "../../lib/store";
+
+const tr = translator(settingsPage);
 
 type State =
   | { kind: "idle" }
@@ -60,10 +64,10 @@ export function UpdatesSection() {
           onClick={() => void check()}
         >
           <RefreshCw class="icon" aria-hidden="true" />{" "}
-          {state().kind === "checking" ? "Checking…" : "Check for updates"}
+          {state().kind === "checking" ? tr("checking") : tr("check")}
         </button>
         <Show when={state().kind === "current"}>
-          <span role="status">You&apos;re up to date.</span>
+          <span role="status">{tr("upToDate")}</span>
         </Show>
       </div>
       <Show when={state()} keyed>
@@ -80,13 +84,13 @@ export function UpdatesSection() {
       <Show when={shown()}>
         {(update) => (
           <div class="form">
-            <p role="status">Version {update().version} is available</p>
+            <p role="status">{tr("available", { version: update().version })}</p>
             <Show when={update().notes}>{(notes) => <p class="update-notes">{notes()}</p>}</Show>
             <Show
               when={installing() === null}
               fallback={
                 <button type="button" class="btn btn--primary" disabled>
-                  Installing…
+                  {tr("installing")}
                 </button>
               }
             >
@@ -101,19 +105,19 @@ export function UpdatesSection() {
                         setState({ kind: "available", update: update(), confirming: true })
                       }
                     >
-                      <Download class="icon" aria-hidden="true" /> Install and restart
+                      <Download class="icon" aria-hidden="true" /> {tr("install")}
                     </button>
                   </div>
                 }
               >
-                <p>Questkeep will download the update and restart. Continue?</p>
+                <p>{tr("confirmInstall")}</p>
                 <div class="details__row">
                   <button
                     type="button"
                     class="btn btn--primary"
                     onClick={() => void install(update())}
                   >
-                    Install and restart now
+                    {tr("installNow")}
                   </button>
                   <button
                     type="button"
@@ -122,7 +126,7 @@ export function UpdatesSection() {
                       setState({ kind: "available", update: update(), confirming: false })
                     }
                   >
-                    Cancel
+                    {tr("cancel")}
                   </button>
                 </div>
               </Show>

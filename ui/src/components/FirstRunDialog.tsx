@@ -1,4 +1,6 @@
 import { createEffect, createSignal, For, Match, on, onMount, Switch } from "solid-js";
+import { translator } from "../i18n";
+import { setup } from "../i18n/setup";
 import * as api from "../lib/api";
 import { store } from "../lib/store";
 import { AccountsSection } from "./settings/AccountsSection";
@@ -6,15 +8,12 @@ import { GridDbField, IgdbFields, IgdbSteps } from "./settings/KeyFields";
 import { createSettingsModel } from "./settings/useSettings";
 import { Modal } from "./Modal";
 
+const tr = translator(setup);
+
 type Step = "welcome" | "stores" | "keys" | "warn";
 
 /** What stays empty without IGDB; shown before the setup ends without a key. */
-const WITHOUT_IGDB = [
-  "Time to beat (only HowLongToBeat's numbers remain, when it finds the game)",
-  "Website, wiki and social links (store links still work)",
-  "Series, age ratings, game modes, themes, perspectives, and filters on them",
-  "Details for games from stores without metadata (Ubisoft, EA, Battle.net, added by hand)",
-];
+const WITHOUT_IGDB = ["without1", "without2", "without3", "without4"] as const;
 
 /**
  * The first-run setup: welcome, stores, metadata keys. Shown once on a new database; every step
@@ -79,9 +78,9 @@ export function FirstRunDialog() {
   const dots = () => (step() === "welcome" ? 1 : step() === "stores" ? 2 : 3);
 
   return (
-    <Modal title="Set up Questkeep" wide onClose={onClose}>
+    <Modal title={tr("title")} wide onClose={onClose}>
       <div class="setup" onKeyDown={onKeyDown}>
-        <div class="setup__dots" aria-label={`Step ${dots()} of 3`} role="img">
+        <div class="setup__dots" aria-label={tr("step", { n: dots() })} role="img">
           <For each={[1, 2, 3]}>
             {(n) => <span class="setup__dot" classList={{ "setup__dot--on": n <= dots() }} />}
           </For>
@@ -89,60 +88,43 @@ export function FirstRunDialog() {
         <div class="setup__content">
           <Switch>
             <Match when={step() === "welcome"}>
-              <h3 class="setup__title">Welcome to Questkeep</h3>
-              <p class="muted">
-                All your PC games from every store in one library. Questkeep already looks for
-                installed stores; the next two steps let you sign in to stores and set up optional
-                keys for richer game details. Everything here can be changed later in Settings.
-              </p>
+              <h3 class="setup__title">{tr("welcomeTitle")}</h3>
+              <p class="muted">{tr("welcomeText")}</p>
             </Match>
             <Match when={step() === "stores"}>
-              <h3 class="setup__title">Your stores</h3>
+              <h3 class="setup__title">{tr("storesTitle")}</h3>
               <AccountsSection model={model} />
             </Match>
             <Match when={step() === "keys"}>
-              <h3 class="setup__title">Richer game details (optional)</h3>
-              <p class="muted">
-                Questkeep gets most details from your stores. Two free services add more; both need
-                a key from your own free account, stored only in your system&apos;s credential
-                store.
-              </p>
+              <h3 class="setup__title">{tr("keysTitle")}</h3>
+              <p class="muted">{tr("keysIntro")}</p>
               <section class="setup-key" aria-labelledby="setup-igdb">
                 <header class="setup-key__head">
-                  <h4 id="setup-igdb">IGDB (via Twitch)</h4>
-                  <span class="setup-key__badge setup-key__badge--accent">Recommended</span>
+                  <h4 id="setup-igdb">{tr("igdbTitle")}</h4>
+                  <span class="setup-key__badge setup-key__badge--accent">{tr("recommended")}</span>
                 </header>
-                <p class="muted">
-                  Time to beat, wiki and social links, series, age ratings, game modes, themes, and
-                  details for games your stores know little about.
-                </p>
+                <p class="muted">{tr("igdbDesc")}</p>
                 <IgdbSteps />
                 <IgdbFields model={model} />
               </section>
               <section class="setup-key" aria-labelledby="setup-griddb">
                 <header class="setup-key__head">
                   <h4 id="setup-griddb">SteamGridDB</h4>
-                  <span class="setup-key__badge">Optional</span>
+                  <span class="setup-key__badge">{tr("optional")}</span>
                 </header>
-                <p class="muted">
-                  Covers for games without one, and more covers, backgrounds and icons in the image
-                  picker.
-                </p>
+                <p class="muted">{tr("griddbDesc")}</p>
                 <GridDbField model={model} />
               </section>
             </Match>
             <Match when={step() === "warn"}>
-              <h3 class="setup__title">Continue without IGDB?</h3>
+              <h3 class="setup__title">{tr("warnTitle")}</h3>
               <div class="setup__warn">
-                <strong>Without an IGDB key these stay empty:</strong>
+                <strong>{tr("warnStrong")}</strong>
                 <ul>
-                  <For each={WITHOUT_IGDB}>{(item) => <li>{item}</li>}</For>
+                  <For each={WITHOUT_IGDB}>{(item) => <li>{tr(item)}</li>}</For>
                 </ul>
               </div>
-              <p class="muted">
-                You can add the key any time in Settings → Metadata, then use &quot;Refresh metadata
-                for all games&quot;.
-              </p>
+              <p class="muted">{tr("warnHint")}</p>
             </Match>
           </Switch>
         </div>
@@ -150,7 +132,7 @@ export function FirstRunDialog() {
           <Switch>
             <Match when={step() === "welcome"}>
               <button type="button" class="btn btn--ghost" onClick={skip}>
-                Skip setup
+                {tr("skipSetup")}
               </button>
               <button
                 ref={(el) => (primary = el)}
@@ -159,12 +141,12 @@ export function FirstRunDialog() {
                 data-autofocus
                 onClick={() => setStep("stores")}
               >
-                Get started
+                {tr("getStarted")}
               </button>
             </Match>
             <Match when={step() === "stores"}>
               <button type="button" class="btn btn--ghost" onClick={() => setStep("welcome")}>
-                Back
+                {tr("back")}
               </button>
               <button
                 ref={(el) => (primary = el)}
@@ -172,16 +154,16 @@ export function FirstRunDialog() {
                 class="btn btn--primary"
                 onClick={() => setStep("keys")}
               >
-                Next
+                {tr("next")}
               </button>
             </Match>
             <Match when={step() === "keys"}>
               <button type="button" class="btn btn--ghost" onClick={() => setStep("stores")}>
-                Back
+                {tr("back")}
               </button>
               <span class="setup__buttons">
                 <button type="button" class="btn btn--ghost" onClick={skip}>
-                  Skip
+                  {tr("skip")}
                 </button>
                 <button
                   ref={(el) => (primary = el)}
@@ -190,13 +172,13 @@ export function FirstRunDialog() {
                   disabled={saving()}
                   onClick={onFinish}
                 >
-                  {saving() ? "Saving…" : "Finish"}
+                  {saving() ? tr("saving") : tr("finish")}
                 </button>
               </span>
             </Match>
             <Match when={step() === "warn"}>
               <button type="button" class="btn btn--ghost" onClick={() => setStep("keys")}>
-                Back to keys
+                {tr("backToKeys")}
               </button>
               <button
                 ref={(el) => (primary = el)}
@@ -205,7 +187,7 @@ export function FirstRunDialog() {
                 disabled={saving()}
                 onClick={() => void finish(saveOnContinue())}
               >
-                Continue without
+                {tr("continueWithout")}
               </button>
             </Match>
           </Switch>

@@ -1,7 +1,11 @@
 import { Show } from "solid-js";
 import * as api from "../../lib/api";
 import { errorMessage } from "../../lib/errors";
+import { translator } from "../../i18n";
+import { settingsPage } from "../../i18n/settingsPage";
 import { store } from "../../lib/store";
+
+const tr = translator(settingsPage);
 
 async function openFolder(kind: "data" | "logs") {
   try {
@@ -13,23 +17,23 @@ async function openFolder(kind: "data" | "logs") {
 
 export function AboutSection() {
   return (
-    <Show when={store.appInfo()} fallback={<p class="muted">Loading…</p>}>
+    <Show when={store.appInfo()} fallback={<p class="muted">{tr("loading")}</p>}>
       {(info) => (
         <dl class="facts">
-          <dt>Version</dt>
+          <dt>{tr("version")}</dt>
           <dd>{info().version}</dd>
-          <dt>Data directory</dt>
+          <dt>{tr("dataDir")}</dt>
           <dd class="facts__path">
             <span class="facts__path-text selectable">{info().dataDir}</span>
             <button type="button" class="btn" onClick={() => void openFolder("data")}>
-              Open folder
+              {tr("openFolder")}
             </button>
           </dd>
-          <dt>Logs directory</dt>
+          <dt>{tr("logsDir")}</dt>
           <dd class="facts__path">
             <span class="facts__path-text selectable">{info().logsDir}</span>
             <button type="button" class="btn" onClick={() => void openFolder("logs")}>
-              Open folder
+              {tr("openFolder")}
             </button>
           </dd>
         </dl>

@@ -1,6 +1,8 @@
 import type { Game } from "../bindings/Game";
 import type { SortField } from "../bindings/SortField";
 import type { ViewColumn } from "../bindings/ViewColumn";
+import { intlLocale, translator } from "../i18n";
+import { libraryColumns } from "../i18n/libraryColumns";
 import {
   formatDate,
   formatPlaytime,
@@ -9,6 +11,8 @@ import {
   formatSize,
   releaseYear,
 } from "./format";
+
+const tr = translator(libraryColumns);
 
 /** Names the table needs that live outside the game (completion statuses, categories). */
 export interface ColumnNames {
@@ -21,6 +25,7 @@ export type ColumnSize = "sm" | "md" | "lg";
 
 export interface ColumnDef {
   id: string;
+  /** Read at use time, so it follows the language. */
   label: string;
   size: ColumnSize;
   /** The sort a click on the header sets; none: the header doesn't sort. */
@@ -41,25 +46,43 @@ const hours = (seconds: number | null | undefined) => (seconds ? formatPlaytime(
 
 /** Every column the table can show, in the picker's order for hidden ones (by label). */
 export const COLUMNS: readonly ColumnDef[] = [
-  { id: "source", label: "Source", size: "md" },
-  { id: "state", label: "Install state", size: "md" },
+  {
+    id: "source",
+    get label() {
+      return tr("source");
+    },
+    size: "md",
+  },
+  {
+    id: "state",
+    get label() {
+      return tr("state");
+    },
+    size: "md",
+  },
   {
     id: "playtime",
-    label: "Playtime",
+    get label() {
+      return tr("playtime");
+    },
     size: "md",
     sort: "playtime",
     text: (g) => formatPlaytime(g.playtimeSeconds),
   },
   {
     id: "lastPlayed",
-    label: "Last played",
+    get label() {
+      return tr("lastPlayed");
+    },
     size: "md",
     sort: "lastPlayed",
     text: (g) => formatRelativeDate(g.lastPlayed),
   },
   {
     id: "releaseYear",
-    label: "Release year",
+    get label() {
+      return tr("releaseYear");
+    },
     size: "sm",
     sort: "releaseDate",
     numeric: true,
@@ -67,21 +90,27 @@ export const COLUMNS: readonly ColumnDef[] = [
   },
   {
     id: "releaseDate",
-    label: "Release date",
+    get label() {
+      return tr("releaseDate");
+    },
     size: "md",
     sort: "releaseDate",
     text: (g) => formatReleaseDate(g.releaseDate) ?? EMPTY,
   },
   {
     id: "dateAdded",
-    label: "Date added",
+    get label() {
+      return tr("dateAdded");
+    },
     size: "md",
     sort: "dateAdded",
     text: (g) => formatDate(g.dateAdded),
   },
   {
     id: "playCount",
-    label: "Play count",
+    get label() {
+      return tr("playCount");
+    },
     size: "sm",
     sort: "playCount",
     numeric: true,
@@ -89,14 +118,18 @@ export const COLUMNS: readonly ColumnDef[] = [
   },
   {
     id: "completionStatus",
-    label: "Completion status",
+    get label() {
+      return tr("completionStatus");
+    },
     size: "md",
     sort: "completionStatus",
     text: (g, n) => (g.completionStatus ? (n.status(g.completionStatus) ?? EMPTY) : EMPTY),
   },
   {
     id: "userScore",
-    label: "Your score",
+    get label() {
+      return tr("userScore");
+    },
     size: "sm",
     sort: "userScore",
     numeric: true,
@@ -104,7 +137,9 @@ export const COLUMNS: readonly ColumnDef[] = [
   },
   {
     id: "criticScore",
-    label: "Critic score",
+    get label() {
+      return tr("criticScore");
+    },
     size: "sm",
     sort: "criticScore",
     numeric: true,
@@ -112,7 +147,9 @@ export const COLUMNS: readonly ColumnDef[] = [
   },
   {
     id: "communityScore",
-    label: "Community score",
+    get label() {
+      return tr("communityScore");
+    },
     size: "sm",
     sort: "communityScore",
     numeric: true,
@@ -120,7 +157,9 @@ export const COLUMNS: readonly ColumnDef[] = [
   },
   {
     id: "timeToBeat",
-    label: "Time to beat",
+    get label() {
+      return tr("timeToBeat");
+    },
     size: "sm",
     sort: "timeToBeat",
     numeric: true,
@@ -128,43 +167,129 @@ export const COLUMNS: readonly ColumnDef[] = [
   },
   {
     id: "installSize",
-    label: "Install size",
+    get label() {
+      return tr("installSize");
+    },
     size: "sm",
     sort: "installSize",
     numeric: true,
     text: (g) => (g.installSize ? formatSize(g.installSize) : EMPTY),
   },
-  { id: "favorite", label: "Favorite", size: "sm", text: (g) => (g.favorite ? "Yes" : EMPTY) },
+  {
+    id: "favorite",
+    get label() {
+      return tr("favorite");
+    },
+    size: "sm",
+    text: (g) => (g.favorite ? tr("yes") : EMPTY),
+  },
   {
     id: "categories",
-    label: "Categories",
+    get label() {
+      return tr("categories");
+    },
     size: "lg",
     text: (g, n) => list(g.categories.map((id) => n.category(id) ?? id)),
   },
   {
     id: "developers",
-    label: "Developers",
+    get label() {
+      return tr("developers");
+    },
     size: "lg",
     sort: "developer",
     text: (g) => list(g.developers),
   },
   {
     id: "publishers",
-    label: "Publishers",
+    get label() {
+      return tr("publishers");
+    },
     size: "lg",
     sort: "publisher",
     text: (g) => list(g.publishers),
   },
-  { id: "series", label: "Series", size: "lg", sort: "series", text: (g) => list(g.series) },
-  { id: "genres", label: "Genres", size: "lg", text: (g) => list(g.genres) },
-  { id: "tags", label: "Tags", size: "lg", text: (g) => list(g.tags) },
-  { id: "features", label: "Features", size: "lg", text: (g) => list(g.features) },
-  { id: "platforms", label: "Platforms", size: "md", text: (g) => list(g.platforms) },
-  { id: "gameModes", label: "Game modes", size: "lg", text: (g) => list(g.gameModes) },
-  { id: "themes", label: "Themes", size: "lg", text: (g) => list(g.themes) },
-  { id: "perspectives", label: "Perspectives", size: "md", text: (g) => list(g.perspectives) },
-  { id: "ageRatings", label: "Age ratings", size: "md", text: (g) => list(g.ageRatings) },
-  { id: "installDir", label: "Install folder", size: "lg", text: (g) => g.installDir ?? EMPTY },
+  {
+    id: "series",
+    get label() {
+      return tr("series");
+    },
+    size: "lg",
+    sort: "series",
+    text: (g) => list(g.series),
+  },
+  {
+    id: "genres",
+    get label() {
+      return tr("genres");
+    },
+    size: "lg",
+    text: (g) => list(g.genres),
+  },
+  {
+    id: "tags",
+    get label() {
+      return tr("tags");
+    },
+    size: "lg",
+    text: (g) => list(g.tags),
+  },
+  {
+    id: "features",
+    get label() {
+      return tr("features");
+    },
+    size: "lg",
+    text: (g) => list(g.features),
+  },
+  {
+    id: "platforms",
+    get label() {
+      return tr("platforms");
+    },
+    size: "md",
+    text: (g) => list(g.platforms),
+  },
+  {
+    id: "gameModes",
+    get label() {
+      return tr("gameModes");
+    },
+    size: "lg",
+    text: (g) => list(g.gameModes),
+  },
+  {
+    id: "themes",
+    get label() {
+      return tr("themes");
+    },
+    size: "lg",
+    text: (g) => list(g.themes),
+  },
+  {
+    id: "perspectives",
+    get label() {
+      return tr("perspectives");
+    },
+    size: "md",
+    text: (g) => list(g.perspectives),
+  },
+  {
+    id: "ageRatings",
+    get label() {
+      return tr("ageRatings");
+    },
+    size: "md",
+    text: (g) => list(g.ageRatings),
+  },
+  {
+    id: "installDir",
+    get label() {
+      return tr("installDir");
+    },
+    size: "lg",
+    text: (g) => g.installDir ?? EMPTY,
+  },
 ];
 
 const BY_ID = new Map(COLUMNS.map((c) => [c.id, c]));
@@ -269,7 +394,7 @@ export function pickerColumns(
   const shown = shownColumns(columns).map((c) => ({ def: c.def, shown: true }));
   const ids = new Set(shown.map((c) => c.def.id));
   const hidden = COLUMNS.filter((c) => !ids.has(c.id))
-    .toSorted((a, b) => a.label.localeCompare(b.label))
+    .toSorted((a, b) => a.label.localeCompare(b.label, intlLocale()))
     .map((def) => ({ def, shown: false }));
   return [...shown, ...hidden];
 }

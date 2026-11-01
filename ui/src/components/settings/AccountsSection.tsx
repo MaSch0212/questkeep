@@ -10,6 +10,8 @@ import type { AccountStatus } from "../../bindings/AccountStatus";
 import { accountState, connectedSummary, storeRows, type StoreRow } from "../../lib/accountState";
 import { credentialsSaved } from "../../lib/providerSettings";
 import * as api from "../../lib/api";
+import { translator } from "../../i18n";
+import { settingsAccounts } from "../../i18n/settingsAccounts";
 import { errorMessage } from "../../lib/errors";
 import { store } from "../../lib/store";
 import { isProviderSyncing } from "../../lib/syncStatus";
@@ -18,6 +20,8 @@ import { CredentialsForm } from "./CredentialsForm";
 import { openLink } from "./openLink";
 import { StoreOptions } from "./StoreOptions";
 import type { SettingsModel } from "./useSettings";
+
+const tr = translator(settingsAccounts);
 
 interface RowState {
   signingIn: boolean;
@@ -55,12 +59,12 @@ async function syncStore(id: string) {
 function storeDetail(entry: StoreRow, accountDetail: string | null): string {
   if (!entry.installed && entry.canScan) {
     return entry.account === null
-      ? "Not installed on this PC"
+      ? tr("notInstalled")
       : entry.account.signedIn || entry.syncable
-        ? `Not installed on this PC · ${accountDetail ?? ""}`
-        : "Not installed on this PC. Sign in to sync the games you own.";
+        ? tr("notInstalledWith", { detail: accountDetail ?? "" })
+        : tr("notInstalledSignIn");
   }
-  return accountDetail ?? "Imports the games installed on this PC";
+  return accountDetail ?? tr("importsInstalled");
 }
 
 /** Whether the row has anything below its head: options, sign-out, credentials or code sign-in. */
@@ -111,7 +115,7 @@ export function AccountsSection(props: { model: SettingsModel }) {
     patch(account.provider, { signingIn: true });
     try {
       if (await api.signIn(account.provider)) {
-        store.pushToast("info", `Signed in to ${account.name}. Importing your library…`);
+        store.pushToast("info", tr("toastSignedIn", { name: account.name }));
         store.scheduleRefresh();
         await refresh();
         void store.loadProviders();
@@ -129,7 +133,7 @@ export function AccountsSection(props: { model: SettingsModel }) {
     patch(account.provider, { submitting: true });
     try {
       await api.signInWithCode(account.provider, code);
-      store.pushToast("info", `Signed in to ${account.name}. Importing your library…`);
+      store.pushToast("info", tr("toastSignedIn", { name: account.name }));
       patch(account.provider, { code: "", codeOpen: false });
       store.scheduleRefresh();
       await refresh();
@@ -145,7 +149,7 @@ export function AccountsSection(props: { model: SettingsModel }) {
     patch(account.provider, { confirmingSignOut: false });
     try {
       await api.signOut(account.provider);
-      store.pushToast("info", `Signed out of ${account.name}`);
+      store.pushToast("info", tr("toastSignedOut", { name: account.name }));
       await refresh();
       void store.loadProviders();
     } catch (error) {
@@ -159,14 +163,9 @@ export function AccountsSection(props: { model: SettingsModel }) {
 
   return (
     <div class="form">
-      <p class="muted">
-        Sign in to list games you own but have not installed. Sign-in tokens are stored in your
-        system&apos;s credential store, not in the Questkeep data folder. Steam, Battle.net and EA
-        are the exception: they only have their website sign-in, so Questkeep keeps those browser
-        sessions in its data folder and deletes them when you sign out.
-      </p>
-      <Show when={accounts()} fallback={<p class="muted">Loading…</p>}>
-        <Show when={stores().length > 0} fallback={<p class="muted">No stores available.</p>}>
+      <p class="muted">{tr("intro")}</p>
+      <Show when={accounts()} fallback={<p class="muted">{tr("loading")}</p>}>
+        <Show when={stores().length > 0} fallback={<p class="muted">{tr("noStores")}</p>}>
           <p class="account-summary">
             {connectedSummary(
               stores().flatMap((r) => (r.account === null ? [] : [state(r, r.account)])),
@@ -206,8 +205,8 @@ export function AccountsSection(props: { model: SettingsModel }) {
                     <button
                       type="button"
                       class="icon-btn icon-btn--small account__toggle"
-                      aria-label={`${entry.name} settings`}
-                      title={row(entry.id).open ? "Hide settings" : "Show settings"}
+                      aria-label={tr("storeSettings", { name: entry.name })}
+                      title={row(entry.id).open ? tr("hideSettings") : tr("showSettings")}
                       aria-expanded={row(entry.id).open}
                       aria-controls={`store-${entry.id}-details`}
                       onClick={() => patch(entry.id, { open: !row(entry.id).open })}
@@ -249,8 +248,8 @@ export function AccountsSection(props: { model: SettingsModel }) {
                     <button
                       type="button"
                       class="icon-btn"
-                      aria-label={syncing() ? `Syncing ${entry.name}…` : `Sync ${entry.name}`}
-                      title={syncing() ? `Syncing ${entry.name}…` : `Sync ${entry.name}`}
+                      aria-label={tr(syncing() ? "syncing" : "sync", { name: entry.name })}
+                      title={tr(syncing() ? "syncing" : "sync", { name: entry.name })}
                       disabled={syncing()}
                       onClick={() => void syncStore(entry.id)}
                     >
@@ -266,16 +265,16 @@ export function AccountsSection(props: { model: SettingsModel }) {
                       type="button"
                       class="btn"
                       disabled={row(entry.id).signingIn}
-                      aria-label={`Sign in to ${entry.name}`}
+                      aria-label={tr("signInTo", { name: entry.name })}
                       onClick={() => entry.account && void signIn(entry.account)}
                     >
                       <LogIn class="icon" aria-hidden="true" />{" "}
-                      {row(entry.id).signingIn ? "Waiting for sign-in…" : "Sign in"}
+                      {row(entry.id).signingIn ? tr("waitingSignIn") : tr("signIn")}
                     </button>
                   </Show>
                 </div>
                 <Show when={row(entry.id).signingIn}>
-                  <p class="field__hint">Finish signing in in the window that opened.</p>
+                  <p class="field__hint">{tr("finishSignIn")}</p>
                 </Show>
                 <Show when={expandable(entry) && row(entry.id).open}>
                   <div class="account__body" id={`store-${entry.id}-details`}>
@@ -287,14 +286,15 @@ export function AccountsSection(props: { model: SettingsModel }) {
                               <>
                                 <Show when={state(entry, account()).connection === "credentials"}>
                                   <p class="field__hint">
-                                    Remove the {credentials().noun} to sign in to {entry.name}{" "}
-                                    instead.
+                                    {tr("removeToSignIn", {
+                                      noun: credentials().noun,
+                                      name: entry.name,
+                                    })}
                                   </p>
                                 </Show>
                                 <Show when={account().signedIn && savedCredentials(entry)}>
                                   <p class="field__hint">
-                                    A {credentials().noun} is also saved; it is not needed while you
-                                    are signed in.{" "}
+                                    {tr("alsoSaved", { noun: credentials().noun })}{" "}
                                     <button
                                       type="button"
                                       class="link-btn"
@@ -307,7 +307,7 @@ export function AccountsSection(props: { model: SettingsModel }) {
                                         )
                                       }
                                     >
-                                      Remove {credentials().noun}
+                                      {tr("removeNoun", { noun: credentials().noun })}
                                     </button>
                                   </p>
                                 </Show>
@@ -330,7 +330,7 @@ export function AccountsSection(props: { model: SettingsModel }) {
                                       aria-hidden="true"
                                     />{" "}
                                     {state(entry, account()).connection === "credentials"
-                                      ? `Change ${credentials().noun}`
+                                      ? tr("changeNoun", { noun: credentials().noun })
                                       : credentials().offer}
                                   </button>
                                   <Show when={row(account().provider).keyOpen}>
@@ -363,7 +363,7 @@ export function AccountsSection(props: { model: SettingsModel }) {
                                 }}
                                 aria-hidden="true"
                               />{" "}
-                              Sign in with a code instead
+                              {tr("codeInstead")}
                             </button>
                             <Show when={row(account().provider).codeOpen}>
                               <form
@@ -374,12 +374,9 @@ export function AccountsSection(props: { model: SettingsModel }) {
                                 }}
                               >
                                 <ol class="account__steps">
-                                  <li>Open the sign-in page in your normal browser and sign in.</li>
-                                  <li>
-                                    {account().codeHint ??
-                                      "Copy the code, or the whole address of the final page."}
-                                  </li>
-                                  <li>Paste it below and submit.</li>
+                                  <li>{tr("codeStep1")}</li>
+                                  <li>{account().codeHint ?? tr("codeStep2")}</li>
+                                  <li>{tr("codeStep3")}</li>
                                 </ol>
                                 <Show when={account().codeUrl}>
                                   {(url) => (
@@ -389,14 +386,14 @@ export function AccountsSection(props: { model: SettingsModel }) {
                                         class="btn"
                                         onClick={() => void openLink(url())}
                                       >
-                                        Open sign-in page
+                                        {tr("openSignInPage")}
                                       </button>
                                     </div>
                                   )}
                                 </Show>
                                 <div class="field">
                                   <label class="field__label" for={`code-${account().provider}`}>
-                                    {account().name} sign-in code
+                                    {tr("codeLabel", { name: account().name })}
                                   </label>
                                   <div class="field__row">
                                     <input
@@ -419,8 +416,8 @@ export function AccountsSection(props: { model: SettingsModel }) {
                                       }
                                     >
                                       {row(account().provider).submitting
-                                        ? "Signing in…"
-                                        : "Submit code"}
+                                        ? tr("signingIn")
+                                        : tr("submitCode")}
                                     </button>
                                   </div>
                                 </div>
@@ -447,12 +444,12 @@ export function AccountsSection(props: { model: SettingsModel }) {
                                   <button
                                     type="button"
                                     class="btn btn--danger"
-                                    aria-label={`Sign out of ${account().name}`}
+                                    aria-label={tr("signOutOf", { name: account().name })}
                                     onClick={() =>
                                       patch(account().provider, { confirmingSignOut: true })
                                     }
                                   >
-                                    <LogOut class="icon" aria-hidden="true" /> Sign out
+                                    <LogOut class="icon" aria-hidden="true" /> {tr("signOut")}
                                   </button>
                                 }
                               >
@@ -463,14 +460,14 @@ export function AccountsSection(props: { model: SettingsModel }) {
                                     patch(account().provider, { confirmingSignOut: false })
                                   }
                                 >
-                                  Cancel
+                                  {tr("cancel")}
                                 </button>
                                 <button
                                   type="button"
                                   class="btn btn--danger-solid"
                                   onClick={() => void signOut(account())}
                                 >
-                                  Confirm sign out
+                                  {tr("confirmSignOut")}
                                 </button>
                               </Show>
                             </div>
@@ -495,7 +492,7 @@ export function AccountsSection(props: { model: SettingsModel }) {
                                     )
                                   }
                                 >
-                                  Remove {credentials().noun}
+                                  {tr("removeNoun", { noun: credentials().noun })}
                                 </button>
                               </div>
                             )}

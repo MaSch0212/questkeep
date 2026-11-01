@@ -1,26 +1,33 @@
 import type { MetadataField } from "../bindings/MetadataField";
 import type { MetadataPriority } from "../bindings/MetadataPriority";
+import { translator } from "../i18n";
+import { settingsKeys } from "../i18n/settingsKeys";
+
+const tr = translator(settingsKeys);
 
 /** The fields with their own source order, in settings order. */
-export const PRIORITY_FIELDS: { id: MetadataField; label: string }[] = [
-  { id: "description", label: "Description" },
-  { id: "releaseDate", label: "Release date" },
-  { id: "developers", label: "Developers" },
-  { id: "publishers", label: "Publishers" },
-  { id: "genres", label: "Genres" },
-  { id: "tags", label: "Tags" },
-  { id: "features", label: "Features" },
-  { id: "series", label: "Series" },
-  { id: "ageRatings", label: "Age ratings" },
-  { id: "platforms", label: "Platforms" },
-  { id: "gameModes", label: "Game modes" },
-  { id: "themes", label: "Themes" },
-  { id: "perspectives", label: "Perspectives" },
-  { id: "criticScore", label: "Critic score" },
-  { id: "communityScore", label: "Community score" },
-  { id: "installSize", label: "Install size" },
-  { id: "timeToBeat", label: "Time to beat" },
+export const PRIORITY_FIELDS: { id: MetadataField }[] = [
+  { id: "description" },
+  { id: "releaseDate" },
+  { id: "developers" },
+  { id: "publishers" },
+  { id: "genres" },
+  { id: "tags" },
+  { id: "features" },
+  { id: "series" },
+  { id: "ageRatings" },
+  { id: "platforms" },
+  { id: "gameModes" },
+  { id: "themes" },
+  { id: "perspectives" },
+  { id: "criticScore" },
+  { id: "communityScore" },
+  { id: "installSize" },
+  { id: "timeToBeat" },
 ];
+
+/** The settings label of a field, in the current language. */
+export const priorityFieldLabel = (id: MetadataField): string => tr(`field_${id}`);
 
 // Mirrors the core's `default_order` (model/metadata.rs).
 const STEAM_FIRST: ReadonlySet<MetadataField> = new Set([

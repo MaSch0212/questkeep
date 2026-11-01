@@ -77,4 +77,8 @@ sortPrefixes: SortPrefixes,
 /**
  * Automatic backups (kept from the current install when a backup is restored).
  */
-backups: BackupSettings, };
+backups: BackupSettings, 
+/**
+ * UI language (`en`, `de`, `fr`, `it`, `es`, `pt`); `None` follows the system.
+ */
+language: string | null, };

@@ -4,7 +4,11 @@ import Trash from "lucide-solid/icons/trash";
 import { createSignal, For, onMount, Show } from "solid-js";
 import type { CompletionSettings } from "../../bindings/CompletionSettings";
 import type { CompletionStatus } from "../../bindings/CompletionStatus";
+import { translator } from "../../i18n";
+import { settingsLibrary } from "../../i18n/settingsLibrary";
 import { store } from "../../lib/store";
+
+const tr = translator(settingsLibrary);
 
 const sameName = (a: string, b: string) =>
   a.trim().localeCompare(b.trim(), undefined, { sensitivity: "base" }) === 0;
@@ -23,7 +27,6 @@ function withStatuses(list: CompletionStatus[]): CompletionSettings {
 }
 
 const options = (except?: string) => statuses().filter((s) => s.id !== except);
-const noun = (n: number) => (n === 1 ? "game" : "games");
 
 /**
  * The user's completion statuses: add, rename, reorder (arrow buttons or Alt+Up/Down) and remove
@@ -41,7 +44,7 @@ export function CompletionSection() {
     const trimmed = name.trim();
     if (trimmed === "" || trimmed === status.name) return;
     if (statuses().some((s) => s.id !== status.id && sameName(s.name, trimmed))) {
-      store.pushToast("error", `There already is a status named “${trimmed}”.`);
+      store.pushToast("error", tr("statusExists", { name: trimmed }));
       return;
     }
     const index = statuses().findIndex((s) => s.id === status.id);
@@ -66,7 +69,7 @@ export function CompletionSection() {
     const name = adding().trim();
     if (name === "") return;
     if (statuses().some((s) => sameName(s.name, name))) {
-      store.pushToast("error", `There already is a status named “${name}”.`);
+      store.pushToast("error", tr("statusExists", { name }));
       return;
     }
     if (await save(withStatuses([...statuses(), { id: "", name, gameCount: 0 }]))) setAdding("");
@@ -88,11 +91,8 @@ export function CompletionSection() {
 
   return (
     <div class="form">
-      <p class="muted">
-        Track how far you got with each game. Sort and group views by status, or filter by it. Move
-        a status with its arrows or Alt+Up/Down; the order is also the sort order.
-      </p>
-      <ol class="source-order status-list" aria-label="Completion statuses">
+      <p class="muted">{tr("completionIntro")}</p>
+      <ol class="source-order status-list" aria-label={tr("statusList")}>
         <For each={statuses()}>
           {(status, index) => (
             <li
@@ -110,20 +110,18 @@ export function CompletionSection() {
               <input
                 class="input status-list__name"
                 value={status.name}
-                aria-label={`Name of ${status.name}`}
+                aria-label={tr("statusNameOf", { name: status.name })}
                 onChange={(event) => {
                   rename(status, event.currentTarget.value);
                   event.currentTarget.value = status.name;
                 }}
               />
-              <span class="status-list__count">
-                {status.gameCount} {noun(status.gameCount)}
-              </span>
+              <span class="status-list__count">{tr("games", { count: status.gameCount })}</span>
               <button
                 type="button"
                 class="icon-btn icon-btn--small"
-                aria-label={`Move ${status.name} up`}
-                title="Move up (Alt+Up)"
+                aria-label={tr("moveUp", { name: status.name })}
+                title={tr("moveUpTitle")}
                 disabled={index() === 0}
                 onClick={() => move(status.id, -1)}
               >
@@ -132,8 +130,8 @@ export function CompletionSection() {
               <button
                 type="button"
                 class="icon-btn icon-btn--small"
-                aria-label={`Move ${status.name} down`}
-                title="Move down (Alt+Down)"
+                aria-label={tr("moveDown", { name: status.name })}
+                title={tr("moveDownTitle")}
                 disabled={index() === statuses().length - 1}
                 onClick={() => move(status.id, 1)}
               >
@@ -142,8 +140,8 @@ export function CompletionSection() {
               <button
                 type="button"
                 class="icon-btn icon-btn--small"
-                aria-label={`Remove ${status.name}`}
-                title="Remove"
+                aria-label={tr("removeStatus", { name: status.name })}
+                title={tr("removeTitle")}
                 onClick={() => askRemove(status)}
               >
                 <Trash class="icon" aria-hidden="true" />
@@ -154,29 +152,30 @@ export function CompletionSection() {
       </ol>
       <Show when={removing()}>
         {(status) => (
-          <div class="status-remove" role="group" aria-label={`Remove ${status().name}`}>
-            <span>
-              {status().gameCount} {noun(status().gameCount)}{" "}
-              {status().gameCount === 1 ? "has" : "have"} “{status().name}”. Give them:
-            </span>
+          <div
+            class="status-remove"
+            role="group"
+            aria-label={tr("removeStatus", { name: status().name })}
+          >
+            <span>{tr("removePrompt", { count: status().gameCount, name: status().name })}</span>
             <select
               class="input"
-              aria-label="Status for those games"
+              aria-label={tr("statusForGames")}
               value={replacement()}
               onChange={(event) => setReplacement(event.currentTarget.value)}
             >
               <For each={options(status().id)}>{(s) => <option value={s.id}>{s.name}</option>}</For>
-              <option value={NONE}>No status</option>
+              <option value={NONE}>{tr("noStatus")}</option>
             </select>
             <button
               type="button"
               class="btn btn--danger"
               onClick={() => remove(status(), replacement() === NONE ? null : replacement())}
             >
-              Remove
+              {tr("removeButton")}
             </button>
             <button type="button" class="btn btn--ghost" onClick={() => setRemoving(null)}>
-              Cancel
+              {tr("cancel")}
             </button>
           </div>
         )}
@@ -184,18 +183,18 @@ export function CompletionSection() {
       <form class="field__row status-add" onSubmit={(event) => void add(event)}>
         <input
           class="input"
-          placeholder="New status, e.g. Abandoned"
-          aria-label="New status name"
+          placeholder={tr("newPlaceholder")}
+          aria-label={tr("newAria")}
           value={adding()}
           onInput={(event) => setAdding(event.currentTarget.value)}
         />
         <button type="submit" class="btn" disabled={adding().trim() === ""}>
-          Add status
+          {tr("addStatus")}
         </button>
       </form>
       <div class="field">
         <label class="field__label" for="completion-new-game">
-          New games get
+          {tr("newGamesGet")}
         </label>
         <select
           id="completion-new-game"
@@ -209,12 +208,12 @@ export function CompletionSection() {
           }
         >
           <For each={statuses()}>{(s) => <option value={s.id}>{s.name}</option>}</For>
-          <option value={NONE}>No status</option>
+          <option value={NONE}>{tr("noStatus")}</option>
         </select>
       </div>
       <div class="field">
         <label class="field__label" for="completion-first-start">
-          When a game is started for the first time
+          {tr("firstStart")}
         </label>
         <select
           id="completion-first-start"
@@ -227,10 +226,12 @@ export function CompletionSection() {
             })
           }
         >
-          <For each={statuses()}>{(s) => <option value={s.id}>Set it to {s.name}</option>}</For>
-          <option value={NONE}>Leave the status alone</option>
+          <For each={statuses()}>
+            {(s) => <option value={s.id}>{tr("setItTo", { name: s.name })}</option>}
+          </For>
+          <option value={NONE}>{tr("leaveAlone")}</option>
         </select>
-        <p class="field__hint">Only changes games that still have the status new games get.</p>
+        <p class="field__hint">{tr("firstStartHint")}</p>
       </div>
     </div>
   );

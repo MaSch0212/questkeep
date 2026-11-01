@@ -5,6 +5,8 @@ import RefreshCw from "lucide-solid/icons/refresh-cw";
 import { createResource, createSignal, For, onCleanup, Show } from "solid-js";
 import type { MetadataField } from "../../bindings/MetadataField";
 import type { MetadataPriority } from "../../bindings/MetadataPriority";
+import { translator } from "../../i18n";
+import { settingsKeys } from "../../i18n/settingsKeys";
 import * as api from "../../lib/api";
 import { errorMessage } from "../../lib/errors";
 import {
@@ -12,11 +14,14 @@ import {
   hasOwnOrder,
   moveSource,
   PRIORITY_FIELDS,
+  priorityFieldLabel,
   withFieldOrder,
   withGlobalOrder,
 } from "../../lib/metadataPriority";
 import { store } from "../../lib/store";
 import type { SettingsModel } from "./useSettings";
+
+const tr = translator(settingsKeys);
 
 /** Saving re-resolves every game, so moves are saved once they stop for a moment. */
 const SAVE_DELAY_MS = 700;
@@ -79,8 +84,8 @@ function OrderList(props: {
             <button
               type="button"
               class="icon-btn icon-btn--small"
-              aria-label={`Move ${props.name(id)} up`}
-              title="Move up (Alt+Up)"
+              aria-label={tr("moveUp", { name: props.name(id) })}
+              title={tr("moveUpTitle")}
               disabled={index() === 0}
               onClick={() => move(id, -1)}
             >
@@ -89,8 +94,8 @@ function OrderList(props: {
             <button
               type="button"
               class="icon-btn icon-btn--small"
-              aria-label={`Move ${props.name(id)} down`}
-              title="Move down (Alt+Down)"
+              aria-label={tr("moveDown", { name: props.name(id) })}
+              title={tr("moveDownTitle")}
               disabled={index() === props.order.length - 1}
               onClick={() => move(id, 1)}
             >
@@ -138,9 +143,7 @@ export function SourcePriority(props: { model: SettingsModel }) {
       const queued = await api.refreshAllMetadata();
       store.pushToast(
         "info",
-        queued === 0
-          ? "No games to refresh"
-          : `Refreshing metadata for ${queued} ${queued === 1 ? "game" : "games"} in the background`,
+        queued === 0 ? tr("noGamesToRefresh") : tr("refreshingMetadata", { count: queued }),
       );
     } catch (error) {
       store.pushToast("error", errorMessage(error));
@@ -151,22 +154,19 @@ export function SourcePriority(props: { model: SettingsModel }) {
 
   return (
     <div class="form">
-      <h3 class="fieldset__legend">Source priority</h3>
-      <p class="muted">
-        For each field the first source in this order that knows a value wins. Your own edits always
-        come first; data from before this version comes last until it is refreshed.
-      </p>
-      <Show when={sources()} fallback={<p class="muted">Loading…</p>}>
+      <h3 class="fieldset__legend">{tr("sourcePriority")}</h3>
+      <p class="muted">{tr("priorityIntro")}</p>
+      <Show when={sources()} fallback={<p class="muted">{tr("loading")}</p>}>
         <div class="source-priority">
-          <nav class="source-priority__nav" aria-label="Fields">
+          <nav class="source-priority__nav" aria-label={tr("fields")}>
             <button
               type="button"
               class="source-priority__field"
               aria-current={open() === null ? "true" : undefined}
               onClick={() => setOpen(null)}
             >
-              <span class="source-priority__label">All fields</span>
-              <span class="source-priority__note">Default</span>
+              <span class="source-priority__label">{tr("allFields")}</span>
+              <span class="source-priority__note">{tr("defaultNote")}</span>
             </button>
             <For each={PRIORITY_FIELDS}>
               {(field) => (
@@ -176,9 +176,9 @@ export function SourcePriority(props: { model: SettingsModel }) {
                   aria-current={open() === field.id ? "true" : undefined}
                   onClick={() => setOpen(field.id)}
                 >
-                  <span class="source-priority__label">{field.label}</span>
+                  <span class="source-priority__label">{priorityFieldLabel(field.id)}</span>
                   <Show when={hasOwnOrder(priority(), field.id)}>
-                    <span class="source-priority__note">Own order</span>
+                    <span class="source-priority__note">{tr("ownOrderNote")}</span>
                   </Show>
                 </button>
               )}
@@ -189,9 +189,9 @@ export function SourcePriority(props: { model: SettingsModel }) {
               when={PRIORITY_FIELDS.find((f) => f.id === open())}
               fallback={
                 <>
-                  <p class="field__hint">Used by every field without its own order.</p>
+                  <p class="field__hint">{tr("usedByAll")}</p>
                   <OrderList
-                    label="Source order for all fields"
+                    label={tr("orderAll")}
                     order={effectiveOrder(priority(), null, ids())}
                     name={name}
                     onChange={(order) => change(withGlobalOrder(priority(), order))}
@@ -218,18 +218,18 @@ export function SourcePriority(props: { model: SettingsModel }) {
                           )
                         }
                       />
-                      {field().label}: use its own order
+                      {tr("useOwnOrder", { field: priorityFieldLabel(field().id) })}
                     </label>
                     <Show
                       when={own()}
                       fallback={
                         <p class="field__hint">
-                          Uses the default order: {order().map(name).join(" › ")}
+                          {tr("usesDefault", { order: order().map(name).join(" › ") })}
                         </p>
                       }
                     >
                       <OrderList
-                        label={`Source order for ${field().label.toLowerCase()}`}
+                        label={tr("orderFor", { field: priorityFieldLabel(field().id) })}
                         order={order()}
                         name={name}
                         onChange={(next) => change(withFieldOrder(priority(), field().id, next))}
@@ -250,13 +250,10 @@ export function SourcePriority(props: { model: SettingsModel }) {
           onClick={() => void refreshAll()}
         >
           <RefreshCw class="icon" aria-hidden="true" />
-          Refresh metadata for all games
+          {tr("refreshAll")}
         </button>
       </div>
-      <p class="field__hint">
-        Asks every store and IGDB again for every game. It runs in the background and can take a
-        while for a large library.
-      </p>
+      <p class="field__hint">{tr("refreshHint")}</p>
     </div>
   );
 }

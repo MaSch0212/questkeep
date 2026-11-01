@@ -2,9 +2,17 @@ import X from "lucide-solid/icons/x";
 import { createEffect, For, Show } from "solid-js";
 import type { GameQuery } from "../bindings/GameQuery";
 import type { ListField } from "../bindings/ListField";
-import { emptyGroup, removeAt, treePills, type PillPart } from "../lib/filters";
+import { translator } from "../i18n";
+import { libraryCommon } from "../i18n/libraryCommon";
+import { libraryFilterPills } from "../i18n/libraryFilterPills";
+import { libraryFilters } from "../i18n/libraryFilters";
+import { emptyGroup, joinerWord, removeAt, treePills, type PillPart } from "../lib/filters";
 import { store } from "../lib/store";
 import { clearedFilters, NO_CATEGORY } from "../lib/views";
+
+const tr = translator(libraryFilterPills);
+const trCommon = translator(libraryCommon);
+const trFilters = translator(libraryFilters);
 
 interface QuickPill {
   parts: PillPart[];
@@ -16,44 +24,51 @@ function quickPills(query: GameQuery): QuickPill[] {
   const pills: QuickPill[] = [];
   if (query.sources.length > 0) {
     const names = query.sources.map((id) => store.valueName("source", id));
-    pills.push({ parts: [{ label: "Store", value: names.join(", ") }], clear: { sources: [] } });
+    pills.push({
+      parts: [{ label: trFilters("source"), value: names.join(", ") }],
+      clear: { sources: [] },
+    });
   }
   if (query.categories.length > 0) {
     const names = query.categories.map((id) =>
-      id === NO_CATEGORY ? "No category" : store.valueName("category", id),
+      id === NO_CATEGORY ? trCommon("noCategory") : store.valueName("category", id),
     );
     pills.push({
-      parts: [{ label: "Category", value: names.join(", ") }],
+      parts: [{ label: trFilters("category"), value: names.join(", ") }],
       clear: { categories: [] },
     });
   }
   if (query.kind !== "games") {
     pills.push({
-      parts: [{ label: query.kind === "apps" ? "Apps" : "Games and apps", value: "" }],
+      parts: [{ label: query.kind === "apps" ? tr("apps") : tr("gamesAndApps"), value: "" }],
       clear: { kind: "games" },
     });
   }
   if (query.installed !== "any") {
     pills.push({
-      parts: [{ label: query.installed === "yes" ? "Installed" : "Not installed", value: "" }],
+      parts: [
+        { label: query.installed === "yes" ? tr("installed") : tr("notInstalled"), value: "" },
+      ],
       clear: { installed: "any" },
     });
   }
   if (query.favorite !== "any") {
     pills.push({
-      parts: [{ label: query.favorite === "yes" ? "Favorite" : "Not favorite", value: "" }],
+      parts: [{ label: query.favorite === "yes" ? tr("favorite") : tr("notFavorite"), value: "" }],
       clear: { favorite: "any" },
     });
   }
   if (query.played !== "any") {
     pills.push({
-      parts: [{ label: query.played === "played" ? "Played" : "Never played", value: "" }],
+      parts: [{ label: query.played === "played" ? tr("played") : tr("neverPlayed"), value: "" }],
       clear: { played: "any" },
     });
   }
   if (query.hidden !== "visible") {
     pills.push({
-      parts: [{ label: query.hidden === "all" ? "Hidden included" : "Only hidden", value: "" }],
+      parts: [
+        { label: query.hidden === "all" ? tr("hiddenIncluded") : tr("onlyHidden"), value: "" },
+      ],
       clear: { hidden: "visible" },
     });
   }
@@ -68,7 +83,7 @@ function PillText(props: { parts: PillPart[]; joiner: string; grouped: boolean }
         {(part, index) => (
           <>
             <Show when={index() > 0}>
-              <i class="pill__joiner"> {props.joiner} </i>
+              <i class="pill__joiner"> {joinerWord(props.joiner === "or" ? "or" : "and")} </i>
             </Show>
             {part.label}
             <Show when={part.value}>
@@ -107,7 +122,7 @@ export function FilterPills() {
 
   return (
     <Show when={quick().length + tree().length > 0}>
-      <div class="filter-pills" role="list" aria-label="Active filters">
+      <div class="filter-pills" role="list" aria-label={tr("activeFilters")}>
         <For each={quick()}>
           {(pill) => (
             <span class="pill" role="listitem">
@@ -115,7 +130,7 @@ export function FilterPills() {
               <button
                 type="button"
                 class="pill__remove"
-                aria-label={`Remove filter ${describe(pill.parts)}`}
+                aria-label={tr("removeFilter", { text: describe(pill.parts) })}
                 onClick={() => store.changeQuery(pill.clear)}
               >
                 <X class="icon" aria-hidden="true" />
@@ -130,7 +145,7 @@ export function FilterPills() {
               <button
                 type="button"
                 class="pill__remove"
-                aria-label={`Remove filter ${describe(pill.parts)}`}
+                aria-label={tr("removeFilter", { text: describe(pill.parts) })}
                 onClick={() =>
                   store.changeQuery({ filter: removeAt(store.query().filter, [pill.index]) })
                 }
@@ -157,7 +172,7 @@ export function FilterPills() {
             });
           }}
         >
-          Clear all
+          {tr("clearAll")}
         </button>
       </div>
     </Show>

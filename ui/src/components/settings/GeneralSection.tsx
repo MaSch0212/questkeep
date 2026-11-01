@@ -1,6 +1,8 @@
 import { For, Show } from "solid-js";
 import type { StartupPage } from "../../bindings/StartupPage";
-import { allViews } from "../../lib/views";
+import { LOCALE_NAMES, LOCALES, resolveLocale, translator } from "../../i18n";
+import { settingsGeneral } from "../../i18n/settingsGeneral";
+import { allViews, shownName } from "../../lib/views";
 import { store } from "../../lib/store";
 import { ChipInput } from "../ChipInput";
 import type { SettingsModel } from "./useSettings";
@@ -8,21 +10,20 @@ import type { SettingsModel } from "./useSettings";
 /** Common leading words offered while typing (English, German, French, Spanish). */
 const SUGGESTED_PREFIXES = ["The", "A", "An", "Der", "Die", "Das", "Le", "La", "Les", "El", "Los"];
 
+const tr = translator(settingsGeneral);
+
+/** Check boxes saved as they are; the label is the message with the setting's name. */
 const OPTIONS = [
-  { key: "scanOnStartup", label: "Scan stores when the app starts" },
-  { key: "downloadCovers", label: "Download missing covers" },
-  { key: "fetchMetadata", label: "Download store metadata" },
-  {
-    key: "detectExternalLaunches",
-    label: "Record playtime of games started outside Questkeep",
-  },
+  "scanOnStartup",
+  "downloadCovers",
+  "fetchMetadata",
+  "detectExternalLaunches",
 ] as const;
 
-const TRAY_OPTIONS = [
-  { key: "closeToTray", label: "Close to the tray instead of quitting" },
-  { key: "minimizeToTray", label: "Minimize to the tray" },
-  { key: "startWithSystem", label: "Start Questkeep when I sign in to my computer" },
-] as const;
+const TRAY_OPTIONS = ["closeToTray", "minimizeToTray", "startWithSystem"] as const;
+
+/** The language the system would give (shown next to "System language"). */
+const systemLocale = () => resolveLocale(null, navigator.languages ?? [navigator.language]);
 
 /** The dropdown value of a startup page: "start", "last" or "view:<id>". */
 function startupValue(page: StartupPage): string {
@@ -36,10 +37,7 @@ function startupPage(value: string): StartupPage {
 
 function CheckOption(props: {
   model: SettingsModel;
-  option: {
-    key: (typeof OPTIONS)[number]["key"] | (typeof TRAY_OPTIONS)[number]["key"];
-    label: string;
-  };
+  option: (typeof OPTIONS)[number] | (typeof TRAY_OPTIONS)[number];
   checked: boolean;
 }) {
   return (
@@ -47,25 +45,41 @@ function CheckOption(props: {
       <input
         type="checkbox"
         checked={props.checked}
-        onChange={(e) => void props.model.toggle(props.option.key, e.currentTarget.checked)}
+        onChange={(e) => void props.model.toggle(props.option, e.currentTarget.checked)}
       />
-      <span>{props.option.label}</span>
+      <span>{tr(props.option)}</span>
     </label>
   );
 }
 
 export function GeneralSection(props: { model: SettingsModel }) {
   return (
-    <Show when={props.model.settings()} fallback={<p class="muted">Loading…</p>}>
+    <Show when={props.model.settings()} fallback={<p class="muted">{tr("loading")}</p>}>
       {(current) => (
         <>
+          <div class="settings-row">
+            <label for="language">{tr("language")}</label>
+            <select
+              id="language"
+              class="input settings-row__input"
+              value={current().language ?? ""}
+              onChange={(e) => void props.model.update({ language: e.currentTarget.value || null })}
+            >
+              <option value="">
+                {tr("systemLanguage", { name: LOCALE_NAMES[systemLocale()] })}
+              </option>
+              <For each={LOCALES}>
+                {(locale) => <option value={locale}>{LOCALE_NAMES[locale]}</option>}
+              </For>
+            </select>
+          </div>
           <For each={OPTIONS}>
             {(option) => (
-              <CheckOption model={props.model} option={option} checked={current()[option.key]} />
+              <CheckOption model={props.model} option={option} checked={current()[option]} />
             )}
           </For>
           <fieldset class="fieldset settings-group">
-            <legend class="fieldset__legend">Start page</legend>
+            <legend class="fieldset__legend">{tr("startPage")}</legend>
             <label class="check">
               <input
                 type="checkbox"
@@ -74,10 +88,10 @@ export function GeneralSection(props: { model: SettingsModel }) {
                   void props.model.update({ showStartPage: e.currentTarget.checked })
                 }
               />
-              <span>Show the start page</span>
+              <span>{tr("showStartPage")}</span>
             </label>
             <div class="settings-row">
-              <label for="startup-page">When Questkeep opens, show</label>
+              <label for="startup-page">{tr("whenOpens")}</label>
               <select
                 id="startup-page"
                 class="input settings-row__input"
@@ -87,24 +101,22 @@ export function GeneralSection(props: { model: SettingsModel }) {
                 }
               >
                 <option value="start" disabled={!current().showStartPage}>
-                  Start page
+                  {tr("startPage")}
                 </option>
-                <option value="last">The page I had open last</option>
-                <optgroup label="Views">
+                <option value="last">{tr("lastPage")}</option>
+                <optgroup label={tr("views")}>
                   <For each={allViews(store.sections())}>
-                    {(view) => <option value={`view:${view.id}`}>{view.name}</option>}
+                    {(view) => <option value={`view:${view.id}`}>{shownName(view)}</option>}
                   </For>
                 </optgroup>
               </select>
             </div>
             <Show when={!current().showStartPage && current().startupPage.kind === "start"}>
-              <p class="field__hint">
-                The start page is turned off, so Questkeep opens the first view instead.
-              </p>
+              <p class="field__hint">{tr("startPageOff")}</p>
             </Show>
           </fieldset>
           <fieldset class="fieldset settings-group">
-            <legend class="fieldset__legend">Sorting</legend>
+            <legend class="fieldset__legend">{tr("sorting")}</legend>
             <label class="check">
               <input
                 type="checkbox"
@@ -115,16 +127,16 @@ export function GeneralSection(props: { model: SettingsModel }) {
                   })
                 }
               />
-              <span>Ignore words at the start of names when sorting</span>
+              <span>{tr("ignorePrefixes")}</span>
             </label>
             <div
               class="settings-row"
               classList={{ "check--disabled": !current().sortPrefixes.enabled }}
             >
-              <label for="sort-prefixes">Words to ignore</label>
+              <label for="sort-prefixes">{tr("wordsToIgnore")}</label>
               <ChipInput
                 id="sort-prefixes"
-                label="Words to ignore"
+                label={tr("wordsToIgnore")}
                 values={current().sortPrefixes.words}
                 suggestions={SUGGESTED_PREFIXES}
                 describedBy="sort-prefixes-hint"
@@ -134,12 +146,12 @@ export function GeneralSection(props: { model: SettingsModel }) {
               />
             </div>
             <p class="field__hint" id="sort-prefixes-hint">
-              “The Witcher” sorts under W. Your own sorting names (Edit game) stay as they are.
+              {tr("prefixesHint")}
             </p>
           </fieldset>
           <For each={TRAY_OPTIONS}>
             {(option) => (
-              <CheckOption model={props.model} option={option} checked={current()[option.key]} />
+              <CheckOption model={props.model} option={option} checked={current()[option]} />
             )}
           </For>
           <label
@@ -152,7 +164,7 @@ export function GeneralSection(props: { model: SettingsModel }) {
               disabled={!current().startWithSystem}
               onChange={(e) => void props.model.toggle("startMinimized", e.currentTarget.checked)}
             />
-            <span>Start minimized to the tray</span>
+            <span>{tr("startMinimized")}</span>
           </label>
         </>
       )}

@@ -2,12 +2,16 @@ import RefreshCw from "lucide-solid/icons/refresh-cw";
 import TriangleAlert from "lucide-solid/icons/triangle-alert";
 import X from "lucide-solid/icons/x";
 import { For, onMount, Show } from "solid-js";
+import { translator } from "../i18n";
+import { shellSync } from "../i18n/shellSync";
 import * as api from "../lib/api";
 import { errorMessage } from "../lib/errors";
 import { store } from "../lib/store";
 import { syncRowText } from "../lib/syncStatus";
 import { Popover, type PopoverAnchor } from "./Popover";
 import { SourceIcon } from "./SourceIcon";
+
+const tr = translator(shellSync);
 
 export async function syncAll() {
   try {
@@ -46,13 +50,13 @@ export function SyncPanel(props: {
       anchor={props.anchor}
       class="sync-panel"
       role="dialog"
-      label="Library sync"
+      label={tr("panelLabel")}
       inside={props.inside}
       onClose={props.onClose}
     >
       <div class="sync-panel__head">
         <span class="sync-panel__last">
-          {syncRowText(undefined, store.syncTimes().all, "Last full sync")}
+          {syncRowText(undefined, store.syncTimes().all, tr("lastFullSync"))}
         </span>
         <button
           ref={(el) => (allButton = el)}
@@ -61,19 +65,19 @@ export function SyncPanel(props: {
           disabled={store.syncState().active}
           onClick={() => void syncAll()}
         >
-          <RefreshCw class="icon" aria-hidden="true" /> Sync all
+          <RefreshCw class="icon" aria-hidden="true" /> {tr("syncAll")}
         </button>
       </div>
       <Show when={store.accountWarnings().length > 0}>
-        <ul class="sync-panel__warnings" aria-label="Accounts signed out">
+        <ul class="sync-panel__warnings" aria-label={tr("accountsSignedOut")}>
           <For each={store.accountWarnings()}>
             {(warning) => (
               <li class="sync-panel__warning">
                 <TriangleAlert class="icon sync-panel__warning-icon" aria-hidden="true" />
                 <span class="sync-panel__warning-text">
-                  {warning.name}
-                  {warning.displayName ? ` (${warning.displayName})` : ""} is signed out, so its
-                  owned games and achievements don't update.
+                  {tr("signedOutWarning", {
+                    name: `${warning.name}${warning.displayName ? ` (${warning.displayName})` : ""}`,
+                  })}
                 </span>
                 <button
                   type="button"
@@ -83,13 +87,13 @@ export function SyncPanel(props: {
                     store.showSettingsSection("stores");
                   }}
                 >
-                  Sign in…
+                  {tr("signIn")}
                 </button>
                 <button
                   type="button"
                   class="icon-btn icon-btn--small"
-                  aria-label={`Dismiss the warning about ${warning.name}`}
-                  title="Dismiss (until you sign in again)"
+                  aria-label={tr("dismissWarning", { name: warning.name })}
+                  title={tr("dismissTitle")}
                   onClick={() => void store.dismissAccountWarning(warning.provider)}
                 >
                   <X class="icon" aria-hidden="true" />
@@ -121,8 +125,16 @@ export function SyncPanel(props: {
                 <button
                   type="button"
                   class="icon-btn icon-btn--small"
-                  aria-label={busy() ? `Syncing ${provider.name}…` : `Sync ${provider.name}`}
-                  title={busy() ? `Syncing ${provider.name}…` : `Sync ${provider.name}`}
+                  aria-label={
+                    busy()
+                      ? tr("syncingName", { name: provider.name })
+                      : tr("syncName", { name: provider.name })
+                  }
+                  title={
+                    busy()
+                      ? tr("syncingName", { name: provider.name })
+                      : tr("syncName", { name: provider.name })
+                  }
                   disabled={busy()}
                   onClick={() => void syncStore(provider.id)}
                 >

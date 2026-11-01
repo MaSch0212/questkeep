@@ -1,3 +1,5 @@
+import { translator } from "../i18n";
+import { gameEdit } from "../i18n/gameEdit";
 import {
   createResource,
   createSignal,
@@ -45,20 +47,25 @@ import { ImagePicker, imageSrc } from "./ImagePicker";
 import { Modal } from "./Modal";
 import { sourceName as storeName } from "./SourceIcon";
 
+const tr = translator(gameEdit);
+
 type Section = "general" | "details" | "links" | "launch" | "tracking" | "images";
 
-const KINDS: readonly (readonly [GameKind, string])[] = [
-  ["game", "Game"],
-  ["app", "App"],
+const KINDS: readonly (readonly [GameKind, "kindGame" | "kindApp"])[] = [
+  ["game", "kindGame"],
+  ["app", "kindApp"],
 ];
 
-const SECTIONS: { id: Section; label: string }[] = [
-  { id: "general", label: "General" },
-  { id: "details", label: "Details" },
-  { id: "links", label: "Links" },
-  { id: "launch", label: "Launch" },
-  { id: "tracking", label: "Playtime tracking" },
-  { id: "images", label: "Images" },
+const SECTIONS: {
+  id: Section;
+  label: "secGeneral" | "secDetails" | "secLinks" | "secLaunch" | "secTracking" | "secImages";
+}[] = [
+  { id: "general", label: "secGeneral" },
+  { id: "details", label: "secDetails" },
+  { id: "links", label: "secLinks" },
+  { id: "launch", label: "secLaunch" },
+  { id: "tracking", label: "secTracking" },
+  { id: "images", label: "secImages" },
 ];
 
 const RELEASE_DATE = /^\d{4}(-\d{2}(-\d{2})?)?$/;
@@ -92,9 +99,11 @@ function FieldLabel(props: {
         fallback={<span class="edit-field__source">{sourceLabel(source(), nameOf)}</span>}
       >
         <span class="edit-field__source edit-field__source--user">
-          edited by you ·{" "}
+          {tr("editedByYou")} ·{" "}
           <button type="button" class="link-btn" onClick={() => props.onReset()}>
-            {source() === undefined ? "Clear" : `Use ${sourceName(source(), nameOf)} value`}
+            {source() === undefined
+              ? tr("clear")
+              : tr("useValue", { source: sourceName(source(), nameOf) })}
           </button>
         </span>
       </Show>
@@ -120,7 +129,7 @@ function ImageRow(props: {
         <Show
           when={props.slot === "cover"}
           fallback={
-            <Show when={props.path} fallback={<span class="muted">None</span>}>
+            <Show when={props.path} fallback={<span class="muted">{tr("none")}</span>}>
               {(path) => (
                 <img
                   class="image-row__img"
@@ -139,14 +148,14 @@ function ImageRow(props: {
       <div class="image-row__info">
         <b>{props.title}</b>
         <span class="field__hint">
-          {props.hint} {props.user ? "Chosen by you." : ""}
+          {props.hint} {props.user ? tr("chosenByYou") : ""}
         </span>
         <div class="image-row__buttons">
           <button type="button" class="btn" onClick={() => props.onChoose()}>
-            Choose file…
+            {tr("chooseFile")}
           </button>
           <button type="button" class="btn" onClick={() => props.onPick()}>
-            Pick image…
+            {tr("pickImage")}
           </button>
           <button
             type="button"
@@ -154,7 +163,7 @@ function ImageRow(props: {
             disabled={props.slot === "icon" ? !props.user : props.path === null}
             onClick={() => props.onRemove()}
           >
-            {props.slot === "icon" ? "Reset" : "Remove"}
+            {props.slot === "icon" ? tr("reset") : tr("remove")}
           </button>
         </div>
       </div>
@@ -283,32 +292,32 @@ export function EditGameDialog(props: {
     const scoreOf = (key: "criticScore" | "communityScore", title: string) => {
       if (!isEdited(key)) return null;
       const value = parseScore(n[key] ?? "");
-      if (value === undefined) return `${title} must be a whole number from 0 to 100.`;
+      if (value === undefined) return tr("scoreError", { title });
       const old = current[key];
       setField(key, value === null ? null : { value, source: old?.source ?? "Your score" });
       return null;
     };
     const failed =
-      scoreOf("criticScore", "Critic score") ?? scoreOf("communityScore", "Community score");
+      scoreOf("criticScore", tr("criticScore")) ?? scoreOf("communityScore", tr("communityScore"));
     if (failed) return failed;
     if (isEdited("timeToBeat")) {
       const main = parseHours(n.ttbMain ?? "");
       const extra = parseHours(n.ttbExtra ?? "");
       const complete = parseHours(n.ttbComplete ?? "");
       if (main === undefined || extra === undefined || complete === undefined) {
-        return "Enter time to beat in hours, e.g. 28 or 28.5.";
+        return tr("ttbError");
       }
       const empty = main === null && extra === null && complete === null;
       setField("timeToBeat", empty ? null : { main, extra, complete });
     }
     if (isEdited("installSize")) {
       const size = parseGigabytes(n.installSize ?? "");
-      if (size === undefined) return "Enter the install size in GB, e.g. 9.4.";
+      if (size === undefined) return tr("sizeError");
       setField("installSize", size);
     }
     const date = current.releaseDate?.trim() ?? "";
     if (isEdited("releaseDate") && date !== "" && !RELEASE_DATE.test(date)) {
-      return "Enter the release date as YYYY-MM-DD, YYYY-MM or YYYY.";
+      return tr("dateError");
     }
     return null;
   }
@@ -323,7 +332,7 @@ export function EditGameDialog(props: {
     const trimmed = name().trim();
     if (trimmed === "") {
       setSection("general");
-      setError("Enter a name for the game.");
+      setError(tr("nameError"));
       return;
     }
     const failedInput = readNumbers();
@@ -430,7 +439,7 @@ export function EditGameDialog(props: {
   const sectionCount = (s: Section): string | null => {
     if (s === "general" || s === "details") {
       const count = editedCount(SECTION_FIELDS[s], edited());
-      return count > 0 ? `${count} edited` : null;
+      return count > 0 ? tr("edited", { count }) : null;
     }
     if (s === "launch") {
       const count = profiles()?.profiles.length ?? 0;
@@ -483,10 +492,10 @@ export function EditGameDialog(props: {
   }
 
   return (
-    <Modal title="Edit game" wide onClose={props.onClose}>
+    <Modal title={tr("editGame")} wide onClose={props.onClose}>
       <div class="edit-game">
         <div class="edit-game__main">
-          <nav class="edit-game__nav" aria-label="Sections">
+          <nav class="edit-game__nav" aria-label={tr("sections")}>
             <For each={SECTIONS}>
               {(entry) => (
                 <button
@@ -495,7 +504,7 @@ export function EditGameDialog(props: {
                   aria-current={section() === entry.id ? "page" : undefined}
                   onClick={() => setSection(entry.id)}
                 >
-                  {entry.label}
+                  {tr(entry.label)}
                   <Show when={sectionCount(entry.id)}>
                     <small>{sectionCount(entry.id)}</small>
                   </Show>
@@ -516,10 +525,10 @@ export function EditGameDialog(props: {
                       checked={detectLaunches()}
                       onChange={(event) => setDetectLaunches(event.currentTarget.checked)}
                     />
-                    <span>Record playtime when started outside Questkeep</span>
+                    <span>{tr("recordPlaytime")}</span>
                   </label>
                   <label class="field">
-                    <span class="field__label">Ignored programs</span>
+                    <span class="field__label">{tr("ignoredPrograms")}</span>
                     <textarea
                       class="input input--multiline"
                       rows={4}
@@ -530,8 +539,7 @@ export function EditGameDialog(props: {
                     />
                   </label>
                   <p class="field__hint" id="ignored-programs-hint">
-                    One per line. While only these run, the game doesn't count as playing. Use * as
-                    a wildcard.
+                    {tr("ignoredHint")}
                   </p>
                 </div>
               </Match>
@@ -540,8 +548,8 @@ export function EditGameDialog(props: {
                   <ImageRow
                     game={game()}
                     slot="cover"
-                    title="Cover"
-                    hint="Grid view and game page."
+                    title={tr("imgCover")}
+                    hint={tr("imgCoverHint")}
                     path={game().coverPath}
                     user={userImage("cover")}
                     onChoose={() => void chooseFile("cover").then(() => markUser("cover", true))}
@@ -555,8 +563,8 @@ export function EditGameDialog(props: {
                   <ImageRow
                     game={game()}
                     slot="background"
-                    title="Background"
-                    hint="Behind the game page header."
+                    title={tr("imgBackground")}
+                    hint={tr("imgBackgroundHint")}
                     path={game().backgroundPath}
                     user={userImage("background")}
                     onChoose={() =>
@@ -572,8 +580,8 @@ export function EditGameDialog(props: {
                   <ImageRow
                     game={game()}
                     slot="icon"
-                    title="Icon"
-                    hint="List view, tray and command bar."
+                    title={tr("imgIcon")}
+                    hint={tr("imgIconHint")}
                     path={game().iconPath}
                     user={userImage("icon") && game().iconPath !== null}
                     onChoose={() => void chooseFile("icon").then(() => markUser("icon", true))}
@@ -584,22 +592,17 @@ export function EditGameDialog(props: {
                       )
                     }
                   />
-                  <p class="field__hint">
-                    Files: .png, .jpg, .webp; icons also .ico, .exe or .dll. "Pick image…" shows
-                    images from the stores, IGDB and SteamGridDB (each when available) and a web
-                    search. Your images stay through metadata refreshes; Remove keeps the image
-                    empty, Reset makes the icon again from the store or the executable.
-                  </p>
+                  <p class="field__hint">{tr("imagesHint")}</p>
                 </div>
               </Match>
               <Match when={!ready()}>
-                <p class="muted">Loading…</p>
+                <p class="muted">{tr("loading")}</p>
               </Match>
               <Match when={section() === "general"}>
                 <div class="edit-section">
                   <div class="edit-grid">
                     <label class="field field--full">
-                      <span class="field__label">Name</span>
+                      <span class="field__label">{tr("name")}</span>
                       <input
                         class="input"
                         data-autofocus
@@ -609,9 +612,9 @@ export function EditGameDialog(props: {
                     </label>
                     <label class="field">
                       <span class="field__label edit-field__label">
-                        Sorting name
+                        {tr("sortingName")}
                         <span class="edit-field__source">
-                          {sortingName() ? "your own" : "automatic"}
+                          {sortingName() ? tr("yourOwn") : tr("automatic")}
                         </span>
                       </span>
                       <input
@@ -622,7 +625,7 @@ export function EditGameDialog(props: {
                       />
                     </label>
                     <div class="field">
-                      {label("Release date", "releaseDate")}
+                      {label(tr("releaseDate"), "releaseDate")}
                       <input
                         id={fieldId("releaseDate")}
                         class="input"
@@ -634,7 +637,7 @@ export function EditGameDialog(props: {
                     </div>
                     <div class="field">
                       <span class="field__label" id="edit-kind">
-                        Type
+                        {tr("type")}
                       </span>
                       <div class="segmented" role="radiogroup" aria-labelledby="edit-kind">
                         <For each={KINDS}>
@@ -646,14 +649,14 @@ export function EditGameDialog(props: {
                               aria-checked={kind() === value}
                               onClick={() => setKind(value)}
                             >
-                              {text}
+                              {tr(text)}
                             </button>
                           )}
                         </For>
                       </div>
                     </div>
                     <div class="field field--full">
-                      {label("Description", "description")}
+                      {label(tr("description"), "description")}
                       <textarea
                         id={fieldId("description")}
                         class="input input--multiline"
@@ -666,12 +669,12 @@ export function EditGameDialog(props: {
                       />
                     </div>
                   </div>
-                  <h3 class="edit-section__title">You</h3>
+                  <h3 class="edit-section__title">{tr("you")}</h3>
                   <div class="edit-grid">
                     <Show when={kind() === "game"}>
                       <div class="field field--full">
                         <span class="field__label" id="edit-completion">
-                          Completion status
+                          {tr("completionStatus")}
                         </span>
                         <div class="segmented" role="radiogroup" aria-labelledby="edit-completion">
                           <For each={store.completion().statuses}>
@@ -694,9 +697,11 @@ export function EditGameDialog(props: {
                     </Show>
                     <div class="field">
                       <span class="field__label edit-field__label" id="edit-score">
-                        Your score
+                        {tr("yourScore")}
                         <span class="edit-field__source">
-                          {score() === null ? "none" : `${score()} / 100`}
+                          {score() === null
+                            ? tr("noScore")
+                            : tr("scoreValue", { score: score() ?? 0 })}
                         </span>
                       </span>
                       <div class="edit-score">
@@ -716,25 +721,25 @@ export function EditGameDialog(props: {
                           disabled={score() === null}
                           onClick={() => setScore(null)}
                         >
-                          Clear
+                          {tr("clear")}
                         </button>
                       </div>
                     </div>
                     <div class="field">
-                      <span class="field__label">Categories</span>
+                      <span class="field__label">{tr("categories")}</span>
                       <ChipInput
-                        label="Categories"
+                        label={tr("categories")}
                         values={categoryNames()}
                         suggestions={store.categories().map((c) => c.name)}
                         onChange={setCategoryNames}
                       />
                     </div>
                     <label class="field field--full">
-                      <span class="field__label">Notes</span>
+                      <span class="field__label">{tr("notes")}</span>
                       <textarea
                         class="input input--multiline"
                         rows={3}
-                        placeholder="Anything you want to remember about this game."
+                        placeholder={tr("notesPlaceholder")}
                         value={notes()}
                         onInput={(event) => setNotes(event.currentTarget.value)}
                       />
@@ -744,18 +749,14 @@ export function EditGameDialog(props: {
               </Match>
               <Match when={section() === "details"}>
                 <div class="edit-section">
-                  <p class="field__hint">
-                    Each field shows where its value comes from. Change a field to keep your own
-                    value through every metadata refresh; "Use … value" goes back to the automatic
-                    one.
-                  </p>
+                  <p class="field__hint">{tr("detailsHint")}</p>
                   <div class="edit-grid">
                     <For each={LIST_FIELDS}>
                       {(entry) => (
                         <div class="field" classList={{ "field--full": entry.wide === true }}>
-                          {label(entry.label, entry.field)}
+                          {label(tr(entry.label), entry.field)}
                           <ChipInput
-                            label={entry.label}
+                            label={tr(entry.label)}
                             id={fieldId(entry.field)}
                             values={values()?.[entry.field] ?? []}
                             edited={isEdited(entry.field)}
@@ -768,33 +769,29 @@ export function EditGameDialog(props: {
                       )}
                     </For>
                   </div>
-                  <h3 class="edit-section__title">Numbers</h3>
+                  <h3 class="edit-section__title">{tr("numbers")}</h3>
                   <div class="edit-grid">
                     {numberInput(
                       "criticScore",
-                      label("Critic score", "criticScore"),
+                      label(tr("criticScore"), "criticScore"),
                       "criticScore",
                       "0–100",
                     )}
                     {numberInput(
                       "communityScore",
-                      label("Community score", "communityScore"),
+                      label(tr("communityScore"), "communityScore"),
                       "communityScore",
                       "0–100",
                     )}
-                    {numberInput(
-                      "ttbMain",
-                      label("Time to beat: main story (hours)", "timeToBeat"),
-                      "timeToBeat",
-                    )}
+                    {numberInput("ttbMain", label(tr("ttbMain"), "timeToBeat"), "timeToBeat")}
                     <div class="field">
-                      <span class="field__label">Main + extras / completionist (hours)</span>
+                      <span class="field__label">{tr("ttbOthers")}</span>
                       <span class="field__row">
                         <input
                           class="input"
                           classList={{ "input--edited": isEdited("timeToBeat") }}
                           inputmode="decimal"
-                          aria-label="Main + extras (hours)"
+                          aria-label={tr("ttbExtraAria")}
                           value={numbers().ttbExtra ?? ""}
                           onInput={(event) => {
                             const text = event.currentTarget.value;
@@ -806,7 +803,7 @@ export function EditGameDialog(props: {
                           class="input"
                           classList={{ "input--edited": isEdited("timeToBeat") }}
                           inputmode="decimal"
-                          aria-label="Completionist (hours)"
+                          aria-label={tr("ttbCompleteAria")}
                           value={numbers().ttbComplete ?? ""}
                           onInput={(event) => {
                             const text = event.currentTarget.value;
@@ -818,7 +815,7 @@ export function EditGameDialog(props: {
                     </div>
                     {numberInput(
                       "installSize",
-                      label("Install size (GB)", "installSize"),
+                      label(tr("installSize"), "installSize"),
                       "installSize",
                     )}
                   </div>
@@ -826,17 +823,16 @@ export function EditGameDialog(props: {
               </Match>
               <Match when={section() === "links"}>
                 <div class="edit-section">
-                  <p class="field__hint">
-                    Links from all sources are shown on the game page. Hide the ones you don't need,
-                    or add your own.
-                  </p>
+                  <p class="field__hint">{tr("linksHint")}</p>
                   <ul class="edit-links">
                     <For each={ownLinks()}>
                       {(link, index) => (
                         <li class="edit-link">
                           <div class="edit-link__text">
                             <span>{link.name || shortUrl(link.url)}</span>
-                            <small class="muted">{shortUrl(link.url)} · added by you</small>
+                            <small class="muted">
+                              {shortUrl(link.url)} · {tr("addedByYou")}
+                            </small>
                           </div>
                           <button
                             type="button"
@@ -846,7 +842,7 @@ export function EditGameDialog(props: {
                               setNewLink({ name: link.name, url: link.url });
                             }}
                           >
-                            Edit
+                            {tr("edit")}
                           </button>
                           <button
                             type="button"
@@ -855,7 +851,7 @@ export function EditGameDialog(props: {
                               setOwnLinks((all) => all.filter((_, i) => i !== index()))
                             }
                           >
-                            Remove
+                            {tr("remove")}
                           </button>
                         </li>
                       )}
@@ -870,7 +866,7 @@ export function EditGameDialog(props: {
                             <span>
                               {entry.link.name}
                               <Show when={isHidden(entry.link.url)}>
-                                <small class="muted"> (hidden)</small>
+                                <small class="muted"> ({tr("hiddenLink")})</small>
                               </Show>
                             </span>
                             <small class="muted">
@@ -888,7 +884,7 @@ export function EditGameDialog(props: {
                               )
                             }
                           >
-                            {isHidden(entry.link.url) ? "Show" : "Hide"}
+                            {isHidden(entry.link.url) ? tr("show") : tr("hide")}
                           </button>
                         </li>
                       )}
@@ -897,8 +893,8 @@ export function EditGameDialog(props: {
                   <form class="edit-links__add" onSubmit={addLink}>
                     <input
                       class="input"
-                      aria-label="Link name"
-                      placeholder="Name"
+                      aria-label={tr("linkName")}
+                      placeholder={tr("name")}
                       value={newLink().name}
                       onInput={(event) =>
                         setNewLink((l) => ({ ...l, name: event.currentTarget.value }))
@@ -906,7 +902,7 @@ export function EditGameDialog(props: {
                     />
                     <input
                       class="input"
-                      aria-label="Link address"
+                      aria-label={tr("linkAddress")}
                       placeholder="https://…"
                       type="url"
                       value={newLink().url}
@@ -915,7 +911,7 @@ export function EditGameDialog(props: {
                       }
                     />
                     <button type="submit" class="btn">
-                      {editingLink() === null ? "Add link" : "Save link"}
+                      {editingLink() === null ? tr("addLink") : tr("saveLink")}
                     </button>
                   </form>
                 </div>
@@ -934,15 +930,15 @@ export function EditGameDialog(props: {
             class="btn btn--ghost"
             onClick={() =>
               void refreshMetadata(id).then((failure) =>
-                failure ? setError(failure) : store.pushToast("info", "Refreshing metadata…"),
+                failure ? setError(failure) : store.pushToast("info", tr("refreshing")),
               )
             }
           >
-            Refresh metadata
+            {tr("refreshMetadata")}
           </button>
           <span class="edit-game__buttons">
             <button type="button" class="btn" onClick={props.onClose}>
-              Cancel
+              {tr("cancel")}
             </button>
             <button
               type="button"
@@ -950,7 +946,7 @@ export function EditGameDialog(props: {
               disabled={saving() || !ready()}
               onClick={() => void save()}
             >
-              Save
+              {tr("save")}
             </button>
           </span>
         </div>

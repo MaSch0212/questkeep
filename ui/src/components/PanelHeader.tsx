@@ -1,8 +1,12 @@
+import { translator } from "../i18n";
+import { gameChrome } from "../i18n/gameChrome";
 import Pin from "lucide-solid/icons/pin";
 import PinOff from "lucide-solid/icons/pin-off";
 import X from "lucide-solid/icons/x";
 import { Show } from "solid-js";
 import { store } from "../lib/store";
+
+const tr = translator(gameChrome);
 
 /**
  * How the details panel sits: "docked" beside the list (always shown), "floating" over it by
@@ -19,12 +23,8 @@ export function PanelHeader(props: { pin: PanelPin; onClose: () => void }) {
           <button
             type="button"
             class="icon-btn"
-            aria-label={pin() === "docked" ? "Unpin panel" : "Dock panel"}
-            title={
-              pin() === "docked"
-                ? "Unpin: show details over the list only while a game is selected"
-                : "Dock: always show details beside the list"
-            }
+            aria-label={pin() === "docked" ? tr("unpinPanel") : tr("dockPanel")}
+            title={pin() === "docked" ? tr("unpinTitle") : tr("dockTitle")}
             onClick={() => store.setPanelFloating(pin() === "docked")}
           >
             <Show when={pin() === "docked"} fallback={<Pin class="icon" aria-hidden="true" />}>
@@ -37,8 +37,8 @@ export function PanelHeader(props: { pin: PanelPin; onClose: () => void }) {
         <button
           type="button"
           class="icon-btn"
-          aria-label="Close details"
-          title="Close (Esc)"
+          aria-label={tr("closeDetails")}
+          title={tr("closeTitle")}
           onClick={() => props.onClose()}
         >
           <X class="icon" aria-hidden="true" />
@@ -51,9 +51,9 @@ export function PanelHeader(props: { pin: PanelPin; onClose: () => void }) {
 /** The docked panel while no game is selected. */
 export function EmptyDetails() {
   return (
-    <aside class="details details--split details--empty" aria-label="Game details">
+    <aside class="details details--split details--empty" aria-label={tr("gameDetails")}>
       <PanelHeader pin="docked" onClose={() => undefined} />
-      <p class="details__empty muted">Select a game to see its details here.</p>
+      <p class="details__empty muted">{tr("selectToSeeHere")}</p>
     </aside>
   );
 }

@@ -4,6 +4,8 @@ import { createEffect, createSignal, For, on, Show } from "solid-js";
 import type { BackupFrequency } from "../../bindings/BackupFrequency";
 import type { BackupInfo } from "../../bindings/BackupInfo";
 import type { BackupSettings } from "../../bindings/BackupSettings";
+import { translator } from "../../i18n";
+import { settingsBackups } from "../../i18n/settingsBackups";
 import * as api from "../../lib/api";
 import { errorMessage } from "../../lib/errors";
 import { formatAgo, formatDateTime, formatSize } from "../../lib/format";
@@ -12,10 +14,12 @@ import { store } from "../../lib/store";
 import { ConfirmDialog } from "../ConfirmDialog";
 import type { SettingsModel } from "./useSettings";
 
-const FREQUENCIES: { value: BackupFrequency; label: string }[] = [
-  { value: "everyStart", label: "Every time Questkeep starts" },
-  { value: "daily", label: "Once a day" },
-  { value: "weekly", label: "Once a week" },
+const tr = translator(settingsBackups);
+
+const FREQUENCIES: { value: BackupFrequency; label: "everyStart" | "daily" | "weekly" }[] = [
+  { value: "everyStart", label: "everyStart" },
+  { value: "daily", label: "daily" },
+  { value: "weekly", label: "weekly" },
 ];
 
 /** Archives kept: at least one, and no more than the field allows. */
@@ -24,7 +28,7 @@ const MAX_KEEP = 50;
 async function backUpNow() {
   try {
     await api.backupNow();
-    store.pushToast("info", "Backup written.");
+    store.pushToast("info", tr("written"));
   } catch {
     // The failure arrives as a core event and shows as a toast.
   }
@@ -71,7 +75,7 @@ export function BackupsSection(props: { model: SettingsModel }) {
   }
 
   return (
-    <Show when={props.model.settings()?.backups} fallback={<p class="muted">Loading…</p>}>
+    <Show when={props.model.settings()?.backups} fallback={<p class="muted">{tr("loading")}</p>}>
       {(current) => (
         <div class="form">
           <label class="check">
@@ -80,10 +84,10 @@ export function BackupsSection(props: { model: SettingsModel }) {
               checked={current().enabled}
               onChange={(e) => change({ enabled: e.currentTarget.checked })}
             />
-            <span>Back up the library automatically</span>
+            <span>{tr("auto")}</span>
           </label>
           <div class="settings-row" classList={{ "check--disabled": !current().enabled }}>
-            <label for="backup-frequency">How often</label>
+            <label for="backup-frequency">{tr("howOften")}</label>
             <select
               id="backup-frequency"
               class="input settings-row__input"
@@ -91,11 +95,11 @@ export function BackupsSection(props: { model: SettingsModel }) {
               disabled={!current().enabled}
               onChange={(e) => change({ frequency: e.currentTarget.value as BackupFrequency })}
             >
-              <For each={FREQUENCIES}>{(f) => <option value={f.value}>{f.label}</option>}</For>
+              <For each={FREQUENCIES}>{(f) => <option value={f.value}>{tr(f.label)}</option>}</For>
             </select>
           </div>
           <div class="settings-row">
-            <label for="backup-keep">Backups to keep</label>
+            <label for="backup-keep">{tr("keep")}</label>
             <input
               id="backup-keep"
               class="input settings-row__number"
@@ -111,23 +115,20 @@ export function BackupsSection(props: { model: SettingsModel }) {
             />
           </div>
           <div class="settings-row">
-            <span id="backup-folder-label">Folder</span>
+            <span id="backup-folder-label">{tr("folder")}</span>
             <span class="backup-folder" aria-labelledby="backup-folder-label" title={folder()}>
               {folder()}
             </span>
             <button type="button" class="btn" onClick={() => void chooseFolder()}>
-              Change…
+              {tr("change")}
             </button>
             <Show when={current().folder !== null}>
               <button type="button" class="btn" onClick={() => change({ folder: null })}>
-                Use default
+                {tr("useDefault")}
               </button>
             </Show>
           </div>
-          <p class="field__hint">
-            A backup holds the library, the settings and the downloaded images. API keys and store
-            sign-ins stay in the system keychain and are not included.
-          </p>
+          <p class="field__hint">{tr("hint")}</p>
           <div class="scan-row">
             <button
               type="button"
@@ -135,27 +136,27 @@ export function BackupsSection(props: { model: SettingsModel }) {
               disabled={store.backupRunning()}
               onClick={() => void backUpNow()}
             >
-              <DatabaseBackup class="icon" aria-hidden="true" /> Back up now
+              <DatabaseBackup class="icon" aria-hidden="true" /> {tr("backUpNow")}
             </button>
             <Show when={!store.backupRunning() && backups()[0]}>
               {(last) => (
                 <span class="muted">
-                  Last backup {formatAgo(last().createdAt)}, {formatSize(last().size)}
+                  {tr("lastBackup", {
+                    ago: formatAgo(last().createdAt),
+                    size: formatSize(last().size),
+                  })}
                 </span>
               )}
             </Show>
             <Show when={store.backupRunning()}>
               <span role="status">{store.backgroundWorkLabel()}</span>
               <button type="button" class="btn" onClick={() => void api.cancelBackup()}>
-                Cancel
+                {tr("cancel")}
               </button>
             </Show>
           </div>
-          <Show
-            when={backups().length > 0}
-            fallback={<p class="muted">No backups in this folder yet.</p>}
-          >
-            <ul class="backup-list" aria-label="Backups">
+          <Show when={backups().length > 0} fallback={<p class="muted">{tr("none")}</p>}>
+            <ul class="backup-list" aria-label={tr("list")}>
               <For each={backups()}>
                 {(backup) => (
                   <li class="backup-list__item">
@@ -170,10 +171,10 @@ export function BackupsSection(props: { model: SettingsModel }) {
                       type="button"
                       class="btn btn--small"
                       disabled={store.backupRunning() || restartPending()}
-                      aria-label={`Restore the backup from ${formatDateTime(backup.createdAt)}`}
+                      aria-label={tr("restoreAria", { date: formatDateTime(backup.createdAt) })}
                       onClick={() => setRestoring(backup)}
                     >
-                      <ArchiveRestore class="icon" aria-hidden="true" /> Restore…
+                      <ArchiveRestore class="icon" aria-hidden="true" /> {tr("restore")}
                     </button>
                   </li>
                 )}
@@ -181,21 +182,14 @@ export function BackupsSection(props: { model: SettingsModel }) {
             </ul>
           </Show>
           <Show when={restartPending()}>
-            <p role="status">Backing up the current library, then restarting…</p>
+            <p role="status">{tr("restarting")}</p>
           </Show>
           <Show when={restoring()} keyed>
             {(backup) => (
               <ConfirmDialog
-                title="Restore this backup?"
-                message={
-                  <>
-                    Questkeep replaces the library, settings and images with the backup from{" "}
-                    {formatDateTime(backup.createdAt)} and restarts. The current library is backed
-                    up first. API keys and store sign-ins are not part of a backup and stay as they
-                    are.
-                  </>
-                }
-                confirmLabel="Restore and restart"
+                title={tr("restoreTitle")}
+                message={tr("restoreMessage", { date: formatDateTime(backup.createdAt) })}
+                confirmLabel={tr("restoreConfirm")}
                 onConfirm={() => void restore(backup)}
                 onClose={() => setRestoring(null)}
               />

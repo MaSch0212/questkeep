@@ -55,6 +55,8 @@ import {
   gamePlayerCount,
   launchProfiles,
 } from "../lib/api";
+import { intlLocale, translator } from "../i18n";
+import { gamePage } from "../i18n/gamePage";
 import { store } from "../lib/store";
 import { CategoryEditor } from "./CategoryEditor";
 import { CombinePicker } from "./CombinePicker";
@@ -77,6 +79,8 @@ import { EditGameDialog } from "./EditGameDialog";
 import { Menu, type MenuEntry } from "./Menu";
 import type { PopoverAnchor } from "./Popover";
 import { SourceIcon, SourceIcons, sourceName, storeNames } from "./SourceIcon";
+
+const tr = translator(gamePage);
 
 const DESCRIPTION_CLAMP_CHARS = 300;
 const DESCRIPTION_CLAMP_LINES = 5;
@@ -117,7 +121,7 @@ function ChipGroup(props: {
                 aria-expanded={all()}
                 onClick={() => setAll((open) => !open)}
               >
-                {all() ? "Fewer" : `+${rest()}`}
+                {all() ? tr("fewer") : `+${rest()}`}
               </button>
             </li>
           </Show>
@@ -128,10 +132,11 @@ function ChipGroup(props: {
 }
 
 /** A Details row whose values open Explore; hidden without values. */
-function Fact(props: { label: string; plural?: string; field: ListField; values: string[] }) {
+type FactKey = Parameters<typeof tr>[0];
+function Fact(props: { label: FactKey; plural?: FactKey; field: ListField; values: string[] }) {
   return (
     <Show when={props.values.length > 0}>
-      <dt>{props.values.length > 1 && props.plural ? props.plural : props.label}</dt>
+      <dt>{props.values.length > 1 && props.plural ? tr(props.plural) : tr(props.label)}</dt>
       <dd>
         <FilterValues field={props.field} values={props.values} />
       </dd>
@@ -300,48 +305,48 @@ export function DetailsPanel(props: DetailsPanelProps) {
           .map((profile) => ({
             label: profile.name,
             icon: icon(profile.source),
-            hint: profile.id === list.playId ? "Default" : undefined,
+            hint: profile.id === list.playId ? tr("default") : undefined,
             disabled: running(),
             onSelect: () => void run(() => launchGame(props.game.id, null, profile.id)),
           }))
       : copies()
           .filter((copy) => copy.installed)
           .map((copy) => ({
-            label: `Play with ${sourceName(copy.source)}`,
+            label: tr("playWith", { store: sourceName(copy.source) }),
             icon: icon(copy.source),
-            hint: copy.id === playCopy(props.game)?.id ? "Default" : undefined,
+            hint: copy.id === playCopy(props.game)?.id ? tr("default") : undefined,
             disabled: running(),
             onSelect: () => void run(() => launchGame(props.game.id, copy.id)),
           }));
     const installs: MenuEntry[] = copies()
       .filter((copy) => !copy.installed)
       .map((copy) => ({
-        label: `Install with ${sourceName(copy.source)}`,
+        label: tr("installWith", { store: sourceName(copy.source) }),
         icon: icon(copy.source),
         onSelect: () => void install(copy.id),
       }));
     return [
-      { kind: "heading", label: "Play" },
+      { kind: "heading", label: tr("play") },
       ...played,
       ...(installs.length > 0 ? [{ kind: "separator" } as const, ...installs] : []),
       { kind: "separator" },
-      { label: "Edit profiles…", onSelect: () => setEditing("launch") },
+      { label: tr("editProfiles"), onSelect: () => setEditing("launch") },
     ];
   };
 
   const moreEntries = (): MenuEntry[] => [
     {
-      label: "Refresh metadata",
+      label: tr("refreshMetadata"),
       icon: () => <RefreshCw class="icon" aria-hidden="true" />,
       onSelect: () => void refreshGameMetadata(),
     },
     {
-      label: "Refetch artwork",
+      label: tr("refetchArtwork"),
       icon: () => <ImageDown class="icon" aria-hidden="true" />,
       onSelect: () => void refetchGameArtwork(),
     },
     {
-      label: "Combine with another game…",
+      label: tr("combine"),
       icon: () => <Combine class="icon" aria-hidden="true" />,
       // The menu closes first; open the picker where the menu button is.
       onSelect: () =>
@@ -351,7 +356,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
       ? []
       : [
           {
-            label: "Open install folder",
+            label: tr("openInstallFolder"),
             icon: () => <FolderOpen class="icon" aria-hidden="true" />,
             onSelect: () => void run(() => openInstallFolder(props.game.id)),
           },
@@ -360,7 +365,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
     ...(canUninstall()
       ? [
           {
-            label: "Uninstall…",
+            label: tr("uninstall"),
             icon: () => <PackageMinus class="icon" aria-hidden="true" />,
             danger: true,
             onSelect: () => setConfirming("uninstall"),
@@ -368,7 +373,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
         ]
       : []),
     {
-      label: "Remove from library…",
+      label: tr("removeFromLibrary"),
       icon: () => <Trash class="icon" aria-hidden="true" />,
       danger: true,
       onSelect: () => setConfirming("remove"),
@@ -380,14 +385,14 @@ export function DetailsPanel(props: DetailsPanelProps) {
       ? []
       : [
           {
-            label: "Play this store first",
+            label: tr("playThisFirst"),
             icon: () => <ArrowUpToLine class="icon" aria-hidden="true" />,
             onSelect: () => void run(() => preferCopy(copy.id)),
           },
         ]),
     {
-      label: "Separate",
-      hint: "Its own game again",
+      label: tr("separate"),
+      hint: tr("separateHint"),
       icon: () => <Unlink class="icon" aria-hidden="true" />,
       onSelect: () => void run(() => separateCopy(copy.id)),
     },
@@ -397,14 +402,14 @@ export function DetailsPanel(props: DetailsPanelProps) {
     setError(null);
     const failure = await installGame(props.game.id, copyId);
     if (failure) setError(failure);
-    else store.pushToast("info", "Install handed to the store client");
+    else store.pushToast("info", tr("installHanded"));
   }
 
   async function uninstall() {
     setError(null);
     const failure = await uninstallGame(props.game.id, uninstallCopy()?.id ?? null);
     if (failure) setError(failure);
-    else store.pushToast("info", "Uninstall handed to the store client");
+    else store.pushToast("info", tr("uninstallHanded"));
   }
 
   /** Store games ask their store (then IGDB); others only IGDB, which the core may refuse. */
@@ -412,19 +417,19 @@ export function DetailsPanel(props: DetailsPanelProps) {
     setError(null);
     const failure = await refreshMetadata(props.game.id);
     if (failure) setError(failure);
-    else store.pushToast("info", "Refreshing metadata…");
+    else store.pushToast("info", tr("refreshing"));
   }
 
   async function refetchGameArtwork() {
     const failure = await refetchArtwork(props.game.id);
     if (failure) store.pushToast("error", failure);
-    else store.pushToast("info", "Fetching artwork…");
+    else store.pushToast("info", tr("fetchingArtwork"));
   }
 
   const copyState = (copy: GameCopy, index: number) =>
     [
-      copy.installed ? "Installed" : "Not installed",
-      combined() && index === 0 ? "preferred" : null,
+      copy.installed ? tr("installed") : tr("notInstalled"),
+      combined() && index === 0 ? tr("preferred") : null,
       combined() && copy.playtimeSeconds > 0 ? formatPlaytime(copy.playtimeSeconds) : null,
     ]
       .filter((part) => part !== null)
@@ -437,7 +442,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
         "details--split": props.split === true,
         "details--page": isPage(),
       }}
-      aria-label="Game details"
+      aria-label={tr("gameDetails")}
     >
       <Show when={!isPage()}>
         <PanelHeader pin={props.pin ?? null} onClose={props.onClose} />
@@ -473,7 +478,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
                         void install(props.game.installed ? (playProfile()?.copyId ?? null) : null)
                       }
                     >
-                      Install
+                      {tr("install")}
                     </button>
                   }
                 >
@@ -483,7 +488,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
                     disabled={running()}
                     onClick={() => void run(() => launchGame(props.game.id))}
                   >
-                    {running() ? "Running…" : "Play"}
+                    {running() ? tr("running") : tr("play")}
                   </button>
                 </Show>
                 <Show when={combined() || (profiles()?.profiles.length ?? 0) > 1}>
@@ -491,8 +496,8 @@ export function DetailsPanel(props: DetailsPanelProps) {
                     ref={(el) => (storeMenuButton = el)}
                     type="button"
                     class="btn btn--primary play-split__more"
-                    aria-label="Choose how to play"
-                    title="Play with another profile or store"
+                    aria-label={tr("chooseHowToPlay")}
+                    title={tr("playWithOther")}
                     aria-haspopup="menu"
                     aria-expanded={storeMenu() !== null}
                     onClick={() => toggleAnchored(storeMenu, setStoreMenu, storeMenuButton, "end")}
@@ -506,32 +511,32 @@ export function DetailsPanel(props: DetailsPanelProps) {
                 <Show when={players()}>
                   {(count) => (
                     <div class="details__stat details__stat--players">
-                      <dt>Playing now</dt>
+                      <dt>{tr("playingNow")}</dt>
                       <dd>
                         <span class="players-dot" aria-hidden="true" />
-                        {count().toLocaleString()}
+                        {count().toLocaleString(intlLocale())}
                       </dd>
                     </div>
                   )}
                 </Show>
                 <div class="details__stat">
-                  <dt>Last played</dt>
+                  <dt>{tr("lastPlayed")}</dt>
                   <dd>{formatRelativeDate(props.game.lastPlayed)}</dd>
                 </div>
                 <div class="details__stat">
-                  <dt>Playtime</dt>
+                  <dt>{tr("playtime")}</dt>
                   <dd>{formatPlaytime(props.game.playtimeSeconds)}</dd>
                 </div>
                 <Show when={props.game.kind === "game"}>
                   <div class="details__stat">
-                    <dt>Status</dt>
+                    <dt>{tr("status")}</dt>
                     <dd>
                       <CompletionPicker game={props.game} />
                     </dd>
                   </div>
                 </Show>
                 <div class="details__stat details__stat--stores">
-                  <dt>{combined() ? "Stores" : "Store"}</dt>
+                  <dt>{combined() ? tr("stores") : tr("store")}</dt>
                   <dd class="details__stores">
                     <SourceIcons game={props.game} />
                     <span>{storeNames(props.game)}</span>
@@ -545,8 +550,8 @@ export function DetailsPanel(props: DetailsPanelProps) {
                   class="toggle-btn"
                   classList={{ "toggle-btn--on": props.game.favorite }}
                   aria-pressed={props.game.favorite}
-                  aria-label="Favorite"
-                  title={props.game.favorite ? "Remove from favorites" : "Add to favorites"}
+                  aria-label={tr("favorite")}
+                  title={props.game.favorite ? tr("removeFavorite") : tr("addFavorite")}
                   onClick={() =>
                     void run(() => updateGame(props.game.id, { favorite: !props.game.favorite }))
                   }
@@ -558,8 +563,8 @@ export function DetailsPanel(props: DetailsPanelProps) {
                   class="toggle-btn"
                   classList={{ "toggle-btn--on": props.game.hidden }}
                   aria-pressed={props.game.hidden}
-                  aria-label="Hidden"
-                  title={props.game.hidden ? "Show in library" : "Hide from library"}
+                  aria-label={tr("hidden")}
+                  title={props.game.hidden ? tr("showInLibrary") : tr("hideFromLibrary")}
                   onClick={() =>
                     void run(() => updateGame(props.game.id, { hidden: !props.game.hidden }))
                   }
@@ -572,17 +577,17 @@ export function DetailsPanel(props: DetailsPanelProps) {
                   type="button"
                   class="btn"
                   aria-haspopup="dialog"
-                  title="Edit name, cover and launch options (F2)"
+                  title={tr("editTitle")}
                   onClick={() => setEditing("general")}
                 >
-                  <Pencil class="icon" aria-hidden="true" /> Edit
+                  <Pencil class="icon" aria-hidden="true" /> {tr("edit")}
                 </button>
                 <button
                   ref={(el) => (moreButton = el)}
                   type="button"
                   class="toggle-btn"
-                  aria-label="More actions"
-                  title="More actions"
+                  aria-label={tr("moreActions")}
+                  title={tr("moreActions")}
                   aria-haspopup="menu"
                   aria-expanded={moreMenu() !== null}
                   onClick={() => toggleAnchored(moreMenu, setMoreMenu, moreButton, "end")}
@@ -605,7 +610,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
         <div class="details__cards">
           <div class="details__col details__col--wide">
             <Show when={description() !== "" || hasChips()}>
-              <Card title="About" order={1} class="details-card--about">
+              <Card title={tr("about")} order={1} class="details-card--about">
                 <Show when={description() !== ""}>
                   <div class="description">
                     <p
@@ -624,81 +629,87 @@ export function DetailsPanel(props: DetailsPanelProps) {
                         aria-expanded={descriptionOpen()}
                         onClick={() => setDescriptionOpen((open) => !open)}
                       >
-                        {descriptionOpen() ? "Show less" : "Show more"}
+                        {descriptionOpen() ? tr("showLess") : tr("showMore")}
                       </button>
                     </Show>
                   </div>
                 </Show>
-                <ChipGroup label="Genres" field="genre" values={props.game.genres} />
+                <ChipGroup label={tr("genres")} field="genre" values={props.game.genres} />
                 <ChipGroup
-                  label="Features"
+                  label={tr("features")}
                   field="feature"
                   values={props.game.features}
                   limit={10}
                 />
-                <ChipGroup label="Tags" field="tag" values={props.game.tags} plain limit={12} />
+                <ChipGroup
+                  label={tr("tags")}
+                  field="tag"
+                  values={props.game.tags}
+                  plain
+                  limit={12}
+                />
               </Card>
             </Show>
             <NewsCard news={news()} />
-            <Card title="Details" order={7}>
+            <Card title={tr("details")} order={7}>
               <dl class="facts">
                 <Show when={released()}>
                   {(text) => (
                     <>
-                      <dt>Released</dt>
+                      <dt>{tr("released")}</dt>
                       <dd>{text()}</dd>
                     </>
                   )}
                 </Show>
                 <Fact
-                  label="Developer"
-                  plural="Developers"
+                  label="developer"
+                  plural="developers"
                   field="developer"
                   values={props.game.developers}
                 />
                 <Fact
-                  label="Publisher"
-                  plural="Publishers"
+                  label="publisher"
+                  plural="publishers"
                   field="publisher"
                   values={props.game.publishers}
                 />
-                <Fact label="Series" field="series" values={props.game.series} />
+                <Fact label="series" field="series" values={props.game.series} />
                 <Fact
-                  label="Platform"
-                  plural="Platforms"
+                  label="platform"
+                  plural="platforms"
                   field="platform"
                   values={props.game.platforms}
                 />
                 <Fact
-                  label="Game mode"
-                  plural="Game modes"
+                  label="gameMode"
+                  plural="gameModes"
                   field="gameMode"
                   values={props.game.gameModes}
                 />
                 <Fact
-                  label="Perspective"
-                  plural="Perspectives"
+                  label="perspective"
+                  plural="perspectives"
                   field="perspective"
                   values={props.game.perspectives}
                 />
-                <Fact label="Theme" plural="Themes" field="theme" values={props.game.themes} />
+                <Fact label="theme" plural="themes" field="theme" values={props.game.themes} />
                 <Fact
-                  label="Age rating"
-                  plural="Age ratings"
+                  label="ageRating"
+                  plural="ageRatings"
                   field="ageRating"
                   values={props.game.ageRatings}
                 />
                 <Show when={props.game.installSize}>
                   {(size) => (
                     <>
-                      <dt>Install size</dt>
+                      <dt>{tr("installSize")}</dt>
                       <dd>{formatSize(size())}</dd>
                     </>
                   )}
                 </Show>
-                <dt>Date added</dt>
+                <dt>{tr("dateAdded")}</dt>
                 <dd>{formatDate(props.game.dateAdded)}</dd>
-                <dt>Play count</dt>
+                <dt>{tr("playCount")}</dt>
                 <dd>{props.game.playCount}</dd>
               </dl>
             </Card>
@@ -708,11 +719,11 @@ export function DetailsPanel(props: DetailsPanelProps) {
             <TimeToBeatCard game={props.game} />
             <AchievementsCard achievements={achievements()} />
             <ActivityCard activity={activity()} />
-            <Card title="Library" order={8}>
-              <h4 class="details-card__subtitle">Categories</h4>
+            <Card title={tr("library")} order={8}>
+              <h4 class="details-card__subtitle">{tr("categories")}</h4>
               <CategoryEditor game={props.game} />
-              <h4 class="details-card__subtitle">{combined() ? "Stores" : "Store"}</h4>
-              <ul class="copies" aria-label="Stores">
+              <h4 class="details-card__subtitle">{combined() ? tr("stores") : tr("store")}</h4>
+              <ul class="copies" aria-label={tr("stores")}>
                 <For each={copies()}>
                   {(copy, index) => (
                     <li class="copies__row">
@@ -724,8 +735,8 @@ export function DetailsPanel(props: DetailsPanelProps) {
                           ref={(el) => copyButtons.set(copy.id, el)}
                           type="button"
                           class="icon-btn icon-btn--small"
-                          aria-label={`${sourceName(copy.source)} actions`}
-                          title="Store actions"
+                          aria-label={tr("actionsOf", { name: sourceName(copy.source) })}
+                          title={tr("storeActions")}
                           aria-haspopup="menu"
                           aria-expanded={copyMenu()?.copy.id === copy.id}
                           onClick={(event) => {
@@ -760,7 +771,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
         {(anchor) => (
           <Menu
             anchor={anchor()}
-            label="Stores"
+            label={tr("stores")}
             inside={() => [storeMenuButton]}
             onClose={(returnFocus) => {
               setStoreMenu(null);
@@ -774,7 +785,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
         {(anchor) => (
           <Menu
             anchor={anchor()}
-            label="More actions"
+            label={tr("moreActions")}
             inside={() => [moreButton]}
             onClose={(returnFocus) => {
               setMoreMenu(null);
@@ -788,7 +799,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
         {(open) => (
           <Menu
             anchor={open().anchor}
-            label={`${sourceName(open().copy.source)} actions`}
+            label={tr("actionsOf", { name: sourceName(open().copy.source) })}
             inside={() => [copyButtons.get(open().copy.id)]}
             onClose={(returnFocus) => {
               const button = copyButtons.get(open().copy.id);
@@ -831,26 +842,25 @@ export function DetailsPanel(props: DetailsPanelProps) {
       </Show>
       <Show when={confirming() === "uninstall"}>
         <ConfirmDialog
-          title="Uninstall game"
+          title={tr("uninstallTitle")}
           message={
-            <>
-              Uninstall “{props.game.name}”
-              <Show when={combined() && uninstallCopy()}>
-                {(copy) => <> from {sourceName(copy().source)}</>}
-              </Show>
-              ? The store will ask to confirm.
-            </>
+            combined() && uninstallCopy()
+              ? tr("uninstallMessageFrom", {
+                  name: props.game.name,
+                  store: sourceName(uninstallCopy()?.source ?? ""),
+                })
+              : tr("uninstallMessage", { name: props.game.name })
           }
-          confirmLabel="Uninstall"
+          confirmLabel={tr("uninstallLabel")}
           onConfirm={() => void uninstall()}
           onClose={() => setConfirming(null)}
         />
       </Show>
       <Show when={confirming() === "remove"}>
         <ConfirmDialog
-          title="Remove game"
-          message={<>Remove “{props.game.name}” from your library?</>}
-          confirmLabel="Remove"
+          title={tr("removeTitle")}
+          message={tr("removeMessage", { name: props.game.name })}
+          confirmLabel={tr("removeLabel")}
           onConfirm={() => void run(() => removeGame(props.game.id))}
           onClose={() => setConfirming(null)}
         />

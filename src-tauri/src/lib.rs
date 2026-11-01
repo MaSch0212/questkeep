@@ -3,6 +3,7 @@
 mod autostart;
 mod backups;
 mod commands;
+mod i18n;
 mod signin;
 mod tray;
 mod tray_theme;

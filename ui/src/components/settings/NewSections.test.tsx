@@ -317,6 +317,7 @@ function makeSettings(overrides: Partial<Settings> = {}): Settings {
     startupPage: { kind: "start" },
     sortPrefixes: { enabled: true, words: ["The", "A", "An"] },
     backups: { enabled: true, folder: null, frequency: "weekly", keep: 5 },
+    language: null,
     metadataPriority: { order: [], fields: {} },
     providers: { epic: { token: "keep-me" }, steam: { apiKey: "K" } },
     ...overrides,

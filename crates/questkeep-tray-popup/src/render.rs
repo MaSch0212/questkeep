@@ -453,7 +453,7 @@ impl Painter<'_> {
         }
         if let Some(r) = layout.empty_recent {
             self.text(
-                layout::EMPTY_RECENT,
+                &data.texts.empty_recent,
                 &self.renderer.empty,
                 Rect::new(r.x + 2.0, r.y, r.w, r.h),
                 &faint,
@@ -583,7 +583,7 @@ impl Painter<'_> {
                     )?;
                     self.fill(r, BUTTON_RADIUS, &bg);
                     let fg = self.brush(color::ACCENT_CONTRAST, 1.0)?;
-                    self.centered_text(layout::OPEN_LABEL, r, &fg);
+                    self.centered_text(&data.texts.open, r, &fg);
                     if focused {
                         self.stroke(inflate(r, 2.5), BUTTON_RADIUS + 2.5, &focus, FOCUS_WIDTH);
                     }
@@ -605,7 +605,7 @@ impl Painter<'_> {
                     self.fill(r, BUTTON_RADIUS, &bg);
                     let accent = self.brush(color::ACCENT, 1.0)?;
                     self.stroke(inflate(r, -0.5), BUTTON_RADIUS, &accent, 1.0);
-                    self.centered_text(&layout::update_label(version), r, &accent);
+                    self.centered_text(&data.texts.update_label(version), r, &accent);
                     if focused {
                         self.stroke(inflate(r, 2.5), BUTTON_RADIUS + 2.5, &focus, FOCUS_WIDTH);
                     }
@@ -616,7 +616,7 @@ impl Painter<'_> {
                             self.brush(if pressed { color::BORDER } else { color::HOVER }, 1.0)?;
                         self.fill(r, BUTTON_RADIUS, &bg);
                     }
-                    self.centered_text(layout::EXIT_LABEL, r, if hovered { &text } else { &muted });
+                    self.centered_text(&data.texts.exit, r, if hovered { &text } else { &muted });
                     if focused {
                         self.stroke(inflate(r, 2.5), BUTTON_RADIUS + 2.5, &focus, FOCUS_WIDTH);
                     }
@@ -765,7 +765,7 @@ mod tests {
             icon: icon.into(),
         }
     }
-    use crate::{PopupGame, PopupGames};
+    use crate::{PopupGame, PopupGames, PopupTexts};
     use windows::Win32::Graphics::Direct2D::{
         D2D1_FEATURE_LEVEL_DEFAULT, D2D1_RENDER_TARGET_PROPERTIES,
         D2D1_RENDER_TARGET_TYPE_SOFTWARE, D2D1_RENDER_TARGET_USAGE_NONE,
@@ -854,6 +854,7 @@ mod tests {
             },
             launchers: vec![launcher("steam", "Steam", icons::STEAM)],
             update: None,
+            texts: PopupTexts::default(),
         }
     }
 
@@ -900,6 +901,7 @@ mod tests {
                     launcher("prism", "Prism Launcher", icons::PRISM),
                 ],
                 update: Some("0.3.0".into()),
+                texts: PopupTexts::default(),
             };
             // QUESTKEEP_POPUP_IMAGES=<data dir>/images previews real covers and icons instead.
             let real = std::env::var_os("QUESTKEEP_POPUP_IMAGES")

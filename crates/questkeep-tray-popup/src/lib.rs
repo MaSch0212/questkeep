@@ -23,7 +23,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use questkeep_imaging::{IconRgba, load_icon_rgba, load_image_filled, scale_icon};
 
-pub use layout::{Action, ScreenRect};
+pub use layout::{Action, PopupTexts, ScreenRect};
 use layout::{Content, Item, ItemKind, Layout, MAX_TILES};
 
 use uuid::Uuid;
@@ -65,6 +65,7 @@ pub struct PopupData {
     pub launchers: Vec<PopupLauncher>,
     /// Version of an available app update.
     pub update: Option<String>,
+    pub texts: PopupTexts,
 }
 
 impl PopupData {
@@ -74,6 +75,7 @@ impl PopupData {
             favorites: self.games.favorites.iter().map(|g| g.id).collect(),
             launchers: self.launchers.iter().map(|l| l.id.clone()).collect(),
             update: self.update.clone(),
+            texts: self.texts.clone(),
         }
     }
 

@@ -1,6 +1,8 @@
 import { createResource, createSignal, For, Match, Show, Switch } from "solid-js";
 import type { CombinePlan } from "../bindings/CombinePlan";
 import type { Game } from "../bindings/Game";
+import { translator } from "../i18n";
+import { shellCombine } from "../i18n/shellCombine";
 import * as api from "../lib/api";
 import {
   combineRows,
@@ -15,9 +17,11 @@ import { Cover } from "./Cover";
 import { Modal } from "./Modal";
 import { sourceName } from "./SourceIcon";
 
+const tr = translator(shellCombine);
+
 const SECTIONS = [
-  { id: "game", label: "Game" },
-  { id: "you", label: "You" },
+  { id: "game", label: () => tr("sectionGame") },
+  { id: "you", label: () => tr("sectionYou") },
 ] as const;
 
 /** Loads what the combine screen shows about each game. */
@@ -72,7 +76,7 @@ export function CombineDialog(props: { ids: string[]; onClose: () => void }) {
   function isChosen(row: CombineRow, id: string, value: string | null): boolean {
     const now = current();
     if (!now) return false;
-    if (row.kind === "favorite") return (value === "Yes") === now.favorite;
+    if (row.kind === "favorite") return (value === tr("yes")) === now.favorite;
     if (row.kind === "single") return now[row.key] === id;
     return now[row.key].includes(id);
   }
@@ -80,7 +84,7 @@ export function CombineDialog(props: { ids: string[]; onClose: () => void }) {
   function choose(row: CombineRow, id: string, value: string | null) {
     const now = current();
     if (!now) return;
-    if (row.kind === "favorite") change({ favorite: value === "Yes" });
+    if (row.kind === "favorite") change({ favorite: value === tr("yes") });
     else if (row.kind === "single") change({ [row.key]: id });
     else {
       const list = now[row.key];
@@ -99,7 +103,7 @@ export function CombineDialog(props: { ids: string[]; onClose: () => void }) {
       store.selectGame(game.id);
       store.scheduleRefresh(0);
       void store.loadCategories();
-      store.pushToast("info", `Combined ${props.ids.length} games into “${game.name}”`);
+      store.pushToast("info", tr("combinedToast", { count: props.ids.length, name: game.name }));
       props.onClose();
     } catch (failure) {
       setError(errorMessage(failure));
@@ -108,19 +112,16 @@ export function CombineDialog(props: { ids: string[]; onClose: () => void }) {
   }
 
   return (
-    <Modal title={`Combine ${props.ids.length} games into one`} wide onClose={props.onClose}>
+    <Modal title={tr("title", { count: props.ids.length })} wide onClose={props.onClose}>
       <div class="combine">
-        <p class="muted">
-          Each game&apos;s store copies are kept. Choose which values the combined game keeps;
-          values with a check box can be kept together.
-        </p>
-        <Show when={sources()} fallback={<p class="muted">Loading…</p>}>
+        <p class="muted">{tr("intro")}</p>
+        <Show when={sources()} fallback={<p class="muted">{tr("loading")}</p>}>
           <div class="combine__scroll">
             <table class="combine__table">
               <thead>
                 <tr>
                   <th scope="col">
-                    <span class="visually-hidden">Value</span>
+                    <span class="visually-hidden">{tr("value")}</span>
                   </th>
                   <For each={games()}>
                     {(game) => (
@@ -143,7 +144,7 @@ export function CombineDialog(props: { ids: string[]; onClose: () => void }) {
                     <Show when={rows().some((r) => r.section === section.id)}>
                       <tr class="combine__section">
                         <th scope="rowgroup" colspan={games().length + 1}>
-                          {section.label}
+                          {section.label()}
                         </th>
                       </tr>
                       <For each={rows().filter((r) => r.section === section.id)}>
@@ -159,7 +160,7 @@ export function CombineDialog(props: { ids: string[]; onClose: () => void }) {
                                   <td>
                                     <Show
                                       when={value() !== null}
-                                      fallback={<span class="combine__empty">none</span>}
+                                      fallback={<span class="combine__empty">{tr("none")}</span>}
                                     >
                                       <label
                                         class="combine__option"
@@ -190,30 +191,30 @@ export function CombineDialog(props: { ids: string[]; onClose: () => void }) {
                 </For>
                 <tr class="combine__section">
                   <th scope="rowgroup" colspan={games().length + 1}>
-                    Added up
+                    {tr("addedUp")}
                   </th>
                 </tr>
                 <tr>
                   <th scope="row" class="combine__field">
-                    Playtime
+                    {tr("playtime")}
                   </th>
                   <td colspan={games().length}>
                     <strong>
                       {formatPlaytime(games().reduce((sum, g) => sum + g.playtimeSeconds, 0))}
                     </strong>{" "}
-                    <span class="muted">all play history is kept</span>
+                    <span class="muted">{tr("historyKept")}</span>
                   </td>
                 </tr>
                 <tr>
                   <th scope="row" class="combine__field">
-                    Last played / added
+                    {tr("lastPlayedAdded")}
                   </th>
                   <td colspan={games().length}>
                     <strong>
                       {formatDate(latest(games(), (g) => g.lastPlayed, true))} /{" "}
                       {formatDate(latest(games(), (g) => g.dateAdded, false))}
                     </strong>{" "}
-                    <span class="muted">latest played, earliest added</span>
+                    <span class="muted">{tr("latestEarliest")}</span>
                   </td>
                 </tr>
               </tbody>
@@ -230,11 +231,11 @@ export function CombineDialog(props: { ids: string[]; onClose: () => void }) {
             disabled={plan() === null}
             onClick={() => setPlan(null)}
           >
-            Reset to suggested
+            {tr("resetToSuggested")}
           </button>
           <span class="combine__buttons">
             <button type="button" class="btn" onClick={props.onClose}>
-              Cancel
+              {tr("cancel")}
             </button>
             <button
               type="button"
@@ -242,7 +243,7 @@ export function CombineDialog(props: { ids: string[]; onClose: () => void }) {
               disabled={!current() || saving()}
               onClick={() => void combine()}
             >
-              {saving() ? "Combining…" : "Combine"}
+              {saving() ? tr("combining") : tr("combine")}
             </button>
           </span>
         </div>

@@ -35,12 +35,53 @@ pub const BUTTON_PADDING: f32 = 16.0;
 pub const EMPTY_HEIGHT: f32 = 36.0;
 pub const SECTION_GAP: f32 = 6.0;
 
-pub const RECENT_LABEL: &str = "Recently played";
-pub const FAVORITES_LABEL: &str = "Favorites";
-pub const LAUNCHERS_LABEL: &str = "Launchers";
-pub const EMPTY_RECENT: &str = "No recently played games yet";
-pub const OPEN_LABEL: &str = "Open Questkeep";
-pub const EXIT_LABEL: &str = "Exit";
+/// Every text the popup shows or reads out, in the app's language (English by default).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PopupTexts {
+    pub recent: String,
+    pub favorites: String,
+    pub launchers: String,
+    pub empty_recent: String,
+    pub open: String,
+    pub exit: String,
+    /// The exit button for screen readers.
+    pub exit_app: String,
+    /// The update button; `{version}` is replaced.
+    pub update: String,
+    /// A launcher tile for screen readers; `{name}` is replaced.
+    pub open_launcher: String,
+    /// What activating a game does, for screen readers.
+    pub play: String,
+}
+
+impl Default for PopupTexts {
+    fn default() -> Self {
+        Self {
+            recent: "Recently played".into(),
+            favorites: "Favorites".into(),
+            launchers: "Launchers".into(),
+            empty_recent: "No recently played games yet".into(),
+            open: "Open Questkeep".into(),
+            exit: "Exit".into(),
+            exit_app: "Exit Questkeep".into(),
+            update: "Update to {version}".into(),
+            open_launcher: "Open {name}".into(),
+            play: "Play".into(),
+        }
+    }
+}
+
+impl PopupTexts {
+    /// Label of the update button.
+    pub fn update_label(&self, version: &str) -> String {
+        self.update.replace("{version}", version)
+    }
+
+    /// Screen-reader label of a launcher tile.
+    pub fn open_launcher_label(&self, name: &str) -> String {
+        self.open_launcher.replace("{name}", name)
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Rect {
@@ -117,11 +158,7 @@ pub struct Content {
     pub launchers: Vec<String>,
     /// Version of an available app update.
     pub update: Option<String>,
-}
-
-/// Label of the update button.
-pub fn update_label(version: &str) -> String {
-    format!("Update to {version}")
+    pub texts: PopupTexts,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -130,7 +167,7 @@ pub struct Layout {
     pub height: f32,
     pub items: Vec<Item>,
     /// Section labels and the empty-state text: (text, rect).
-    pub labels: Vec<(&'static str, Rect)>,
+    pub labels: Vec<(String, Rect)>,
     pub empty_recent: Option<Rect>,
     /// Horizontal line above the footer.
     pub separator_y: f32,
@@ -148,7 +185,11 @@ pub fn layout(content: &Content, scroll: f32, measure: impl Fn(&str) -> f32) -> 
     let mut labels = Vec::new();
     let mut y = PADDING / 2.0;
 
-    labels.push((RECENT_LABEL, Rect::new(PADDING, y, inner, LABEL_HEIGHT)));
+    let texts = &content.texts;
+    labels.push((
+        texts.recent.clone(),
+        Rect::new(PADDING, y, inner, LABEL_HEIGHT),
+    ));
     y += LABEL_HEIGHT;
     let mut empty_recent = None;
     let tiles = content.recent.len().min(MAX_TILES);
@@ -180,7 +221,10 @@ pub fn layout(content: &Content, scroll: f32, measure: impl Fn(&str) -> f32) -> 
     let mut max_scroll = 0.0;
     if !content.favorites.is_empty() {
         y += SECTION_GAP;
-        labels.push((FAVORITES_LABEL, Rect::new(PADDING, y, inner, LABEL_HEIGHT)));
+        labels.push((
+            texts.favorites.clone(),
+            Rect::new(PADDING, y, inner, LABEL_HEIGHT),
+        ));
         y += LABEL_HEIGHT;
         let visible = content.favorites.len().min(MAX_VISIBLE_ROWS);
         let clip = Rect::new(PADDING, y, inner, visible as f32 * ROW_HEIGHT);
@@ -200,7 +244,10 @@ pub fn layout(content: &Content, scroll: f32, measure: impl Fn(&str) -> f32) -> 
 
     if !content.launchers.is_empty() {
         y += SECTION_GAP;
-        labels.push((LAUNCHERS_LABEL, Rect::new(PADDING, y, inner, LABEL_HEIGHT)));
+        labels.push((
+            texts.launchers.clone(),
+            Rect::new(PADDING, y, inner, LABEL_HEIGHT),
+        ));
         y += LABEL_HEIGHT;
         let tile_w = (inner - TILE_GAP * (COLUMNS as f32 - 1.0)) / COLUMNS as f32;
         for (i, id) in content.launchers.iter().enumerate() {
@@ -223,15 +270,15 @@ pub fn layout(content: &Content, scroll: f32, measure: impl Fn(&str) -> f32) -> 
     y += PADDING;
     let separator_y = y;
     let button_y = y + (FOOTER_HEIGHT - BUTTON_HEIGHT) / 2.0;
-    let open_w = (measure(OPEN_LABEL) + 2.0 * BUTTON_PADDING).ceil();
-    let exit_w = (measure(EXIT_LABEL) + 2.0 * BUTTON_PADDING).ceil();
+    let open_w = (measure(&texts.open) + 2.0 * BUTTON_PADDING).ceil();
+    let exit_w = (measure(&texts.exit) + 2.0 * BUTTON_PADDING).ceil();
     items.push(Item {
         kind: ItemKind::OpenButton,
         action: Action::OpenWindow,
         rect: Rect::new(PADDING, button_y, open_w, BUTTON_HEIGHT),
     });
     if let Some(version) = &content.update {
-        let update_w = (measure(&update_label(version)) + 2.0 * BUTTON_PADDING).ceil();
+        let update_w = (measure(&texts.update_label(version)) + 2.0 * BUTTON_PADDING).ceil();
         items.push(Item {
             kind: ItemKind::UpdateButton,
             action: Action::ShowUpdate,
@@ -456,6 +503,7 @@ mod tests {
             favorites: ids(favorites),
             launchers: (0..launchers).map(|i| format!("store{i}")).collect(),
             update: None,
+            texts: PopupTexts::default(),
         }
     }
 
@@ -484,8 +532,8 @@ mod tests {
         assert_eq!(k[12], ItemKind::OpenButton);
         assert_eq!(k[13], ItemKind::ExitButton);
         assert_eq!(
-            l.labels.iter().map(|(t, _)| *t).collect::<Vec<_>>(),
-            vec![RECENT_LABEL, FAVORITES_LABEL, LAUNCHERS_LABEL]
+            l.labels.iter().map(|(t, _)| t.as_str()).collect::<Vec<_>>(),
+            vec!["Recently played", "Favorites", "Launchers"]
         );
         // Everything inside the popup, and the footer at the bottom.
         for item in &l.items {

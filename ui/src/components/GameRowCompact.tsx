@@ -1,3 +1,5 @@
+import { translator } from "../i18n";
+import { libraryList } from "../i18n/libraryList";
 import { Show } from "solid-js";
 import type { Game } from "../bindings/Game";
 import Star from "lucide-solid/icons/star";
@@ -17,6 +19,8 @@ interface GameRowCompactProps {
   domKey?: string;
 }
 
+const tr = translator(libraryList);
+
 /** One row of the narrow list in the details view: small cover, name, store icons. */
 export function GameRowCompact(props: GameRowCompactProps) {
   const running = () => store.isRunning(props.game.id);
@@ -30,7 +34,9 @@ export function GameRowCompact(props: GameRowCompactProps) {
         "compact-row--missing": !props.game.installed,
       }}
       aria-selected={props.selected}
-      aria-label={props.game.installed ? props.game.name : `${props.game.name} (not installed)`}
+      aria-label={
+        props.game.installed ? props.game.name : tr("notInstalledName", { name: props.game.name })
+      }
       onClick={(event) => props.onSelect(props.game.id, event)}
       onContextMenu={(event) => {
         if (!props.onContextMenu) return;
@@ -45,10 +51,10 @@ export function GameRowCompact(props: GameRowCompactProps) {
         {props.game.name}
       </span>
       <Show when={running()}>
-        <span class="compact-row__running" title="Running" aria-hidden="true" />
+        <span class="compact-row__running" title={tr("running")} aria-hidden="true" />
       </Show>
       <Show when={props.game.favorite}>
-        <span class="list-row__star" title="Favorite">
+        <span class="list-row__star" title={tr("favorite")}>
           <Star class="icon icon--filled" aria-hidden="true" />
         </span>
       </Show>

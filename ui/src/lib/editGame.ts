@@ -1,9 +1,13 @@
+import { translator } from "../i18n";
+import { gameEdit } from "../i18n/gameEdit";
 import type { GameEditInfo } from "../bindings/GameEditInfo";
 import type { GameLink } from "../bindings/GameLink";
 import type { GameMetadata } from "../bindings/GameMetadata";
 import type { ListField } from "../bindings/ListField";
 import type { MetadataField } from "../bindings/MetadataField";
 import type { UserEdits } from "../bindings/UserEdits";
+
+const tr = translator(gameEdit);
 
 /** The list fields of the dialog with their labels and the filter field for suggestions. */
 export type ListMetaField =
@@ -19,23 +23,26 @@ export type ListMetaField =
   | "perspectives"
   | "themes";
 
+/** The dictionary key of a list field's label. */
+export type ListLabel = Extract<keyof typeof gameEdit.en, `field${string}`>;
+
 export const LIST_FIELDS: {
   field: ListMetaField;
-  label: string;
+  label: ListLabel;
   values: ListField;
   wide?: boolean;
 }[] = [
-  { field: "developers", label: "Developers", values: "developer" },
-  { field: "publishers", label: "Publishers", values: "publisher" },
-  { field: "genres", label: "Genres", values: "genre" },
-  { field: "series", label: "Series", values: "series" },
-  { field: "tags", label: "Tags", values: "tag", wide: true },
-  { field: "features", label: "Features", values: "feature", wide: true },
-  { field: "platforms", label: "Platforms", values: "platform" },
-  { field: "ageRatings", label: "Age rating", values: "ageRating" },
-  { field: "gameModes", label: "Game modes", values: "gameMode" },
-  { field: "perspectives", label: "Perspective", values: "perspective" },
-  { field: "themes", label: "Themes", values: "theme", wide: true },
+  { field: "developers", label: "fieldDevelopers", values: "developer" },
+  { field: "publishers", label: "fieldPublishers", values: "publisher" },
+  { field: "genres", label: "fieldGenres", values: "genre" },
+  { field: "series", label: "fieldSeries", values: "series" },
+  { field: "tags", label: "fieldTags", values: "tag", wide: true },
+  { field: "features", label: "fieldFeatures", values: "feature", wide: true },
+  { field: "platforms", label: "fieldPlatforms", values: "platform" },
+  { field: "ageRatings", label: "fieldAgeRating", values: "ageRating" },
+  { field: "gameModes", label: "fieldGameModes", values: "gameMode" },
+  { field: "perspectives", label: "fieldPerspective", values: "perspective" },
+  { field: "themes", label: "fieldThemes", values: "theme", wide: true },
 ];
 
 /** Which dialog section shows which metadata field (for the "N edited" counts). */
@@ -58,18 +65,18 @@ const SOURCE_NAMES: Record<string, string> = {
 
 /** Where a field's automatic value comes from, as shown next to it. */
 export function sourceLabel(source: string | undefined, nameOf: (id: string) => string): string {
-  if (source === undefined) return "no value";
-  if (source === "measured") return "measured";
-  if (source === "previous") return "from earlier data";
-  if (source === "user") return "edited by you";
-  return `from ${SOURCE_NAMES[source] ?? nameOf(source)}`;
+  if (source === undefined) return tr("noValue");
+  if (source === "measured") return tr("measured");
+  if (source === "previous") return tr("fromEarlier");
+  if (source === "user") return tr("editedByYou");
+  return tr("fromSource", { source: SOURCE_NAMES[source] ?? nameOf(source) });
 }
 
 /** The name of a source for "Use … value". */
 export function sourceName(source: string | undefined, nameOf: (id: string) => string): string {
-  if (source === undefined) return "automatic";
-  if (source === "measured") return "measured";
-  if (source === "previous") return "earlier";
+  if (source === undefined) return tr("automatic");
+  if (source === "measured") return tr("measured");
+  if (source === "previous") return tr("earlier");
   return SOURCE_NAMES[source] ?? nameOf(source);
 }
 

@@ -1,5 +1,7 @@
 import { createResource, createSignal, For, Show } from "solid-js";
 import type { Game } from "../bindings/Game";
+import { translator } from "../i18n";
+import { shellDuplicates } from "../i18n/shellDuplicates";
 import * as api from "../lib/api";
 import { errorMessage } from "../lib/errors";
 import { formatPlaytime } from "../lib/format";
@@ -8,6 +10,8 @@ import { titleWhenCut } from "../lib/truncation";
 import { GameIcon } from "./GameIcon";
 import { Modal } from "./Modal";
 import { SourceIcons, storeNames } from "./SourceIcon";
+
+const tr = translator(shellDuplicates);
 
 const groupKey = (group: readonly Game[]) => group.map((g) => g.id).join();
 
@@ -55,21 +59,14 @@ export function DuplicatesDialog(props: { onClose: () => void }) {
   }
 
   return (
-    <Modal title="Games in several stores" wide onClose={props.onClose}>
+    <Modal title={tr("title")} wide onClose={props.onClose}>
       <div class="duplicates">
         <Show
           when={!groups.loading || shown().length > 0}
-          fallback={<p class="muted">Looking for games in several stores…</p>}
+          fallback={<p class="muted">{tr("looking")}</p>}
         >
-          <Show
-            when={shown().length > 0}
-            fallback={<p class="muted">No games found that are in more than one store.</p>}
-          >
-            <p class="muted">
-              These look like the same game in different stores. Combined, they show as one game
-              with every store, and Play starts the installed copy. You can separate them again on
-              the game's page.
-            </p>
+          <Show when={shown().length > 0} fallback={<p class="muted">{tr("noneFound")}</p>}>
+            <p class="muted">{tr("intro")}</p>
             <ul class="duplicates__list">
               <For each={shown()}>
                 {(group) => (
@@ -101,21 +98,21 @@ export function DuplicatesDialog(props: { onClose: () => void }) {
                         type="button"
                         class="btn btn--small"
                         disabled={busy()}
-                        aria-label={`${group[0]?.name ?? ""} are different games`}
+                        aria-label={tr("differentAria", { name: group[0]?.name ?? "" })}
                         onClick={() =>
                           void settle(group, () => api.dismissDuplicates(group.map((g) => g.id)))
                         }
                       >
-                        Not the same
+                        {tr("notSame")}
                       </button>
                       <button
                         type="button"
                         class="btn btn--small btn--primary"
                         disabled={busy()}
-                        aria-label={`Combine ${group[0]?.name ?? ""}`}
+                        aria-label={tr("combineAria", { name: group[0]?.name ?? "" })}
                         onClick={() => void combine(group)}
                       >
-                        Combine
+                        {tr("combine")}
                       </button>
                     </div>
                   </li>
@@ -131,7 +128,7 @@ export function DuplicatesDialog(props: { onClose: () => void }) {
         </Show>
         <div class="form__actions">
           <button type="button" class="btn" onClick={props.onClose}>
-            Close
+            {tr("close")}
           </button>
           <Show when={shown().length > 1}>
             <button
@@ -140,7 +137,7 @@ export function DuplicatesDialog(props: { onClose: () => void }) {
               disabled={busy()}
               onClick={() => void combineAll()}
             >
-              Combine all ({shown().length})
+              {tr("combineAll", { count: shown().length })}
             </button>
           </Show>
         </div>

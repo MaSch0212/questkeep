@@ -7,12 +7,20 @@ import Shapes from "lucide-solid/icons/shapes";
 import Trash from "lucide-solid/icons/trash";
 import { createSignal, For, Show } from "solid-js";
 import type { LibraryView } from "../bindings/LibraryView";
+import { translator } from "../i18n";
+import { librarySidebar } from "../i18n/librarySidebar";
 import { store } from "../lib/store";
 import { IconPicker } from "./IconPicker";
 import { Menu, type MenuEntry } from "./Menu";
 import type { PopoverAnchor } from "./Popover";
 import { SidebarEditor } from "./SidebarEditor";
 import { ViewIcon } from "./ViewIcon";
+import { shownName } from "../lib/views";
+
+const tr = translator(librarySidebar);
+
+const menuLabel = (view: LibraryView | null | undefined) =>
+  view ? tr("menuOptions", { name: shownName(view) }) : tr("views");
 
 interface ContextMenu {
   anchor: PopoverAnchor;
@@ -50,19 +58,19 @@ export function Sidebar() {
   function entries(target: ContextMenu): MenuEntry[] {
     const view = target.view;
     const edit: MenuEntry = {
-      label: "Edit views",
+      label: tr("editViews"),
       icon: () => <Pencil class="icon" aria-hidden="true" />,
       onSelect: () => startEditing(null),
     };
     if (!view) return [edit];
     return [
       {
-        label: "Rename",
+        label: tr("rename"),
         icon: () => <PencilLine class="icon" aria-hidden="true" />,
         onSelect: () => startEditing(view.id),
       },
       {
-        label: "Change icon",
+        label: tr("changeIcon"),
         icon: () => <Shapes class="icon" aria-hidden="true" />,
         onSelect: () => {
           const rect = target.origin?.getBoundingClientRect();
@@ -70,12 +78,12 @@ export function Sidebar() {
         },
       },
       {
-        label: "Duplicate",
+        label: tr("duplicate"),
         icon: () => <Copy class="icon" aria-hidden="true" />,
         onSelect: () => void store.duplicateView(view.id),
       },
       {
-        label: "Delete view",
+        label: tr("deleteView"),
         icon: () => <Trash class="icon" aria-hidden="true" />,
         danger: true,
         onSelect: () => void store.deleteView(view.id),
@@ -89,7 +97,7 @@ export function Sidebar() {
     <nav
       class="sidebar"
       classList={{ "sidebar--editing": store.editingViews() }}
-      aria-label="Library views"
+      aria-label={tr("libraryViews")}
       onContextMenu={(event) => {
         if (store.editingViews()) return;
         event.preventDefault();
@@ -115,7 +123,7 @@ export function Sidebar() {
                 onClick={() => store.showHome()}
               >
                 <House class="icon" aria-hidden="true" />
-                <span class="nav-item__text">Home</span>
+                <span class="nav-item__text">{tr("home")}</span>
               </button>
             </li>
           </ul>
@@ -123,7 +131,7 @@ export function Sidebar() {
         <For each={store.sections()}>
           {(section) => (
             <div class="sidebar__group">
-              <h2 class="sidebar__heading">{section.name}</h2>
+              <h2 class="sidebar__heading">{shownName(section)}</h2>
               <ul class="sidebar__list">
                 <For each={section.views}>
                   {(view) => {
@@ -149,10 +157,10 @@ export function Sidebar() {
                           }}
                         >
                           <ViewIcon name={view.icon} />
-                          <span class="nav-item__text">{view.name}</span>
+                          <span class="nav-item__text">{shownName(view)}</span>
                           <Show when={store.hasDraft(view.id)}>
-                            <span class="view-item__unsaved" title="Unsaved changes">
-                              <span class="visually-hidden">(unsaved changes)</span>
+                            <span class="view-item__unsaved" title={tr("unsavedChanges")}>
+                              <span class="visually-hidden">{tr("unsavedHidden")}</span>
                             </span>
                           </Show>
                           <span class="view-item__count">{store.viewCounts()[view.id] ?? ""}</span>
@@ -173,11 +181,11 @@ export function Sidebar() {
               class="nav-item nav-item--icon view-item"
               classList={{ "nav-item--active": store.page() === "library" && store.isExplore() }}
               aria-current={store.page() === "library" && store.isExplore() ? "page" : undefined}
-              title="Browse the whole library with any filter, sort or grouping, without saving"
+              title={tr("exploreTitle")}
               onClick={() => store.openExplore()}
             >
               <Compass class="icon" aria-hidden="true" />
-              <span class="nav-item__text">Explore</span>
+              <span class="nav-item__text">{tr("explore")}</span>
             </button>
           </li>
         </ul>
@@ -186,7 +194,7 @@ export function Sidebar() {
         {(target) => (
           <Menu
             anchor={target().anchor}
-            label={target().view ? `${target().view?.name} options` : "Views"}
+            label={menuLabel(target().view)}
             entries={entries(target())}
             onClose={(returnFocus) => {
               const origin = target().origin;

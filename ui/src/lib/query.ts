@@ -1,6 +1,10 @@
 import type { GameQuery } from "../bindings/GameQuery";
 import type { ProviderInfo } from "../bindings/ProviderInfo";
 import type { SortField } from "../bindings/SortField";
+import { translator } from "../i18n";
+import { libraryQuery } from "../i18n/libraryQuery";
+
+const tr = translator(libraryQuery);
 
 export function defaultQuery(): GameQuery {
   return {
@@ -67,5 +71,5 @@ export function scanSummaryText(summary: {
   updated: number;
   uninstalled: number;
 }): string {
-  return `${summary.added} added, ${summary.updated} updated, ${summary.uninstalled} uninstalled`;
+  return tr("scanSummary", summary);
 }

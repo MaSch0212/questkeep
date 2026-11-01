@@ -5,17 +5,28 @@ import type { ListField } from "../bindings/ListField";
 import type { ListFilter } from "../bindings/ListFilter";
 import type { RangeField } from "../bindings/RangeField";
 import type { RangeFilter } from "../bindings/RangeFilter";
+import { translator } from "../i18n";
+import { libraryFilters } from "../i18n/libraryFilters";
 import { storesOf } from "./copies";
+
+const tr = translator(libraryFilters);
 
 /** `ListFilter.values` entry for games without a value (the core's `NO_VALUE`). */
 export const NO_VALUE = ":none";
 
 export type FieldSection = "about" | "scores" | "you";
 
+/** Section headings of the field list; read at use time, so they follow the language. */
 export const SECTION_LABELS: Record<FieldSection, string> = {
-  about: "About the game",
-  scores: "Scores & length",
-  you: "You",
+  get about() {
+    return tr("sectionAbout");
+  },
+  get scores() {
+    return tr("sectionScores");
+  },
+  get you() {
+    return tr("sectionYou");
+  },
 };
 
 /** How a range field's numbers are shown and typed. */
@@ -53,70 +64,127 @@ const HOUR = 3600;
 const GB = 1024 ** 3;
 const DAY = 86400;
 
-const list = (
-  field: ListField,
-  label: string,
-  noun: string,
-  plural: string,
-  section: FieldSection,
-): FieldInfo => ({ kind: "list", field, label, noun, plural, section });
+type ListKey =
+  | "genre"
+  | "tag"
+  | "feature"
+  | "series"
+  | "developer"
+  | "publisher"
+  | "platform"
+  | "ageRating"
+  | "gameMode"
+  | "theme"
+  | "perspective"
+  | "source"
+  | "category"
+  | "completionStatus";
+
+type RangeKey =
+  | "releaseYear"
+  | "criticScore"
+  | "communityScore"
+  | "timeToBeat"
+  | "userScore"
+  | "playtime"
+  | "playCount"
+  | "lastPlayed"
+  | "dateAdded"
+  | "installSize";
+
+// The texts are getters: they are looked up when read, in the language of that moment.
+const list = (field: ListField, key: ListKey, section: FieldSection): FieldInfo => ({
+  kind: "list",
+  field,
+  section,
+  get label() {
+    return tr(key);
+  },
+  get noun() {
+    return tr(`${key}Noun`);
+  },
+  get plural() {
+    return tr(`${key}Plural`);
+  },
+});
 
 const range = (
   field: RangeField,
-  label: string,
+  key: RangeKey,
   section: FieldSection,
   unit: RangeUnit,
   presets: RangePreset[] = [],
-): FieldInfo => ({ kind: "range", field, label, section, unit, presets });
+): FieldInfo => ({
+  kind: "range",
+  field,
+  section,
+  unit,
+  presets,
+  get label() {
+    return tr(key);
+  },
+});
+
+/** A preset with a fixed label (numbers and units need no translation). */
+const fixed = (label: string, min: number | null, max: number | null): RangePreset => ({
+  label,
+  min,
+  max,
+});
+
+const neverPreset = (): RangePreset => ({
+  get label() {
+    return tr("never");
+  },
+  min: 0,
+  max: 0,
+});
 
 /** Unix seconds `days` ago, at the time the preset is chosen. */
 export const daysAgo = (days: number, now = Date.now()) => Math.floor(now / 1000) - days * DAY;
 
 /** Every field the filter panel can add, in picker order. */
 export const FIELDS: FieldInfo[] = [
-  list("genre", "Genre", "genre", "genres", "about"),
-  list("tag", "Tags", "tag", "tags", "about"),
-  list("feature", "Features", "feature", "features", "about"),
-  list("series", "Series", "series", "series", "about"),
-  list("developer", "Developer", "developer", "developers", "about"),
-  list("publisher", "Publisher", "publisher", "publishers", "about"),
-  list("platform", "Platform", "platform", "platforms", "about"),
-  list("ageRating", "Age rating", "age rating", "age ratings", "about"),
-  list("gameMode", "Game mode", "game mode", "game modes", "about"),
-  list("theme", "Theme", "theme", "themes", "about"),
-  list("perspective", "Perspective", "perspective", "perspectives", "about"),
-  range("releaseYear", "Release year", "about", "year"),
-  range("criticScore", "Critic score", "scores", "score", [
-    { label: "75 +", min: 75, max: null },
-    { label: "90 +", min: 90, max: null },
+  list("genre", "genre", "about"),
+  list("tag", "tag", "about"),
+  list("feature", "feature", "about"),
+  list("series", "series", "about"),
+  list("developer", "developer", "about"),
+  list("publisher", "publisher", "about"),
+  list("platform", "platform", "about"),
+  list("ageRating", "ageRating", "about"),
+  list("gameMode", "gameMode", "about"),
+  list("theme", "theme", "about"),
+  list("perspective", "perspective", "about"),
+  range("releaseYear", "releaseYear", "about", "year"),
+  range("criticScore", "criticScore", "scores", "score", [
+    fixed("75 +", 75, null),
+    fixed("90 +", 90, null),
   ]),
-  range("communityScore", "Community score", "scores", "score", [
-    { label: "75 +", min: 75, max: null },
-    { label: "90 +", min: 90, max: null },
+  range("communityScore", "communityScore", "scores", "score", [
+    fixed("75 +", 75, null),
+    fixed("90 +", 90, null),
   ]),
-  range("timeToBeat", "Time to beat", "scores", "hours", [
-    { label: "< 5 h", min: null, max: 5 * HOUR },
-    { label: "5–20 h", min: 5 * HOUR, max: 20 * HOUR },
-    { label: "50 h +", min: 50 * HOUR, max: null },
+  range("timeToBeat", "timeToBeat", "scores", "hours", [
+    fixed("< 5 h", null, 5 * HOUR),
+    fixed("5–20 h", 5 * HOUR, 20 * HOUR),
+    fixed("50 h +", 50 * HOUR, null),
   ]),
-  list("source", "Store", "store", "stores", "you"),
-  list("category", "Category", "category", "categories", "you"),
-  list("completionStatus", "Completion status", "status", "statuses", "you"),
-  range("userScore", "Your score", "you", "score"),
-  range("playtime", "Playtime", "you", "hours", [
-    { label: "Never", min: 0, max: 0 },
-    { label: "< 1 h", min: null, max: HOUR },
-    { label: "10 h +", min: 10 * HOUR, max: null },
+  list("source", "source", "you"),
+  list("category", "category", "you"),
+  list("completionStatus", "completionStatus", "you"),
+  range("userScore", "userScore", "you", "score"),
+  range("playtime", "playtime", "you", "hours", [
+    neverPreset(),
+    fixed("< 1 h", null, HOUR),
+    fixed("10 h +", 10 * HOUR, null),
   ]),
-  range("playCount", "Play count", "you", "number", [
-    { label: "Never", min: 0, max: 0 },
-    { label: "10 +", min: 10, max: null },
-  ]),
-  range("lastPlayed", "Last played", "you", "date"),
-  range("dateAdded", "Date added", "you", "date"),
-  range("installSize", "Install size", "you", "gigabytes", [
-    { label: "< 1 GB", min: null, max: GB },
-    { label: "50 GB +", min: 50 * GB, max: null },
+  range("playCount", "playCount", "you", "number", [neverPreset(), fixed("10 +", 10, null)]),
+  range("lastPlayed", "lastPlayed", "you", "date"),
+  range("dateAdded", "dateAdded", "you", "date"),
+  range("installSize", "installSize", "you", "gigabytes", [
+    fixed("< 1 GB", null, GB),
+    fixed("50 GB +", 50 * GB, null),
   ]),
 ];
 
@@ -124,9 +192,9 @@ export const FIELDS: FieldInfo[] = [
 export function presetsOf(info: RangeInfo, now = Date.now()): RangePreset[] {
   if (info.unit !== "date") return info.presets;
   return [
-    { label: "Last 7 days", min: daysAgo(7, now), max: null },
-    { label: "Last 30 days", min: daysAgo(30, now), max: null },
-    { label: "Over a year ago", min: null, max: daysAgo(365, now) },
+    fixed(tr("last7Days"), daysAgo(7, now), null),
+    fixed(tr("last30Days"), daysAgo(30, now), null),
+    fixed(tr("overYearAgo"), null, daysAgo(365, now)),
   ];
 }
 
@@ -444,15 +512,15 @@ export function describeRange(info: RangeInfo, min: number | null, max: number |
   const show = (value: number) => toInput(info.unit, value);
   if (info.unit === "date") {
     if (min !== null && max !== null) return `${show(min)} – ${show(max)}`;
-    if (min !== null) return `since ${show(min)}`;
-    if (max !== null) return `before ${show(max)}`;
+    if (min !== null) return tr("since", { date: show(min) });
+    if (max !== null) return tr("before", { date: show(max) });
     return "";
   }
   if (min !== null && max !== null) {
     return min === max ? `${show(min)}${suffix}` : `${show(min)} – ${show(max)}${suffix}`;
   }
   if (min !== null) return `${show(min)}${suffix} +`;
-  if (max !== null) return `up to ${show(max)}${suffix}`;
+  if (max !== null) return tr("upTo", { value: `${show(max)}${suffix}` });
   return "";
 }
 
@@ -476,11 +544,14 @@ export function describeNode(
   }
   const listed = info as ListInfo;
   const names = node.values.map((key) =>
-    key === NO_VALUE ? `No ${listed.plural}` : name(node.field, key),
+    key === NO_VALUE ? tr("noValue", { plural: listed.plural }) : name(node.field, key),
   );
-  const prefix = node.mode === "none" ? "not " : "";
-  const joiner = node.mode === "all" ? " and " : ", ";
-  return { label: listed.label, value: prefix + names.join(joiner) };
+  const joiner = node.mode === "all" ? tr("and") : ", ";
+  const joined = names.join(joiner);
+  return {
+    label: listed.label,
+    value: node.mode === "none" ? tr("not", { names: joined }) : joined,
+  };
 }
 
 /**
@@ -502,10 +573,15 @@ export function treePills(
       .filter(isActive)
       .map((inner) =>
         inner.kind === "group"
-          ? { label: "", value: `(${activeTreeCount(inner)} filters)` }
+          ? { label: "", value: tr("nestedFilters", { count: activeTreeCount(inner) }) }
           : describeNode(inner, name),
       );
     pills.push({ index, parts, joiner: node.mode === "all" ? "and" : "or", grouped: true });
   }
   return pills;
+}
+
+/** "and" / "or" between the members of a group, as a word of the current language. */
+export function joinerWord(joiner: "and" | "or"): string {
+  return tr(joiner).trim();
 }

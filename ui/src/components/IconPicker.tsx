@@ -1,7 +1,11 @@
+import { translator } from "../i18n";
+import { gameImages } from "../i18n/gameImages";
 import { For, onMount } from "solid-js";
 import { isNavKey, nextIndex } from "../lib/gridNav";
 import { Popover, type PopoverAnchor } from "./Popover";
 import { VIEW_ICON_NAMES, ViewIcon } from "./ViewIcon";
+
+const tr = translator(gameImages);
 
 const COLUMNS = 7;
 
@@ -36,7 +40,7 @@ export function IconPicker(props: {
       anchor={props.anchor}
       class="icon-picker"
       role="listbox"
-      label="Icon"
+      label={tr("icon")}
       onClose={props.onClose}
       onKeyDown={onKeyDown}
     >

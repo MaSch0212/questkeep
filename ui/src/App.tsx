@@ -5,6 +5,8 @@ import {
   readCssPx,
   readSplitBreakpoint,
 } from "./lib/layoutMode";
+import { translator } from "./i18n";
+import { shellCommon } from "./i18n/shellCommon";
 import { clampWidth } from "./lib/viewUi";
 import { AddGameDialog } from "./components/AddGameDialog";
 import { DuplicatesDialog } from "./components/DuplicatesDialog";
@@ -32,6 +34,8 @@ import { QuitDuringBackupDialog } from "./components/QuitDuringBackupDialog";
 import type { CommandBarHandle } from "./components/CommandBar";
 import type { KeywordFilterHandle } from "./components/KeywordFilter";
 import { store } from "./lib/store";
+
+const tr = translator(shellCommon);
 
 /** Grid and table views have the side panel; the details layout has its page instead. */
 const isPanelView = () => store.viewMode() !== "details";
@@ -193,7 +197,7 @@ export function App() {
             </Show>
             <Show when={docked()}>
               <Splitter
-                label="Details panel width"
+                label={tr("detailsPanelWidth")}
                 value={panelWidth()}
                 min={sizes().panelMin}
                 max={Math.max(sizes().panelMin, Math.floor(contentWidth() / 2))}

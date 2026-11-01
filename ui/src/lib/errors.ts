@@ -1,3 +1,8 @@
+import { translator } from "../i18n";
+import { shellCommon } from "../i18n/shellCommon";
+
+const tr = translator(shellCommon);
+
 /** Turns whatever a rejected command produced into a user-facing message. */
 export function errorMessage(error: unknown): string {
   if (typeof error === "string") return error;
@@ -6,5 +11,5 @@ export function errorMessage(error: unknown): string {
     const message = (error as { message: unknown }).message;
     if (typeof message === "string") return message;
   }
-  return "Something went wrong.";
+  return tr("wentWrong");
 }

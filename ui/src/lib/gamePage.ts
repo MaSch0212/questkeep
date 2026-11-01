@@ -1,3 +1,5 @@
+import { translator } from "../i18n";
+import { gameSections } from "../i18n/gameSections";
 import type { Achievement } from "../bindings/Achievement";
 import type { Achievements } from "../bindings/Achievements";
 import type { GameActivity } from "../bindings/GameActivity";
@@ -5,6 +7,8 @@ import type { GameQuery } from "../bindings/GameQuery";
 import type { ListField } from "../bindings/ListField";
 import type { TimeToBeat } from "../bindings/TimeToBeat";
 import { valueKey } from "./filters";
+
+const tr = translator(gameSections);
 
 /**
  * How many links fit in one row of `available` pixels, keeping room for a "+N more" button
@@ -48,9 +52,9 @@ export interface TtbBar {
 }
 
 const TTB_LABELS = {
-  main: "Main story",
-  extra: "Main + extras",
-  complete: "Completionist",
+  main: "ttbMain",
+  extra: "ttbExtra",
+  complete: "ttbComplete",
 } as const;
 
 /** Where the user's marker counts as "near the end" (its label flips to the left). */
@@ -73,7 +77,7 @@ export function ttbBar(ttb: TimeToBeat | null, playtime: number): TtbBar | null 
     const start = Math.min(previous, seconds);
     segments.push({
       key,
-      label: TTB_LABELS[key],
+      label: tr(TTB_LABELS[key]),
       seconds,
       left: (start / scale) * 100,
       width: ((seconds - start) / scale) * 100,
@@ -87,7 +91,7 @@ export function ttbBar(ttb: TimeToBeat | null, playtime: number): TtbBar | null 
 /** Whole hours, at least "<1h": time-to-beat lengths are rough anyway. */
 export function formatHours(seconds: number): string {
   const hours = Math.round(seconds / 3600);
-  return hours < 1 ? "<1h" : `${hours}h`;
+  return hours < 1 ? tr("lessThanHour") : tr("hoursShort", { hours });
 }
 
 /** The unlocked achievement the fewest players have, if any has a percentage. */

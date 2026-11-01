@@ -1,3 +1,5 @@
+import { translator } from "../i18n";
+import { libraryList } from "../i18n/libraryList";
 import {
   createEffect,
   createMemo,
@@ -29,6 +31,8 @@ import { GameTile, tileDomId } from "./GameTile";
 import { GroupHeader } from "./GroupHeader";
 import { StickyGroupHeader } from "./StickyGroupHeader";
 import { Logo } from "./Logo";
+
+const tr = translator(libraryList);
 
 const FALLBACK_WIDTH = 1000;
 const FALLBACK_HEIGHT = 700;
@@ -238,7 +242,7 @@ export function GameGrid() {
       class="grid"
       role="grid"
       tabindex="0"
-      aria-label="Games"
+      aria-label={tr("games")}
       aria-rowcount={layout().rows.length}
       aria-colcount={columns()}
       aria-activedescendant={activeDescendant()}
@@ -313,7 +317,7 @@ export function GameGrid() {
       <Show when={store.games().length === 0 && !store.loading()}>
         <div class="grid__empty">
           <Logo class="logo logo--muted" />
-          <p>No games to show. Add a game, or scan a store from Settings.</p>
+          <p>{tr("empty")}</p>
         </div>
       </Show>
     </div>

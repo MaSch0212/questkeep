@@ -1,39 +1,48 @@
 import { createSignal, For, Show } from "solid-js";
-import { treePills } from "../lib/filters";
+import { translator } from "../i18n";
+import { libraryCommon } from "../i18n/libraryCommon";
+import { librarySaveView } from "../i18n/librarySaveView";
+import { joinerWord, treePills } from "../lib/filters";
 import { store } from "../lib/store";
-import { groupLabel, sortLabel } from "../lib/viewOptions";
-import { activeFilterCount, NO_CATEGORY } from "../lib/views";
+import { groupLabel, inSentence, sortLabel } from "../lib/viewOptions";
+import { activeFilterCount, NO_CATEGORY, shownName } from "../lib/views";
 import { IconPicker } from "./IconPicker";
 import { Modal } from "./Modal";
 import type { PopoverAnchor } from "./Popover";
 import { sourceName } from "./SourceIcon";
 import { ViewIcon } from "./ViewIcon";
 
-const LAYOUT_NAMES: Record<string, string> = { grid: "Grid", list: "List", details: "Details" };
+const tr = translator(librarySaveView);
+const trCommon = translator(libraryCommon);
+
+const layoutName = (mode: string): string =>
+  mode === "grid" ? tr("layoutGrid") : mode === "list" ? tr("layoutList") : tr("layoutDetails");
 
 function categoryName(id: string): string {
-  if (id === NO_CATEGORY) return "No category";
-  return store.categories().find((c) => c.id === id)?.name ?? "Deleted category";
+  if (id === NO_CATEGORY) return trCommon("noCategory");
+  return store.categories().find((c) => c.id === id)?.name ?? tr("deletedCategory");
 }
 
 /** "Store: Steam, GOG · Installed · Never played", or "None". */
 function filterSummary(): string {
   const q = store.query();
   const parts: string[] = [];
-  if (q.sources.length > 0) parts.push(`Store: ${q.sources.map(sourceName).join(", ")}`);
+  if (q.sources.length > 0)
+    parts.push(tr("storeIs", { names: q.sources.map(sourceName).join(", ") }));
   if (q.categories.length > 0) {
-    parts.push(`Category: ${q.categories.map(categoryName).join(", ")}`);
+    parts.push(tr("categoryIs", { names: q.categories.map(categoryName).join(", ") }));
   }
-  if (q.installed !== "any") parts.push(q.installed === "yes" ? "Installed" : "Not installed");
-  if (q.favorite !== "any") parts.push(q.favorite === "yes" ? "Favorites" : "Not favorites");
-  if (q.played !== "any") parts.push(q.played === "played" ? "Played" : "Never played");
-  if (q.hidden === "all") parts.push("Including hidden");
-  if (q.hidden === "hidden") parts.push("Only hidden");
+  if (q.installed !== "any")
+    parts.push(q.installed === "yes" ? tr("installed") : tr("notInstalled"));
+  if (q.favorite !== "any") parts.push(q.favorite === "yes" ? tr("favorites") : tr("notFavorites"));
+  if (q.played !== "any") parts.push(q.played === "played" ? tr("played") : tr("neverPlayed"));
+  if (q.hidden === "all") parts.push(tr("includingHidden"));
+  if (q.hidden === "hidden") parts.push(tr("onlyHidden"));
   for (const pill of treePills(q.filter, store.valueName)) {
     const text = pill.parts.map((p) => (p.value ? `${p.label}: ${p.value}` : p.label));
-    parts.push(pill.grouped ? `(${text.join(` ${pill.joiner} `)})` : text.join(", "));
+    parts.push(pill.grouped ? `(${text.join(` ${joinerWord(pill.joiner)} `)})` : text.join(", "));
   }
-  return activeFilterCount(q) === 0 ? "None" : parts.join(" · ");
+  return activeFilterCount(q) === 0 ? tr("none") : parts.join(" · ");
 }
 
 /** Saves the open view's filters, sort and layout as a new view (never the keyword). */
@@ -63,20 +72,20 @@ export function SaveViewDialog(props: { onClose: () => void }) {
   }
 
   return (
-    <Modal title="Save as new view" onClose={props.onClose}>
+    <Modal title={tr("title")} onClose={props.onClose}>
       <form class="form" onSubmit={(event) => void save(event)}>
-        <p class="muted">Saves the filters, sort order and layout. The filter box is not saved.</p>
+        <p class="muted">{tr("intro")}</p>
         <div class="field">
           <label class="field__label" for="view-name">
-            Icon and name
+            {tr("iconAndName")}
           </label>
           <div class="field__row">
             <button
               ref={(el) => (iconButton = el)}
               type="button"
               class="icon-btn icon-btn--bordered"
-              aria-label="Choose an icon"
-              title="Choose an icon"
+              aria-label={tr("chooseIcon")}
+              title={tr("chooseIcon")}
               onClick={() => {
                 const rect = iconButton?.getBoundingClientRect();
                 if (rect) setPicker({ rect, align: "start" });
@@ -89,14 +98,14 @@ export function SaveViewDialog(props: { onClose: () => void }) {
               class="input"
               data-autofocus
               value={name()}
-              placeholder="My view"
+              placeholder={tr("namePlaceholder")}
               onInput={(event) => setName(event.currentTarget.value)}
             />
           </div>
         </div>
         <div class="field">
           <label class="field__label" for="view-section">
-            Section
+            {tr("section")}
           </label>
           <select
             id="view-section"
@@ -104,34 +113,36 @@ export function SaveViewDialog(props: { onClose: () => void }) {
             value={sectionId()}
             onChange={(event) => setSectionId(event.currentTarget.value)}
           >
-            <For each={sections}>{(s) => <option value={s.id}>{s.name}</option>}</For>
+            <For each={sections}>{(s) => <option value={s.id}>{shownName(s)}</option>}</For>
           </select>
         </div>
         <dl class="view-summary">
-          <dt>Filters</dt>
+          <dt>{tr("filters")}</dt>
           <dd>{filterSummary()}</dd>
-          <dt>Sort</dt>
+          <dt>{tr("sort")}</dt>
           <dd>
-            {sortLabel(store.query().sort)}, {store.query().descending ? "descending" : "ascending"}
+            {tr(store.query().descending ? "sortDescending" : "sortAscending", {
+              sort: sortLabel(store.query().sort),
+            })}
           </dd>
-          <dt>Layout</dt>
+          <dt>{tr("layout")}</dt>
           <dd>
-            {LAYOUT_NAMES[store.viewMode()]}
+            {layoutName(store.viewMode())}
             {store.groupBy() === "none"
               ? ""
-              : `, grouped by ${groupLabel(store.groupBy()).toLowerCase()}`}
+              : tr("groupedBy", { group: inSentence(groupLabel(store.groupBy())) })}
           </dd>
         </dl>
         <div class="form__actions">
           <button type="button" class="btn" onClick={props.onClose}>
-            Cancel
+            {tr("cancel")}
           </button>
           <button
             type="submit"
             class="btn btn--primary"
             disabled={name().trim() === "" || saving()}
           >
-            Save view
+            {tr("saveView")}
           </button>
         </div>
       </form>

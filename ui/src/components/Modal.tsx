@@ -1,5 +1,9 @@
 import X from "lucide-solid/icons/x";
 import { createSignal, createUniqueId, onCleanup, onMount, type ParentProps } from "solid-js";
+import { translator } from "../i18n";
+import { shellCommon } from "../i18n/shellCommon";
+
+const tr = translator(shellCommon);
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -72,7 +76,12 @@ export function Modal(props: ParentProps<ModalProps>) {
           <h2 id={titleId} class="modal__title">
             {props.title}
           </h2>
-          <button class="icon-btn" type="button" aria-label="Close dialog" onClick={props.onClose}>
+          <button
+            class="icon-btn"
+            type="button"
+            aria-label={tr("closeDialog")}
+            onClick={props.onClose}
+          >
             <X class="icon" aria-hidden="true" />
           </button>
         </header>

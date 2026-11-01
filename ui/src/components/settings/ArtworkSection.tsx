@@ -1,8 +1,12 @@
 import Eye from "lucide-solid/icons/eye";
 import EyeOff from "lucide-solid/icons/eye-off";
 import { createSignal, Show } from "solid-js";
+import { translator } from "../../i18n";
+import { settingsKeys } from "../../i18n/settingsKeys";
 import { openLink } from "./openLink";
 import type { SettingsModel } from "./useSettings";
+
+const tr = translator(settingsKeys);
 
 const GRIDDB_KEY_URL = "https://www.steamgriddb.com/profile/preferences/api";
 
@@ -10,7 +14,7 @@ export function ArtworkSection(props: { model: SettingsModel }) {
   const [showKey, setShowKey] = createSignal(false);
 
   return (
-    <Show when={props.model.settings()} fallback={<p class="muted">Loading…</p>}>
+    <Show when={props.model.settings()} fallback={<p class="muted">{tr("loading")}</p>}>
       <form
         class="form"
         onSubmit={(event) => {
@@ -19,8 +23,7 @@ export function ArtworkSection(props: { model: SettingsModel }) {
         }}
       >
         <p class="muted">
-          SteamGridDB is used as a fallback for covers and backgrounds when a store has none. Create
-          an API key at{" "}
+          {tr("artworkIntro")}{" "}
           <button type="button" class="link-btn" onClick={() => void openLink(GRIDDB_KEY_URL)}>
             {GRIDDB_KEY_URL}
           </button>
@@ -28,7 +31,7 @@ export function ArtworkSection(props: { model: SettingsModel }) {
         </p>
         <div class="field">
           <label class="field__label" for="griddb-api-key">
-            SteamGridDB API key
+            {tr("griddbKey")}
           </label>
           <div class="field__row">
             <input
@@ -43,9 +46,9 @@ export function ArtworkSection(props: { model: SettingsModel }) {
             <button
               type="button"
               class="icon-btn icon-btn--bordered"
-              aria-label={showKey() ? "Hide SteamGridDB key" : "Show SteamGridDB key"}
+              aria-label={showKey() ? tr("hideGriddbKey") : tr("showGriddbKey")}
               aria-pressed={showKey()}
-              title={showKey() ? "Hide key" : "Show key"}
+              title={showKey() ? tr("hideKey") : tr("showKey")}
               onClick={() => setShowKey((v) => !v)}
             >
               <Show when={showKey()} fallback={<Eye class="icon" aria-hidden="true" />}>
@@ -54,13 +57,10 @@ export function ArtworkSection(props: { model: SettingsModel }) {
             </button>
           </div>
         </div>
-        <p class="field__hint">
-          The key is stored in your system's credential store, not in the Questkeep data folder.
-          Leave it empty to turn SteamGridDB off.
-        </p>
+        <p class="field__hint">{tr("griddbHint")}</p>
         <div class="form__actions">
           <button type="submit" class="btn btn--primary" disabled={props.model.savingGridDb()}>
-            {props.model.savingGridDb() ? "Saving…" : "Save artwork settings"}
+            {props.model.savingGridDb() ? tr("saving") : tr("saveArtwork")}
           </button>
         </div>
       </form>

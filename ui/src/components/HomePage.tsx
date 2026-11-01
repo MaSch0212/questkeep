@@ -1,11 +1,15 @@
 import { createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import type { ShelfGame } from "../bindings/ShelfGame";
+import { translator } from "../i18n";
+import { shellHome } from "../i18n/shellHome";
 import { activateGame } from "../lib/actions";
 import { formatPlaytime } from "../lib/format";
-import { dayLabel, hoursLabel, relativeDay } from "../lib/startPage";
+import { dayLabel, hoursLabel, oneDecimal, relativeDay } from "../lib/startPage";
 import { store } from "../lib/store";
 import { GameTile, tileDomId } from "./GameTile";
 import { SourceIcon, sourceName } from "./SourceIcon";
+
+const tr = translator(shellHome);
 
 const data = () => store.startData();
 const px = (value: string) => Number.parseFloat(value) || 0;
@@ -55,18 +59,22 @@ export function HomePage() {
   });
 
   return (
-    <section class="home" aria-label="Start page">
+    <section class="home" aria-label={tr("startPage")}>
       <div
         class="home__shelves"
         ref={(el) => (shelves = el)}
         style={{ "--qk-shelf-cover-width": `${coverWidth()}px` }}
       >
         <Shelf
-          title="Recently played"
+          title={tr("recentlyPlayed")}
           games={data()?.recentlyPlayed ?? []}
-          empty="Nothing played yet"
+          empty={tr("nothingPlayed")}
         />
-        <Shelf title="Recently added" games={data()?.recentlyAdded ?? []} empty="No games yet" />
+        <Shelf
+          title={tr("recentlyAdded")}
+          games={data()?.recentlyAdded ?? []}
+          empty={tr("noGames")}
+        />
       </div>
       <div class="home__stats">
         <PlaytimePanel />
@@ -171,10 +179,13 @@ function PlaytimePanel() {
     <section class="home-panel" aria-labelledby="home-playtime">
       <header class="home-panel__head">
         <h2 class="home-panel__title" id="home-playtime">
-          Playtime, last {days().length || 7} days
+          {tr("playtimeTitle", { days: days().length || 7 })}
         </h2>
         <span class="home-panel__sub">
-          {(total() / 3600).toFixed(1)} h · avg {(average() / 3600).toFixed(1)} h/day
+          {tr("playtimeSub", {
+            total: oneDecimal(total() / 3600),
+            average: oneDecimal(average() / 3600),
+          })}
         </span>
       </header>
       <ol class="playtime-chart">
@@ -185,8 +196,12 @@ function PlaytimePanel() {
               <li
                 class="playtime-chart__day"
                 classList={{ "playtime-chart__day--today": i() === days().length - 1 }}
-                title={day.seconds > 0 ? formatPlaytime(day.seconds) : "Not played"}
-                aria-label={`${label()}: ${day.seconds > 0 ? formatPlaytime(day.seconds) : "not played"}`}
+                title={day.seconds > 0 ? formatPlaytime(day.seconds) : tr("notPlayed")}
+                aria-label={
+                  day.seconds > 0
+                    ? tr("dayPlayed", { label: label(), time: formatPlaytime(day.seconds) })
+                    : tr("dayNotPlayed", { label: label() })
+                }
               >
                 <span class="playtime-chart__value" aria-hidden="true">
                   {hoursLabel(day.seconds)}
@@ -216,11 +231,11 @@ function StoresPanel() {
     <section class="home-panel" aria-labelledby="home-stores">
       <header class="home-panel__head">
         <h2 class="home-panel__title" id="home-stores">
-          Installed by store
+          {tr("installedByStore")}
         </h2>
-        <span class="home-panel__sub">{installed()} installed</span>
+        <span class="home-panel__sub">{tr("installedCount", { count: installed() })}</span>
       </header>
-      <Show when={stores().length > 0} fallback={<p class="shelf__empty">No store games yet</p>}>
+      <Show when={stores().length > 0} fallback={<p class="shelf__empty">{tr("noStoreGames")}</p>}>
         <ul class="store-stats">
           <For each={stores()}>
             {(entry) => {
@@ -229,7 +244,10 @@ function StoresPanel() {
               return (
                 <li
                   class="store-stats__row"
-                  title={`${Math.round(share() * 100)} % of your ${name()} games are installed`}
+                  title={tr("shareInstalled", {
+                    percent: Math.round(share() * 100),
+                    name: name(),
+                  })}
                 >
                   <SourceIcon source={entry.source} />
                   <span class="store-stats__name">{name()}</span>

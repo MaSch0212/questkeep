@@ -1,6 +1,10 @@
 import type { CoreEvent } from "../bindings/CoreEvent";
 import type { ScanSummary } from "../bindings/ScanSummary";
+import { translator } from "../i18n";
+import { shellSync } from "../i18n/shellSync";
 import { formatAgo } from "./format";
+
+const tr = translator(shellSync);
 
 /**
  * Library sync progress, built from core scan events. Several stores are scanned one after
@@ -98,10 +102,10 @@ export function isProviderSyncing(state: SyncState, provider: string): boolean {
 
 /** "Syncing 2 of 7…" while busy, otherwise a neutral name for the indicator. */
 export function syncLabel(state: SyncState): string {
-  if (!isSyncBusy(state)) return "Sync status";
+  if (!isSyncBusy(state)) return tr("syncStatus");
   const total = state.entries.length;
   const finished = state.entries.filter((e) => e.status === "done" || e.status === "failed").length;
-  return `Syncing ${Math.min(total, finished + 1)} of ${total}…`;
+  return tr("syncing", { current: Math.min(total, finished + 1), total });
 }
 
 /** The one message shown when a run ends. */
@@ -114,24 +118,25 @@ export function syncResultText(state: SyncState): string {
     added += entry.summary?.added ?? 0;
     updated += entry.summary?.updated ?? 0;
   }
-  const changes = added + updated === 0 ? "no changes" : `${added} added, ${updated} updated`;
-  return `Sync finished: ${changes}${failed > 0 ? `, ${failed} failed` : ""}`;
+  const changes =
+    added + updated === 0 ? tr("noChangesLower") : tr("addedUpdated", { added, updated });
+  return tr("syncFinished", { changes, failed });
 }
 
 /** Per-store status text for the popover. */
 export function syncEntryText(entry: SyncEntry): string {
   switch (entry.status) {
     case "waiting":
-      return "Waiting";
+      return tr("waiting");
     case "running":
-      return "Scanning…";
+      return tr("scanning");
     case "done": {
       const added = entry.summary?.added ?? 0;
       const updated = entry.summary?.updated ?? 0;
-      return added + updated === 0 ? "No changes" : `${added} added, ${updated} updated`;
+      return added + updated === 0 ? tr("noChanges") : tr("addedUpdated", { added, updated });
     }
     case "failed":
-      return entry.message ?? "Failed";
+      return entry.message ?? tr("failed");
   }
 }
 
@@ -198,8 +203,8 @@ export function syncRowText(
   now: Date = new Date(),
 ): string {
   if (entry && entry.status !== "done") return syncEntryText(entry);
-  if (lastIso === null) return prefix ? `${prefix}: never` : "Not synced yet";
+  if (lastIso === null) return prefix ? tr("prefixNever", { prefix }) : tr("notSyncedYet");
   const ago = formatAgo(lastIso, now);
   const text = ago.charAt(0).toLowerCase() + ago.slice(1);
-  return prefix ? `${prefix} ${text}` : `Synced ${text}`;
+  return prefix ? tr("prefixAgo", { prefix, ago: text }) : tr("syncedAgo", { ago: text });
 }

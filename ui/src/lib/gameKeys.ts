@@ -1,8 +1,12 @@
 import type { Game } from "../bindings/Game";
+import { translator } from "../i18n";
+import { shellCommon } from "../i18n/shellCommon";
 import { updateGame } from "./actions";
 import { changeAll } from "./bulkActions";
 import type { GroupedLayout } from "./grouping";
 import { store } from "./store";
+
+const tr = translator(shellCommon);
 
 /**
  * Keys a game list or grid shares for its selected game: the Menu key and Shift+F10 open the
@@ -34,7 +38,7 @@ export function handleGameKeys(
     }
     void updateGame(game.id, { hidden: !game.hidden }).then((failure) => {
       if (failure) store.pushToast("error", failure);
-      else store.pushToast("info", `${game.hidden ? "Unhid" : "Hid"} “${game.name}”`);
+      else store.pushToast("info", tr(game.hidden ? "unhid" : "hid", { name: game.name }));
     });
     return true;
   }

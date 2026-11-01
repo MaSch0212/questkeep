@@ -1,10 +1,14 @@
 import { createResource, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import type { Game } from "../bindings/Game";
+import { translator } from "../i18n";
+import { shellCombine } from "../i18n/shellCombine";
 import * as api from "../lib/api";
 import { defaultQuery } from "../lib/query";
 import { GameIcon } from "./GameIcon";
 import { Popover, type PopoverAnchor } from "./Popover";
 import { SourceIcons, storeNames } from "./SourceIcon";
+
+const tr = translator(shellCombine);
 
 const SEARCH_DELAY_MS = 150;
 const MAX_RESULTS = 30;
@@ -61,23 +65,21 @@ export function CombinePicker(props: {
       anchor={props.anchor}
       class="combine-picker"
       role="dialog"
-      label="Combine with another game"
+      label={tr("pickerLabel")}
       inside={props.inside}
       onClose={props.onClose}
     >
-      <p class="combine-picker__hint">
-        The same game in another store: both show as one, and Play starts the installed one.
-      </p>
+      <p class="combine-picker__hint">{tr("pickerHint")}</p>
       <input
         ref={(el) => (input = el)}
         class="input"
         type="text"
         role="combobox"
-        aria-label="Find a game"
+        aria-label={tr("findGame")}
         aria-expanded="true"
         aria-controls="combine-options"
         aria-activedescendant={options().length > 0 ? optionId(active()) : undefined}
-        placeholder="Find a game…"
+        placeholder={tr("findGameEllipsis")}
         spellcheck={false}
         autocomplete="off"
         value={text()}
@@ -90,7 +92,7 @@ export function CombinePicker(props: {
         }}
         onKeyDown={onKeyDown}
       />
-      <ul id="combine-options" class="combine-picker__list" role="listbox" aria-label="Games">
+      <ul id="combine-options" class="combine-picker__list" role="listbox" aria-label={tr("games")}>
         <For each={options()}>
           {(game, index) => (
             <li
@@ -114,7 +116,7 @@ export function CombinePicker(props: {
         </For>
       </ul>
       <Show when={!results.loading && options().length === 0}>
-        <p class="combine-picker__empty">No other game matches.</p>
+        <p class="combine-picker__empty">{tr("noOther")}</p>
       </Show>
     </Popover>
   );

@@ -1,5 +1,9 @@
 import type { JSX } from "solid-js";
+import { translator } from "../i18n";
+import { shellCommon } from "../i18n/shellCommon";
 import { Modal } from "./Modal";
+
+const tr = translator(shellCommon);
 
 interface ConfirmDialogProps {
   title: string;
@@ -16,7 +20,7 @@ export function ConfirmDialog(props: ConfirmDialogProps) {
       <p>{props.message}</p>
       <div class="form__actions">
         <button type="button" class="btn" data-autofocus onClick={props.onClose}>
-          Cancel
+          {tr("cancel")}
         </button>
         <button
           type="button"

@@ -2,9 +2,13 @@ import type { Game } from "../bindings/Game";
 import type { GameUpdate } from "../bindings/GameUpdate";
 import type { NewManualGame } from "../bindings/NewManualGame";
 import type { PlayAction } from "../bindings/PlayAction";
+import { translator } from "../i18n";
+import { shellCommon } from "../i18n/shellCommon";
 import * as api from "./api";
 import { errorMessage } from "./errors";
 import { store } from "./store";
+
+const tr = translator(shellCommon);
 
 /** Runs `work` and resolves to an error message, or null on success. Never rejects. */
 async function attempt(work: () => Promise<void>): Promise<string | null> {
@@ -76,7 +80,7 @@ export function preferCopy(copyId: string): Promise<string | null> {
 export async function installWithToast(id: string): Promise<void> {
   const error = await installGame(id);
   if (error) store.pushToast("error", error);
-  else store.pushToast("info", "Install handed to the store client");
+  else store.pushToast("info", tr("installHanded"));
 }
 
 /** The primary action of a game: install when it is not installed, otherwise launch. */

@@ -9,10 +9,15 @@ import {
   toggleColumn,
   type ShownColumn,
 } from "../lib/columns";
+import { translator } from "../i18n";
+import { libraryTable } from "../i18n/libraryTable";
 import { readCssPx } from "../lib/layoutMode";
 import { store } from "../lib/store";
+import { inSentence } from "../lib/viewOptions";
 import type { PopoverAnchor } from "./Popover";
 import { SearchPicker, type PickerItem } from "./SearchPicker";
+
+const tr = translator(libraryTable);
 
 /** Fallback for `--qk-column-min` (theme.css). */
 const MIN_WIDTH = 48;
@@ -50,13 +55,20 @@ function SortArrow(props: { field: SortField | undefined }) {
 
 /** The column picker's entries: Name (always shown), the shown columns, then the rest. */
 const pickerItems = (): PickerItem[] => [
-  { id: NAME_ID, label: "Name", checked: true, disabled: true, hint: "Always", section: "Shown" },
+  {
+    id: NAME_ID,
+    label: tr("name"),
+    checked: true,
+    disabled: true,
+    hint: tr("always"),
+    section: tr("shown"),
+  },
   ...pickerColumns(store.columns()).map(({ def, shown }) => ({
     id: def.id,
     label: def.label,
     checked: shown,
     movable: shown,
-    section: shown ? "Shown" : "More columns",
+    section: shown ? tr("shown") : tr("moreColumns"),
   })),
 ];
 
@@ -132,7 +144,7 @@ export function TableHeader(props: { columns: ShownColumn[]; ref?: (el: HTMLDivE
         }}
         class="list__header"
         role="group"
-        aria-label="Columns (right-click to choose)"
+        aria-label={tr("columnsGroup")}
         onContextMenu={(event) => {
           event.preventDefault();
           openPicker({ x: event.clientX, y: event.clientY });
@@ -142,7 +154,7 @@ export function TableHeader(props: { columns: ShownColumn[]; ref?: (el: HTMLDivE
         <span />
         <div class="list__th" aria-sort={ariaSort("name")}>
           <button type="button" class="list__th-btn" onClick={() => sortBy("name")}>
-            <span class="list__th-label">Name</span>
+            <span class="list__th-label">{tr("name")}</span>
             <SortArrow field="name" />
           </button>
         </div>
@@ -185,7 +197,7 @@ export function TableHeader(props: { columns: ShownColumn[]; ref?: (el: HTMLDivE
                   <button
                     type="button"
                     class="list__th-btn"
-                    title={`Sort by ${column().def.label.toLocaleLowerCase()}`}
+                    title={tr("sortBy", { column: inSentence(column().def.label) })}
                     onClick={() => sortBy(field())}
                   >
                     <span class="list__th-label">{column().def.label}</span>
@@ -198,7 +210,7 @@ export function TableHeader(props: { columns: ShownColumn[]; ref?: (el: HTMLDivE
                 role="separator"
                 tabindex="0"
                 aria-orientation="vertical"
-                aria-label={`${column().def.label} column width`}
+                aria-label={tr("columnWidth", { column: column().def.label })}
                 onMouseDown={(event) => event.preventDefault()}
                 onPointerDown={(event) => startResize(column().def.id, event)}
                 onKeyDown={(event) => resizeByKey(column().def.id, event)}
@@ -211,8 +223,8 @@ export function TableHeader(props: { columns: ShownColumn[]; ref?: (el: HTMLDivE
         {(anchor) => (
           <SearchPicker
             anchor={anchor()}
-            label="Columns"
-            placeholder="Find a column"
+            label={tr("columns")}
+            placeholder={tr("findColumn")}
             items={pickerItems()}
             keepOpen
             onPick={(id) => store.changeColumns((columns) => toggleColumn(columns, id))}
@@ -228,7 +240,7 @@ export function TableHeader(props: { columns: ShownColumn[]; ref?: (el: HTMLDivE
                   class="btn btn--small btn--ghost"
                   onClick={() => store.changeColumns(() => [])}
                 >
-                  Reset to default columns
+                  {tr("resetColumns")}
                 </button>
               </div>
             }

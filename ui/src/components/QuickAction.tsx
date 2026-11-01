@@ -1,3 +1,5 @@
+import { translator } from "../i18n";
+import { gameChrome } from "../i18n/gameChrome";
 import { Show } from "solid-js";
 import type { Game } from "../bindings/Game";
 import Download from "lucide-solid/icons/download";
@@ -5,6 +7,8 @@ import Play from "lucide-solid/icons/play";
 import { installWithToast, launchWithToast } from "../lib/actions";
 import { primaryAction } from "../lib/primaryAction";
 import { store } from "../lib/store";
+
+const tr = translator(gameChrome);
 
 interface QuickActionProps {
   game: Game;
@@ -36,10 +40,12 @@ export function QuickAction(props: QuickActionProps) {
           disabled={kind() === "running"}
           aria-label={
             kind() === "running"
-              ? `${props.game.name} is running`
-              : `${kind() === "play" ? "Play" : "Install"} ${props.game.name}`
+              ? tr("isRunning", { name: props.game.name })
+              : kind() === "play"
+                ? tr("playGame", { name: props.game.name })
+                : tr("installGame", { name: props.game.name })
           }
-          title={kind() === "play" ? "Play (Ctrl+Enter)" : kind() === "install" ? "Install" : ""}
+          title={kind() === "play" ? tr("playTitle") : kind() === "install" ? tr("install") : ""}
           onClick={(event) => {
             event.stopPropagation();
             if (kind() === "install") void installWithToast(props.game.id);
@@ -54,7 +60,9 @@ export function QuickAction(props: QuickActionProps) {
           <Show when={kind() === "play"}>
             <Play class="icon icon--filled" aria-hidden="true" />
           </Show>
-          <span>{kind() === "play" ? "Play" : kind() === "install" ? "Install" : "Running"}</span>
+          <span>
+            {kind() === "play" ? tr("play") : kind() === "install" ? tr("install") : tr("running")}
+          </span>
         </button>
       )}
     </Show>

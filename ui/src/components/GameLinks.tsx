@@ -1,3 +1,5 @@
+import { translator } from "../i18n";
+import { gameSections } from "../i18n/gameSections";
 import BookOpen from "lucide-solid/icons/book-open";
 import Globe from "lucide-solid/icons/globe";
 import LifeBuoy from "lucide-solid/icons/life-buoy";
@@ -34,6 +36,8 @@ function LinkIcon(props: { link: GameLink }) {
     />
   );
 }
+
+const tr = translator(gameSections);
 
 /** Links that must fit with their names before the row shows names. */
 const MIN_NAMED = 3;
@@ -86,7 +90,7 @@ export function GameLinks(props: { links: GameLink[] }) {
           class="game-links"
           classList={{ "game-links--labels": labels() }}
           role="list"
-          aria-label="Links"
+          aria-label={tr("links")}
         >
           <For each={shown()}>
             {(link) => (
@@ -118,7 +122,7 @@ export function GameLinks(props: { links: GameLink[] }) {
                 setMenu(menu() || !rect ? null : { rect, align: "end" });
               }}
             >
-              +{hidden().length} more
+              {tr("moreLinks", { count: hidden().length })}
             </button>
           </Show>
         </div>
@@ -139,7 +143,7 @@ export function GameLinks(props: { links: GameLink[] }) {
             )}
           </For>
           <span class="game-link game-link--more" data-more>
-            +{props.links.length} more
+            {tr("moreLinks", { count: props.links.length })}
           </span>
         </div>
       </div>
@@ -147,7 +151,7 @@ export function GameLinks(props: { links: GameLink[] }) {
         {(at) => (
           <Menu
             anchor={at()}
-            label="More links"
+            label={tr("moreLinksLabel")}
             inside={() => [more]}
             onClose={(returnFocus) => {
               setMenu(null);

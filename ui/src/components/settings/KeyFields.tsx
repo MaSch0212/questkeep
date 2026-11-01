@@ -1,10 +1,14 @@
 import Eye from "lucide-solid/icons/eye";
 import EyeOff from "lucide-solid/icons/eye-off";
 import { createEffect, createSignal, createUniqueId, Match, on, Show, Switch } from "solid-js";
+import { translator } from "../../i18n";
+import { settingsKeys } from "../../i18n/settingsKeys";
 import * as api from "../../lib/api";
 import { errorMessage } from "../../lib/errors";
 import { openLink } from "./openLink";
 import type { SettingsModel } from "./useSettings";
+
+const tr = translator(settingsKeys);
 
 export const TWITCH_CONSOLE_URL = "https://dev.twitch.tv/console/apps";
 export const GRIDDB_KEY_URL = "https://www.steamgriddb.com/profile/preferences/api";
@@ -14,17 +18,17 @@ export function IgdbSteps() {
   return (
     <ol class="key-steps">
       <li>
-        Sign in at{" "}
+        {tr("signInAt")}{" "}
         <button type="button" class="link-btn" onClick={() => void openLink(TWITCH_CONSOLE_URL)}>
           dev.twitch.tv/console
         </button>{" "}
-        (any Twitch account; turn on two-factor authentication if Twitch asks).
+        {tr("igdbStep1After")}
       </li>
       <li>
-        Register an application: any name, OAuth redirect URL <code>http://localhost</code>,
-        category &quot;Application Integration&quot;, client type &quot;Confidential&quot;.
+        {tr("igdbStep2Before")} <code>http://localhost</code>
+        {tr("igdbStep2After")}
       </li>
-      <li>Copy the Client ID, create a New Secret, and paste both here.</li>
+      <li>{tr("igdbStep3")}</li>
     </ol>
   );
 }
@@ -74,7 +78,7 @@ export function IgdbFields(props: { model: SettingsModel }) {
       <div class="key-fields">
         <div class="field">
           <label class="field__label" for={idField}>
-            IGDB Client ID
+            {tr("igdbClientId")}
           </label>
           <input
             id={idField}
@@ -88,7 +92,7 @@ export function IgdbFields(props: { model: SettingsModel }) {
         </div>
         <div class="field">
           <label class="field__label" for={secretField}>
-            IGDB Client Secret
+            {tr("igdbClientSecret")}
           </label>
           <div class="field__row">
             <input
@@ -103,9 +107,9 @@ export function IgdbFields(props: { model: SettingsModel }) {
             <button
               type="button"
               class="icon-btn icon-btn--bordered"
-              aria-label={showSecret() ? "Hide IGDB secret" : "Show IGDB secret"}
+              aria-label={showSecret() ? tr("hideIgdbSecret") : tr("showIgdbSecret")}
               aria-pressed={showSecret()}
-              title={showSecret() ? "Hide secret" : "Show secret"}
+              title={showSecret() ? tr("hideSecret") : tr("showSecret")}
               onClick={() => setShowSecret((v) => !v)}
             >
               <Show when={showSecret()} fallback={<Eye class="icon" aria-hidden="true" />}>
@@ -122,12 +126,12 @@ export function IgdbFields(props: { model: SettingsModel }) {
           disabled={!filled() || result().kind === "testing"}
           onClick={() => void test()}
         >
-          {result().kind === "testing" ? "Testing…" : "Test keys"}
+          {result().kind === "testing" ? tr("testing") : tr("testKeys")}
         </button>
         <span class="key-test__result" role="status">
           <Switch>
             <Match when={result().kind === "ok"}>
-              <span class="key-test__ok">✓ The keys work.</span>
+              <span class="key-test__ok">{tr("keysWork")}</span>
             </Match>
             <Match when={failure()}>
               {(message) => <span class="key-test__error">{message()}</span>}
@@ -147,16 +151,16 @@ export function GridDbField(props: { model: SettingsModel }) {
     <>
       <ol class="key-steps">
         <li>
-          Sign in at{" "}
+          {tr("signInAt")}{" "}
           <button type="button" class="link-btn" onClick={() => void openLink(GRIDDB_KEY_URL)}>
             steamgriddb.com
           </button>
-          , open Preferences → API, generate a key and paste it here.
+          {tr("griddbStepAfter")}
         </li>
       </ol>
       <div class="field">
         <label class="field__label" for={field}>
-          SteamGridDB API key
+          {tr("griddbKey")}
         </label>
         <div class="field__row">
           <input
@@ -171,9 +175,9 @@ export function GridDbField(props: { model: SettingsModel }) {
           <button
             type="button"
             class="icon-btn icon-btn--bordered"
-            aria-label={showKey() ? "Hide SteamGridDB key" : "Show SteamGridDB key"}
+            aria-label={showKey() ? tr("hideGriddbKey") : tr("showGriddbKey")}
             aria-pressed={showKey()}
-            title={showKey() ? "Hide key" : "Show key"}
+            title={showKey() ? tr("hideKey") : tr("showKey")}
             onClick={() => setShowKey((v) => !v)}
           >
             <Show when={showKey()} fallback={<Eye class="icon" aria-hidden="true" />}>

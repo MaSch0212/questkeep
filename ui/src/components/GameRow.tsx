@@ -1,3 +1,5 @@
+import { translator } from "../i18n";
+import { libraryList } from "../i18n/libraryList";
 import { Index, Match, Show, Switch } from "solid-js";
 import type { Game } from "../bindings/Game";
 import { shownColumns, type ShownColumn } from "../lib/columns";
@@ -25,6 +27,8 @@ interface GameRowProps {
   domKey?: string;
 }
 
+const tr = translator(libraryList);
+
 const DEFAULT_SHOWN = shownColumns([]);
 
 export function rowDomId(id: string): string {
@@ -51,7 +55,9 @@ export function GameRow(props: GameRowProps) {
         "list-row--missing": !props.game.installed,
       }}
       aria-selected={props.selected}
-      aria-label={props.game.installed ? props.game.name : `${props.game.name} (not installed)`}
+      aria-label={
+        props.game.installed ? props.game.name : tr("notInstalledName", { name: props.game.name })
+      }
       onClick={(event) => props.onSelect(props.game.id, event)}
       onContextMenu={(event) => {
         if (!props.onContextMenu) return;
@@ -66,7 +72,7 @@ export function GameRow(props: GameRowProps) {
       <div class="list-row__name" title={props.game.name}>
         <span class="list-row__text">{props.game.name}</span>
         <Show when={props.game.favorite}>
-          <span class="list-row__star" title="Favorite">
+          <span class="list-row__star" title={tr("favorite")}>
             <Star class="icon icon--filled" aria-hidden="true" />
           </span>
         </Show>
@@ -109,12 +115,12 @@ export function GameRow(props: GameRowProps) {
                   fallback={
                     <span class="state state--missing">
                       <Download class="icon" aria-hidden="true" />
-                      <span>Not installed</span>
+                      <span>{tr("notInstalled")}</span>
                     </span>
                   }
                 >
                   <span classList={{ "state state--running": running() }}>
-                    {running() ? "Running" : "Installed"}
+                    {running() ? tr("running") : tr("installed")}
                   </span>
                 </Show>
               </div>

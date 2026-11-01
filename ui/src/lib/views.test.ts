@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { setLanguage } from "../i18n";
 import type { GameQuery } from "../bindings/GameQuery";
 import type { LibraryView } from "../bindings/LibraryView";
 import type { ViewSection } from "../bindings/ViewSection";
 import { makeGame } from "../test-utils";
 import { defaultQuery } from "./query";
 import {
+  shownName,
   activeFilterCount,
   applyDrop,
   clearedFilters,
@@ -196,5 +198,15 @@ describe("arranging", () => {
     });
     expect(dropTargetAt(rows, ids, sizes, "section", 60)).toEqual({ kind: "section", index: 1 });
     expect(dropTargetAt(rows, ids, sizes, "section", 200)).toEqual({ kind: "section", index: 2 });
+  });
+});
+
+describe("shownName", () => {
+  it("translates default views and sections until they are renamed", () => {
+    setLanguage("de");
+    expect(shownName({ id: "all", name: "All games" })).toBe("Alle Spiele");
+    expect(shownName({ id: "library", name: "Library" })).toBe("Bibliothek");
+    expect(shownName({ id: "all", name: "Everything" })).toBe("Everything");
+    expect(shownName({ id: "custom", name: "Favorites" })).toBe("Favorites");
   });
 });

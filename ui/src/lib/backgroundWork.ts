@@ -1,4 +1,8 @@
 import type { WorkQueue } from "../bindings/WorkQueue";
+import { translator } from "../i18n";
+import { shellSync } from "../i18n/shellSync";
+
+const tr = translator(shellSync);
 
 /** Jobs left in each background download queue, from `backgroundWork` core events. */
 export type BackgroundWork = Record<WorkQueue, number>;
@@ -9,19 +13,23 @@ export function isWorkBusy(work: BackgroundWork): boolean {
   return work.covers > 0 || work.details > 0;
 }
 
-const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
-
 /** "Downloading 12 covers and details of 3 games…", or null while nothing is queued. */
 export function workLabel(work: BackgroundWork): string | null {
-  const covers = work.covers > 0 ? count(work.covers, "cover", "covers") : null;
-  const details = work.details > 0 ? `details of ${count(work.details, "game", "games")}` : null;
+  const covers = work.covers > 0 ? tr("covers", { count: work.covers }) : null;
+  const details = work.details > 0 ? tr("detailsOf", { count: work.details }) : null;
   if (covers === null && details === null) return null;
-  return `Downloading ${[covers, details].filter((part) => part !== null).join(" and ")}…`;
+  const what =
+    covers !== null && details !== null
+      ? tr("and", { a: covers, b: details })
+      : (covers ?? details);
+  return tr("downloading", { what: what ?? "" });
 }
 
 /** "Backing up 42%…" while a backup runs, else null. */
 export function backupLabel(progress: { done: number; total: number } | null): string | null {
   if (progress === null) return null;
-  if (progress.total === 0) return "Backing up…";
-  return `Backing up ${Math.floor((progress.done * 100) / progress.total)}%…`;
+  if (progress.total === 0) return tr("backingUp");
+  return tr("backingUpPercent", {
+    percent: Math.floor((progress.done * 100) / progress.total),
+  });
 }

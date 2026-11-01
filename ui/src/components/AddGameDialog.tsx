@@ -1,8 +1,12 @@
 import { createSignal, Show } from "solid-js";
+import { translator } from "../i18n";
+import { shellAddGame } from "../i18n/shellAddGame";
 import { addGame } from "../lib/actions";
 import { deriveGameName } from "../lib/names";
 import { pickDirectory, pickExecutable, pickImage } from "../lib/pickers";
 import { Modal } from "./Modal";
+
+const tr = translator(shellAddGame);
 
 function emptyToNull(value: string): string | null {
   const trimmed = value.trim();
@@ -54,16 +58,16 @@ export function AddGameDialog(props: { onClose: () => void }) {
   }
 
   return (
-    <Modal title="Add game" onClose={props.onClose}>
+    <Modal title={tr("addGame")} onClose={props.onClose}>
       <form class="form" onSubmit={(event) => void submit(event)}>
         <div class="field">
-          <span class="field__label">Executable</span>
+          <span class="field__label">{tr("executable")}</span>
           <span class="field__row">
             <input
               class="input"
               readOnly
-              aria-label="Executable path"
-              placeholder="No file chosen"
+              aria-label={tr("executablePath")}
+              placeholder={tr("noFile")}
               value={executable()}
             />
             <button
@@ -72,12 +76,12 @@ export function AddGameDialog(props: { onClose: () => void }) {
               data-autofocus
               onClick={() => void chooseExecutable()}
             >
-              Choose executable…
+              {tr("chooseExecutable")}
             </button>
           </span>
         </div>
         <label class="field">
-          <span class="field__label">Name</span>
+          <span class="field__label">{tr("name")}</span>
           <input
             class="input"
             value={name()}
@@ -88,11 +92,11 @@ export function AddGameDialog(props: { onClose: () => void }) {
           />
         </label>
         <label class="field">
-          <span class="field__label">Arguments</span>
+          <span class="field__label">{tr("arguments")}</span>
           <input class="input" value={args()} onInput={(e) => setArgs(e.currentTarget.value)} />
         </label>
         <label class="field">
-          <span class="field__label">Working directory (optional)</span>
+          <span class="field__label">{tr("workingDir")}</span>
           <span class="field__row">
             <input
               class="input"
@@ -100,26 +104,26 @@ export function AddGameDialog(props: { onClose: () => void }) {
               onInput={(e) => setWorkingDir(e.currentTarget.value)}
             />
             <button type="button" class="btn" onClick={() => void chooseDir()}>
-              Browse…
+              {tr("browse")}
             </button>
           </span>
         </label>
         <div class="field">
-          <span class="field__label">Cover image (optional)</span>
+          <span class="field__label">{tr("coverOptional")}</span>
           <span class="field__row">
             <input
               class="input"
               readOnly
-              aria-label="Cover image path"
-              placeholder="None"
+              aria-label={tr("coverPath")}
+              placeholder={tr("none")}
               value={cover() ?? ""}
             />
             <button type="button" class="btn" onClick={() => void chooseCover()}>
-              Choose cover…
+              {tr("chooseCover")}
             </button>
             <Show when={cover() !== null}>
               <button type="button" class="btn" onClick={() => setCover(null)}>
-                Clear
+                {tr("clear")}
               </button>
             </Show>
           </span>
@@ -131,10 +135,10 @@ export function AddGameDialog(props: { onClose: () => void }) {
         </Show>
         <div class="form__actions">
           <button type="submit" class="btn btn--primary" disabled={busy() || executable() === ""}>
-            Add game
+            {tr("addGame")}
           </button>
           <button type="button" class="btn" onClick={props.onClose}>
-            Cancel
+            {tr("cancel")}
           </button>
         </div>
       </form>

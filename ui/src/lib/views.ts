@@ -6,6 +6,9 @@ import type { SectionOrder } from "../bindings/SectionOrder";
 import type { ViewLayout } from "../bindings/ViewLayout";
 import type { ViewColumn } from "../bindings/ViewColumn";
 import type { ViewSection } from "../bindings/ViewSection";
+import { translator } from "../i18n";
+import { libraryDefaults } from "../i18n/libraryDefaults";
+import { librarySidebar } from "../i18n/librarySidebar";
 import { sameColumns } from "./columns";
 import { storesOf } from "./copies";
 import { activeTreeCount, emptyGroup, matchesTree, sameTree } from "./filters";
@@ -23,6 +26,18 @@ export interface ViewState {
 /** `GameQuery.categories` entry for games without a category (the core's `NO_CATEGORY`). */
 export const NO_CATEGORY = ":none";
 
+const tr = translator(librarySidebar);
+const trDefault = translator(libraryDefaults);
+
+/**
+ * The name to show for a view or section: the app's default views and sections keep their
+ * English name in the database and show it translated until the user renames them.
+ */
+export function shownName(item: { id: string; name: string }): string {
+  const key = `${item.id}:${item.name}`;
+  return key in libraryDefaults.en ? trDefault(key as keyof typeof libraryDefaults.en) : item.name;
+}
+
 /** Id of Explore, the unsaved view at the bottom of the sidebar (never stored in the core). */
 export const EXPLORE_ID = "explore";
 
@@ -30,7 +45,10 @@ export const EXPLORE_ID = "explore";
 export function exploreView(preset: Partial<GameQuery> = {}): LibraryView {
   return {
     id: EXPLORE_ID,
-    name: "Explore",
+    // A getter: the name follows the language.
+    get name() {
+      return tr("explore");
+    },
     icon: "compass",
     query: { ...defaultQuery(), ...preset },
     layout: "list",

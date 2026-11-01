@@ -9,7 +9,7 @@ use accesskit::{
 };
 
 use super::PopupData;
-use super::layout::{self, ItemKind, Layout, Rect};
+use super::layout::{ItemKind, Layout, Rect};
 
 const ROOT: NodeId = NodeId(1);
 const RECENT_GROUP: NodeId = NodeId(2);
@@ -54,13 +54,13 @@ fn item_label(data: &PopupData, kind: ItemKind) -> String {
         ItemKind::Launcher(i) => data
             .launchers
             .get(i)
-            .map_or_else(String::new, |l| format!("Open {}", l.name)),
-        ItemKind::OpenButton => layout::OPEN_LABEL.to_string(),
+            .map_or_else(String::new, |l| data.texts.open_launcher_label(&l.name)),
+        ItemKind::OpenButton => data.texts.open.clone(),
         ItemKind::UpdateButton => data
             .update
             .as_deref()
-            .map_or_else(String::new, layout::update_label),
-        ItemKind::ExitButton => format!("{} Questkeep", layout::EXIT_LABEL),
+            .map_or_else(String::new, |v| data.texts.update_label(v)),
+        ItemKind::ExitButton => data.texts.exit_app.clone(),
     }
 }
 
@@ -102,11 +102,11 @@ pub fn tree(layout: &Layout, data: &PopupData, focus: Option<usize>, scale: f32)
         node.add_action(A11yAction::Focus);
         match item.kind {
             ItemKind::Tile(_) => {
-                node.set_description("Play");
+                node.set_description(data.texts.play.as_str());
                 recent.push(id);
             }
             ItemKind::Row(_) => {
-                node.set_description("Play");
+                node.set_description(data.texts.play.as_str());
                 node.add_action(A11yAction::ScrollIntoView);
                 favorites.push(id);
             }
@@ -128,16 +128,16 @@ pub fn tree(layout: &Layout, data: &PopupData, focus: Option<usize>, scale: f32)
     };
     let mut root_children = Vec::new();
     if !recent.is_empty() || layout.empty_recent.is_some() {
-        let mut label = layout::RECENT_LABEL.to_string();
+        let mut label = data.texts.recent.clone();
         if recent.is_empty() {
-            label = format!("{label}: {}", layout::EMPTY_RECENT);
+            label = format!("{label}: {}", data.texts.empty_recent);
         }
         let area = rects(&recent).or(layout.empty_recent);
         nodes.push((RECENT_GROUP, group(&label, area, recent)));
         root_children.push(RECENT_GROUP);
     }
     if !favorites.is_empty() {
-        let mut node = group(layout::FAVORITES_LABEL, layout.favorites_clip, favorites);
+        let mut node = group(&data.texts.favorites, layout.favorites_clip, favorites);
         node.set_clips_children();
         nodes.push((FAVORITES_GROUP, node));
         root_children.push(FAVORITES_GROUP);
@@ -146,7 +146,7 @@ pub fn tree(layout: &Layout, data: &PopupData, focus: Option<usize>, scale: f32)
         let area = rects(&launchers);
         nodes.push((
             LAUNCHERS_GROUP,
-            group(layout::LAUNCHERS_LABEL, area, launchers),
+            group(&data.texts.launchers, area, launchers),
         ));
         root_children.push(LAUNCHERS_GROUP);
     }
@@ -178,7 +178,7 @@ pub fn tree(layout: &Layout, data: &PopupData, focus: Option<usize>, scale: f32)
 mod tests {
     use super::*;
     use crate::layout::layout;
-    use crate::{PopupGame, PopupGames};
+    use crate::{PopupGame, PopupGames, PopupTexts};
     use uuid::Uuid;
 
     fn game(n: u128, name: &str) -> PopupGame {
@@ -202,6 +202,7 @@ mod tests {
                 icon: crate::test_icons::STEAM.into(),
             }],
             update: None,
+            texts: PopupTexts::default(),
         }
     }
 
@@ -282,7 +283,7 @@ mod tests {
             .label()
             .unwrap_or_default()
             .to_string();
-        assert!(label.contains(layout::EMPTY_RECENT));
+        assert!(label.contains(&d.texts.empty_recent));
         assert!(node(&t, RECENT_GROUP).children().is_empty());
     }
 

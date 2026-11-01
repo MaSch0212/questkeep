@@ -4,6 +4,8 @@ import Trash from "lucide-solid/icons/trash";
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import type { LibraryView } from "../bindings/LibraryView";
 import type { ViewSection } from "../bindings/ViewSection";
+import { translator } from "../i18n";
+import { librarySidebar } from "../i18n/librarySidebar";
 import { store } from "../lib/store";
 import {
   applyDrop,
@@ -12,10 +14,13 @@ import {
   nudgeView,
   type DropTarget,
   type EditRow,
+  shownName,
 } from "../lib/views";
 import { IconPicker } from "./IconPicker";
 import type { PopoverAnchor } from "./Popover";
 import { ViewIcon } from "./ViewIcon";
+
+const tr = translator(librarySidebar);
 
 type Dragged = { kind: "section" | "view"; id: string };
 
@@ -163,7 +168,7 @@ export function SidebarEditor(props: { renameId: string | null; onDone: () => vo
   };
 
   async function addSection() {
-    const id = await store.createSection("New section");
+    const id = await store.createSection(tr("newSection"));
     if (id) {
       focusAfterLoad = id;
       queueMicrotask(() => {
@@ -187,7 +192,7 @@ export function SidebarEditor(props: { renameId: string | null; onDone: () => vo
   const handle = (label: string, item: () => Dragged) => (
     <span
       class="edit-row__handle"
-      title={`Drag to move (or Alt+Up/Down)`}
+      title={tr("dragToMove")}
       aria-hidden="true"
       onPointerDown={(event) => startDrag(event, item())}
     >
@@ -199,9 +204,9 @@ export function SidebarEditor(props: { renameId: string | null; onDone: () => vo
   return (
     <div class="sidebar-editor" classList={{ "sidebar-editor--dragging": dragged() !== null }}>
       <div class="sidebar-editor__bar">
-        <span>Editing views</span>
+        <span>{tr("editingViews")}</span>
         <button type="button" class="btn btn--primary btn--small" onClick={() => props.onDone()}>
-          Done
+          {tr("done")}
         </button>
       </div>
       <div class="sidebar-editor__list" ref={(el) => (list = el)}>
@@ -220,10 +225,13 @@ export function SidebarEditor(props: { renameId: string | null; onDone: () => vo
                 data-index={sectionIndex()}
                 onKeyDown={(event) => onRowKeyDown(event, { kind: "section", id: section.id })}
               >
-                {handle(`Move ${section.name}`, () => ({ kind: "section", id: section.id }))}
+                {handle(tr("move", { name: shownName(section) }), () => ({
+                  kind: "section",
+                  id: section.id,
+                }))}
                 <NameInput
-                  value={section.name}
-                  label="Section name"
+                  value={shownName(section)}
+                  label={tr("sectionName")}
                   class="edit-row__name--section"
                   ref={(el) => nameInputs.set(section.id, el)}
                   onSave={(name) => void store.renameSection(section.id, name)}
@@ -231,8 +239,8 @@ export function SidebarEditor(props: { renameId: string | null; onDone: () => vo
                 <button
                   type="button"
                   class="icon-btn icon-btn--small edit-row__delete"
-                  aria-label={`Delete section ${section.name}`}
-                  title="Delete section"
+                  aria-label={tr("deleteSectionLabel", { name: shownName(section) })}
+                  title={tr("deleteSection")}
                   onClick={() => deleteSection(section)}
                 >
                   <Trash class="icon" aria-hidden="true" />
@@ -241,8 +249,7 @@ export function SidebarEditor(props: { renameId: string | null; onDone: () => vo
               <Show when={confirmSection() === section.id}>
                 <div class="edit-row__confirm" role="alert">
                   <span>
-                    Delete “{section.name}” and its {section.views.length}{" "}
-                    {section.views.length === 1 ? "view" : "views"}?
+                    {tr("confirmDelete", { name: shownName(section), count: section.views.length })}
                   </span>
                   <div class="edit-row__confirm-actions">
                     <button
@@ -250,14 +257,14 @@ export function SidebarEditor(props: { renameId: string | null; onDone: () => vo
                       class="btn btn--small"
                       onClick={() => setConfirmSection(null)}
                     >
-                      Cancel
+                      {tr("cancel")}
                     </button>
                     <button
                       type="button"
                       class="btn btn--small btn--danger-solid"
                       onClick={() => deleteSection(section)}
                     >
-                      Delete
+                      {tr("delete")}
                     </button>
                   </div>
                 </div>
@@ -279,12 +286,15 @@ export function SidebarEditor(props: { renameId: string | null; onDone: () => vo
                       data-index={viewIndex()}
                       onKeyDown={(event) => onRowKeyDown(event, { kind: "view", id: view.id })}
                     >
-                      {handle(`Move ${view.name}`, () => ({ kind: "view", id: view.id }))}
+                      {handle(tr("move", { name: shownName(view) }), () => ({
+                        kind: "view",
+                        id: view.id,
+                      }))}
                       <button
                         type="button"
                         class="icon-btn icon-btn--small"
-                        aria-label={`Change icon of ${view.name}`}
-                        title="Change icon"
+                        aria-label={tr("changeIconOf", { name: shownName(view) })}
+                        title={tr("changeIcon")}
                         onClick={(event) => {
                           const rect = event.currentTarget.getBoundingClientRect();
                           setIconFor({ view, anchor: { rect, align: "start" } });
@@ -293,16 +303,16 @@ export function SidebarEditor(props: { renameId: string | null; onDone: () => vo
                         <ViewIcon name={view.icon} />
                       </button>
                       <NameInput
-                        value={view.name}
-                        label="View name"
+                        value={shownName(view)}
+                        label={tr("viewName")}
                         ref={(el) => nameInputs.set(view.id, el)}
                         onSave={(name) => void store.renameView(view.id, name)}
                       />
                       <button
                         type="button"
                         class="icon-btn icon-btn--small edit-row__delete"
-                        aria-label={`Delete view ${view.name}`}
-                        title="Delete view"
+                        aria-label={tr("deleteViewLabel", { name: shownName(view) })}
+                        title={tr("deleteView")}
                         onClick={() => void store.deleteView(view.id)}
                       >
                         <Trash class="icon" aria-hidden="true" />
@@ -321,7 +331,7 @@ export function SidebarEditor(props: { renameId: string | null; onDone: () => vo
                 <div class="edit-row__drop" />
               </Show>
               <Show when={section.views.length === 0}>
-                <p class="edit-row__empty">Drag views here</p>
+                <p class="edit-row__empty">{tr("dragViewsHere")}</p>
               </Show>
             </>
           )}
@@ -330,7 +340,7 @@ export function SidebarEditor(props: { renameId: string | null; onDone: () => vo
           <div class="edit-row__drop" />
         </Show>
         <button type="button" class="sidebar-editor__add" onClick={() => void addSection()}>
-          <Plus class="icon" aria-hidden="true" /> New section
+          <Plus class="icon" aria-hidden="true" /> {tr("newSection")}
         </button>
       </div>
       <Show when={iconFor()}>

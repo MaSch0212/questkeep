@@ -11,17 +11,21 @@ import Undo2 from "lucide-solid/icons/undo-2";
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import type { GroupBy } from "../bindings/GroupBy";
 import type { SortField } from "../bindings/SortField";
+import { translator } from "../i18n";
+import { libraryCommon } from "../i18n/libraryCommon";
+import { libraryTopBar } from "../i18n/libraryTopBar";
 import { store } from "../lib/store";
 import {
   GAME_GROUPS,
   groupLabel,
   GROUPS,
+  inSentence,
   MORE_SORTS,
   NUMBER_GROUPS,
   sortLabel,
   SORTS,
 } from "../lib/viewOptions";
-import { activeFilterCount } from "../lib/views";
+import { activeFilterCount, shownName } from "../lib/views";
 import type { ViewMode } from "../lib/viewMode";
 import { FilterPanel } from "./FilterPanel";
 import { KeywordFilter, type KeywordFilterHandle } from "./KeywordFilter";
@@ -30,10 +34,17 @@ import type { PopoverAnchor } from "./Popover";
 import { SaveViewDialog } from "./SaveViewDialog";
 import { SearchPicker } from "./SearchPicker";
 
-const LAYOUTS: { id: ViewMode; label: string; icon: typeof List }[] = [
-  { id: "grid", label: "Grid view", icon: LayoutGrid },
-  { id: "list", label: "List view", icon: List },
-  { id: "details", label: "Details view", icon: PanelLeft },
+const tr = translator(libraryTopBar);
+const trCommon = translator(libraryCommon);
+
+const LAYOUTS: {
+  id: ViewMode;
+  key: "layoutGrid" | "layoutList" | "layoutDetails";
+  icon: typeof List;
+}[] = [
+  { id: "grid", key: "layoutGrid", icon: LayoutGrid },
+  { id: "list", key: "layoutList", icon: List },
+  { id: "details", key: "layoutDetails", icon: PanelLeft },
 ];
 
 const sortEntry = (sort: { id: SortField; label: string }): MenuEntry => ({
@@ -54,23 +65,27 @@ type Open = "filters" | "sort" | "group" | "jump" | "save" | null;
 const filters = () => activeFilterCount(store.query());
 const sortName = () => sortLabel(store.query().sort);
 const sortButtonLabel = () =>
-  `Sort: ${sortName()}, ${store.query().descending ? "descending" : "ascending"}`;
+  tr(store.query().descending ? "sortDescending" : "sortAscending", { sort: sortName() });
 const groupButtonLabel = () => {
   const group = store.groupBy();
-  return group === "none" ? "Group by" : `Grouped by ${groupLabel(group).toLowerCase()}`;
+  return group === "none"
+    ? tr("groupBy")
+    : tr("groupedBy", { group: inSentence(groupLabel(group)) });
 };
-const viewName = () => store.activeView()?.name ?? "view";
+const viewName = () => {
+  const view = store.activeView();
+  return view ? shownName(view) : tr("viewFallback");
+};
 const changed = () => {
   const view = store.activeView();
   return view !== null && store.hasDraft(view.id);
 };
-const noun = (n: number) => (n === 1 ? "game" : "games");
 /** "N games", or "N of M games" while the keyword filter narrows the view. */
 const count = () => {
   const shown = store.games().length;
   const total = store.viewCounts()[store.activeViewId() ?? ""];
-  if (store.keyword() !== null && total !== undefined) return { shown, total, noun: noun(total) };
-  return { shown, total: null, noun: noun(shown) };
+  if (store.keyword() !== null && total !== undefined) return { shown, total };
+  return { shown, total: null };
 };
 
 /** The library toolbar: keyword filter, filters, sort, the open view's save actions, layout. */
@@ -118,8 +133,8 @@ export function TopBar(props: { keywordRef?: (handle: KeywordFilterHandle) => vo
         type="button"
         class="tool-btn"
         classList={{ "tool-btn--open": open() === "filters", "tool-btn--wide": filters() > 0 }}
-        aria-label={filters() > 0 ? `Filters (${filters()} active)` : "Filters"}
-        title="Filters"
+        aria-label={filters() > 0 ? tr("filtersActive", { count: filters() }) : tr("filters")}
+        title={tr("filters")}
         aria-haspopup="dialog"
         aria-expanded={open() === "filters"}
         onClick={() => toggle("filters", "start")}
@@ -171,8 +186,8 @@ export function TopBar(props: { keywordRef?: (handle: KeywordFilterHandle) => vo
           type="button"
           class="tool-btn"
           classList={{ "tool-btn--open": open() === "jump" }}
-          aria-label="Jump to group"
-          title="Jump to group (Ctrl+G)"
+          aria-label={tr("jumpToGroup")}
+          title={tr("jumpTitle")}
           aria-haspopup="dialog"
           aria-expanded={open() === "jump"}
           onClick={() => toggle("jump", "start")}
@@ -183,20 +198,24 @@ export function TopBar(props: { keywordRef?: (handle: KeywordFilterHandle) => vo
       <Show when={store.isExplore()}>
         <button type="button" class="btn topbar__save" onClick={() => setSaving(true)}>
           <BookmarkPlus class="icon" aria-hidden="true" />
-          Save as view…
+          {tr("saveAsView")}
         </button>
       </Show>
       <Show when={changed() && !store.isExplore()}>
-        <div class="view-actions" role="group" aria-label={`Unsaved changes to ${viewName()}`}>
+        <div
+          class="view-actions"
+          role="group"
+          aria-label={tr("unsavedChangesTo", { name: viewName() })}
+        >
           <span class="view-actions__label">
             <span class="view-actions__dot" aria-hidden="true" />
-            Unsaved
+            {tr("unsaved")}
           </span>
           <button
             type="button"
             class="view-actions__btn"
-            aria-label={`Reset to the saved ${viewName()}`}
-            title="Reset to the saved view"
+            aria-label={tr("resetTo", { name: viewName() })}
+            title={tr("resetTitle")}
             onClick={() => store.resetView()}
           >
             <Undo2 class="icon" aria-hidden="true" />
@@ -206,8 +225,8 @@ export function TopBar(props: { keywordRef?: (handle: KeywordFilterHandle) => vo
             type="button"
             class="view-actions__btn"
             classList={{ "view-actions__btn--open": open() === "save" }}
-            aria-label="Save view"
-            title="Save view"
+            aria-label={tr("saveView")}
+            title={tr("saveView")}
             aria-haspopup="menu"
             aria-expanded={open() === "save"}
             onClick={() => toggle("save", "start")}
@@ -218,20 +237,23 @@ export function TopBar(props: { keywordRef?: (handle: KeywordFilterHandle) => vo
       </Show>
       <div class="topbar__spacer" />
       <span class="topbar__count" aria-live="polite">
-        <Show when={count().total !== null} fallback={`${count().shown} ${count().noun}`}>
-          <strong>{count().shown}</strong> of {count().total} {count().noun}
+        <Show
+          when={count().total !== null}
+          fallback={trCommon("gamesCount", { count: count().shown })}
+        >
+          <strong>{count().shown}</strong> {tr("ofTotal", { total: count().total ?? 0 })}
         </Show>
       </span>
-      <div class="view-toggle" role="group" aria-label="Layout">
+      <div class="view-toggle" role="group" aria-label={tr("layout")}>
         <For each={LAYOUTS}>
           {(layout) => (
             <button
               type="button"
               class="icon-btn icon-btn--bordered"
               classList={{ "icon-btn--active": store.viewMode() === layout.id }}
-              aria-label={layout.label}
+              aria-label={tr(layout.key)}
               aria-pressed={store.viewMode() === layout.id}
-              title={layout.label}
+              title={tr(layout.key)}
               onClick={() => store.setViewMode(layout.id)}
             >
               <layout.icon class="icon" aria-hidden="true" />
@@ -246,9 +268,9 @@ export function TopBar(props: { keywordRef?: (handle: KeywordFilterHandle) => vo
         {(at) => (
           <SearchPicker
             anchor={at()}
-            label="Jump to group"
-            placeholder="Type to find a group"
-            empty="No group matches"
+            label={tr("jumpToGroup")}
+            placeholder={tr("typeToFind")}
+            empty={tr("noGroupMatches")}
             items={store.groups().map((group) => ({
               id: group.key,
               label: group.label,
@@ -266,7 +288,7 @@ export function TopBar(props: { keywordRef?: (handle: KeywordFilterHandle) => vo
                     close(true);
                   }}
                 >
-                  Collapse all
+                  {tr("collapseAll")}
                 </button>
                 <button
                   type="button"
@@ -276,7 +298,7 @@ export function TopBar(props: { keywordRef?: (handle: KeywordFilterHandle) => vo
                     close(true);
                   }}
                 >
-                  Expand all
+                  {tr("expandAll")}
                 </button>
               </div>
             }
@@ -287,22 +309,22 @@ export function TopBar(props: { keywordRef?: (handle: KeywordFilterHandle) => vo
         {(at) => (
           <Menu
             anchor={at()}
-            label="Group by"
+            label={tr("groupBy")}
             inside={() => [buttons.group]}
             onClose={close}
             entries={[
-              { kind: "heading", label: "Group by" },
+              { kind: "heading", label: tr("groupBy") },
               ...GROUPS.map(groupEntry),
               { kind: "separator" },
               {
                 kind: "submenu",
-                label: "About the game",
+                label: tr("aboutGame"),
                 hint: GAME_GROUPS.find((g) => g.id === store.groupBy())?.label,
                 entries: () => GAME_GROUPS.map(groupEntry),
               },
               {
                 kind: "submenu",
-                label: "Time and numbers",
+                label: tr("timeNumbers"),
                 hint: NUMBER_GROUPS.find((g) => g.id === store.groupBy())?.label,
                 entries: () => NUMBER_GROUPS.map(groupEntry),
               },
@@ -314,26 +336,26 @@ export function TopBar(props: { keywordRef?: (handle: KeywordFilterHandle) => vo
         {(at) => (
           <Menu
             anchor={at()}
-            label="Sort"
+            label={tr("sort")}
             inside={() => [buttons.sort]}
             onClose={close}
             entries={[
               ...SORTS.map(sortEntry),
               {
                 kind: "submenu",
-                label: "More",
+                label: tr("more"),
                 hint: MORE_SORTS.find((s) => s.id === store.query().sort)?.label,
                 entries: () => MORE_SORTS.map(sortEntry),
               },
               { kind: "separator" },
               {
-                label: "Ascending",
+                label: tr("ascending"),
                 checked: !store.query().descending,
                 keepOpen: true,
                 onSelect: () => store.setDescending(false),
               },
               {
-                label: "Descending",
+                label: tr("descending"),
                 checked: store.query().descending,
                 keepOpen: true,
                 onSelect: () => store.setDescending(true),
@@ -346,15 +368,15 @@ export function TopBar(props: { keywordRef?: (handle: KeywordFilterHandle) => vo
         {(at) => (
           <Menu
             anchor={at()}
-            label="Save view"
+            label={tr("saveView")}
             inside={() => [buttons.save]}
             onClose={close}
             entries={[
               {
-                label: `Update “${viewName()}”`,
+                label: tr("updateView", { name: viewName() }),
                 onSelect: () => void store.updateActiveView(),
               },
-              { label: "Save as new view…", onSelect: () => setSaving(true) },
+              { label: tr("saveAsNew"), onSelect: () => setSaving(true) },
             ]}
           />
         )}

@@ -1,6 +1,8 @@
 import { createSignal, onMount } from "solid-js";
 import type { Settings } from "../../bindings/Settings";
 import type { StoreCredentials } from "../../bindings/StoreCredentials";
+import { translator } from "../../i18n";
+import { settingsAccounts } from "../../i18n/settingsAccounts";
 import * as api from "../../lib/api";
 import { errorMessage } from "../../lib/errors";
 import { scanSummaryText } from "../../lib/query";
@@ -11,6 +13,8 @@ import {
   withProviderOption,
 } from "../../lib/providerSettings";
 import { store } from "../../lib/store";
+
+const tr = translator(settingsAccounts);
 
 /** A typed key, trimmed; empty means none. */
 const keyValue = (text: string) => (text.trim() === "" ? null : text.trim());
@@ -89,7 +93,7 @@ export function createSettingsModel() {
       await api.saveSettings(next);
       setSettings(next);
       setDrafts(({ [providerId]: _saved, ...rest }) => rest);
-      store.pushToast("info", `${credentials.noun} ${saved ? "saved" : "removed"}`);
+      store.pushToast("info", tr(saved ? "nounSaved" : "nounRemoved", { noun: credentials.noun }));
     } catch (error) {
       store.pushToast("error", errorMessage(error));
       setSavingCredentials(null);
@@ -152,7 +156,7 @@ export function createSettingsModel() {
       await api.saveSettings(next);
       setSettings(next);
       setGridDbKey(key);
-      store.pushToast("info", key === "" ? "SteamGridDB key removed" : "SteamGridDB key saved");
+      store.pushToast("info", key === "" ? tr("griddbRemoved") : tr("griddbSaved"));
     } catch (error) {
       store.pushToast("error", errorMessage(error));
     } finally {
@@ -177,10 +181,7 @@ export function createSettingsModel() {
       setIgdbClientId(id);
       setIgdbClientSecret(secret);
       void store.loadSetup();
-      store.pushToast(
-        "info",
-        id === "" && secret === "" ? "IGDB credentials removed" : "IGDB credentials saved",
-      );
+      store.pushToast("info", id === "" && secret === "" ? tr("igdbRemoved") : tr("igdbSaved"));
     } catch (error) {
       store.pushToast("error", errorMessage(error));
     } finally {

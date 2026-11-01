@@ -1,6 +1,10 @@
 import X from "lucide-solid/icons/x";
 import { createMemo, createSignal, createUniqueId, For, Show } from "solid-js";
+import { translator } from "../i18n";
+import { settingsChipInput } from "../i18n/settingsChipInput";
 import { Popover, type PopoverAnchor } from "./Popover";
+
+const tr = translator(settingsChipInput);
 
 /** Suggestions shown at most; typing narrows them down. */
 const MAX_SUGGESTIONS = 50;
@@ -91,7 +95,7 @@ export function ChipInput(props: {
             <button
               type="button"
               class="chip-input__remove"
-              aria-label={`Remove ${value}`}
+              aria-label={tr("remove", { value })}
               onClick={() => remove(index())}
             >
               <X class="icon icon--xs" aria-hidden="true" />
@@ -110,7 +114,7 @@ export function ChipInput(props: {
         aria-activedescendant={active() >= 0 ? `${listId}-${active()}` : undefined}
         aria-label={props.label}
         aria-describedby={props.describedBy}
-        placeholder="Add…"
+        placeholder={tr("add")}
         autocomplete="off"
         value={text()}
         onFocus={open}

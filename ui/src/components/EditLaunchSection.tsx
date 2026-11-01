@@ -1,3 +1,5 @@
+import { translator } from "../i18n";
+import { gameLaunch } from "../i18n/gameLaunch";
 import GripVertical from "lucide-solid/icons/grip-vertical";
 import Ellipsis from "lucide-solid/icons/ellipsis";
 import Plus from "lucide-solid/icons/plus";
@@ -14,6 +16,8 @@ import { pickDirectory, pickExecutable } from "../lib/pickers";
 import { Menu, type MenuEntry } from "./Menu";
 import type { PopoverAnchor } from "./Popover";
 import { SourceIcon, sourceName } from "./SourceIcon";
+
+const tr = translator(gameLaunch);
 
 const EXECUTABLE = "executable";
 
@@ -77,7 +81,7 @@ function ProfileForm(props: {
         }
       : null;
     if (executable() && action?.target === "") {
-      setError("Choose the executable this profile starts.");
+      setError(tr("chooseExecutable"));
       return;
     }
     setSaving(true);
@@ -94,19 +98,19 @@ function ProfileForm(props: {
   return (
     <form class="profile__body" onSubmit={(event) => void save(event)}>
       <label class="field">
-        <span class="field__label">Name</span>
+        <span class="field__label">{tr("name")}</span>
         <input
           class="input"
           data-autofocus
           value={name()}
-          placeholder={props.profile?.name ?? "Profile name"}
+          placeholder={props.profile?.name ?? tr("profileName")}
           onInput={(event) => setName(event.currentTarget.value)}
         />
       </label>
       <Show when={own()}>
         <div class="field">
           <span class="field__label" id="profile-based-on">
-            Based on
+            {tr("basedOn")}
           </span>
           <div class="segmented" role="radiogroup" aria-labelledby="profile-based-on">
             <For each={props.game.copies}>
@@ -118,7 +122,7 @@ function ProfileForm(props: {
                   aria-checked={basedOn() === copy.id}
                   onClick={() => setBasedOn(copy.id)}
                 >
-                  {copy.source === "manual" ? "Its executable" : sourceName(copy.source)}
+                  {copy.source === "manual" ? tr("itsExecutable") : sourceName(copy.source)}
                 </button>
               )}
             </For>
@@ -129,14 +133,14 @@ function ProfileForm(props: {
               aria-checked={basedOn() === EXECUTABLE}
               onClick={() => setBasedOn(EXECUTABLE)}
             >
-              Executable
+              {tr("executable")}
             </button>
           </div>
         </div>
       </Show>
       <Show when={executable()}>
         <label class="field field--full">
-          <span class="field__label">Executable</span>
+          <span class="field__label">{tr("executable")}</span>
           <span class="field__row">
             <input
               class="input"
@@ -148,40 +152,40 @@ function ProfileForm(props: {
               class="btn"
               onClick={() => void pickExecutable().then((path) => path !== null && setTarget(path))}
             >
-              Browse…
+              {tr("browse")}
             </button>
           </span>
         </label>
       </Show>
       <div class="field field--full">
         <label class="field__label" for={argsId}>
-          {executable() ? "Arguments" : "Extra arguments"}
+          {executable() ? tr("arguments") : tr("extraArguments")}
         </label>
         <input
           id={argsId}
           class="input"
           value={args()}
           disabled={!argsSupported()}
-          placeholder="e.g. -windowed -skipintro"
+          placeholder={tr("argsPlaceholder")}
           aria-describedby="profile-args-hint"
           onInput={(event) => setArgs(event.currentTarget.value)}
         />
         <span class="field__hint" id="profile-args-hint">
           {argsSupported()
             ? executable()
-              ? "Passed to the executable."
-              : "Passed to the game through the store."
-            : "This store can't pass arguments; base the profile on the executable instead."}
+              ? tr("passedToExe")
+              : tr("passedToStore")
+            : tr("noArgs")}
         </span>
       </div>
       <Show when={executable()}>
         <label class="field field--full">
-          <span class="field__label">Working directory</span>
+          <span class="field__label">{tr("workingDir")}</span>
           <span class="field__row">
             <input
               class="input"
               value={workingDir()}
-              placeholder="The executable's folder"
+              placeholder={tr("workingDirPlaceholder")}
               onInput={(event) => setWorkingDir(event.currentTarget.value)}
             />
             <button
@@ -191,7 +195,7 @@ function ProfileForm(props: {
                 void pickDirectory().then((path) => path !== null && setWorkingDir(path))
               }
             >
-              Browse…
+              {tr("browse")}
             </button>
           </span>
         </label>
@@ -203,10 +207,10 @@ function ProfileForm(props: {
       </Show>
       <div class="profile__actions field--full">
         <button type="button" class="btn" onClick={() => props.onCancel()}>
-          Cancel
+          {tr("cancel")}
         </button>
         <button type="submit" class="btn btn--primary" disabled={saving()}>
-          {props.profile ? "Save profile" : "Add profile"}
+          {props.profile ? tr("saveProfile") : tr("addProfile")}
         </button>
       </div>
     </form>
@@ -282,25 +286,25 @@ export function EditLaunchSection(props: {
     const isDefault = props.profiles?.defaultId === profile.id;
     return [
       {
-        label: "Edit",
+        label: tr("edit"),
         onSelect: () => setOpen(profile.id),
       },
       isDefault
         ? {
-            label: "Use automatic",
+            label: tr("useAutomatic"),
             onSelect: () => void apply(() => api.setDefaultLaunchProfile(props.game.id, null)),
           }
         : {
-            label: "Make default",
+            label: tr("makeDefault"),
             onSelect: () =>
               void apply(() => api.setDefaultLaunchProfile(props.game.id, profile.id)),
           },
       {
-        label: "Duplicate",
+        label: tr("duplicate"),
         onSelect: () =>
           void apply(() =>
             api.saveLaunchProfile(props.game.id, null, {
-              name: `${profile.name} (copy)`,
+              name: tr("copyName", { name: profile.name }),
               copyId: profile.copyId,
               args: profile.args,
               action: profile.action,
@@ -308,9 +312,9 @@ export function EditLaunchSection(props: {
           ),
       },
       { kind: "separator" },
-      { label: "Move up", disabled: index <= 0, onSelect: () => move(index, -1) },
+      { label: tr("moveUp"), disabled: index <= 0, onSelect: () => move(index, -1) },
       {
-        label: "Move down",
+        label: tr("moveDown"),
         disabled: index >= list().length - 1,
         onSelect: () => move(index, 1),
       },
@@ -318,7 +322,7 @@ export function EditLaunchSection(props: {
         ? ([
             { kind: "separator" },
             {
-              label: "Delete",
+              label: tr("delete"),
               danger: true,
               onSelect: () => void apply(() => api.deleteLaunchProfile(props.game.id, profile.id)),
             },
@@ -334,26 +338,20 @@ export function EditLaunchSection(props: {
 
   return (
     <div class="edit-section">
-      <p class="field__hint">
-        Profiles are ways to start this game. The default one runs on Play (and from the tray); all
-        of them are in the menu next to Play. Drag to reorder.
-      </p>
+      <p class="field__hint">{tr("intro")}</p>
       <p class="profiles__default">
-        <Show
-          when={props.profiles?.defaultId}
-          fallback={<>Play starts: Automatic (the first installed store)</>}
-        >
-          Play starts the default profile.{" "}
+        <Show when={props.profiles?.defaultId} fallback={<>{tr("playStartsAutomatic")}</>}>
+          {tr("playStartsDefault")}{" "}
           <button
             type="button"
             class="link-btn"
             onClick={() => void apply(() => api.setDefaultLaunchProfile(props.game.id, null))}
           >
-            Use automatic
+            {tr("useAutomatic")}
           </button>
         </Show>
       </p>
-      <ol class="profiles" aria-label="Launch profiles">
+      <ol class="profiles" aria-label={tr("launchProfiles")}>
         <For each={list()}>
           {(profile, index) => (
             <li
@@ -380,7 +378,7 @@ export function EditLaunchSection(props: {
                 <span
                   class="profile__drag"
                   draggable="true"
-                  title="Drag to reorder"
+                  title={tr("dragToReorder")}
                   aria-hidden="true"
                   onDragStart={(event) => {
                     setDragged(index());
@@ -402,7 +400,7 @@ export function EditLaunchSection(props: {
                     <small class="muted"> {profile.args}</small>
                   </Show>
                   <Show when={!profile.installed}>
-                    <small class="muted"> · not installed</small>
+                    <small class="muted"> · {tr("notInstalled")}</small>
                   </Show>
                 </button>
                 <Show
@@ -415,17 +413,17 @@ export function EditLaunchSection(props: {
                         void apply(() => api.setDefaultLaunchProfile(props.game.id, profile.id))
                       }
                     >
-                      Make default
+                      {tr("makeDefault")}
                     </button>
                   }
                 >
-                  <span class="profile__default">Default</span>
+                  <span class="profile__default">{tr("default")}</span>
                 </Show>
                 <button
                   ref={(el) => menuButtons.set(profile.id, el)}
                   type="button"
                   class="icon-btn"
-                  aria-label={`${profile.name} actions`}
+                  aria-label={tr("actions", { name: profile.name })}
                   aria-haspopup="menu"
                   onClick={(event) => {
                     const rect = event.currentTarget.getBoundingClientRect();
@@ -453,7 +451,7 @@ export function EditLaunchSection(props: {
         when={open() === "new"}
         fallback={
           <button type="button" class="btn profiles__add" onClick={() => setOpen("new")}>
-            <Plus class="icon" aria-hidden="true" /> Add profile
+            <Plus class="icon" aria-hidden="true" /> {tr("addProfile")}
           </button>
         }
       >
@@ -477,7 +475,7 @@ export function EditLaunchSection(props: {
         {(current) => (
           <Menu
             anchor={current().anchor}
-            label={`${current().profile.name} actions`}
+            label={tr("actions", { name: current().profile.name })}
             inside={() => [menuButtons.get(current().profile.id)]}
             onClose={(returnFocus) => {
               const button = menuButtons.get(current().profile.id);

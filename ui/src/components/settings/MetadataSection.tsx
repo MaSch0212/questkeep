@@ -1,11 +1,15 @@
 import { Show } from "solid-js";
+import { translator } from "../../i18n";
+import { settingsKeys } from "../../i18n/settingsKeys";
 import { IgdbFields, IgdbSteps } from "./KeyFields";
 import { SourcePriority } from "./SourcePriority";
 import type { SettingsModel } from "./useSettings";
 
+const tr = translator(settingsKeys);
+
 export function MetadataSection(props: { model: SettingsModel }) {
   return (
-    <Show when={props.model.settings()} fallback={<p class="muted">Loading…</p>}>
+    <Show when={props.model.settings()} fallback={<p class="muted">{tr("loading")}</p>}>
       <form
         class="form"
         onSubmit={(event) => {
@@ -13,19 +17,13 @@ export function MetadataSection(props: { model: SettingsModel }) {
           void props.model.saveIgdb();
         }}
       >
-        <p class="muted">
-          IGDB adds descriptions, genres, series, age ratings, game modes, themes, time to beat and
-          links, also for games you added by hand. It needs a free Twitch application:
-        </p>
+        <p class="muted">{tr("igdbIntro")}</p>
         <IgdbSteps />
         <IgdbFields model={props.model} />
-        <p class="field__hint">
-          Both values are stored in your system's credential store, not in the Questkeep data
-          folder. Leave them empty to turn IGDB off.
-        </p>
+        <p class="field__hint">{tr("igdbHint")}</p>
         <div class="form__actions">
           <button type="submit" class="btn btn--primary" disabled={props.model.savingIgdb()}>
-            {props.model.savingIgdb() ? "Saving…" : "Save metadata settings"}
+            {props.model.savingIgdb() ? tr("saving") : tr("saveMetadata")}
           </button>
         </div>
       </form>

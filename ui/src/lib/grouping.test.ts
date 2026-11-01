@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Category } from "../bindings/Category";
+import { intlLocale } from "../i18n";
 import { makeGame } from "../test-utils";
 import { nextIndex, type NavKey } from "./gridNav";
 import {
@@ -266,7 +267,7 @@ describe("groupSummary", () => {
         makeGame({ id: "2", installed: true, playtimeSeconds: 3600 * 810 + 1700 }),
         makeGame({ id: "3", installed: false, playtimeSeconds: 0 }),
       ]),
-    ).toBe(`2 installed · ${(2310).toLocaleString()}h`);
+    ).toBe(`2 installed · ${(2310).toLocaleString(intlLocale())}h`);
     expect(groupSummary([makeGame({ id: "1", installed: true, playtimeSeconds: 0 })])).toBe(
       "1 installed",
     );

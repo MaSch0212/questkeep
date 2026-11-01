@@ -2,7 +2,11 @@ import Check from "lucide-solid/icons/check";
 import GripVertical from "lucide-solid/icons/grip-vertical";
 import Search from "lucide-solid/icons/search";
 import { createMemo, createSignal, For, onMount, Show, type JSX } from "solid-js";
+import { translator } from "../i18n";
+import { libraryCommon } from "../i18n/libraryCommon";
 import { Popover, type PopoverAnchor } from "./Popover";
+
+const tr = translator(libraryCommon);
 
 export interface PickerItem {
   id: string;
@@ -120,7 +124,7 @@ export function SearchPicker(props: {
       >
         <For
           each={shown()}
-          fallback={<p class="picker__empty">{props.empty ?? "Nothing found"}</p>}
+          fallback={<p class="picker__empty">{props.empty ?? tr("nothingFound")}</p>}
         >
           {(item, index) => (
             <>

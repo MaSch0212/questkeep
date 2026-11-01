@@ -21,6 +21,7 @@ use tauri::{AppHandle, Manager, Wry};
 use uuid::Uuid;
 
 use crate::AppState;
+use crate::i18n::{self, Lang};
 use crate::window::{self, Lifecycle};
 
 const TRAY_ID: &str = "main";
@@ -49,6 +50,7 @@ struct MenuModel {
     games: TrayGames,
     launchers: Vec<TrayLauncher>,
     update: Option<String>,
+    lang: Lang,
 }
 
 /// A store whose own launcher is installed.
@@ -70,17 +72,28 @@ enum Trigger {
     Scan,
     /// An app update was found.
     Update,
+    /// The language setting changed.
+    Language,
 }
 
 /// Shows (or hides, with `None`) the "Update" entry for a newer app version.
 pub fn set_update(version: Option<String>) {
     *UPDATE.lock().unwrap_or_else(PoisonError::into_inner) = version;
+    send(Trigger::Update);
+}
+
+/// Rebuilds the menu in the newly chosen language.
+pub fn language_changed() {
+    send(Trigger::Language);
+}
+
+fn send(trigger: Trigger) {
     if let Some(tx) = TRIGGER
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .as_ref()
     {
-        let _ = tx.send(Trigger::Update);
+        let _ = tx.send(trigger);
     }
 }
 
@@ -198,6 +211,7 @@ fn refresh_loop(app: &AppHandle, state: &AppState, rx: &Receiver<Trigger>) {
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
                 .clone(),
+            lang: i18n::current(state.library.settings().language.as_deref()),
         };
         if shown.as_ref() == Some(&model) {
             continue;
@@ -260,10 +274,14 @@ fn game_items(app: &AppHandle, games: &[TrayGame]) -> tauri::Result<Vec<Box<dyn 
         .collect()
 }
 
-fn favorites_submenu(app: &AppHandle, favorites: &[TrayGame]) -> tauri::Result<Submenu<Wry>> {
-    let mut builder = SubmenuBuilder::new(app, "Favorites");
+fn favorites_submenu(
+    app: &AppHandle,
+    texts: &i18n::MenuTexts,
+    favorites: &[TrayGame],
+) -> tauri::Result<Submenu<Wry>> {
+    let mut builder = SubmenuBuilder::new(app, texts.favorites);
     if favorites.is_empty() {
-        builder = builder.item(&disabled_item(app, "No favorites")?);
+        builder = builder.item(&disabled_item(app, texts.no_favorites)?);
     }
     for item in game_items(app, favorites)? {
         builder = builder.item(item.as_ref());
@@ -271,8 +289,12 @@ fn favorites_submenu(app: &AppHandle, favorites: &[TrayGame]) -> tauri::Result<S
     builder.build()
 }
 
-fn launchers_submenu(app: &AppHandle, launchers: &[TrayLauncher]) -> tauri::Result<Submenu<Wry>> {
-    let mut builder = SubmenuBuilder::new(app, "Launchers");
+fn launchers_submenu(
+    app: &AppHandle,
+    texts: &i18n::MenuTexts,
+    launchers: &[TrayLauncher],
+) -> tauri::Result<Submenu<Wry>> {
+    let mut builder = SubmenuBuilder::new(app, texts.launchers);
     for launcher in launchers {
         builder = builder.text(format!("{LAUNCHER_PREFIX}{}", launcher.id), &launcher.name);
     }
@@ -280,26 +302,27 @@ fn launchers_submenu(app: &AppHandle, launchers: &[TrayLauncher]) -> tauri::Resu
 }
 
 fn build_menu(app: &AppHandle, model: &MenuModel) -> tauri::Result<Menu<Wry>> {
+    let texts = i18n::menu_texts(model.lang);
     let mut builder = MenuBuilder::new(app);
     let recent = game_items(app, &model.games.recent)?;
     if recent.is_empty() {
-        builder = builder.item(&disabled_item(app, "No recently played games")?);
+        builder = builder.item(&disabled_item(app, texts.no_recent)?);
     }
     for item in &recent {
         builder = builder.item(item.as_ref());
     }
     builder = builder
         .separator()
-        .item(&favorites_submenu(app, &model.games.favorites)?)
+        .item(&favorites_submenu(app, &texts, &model.games.favorites)?)
         .separator();
     if let Some(version) = &model.update {
-        builder = builder.text(ID_UPDATE, format!("Update to {version}…"));
+        builder = builder.text(ID_UPDATE, texts.update.replace("{version}", version));
     }
-    builder = builder.text(ID_OPEN, "Open Questkeep");
+    builder = builder.text(ID_OPEN, texts.open);
     if !model.launchers.is_empty() {
-        builder = builder.item(&launchers_submenu(app, &model.launchers)?);
+        builder = builder.item(&launchers_submenu(app, &texts, &model.launchers)?);
     }
-    builder.separator().text(ID_EXIT, "Exit").build()
+    builder.separator().text(ID_EXIT, texts.exit).build()
 }
 
 /// Left click opens the window; right click opens the popup (Windows; elsewhere the native menu
@@ -361,6 +384,7 @@ fn show_popup(app: &AppHandle, rect: &tauri::Rect) {
             })
             .collect(),
         update: model.update,
+        texts: i18n::popup_texts(model.lang),
     };
     let app = app.clone();
     questkeep_tray_popup::show(anchor, data, move |action| match action {

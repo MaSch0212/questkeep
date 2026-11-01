@@ -5,9 +5,13 @@ import X from "lucide-solid/icons/x";
 import { createMemo, createSignal, For, onMount, Show } from "solid-js";
 import type { Category } from "../bindings/Category";
 import type { Game } from "../bindings/Game";
+import { translator } from "../i18n";
+import { shellCategories } from "../i18n/shellCategories";
 import { store } from "../lib/store";
 import { Popover, type PopoverAnchor } from "./Popover";
 import { sourceName } from "./SourceIcon";
+
+const tr = translator(shellCategories);
 
 const optionId = (index: number) => `category-option-${index}`;
 const collator = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
@@ -38,7 +42,7 @@ export function CategoryEditor(props: { game: Game }) {
   }
 
   return (
-    <section class="categories" aria-label="Categories">
+    <section class="categories" aria-label={tr("categories")}>
       <ul class="categories__list">
         <For each={assigned()}>
           {(category) => (
@@ -48,8 +52,8 @@ export function CategoryEditor(props: { game: Game }) {
               <button
                 type="button"
                 class="categories__remove"
-                aria-label={`Remove ${category.name}`}
-                title="Remove"
+                aria-label={tr("removeAria", { name: category.name })}
+                title={tr("remove")}
                 onClick={() => toggle(category.id)}
               >
                 <X class="icon" aria-hidden="true" />
@@ -70,7 +74,7 @@ export function CategoryEditor(props: { game: Game }) {
             }}
           >
             <Plus class="icon" aria-hidden="true" />
-            {assigned().length === 0 ? "Add a category" : "Category"}
+            {assigned().length === 0 ? tr("addCategory") : tr("category")}
           </button>
         </li>
       </ul>
@@ -96,7 +100,7 @@ export function CategoryEditor(props: { game: Game }) {
 function importedTitle(category: Category): string | undefined {
   if (category.sources.length === 0) return undefined;
   const from = category.sources.map((s) => `${sourceName(s.source)} (“${s.name}”)`);
-  return `Synced with ${from.join(", ")}`;
+  return tr("syncedWith", { from: from.join(", ") });
 }
 
 /**
@@ -151,7 +155,7 @@ function CategoryPicker(props: {
       anchor={props.anchor}
       class="category-picker"
       role="dialog"
-      label="Categories"
+      label={tr("categories")}
       inside={props.inside}
       onClose={props.onClose}
     >
@@ -160,11 +164,11 @@ function CategoryPicker(props: {
         class="input category-picker__input"
         type="text"
         role="combobox"
-        aria-label="Find or create a category"
+        aria-label={tr("findOrCreate")}
         aria-expanded="true"
         aria-controls="category-options"
         aria-activedescendant={count() > 0 ? optionId(active()) : undefined}
-        placeholder="Find or create a category…"
+        placeholder={tr("findOrCreatePlaceholder")}
         spellcheck={false}
         autocomplete="off"
         value={text()}
@@ -178,7 +182,7 @@ function CategoryPicker(props: {
         id="category-options"
         class="category-picker__list"
         role="listbox"
-        aria-label="Categories"
+        aria-label={tr("categories")}
       >
         <For each={matches()}>
           {(category, index) => {
@@ -219,12 +223,12 @@ function CategoryPicker(props: {
             <span class="category-picker__check">
               <Plus class="icon" aria-hidden="true" />
             </span>
-            <span class="category-picker__name">Create “{term()}”</span>
+            <span class="category-picker__name">{tr("create", { name: term() })}</span>
           </li>
         </Show>
       </ul>
       <Show when={count() === 0}>
-        <p class="category-picker__empty">Type a name to create your first category.</p>
+        <p class="category-picker__empty">{tr("typeName")}</p>
       </Show>
     </Popover>
   );

@@ -4,6 +4,8 @@ import RefreshCw from "lucide-solid/icons/refresh-cw";
 import Trash from "lucide-solid/icons/trash";
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import type { Game } from "../bindings/Game";
+import { translator } from "../i18n";
+import { shellMulti } from "../i18n/shellMulti";
 import { changeAll, installAll, refreshAll, removeAll } from "../lib/bulkActions";
 import { formatPlaytime, formatSize } from "../lib/format";
 import { readCssPx } from "../lib/layoutMode";
@@ -14,13 +16,15 @@ import { Cover } from "./Cover";
 import { PanelHeader, type PanelPin } from "./PanelHeader";
 import { sourceName } from "./SourceIcon";
 
+const tr = translator(shellMulti);
+
 /** Fallbacks for `--qk-stack-cover-width` and `--qk-stack-min-step` (theme.css). */
 const COVER = 120;
 const MIN_STEP = 22;
 
 /** "Mixed" for differing values, else the value's label. */
 const mixedLabel = <T,>(value: T | "mixed" | undefined, label: (v: T) => string) =>
-  value === "mixed" ? "Mixed" : value === undefined ? "" : label(value);
+  value === "mixed" ? tr("mixed") : value === undefined ? "" : label(value);
 
 /**
  * The details panel (or page) while several games are selected: a fanned stack of their covers,
@@ -82,7 +86,7 @@ export function MultiSelectPanel(props: {
         "details--split": props.split === true,
         "details--page": props.variant === "page",
       }}
-      aria-label={`${count()} games selected`}
+      aria-label={tr("gamesSelected", { count: count() })}
     >
       <Show when={props.variant !== "page"}>
         <PanelHeader pin={props.pin ?? null} onClose={props.onClose} />
@@ -116,26 +120,24 @@ export function MultiSelectPanel(props: {
           </Show>
         </div>
         <div class="multi__head">
-          <h2 class="details__title">{count()} games selected</h2>
+          <h2 class="details__title">{tr("gamesSelected", { count: count() })}</h2>
           <p class="muted">{storeCounts(props.games, sourceName)}</p>
           <button type="button" class="link-btn" onClick={() => store.clearSelection()}>
-            Clear selection
+            {tr("clearSelection")}
           </button>
         </div>
         <dl class="multi__totals">
           <div>
-            <dt>Installed</dt>
-            <dd>
-              {installed()} of {count()}
-            </dd>
+            <dt>{tr("installed")}</dt>
+            <dd>{tr("installedOf", { installed: installed(), count: count() })}</dd>
           </div>
           <div>
-            <dt>Playtime</dt>
-            <dd>{playtime() > 0 ? formatPlaytime(playtime()) : "None"}</dd>
+            <dt>{tr("playtime")}</dt>
+            <dd>{playtime() > 0 ? formatPlaytime(playtime()) : tr("noPlaytime")}</dd>
           </div>
           <Show when={size() > 0}>
             <div>
-              <dt>Install size</dt>
+              <dt>{tr("installSize")}</dt>
               <dd>{formatSize(size())}</dd>
             </div>
           </Show>
@@ -143,18 +145,18 @@ export function MultiSelectPanel(props: {
 
         <section class="details-card" aria-labelledby="multi-change">
           <h3 id="multi-change" class="details-card__title">
-            Change all
+            {tr("changeAll")}
           </h3>
           <label class="multi__row">
-            <span>Completion status</span>
+            <span>{tr("completionStatus")}</span>
             <select class="input" onChange={(e) => onStatus(e.currentTarget.value)}>
               <Show when={status() === "mixed"}>
                 <option value="mixed" disabled selected>
-                  Mixed
+                  {tr("mixed")}
                 </option>
               </Show>
               <option value="" selected={status() === null}>
-                None
+                {tr("none")}
               </option>
               <For each={store.completion().statuses}>
                 {(s) => (
@@ -166,7 +168,7 @@ export function MultiSelectPanel(props: {
             </select>
           </label>
           <div class="multi__row">
-            <span>Favorite</span>
+            <span>{tr("favorite")}</span>
             <button
               type="button"
               class="btn"
@@ -179,11 +181,11 @@ export function MultiSelectPanel(props: {
                 })
               }
             >
-              {mixedLabel(favorite(), (v) => (v ? "Yes" : "No"))}
+              {mixedLabel(favorite(), (v) => (v ? tr("yes") : tr("no")))}
             </button>
           </div>
           <label class="multi__row">
-            <span>Type</span>
+            <span>{tr("type")}</span>
             <select
               class="input"
               onChange={(e) =>
@@ -196,19 +198,19 @@ export function MultiSelectPanel(props: {
             >
               <Show when={kind() === "mixed"}>
                 <option value="mixed" disabled selected>
-                  Mixed
+                  {tr("mixed")}
                 </option>
               </Show>
               <option value="game" selected={kind() === "game"}>
-                Game
+                {tr("game")}
               </option>
               <option value="app" selected={kind() === "app"}>
-                App
+                {tr("app")}
               </option>
             </select>
           </label>
           <div class="multi__row">
-            <span>Hidden</span>
+            <span>{tr("hidden")}</span>
             <button
               type="button"
               class="btn"
@@ -221,12 +223,12 @@ export function MultiSelectPanel(props: {
                 })
               }
             >
-              {mixedLabel(hidden(), (v) => (v ? "Yes" : "No"))}
+              {mixedLabel(hidden(), (v) => (v ? tr("yes") : tr("no")))}
             </button>
           </div>
           <Show when={store.categories().length > 0}>
-            <div class="multi__categories" role="group" aria-label="Categories">
-              <span class="muted">Categories</span>
+            <div class="multi__categories" role="group" aria-label={tr("categories")}>
+              <span class="muted">{tr("categories")}</span>
               <div class="chips">
                 <For each={store.categories()}>
                   {(category) => {
@@ -244,8 +246,8 @@ export function MultiSelectPanel(props: {
                         }
                         title={
                           coverage() === "all"
-                            ? `Take ${category.name} off all`
-                            : `Add ${category.name} to all`
+                            ? tr("takeOffAll", { name: category.name })
+                            : tr("addToAll", { name: category.name })
                         }
                         onClick={() => toggleCategory(category.id)}
                       >
@@ -263,28 +265,28 @@ export function MultiSelectPanel(props: {
           <Show when={installed() < count()}>
             <button type="button" class="btn" onClick={() => void installAll(props.games)}>
               <Download class="icon" aria-hidden="true" />
-              Install all
+              {tr("installAll")}
             </button>
           </Show>
           <button type="button" class="btn" onClick={() => void refreshAll(props.games)}>
             <RefreshCw class="icon" aria-hidden="true" />
-            Refresh metadata
+            {tr("refreshMetadata")}
           </button>
           <button type="button" class="btn" onClick={() => store.openCombine(ids())}>
             <Combine class="icon" aria-hidden="true" />
-            Combine into one game…
+            {tr("combineInto")}
           </button>
           <button type="button" class="btn btn--danger" onClick={() => setRemoving(true)}>
             <Trash class="icon" aria-hidden="true" />
-            Remove from library…
+            {tr("removeFromLibrary")}
           </button>
         </div>
       </div>
       <Show when={removing()}>
         <ConfirmDialog
-          title="Remove games"
-          message={<>Remove {count()} games from your library?</>}
-          confirmLabel="Remove"
+          title={tr("removeGamesTitle")}
+          message={tr("removeGamesMessage", { count: count() })}
+          confirmLabel={tr("remove")}
           onConfirm={() => void removeAll(props.games)}
           onClose={() => setRemoving(false)}
         />

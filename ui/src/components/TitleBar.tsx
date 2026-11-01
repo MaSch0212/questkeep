@@ -15,6 +15,8 @@ import X from "lucide-solid/icons/x";
 import { createSignal, onCleanup, onMount, Show, type JSX } from "solid-js";
 import * as api from "../lib/api";
 import { addGameMenuItems, type AddGameMenuItem } from "../lib/addGameOptions";
+import { translator } from "../i18n";
+import { shellTitleBar } from "../i18n/shellTitleBar";
 import { errorMessage } from "../lib/errors";
 import { store } from "../lib/store";
 import { syncLabel } from "../lib/syncStatus";
@@ -26,13 +28,12 @@ import type { PopoverAnchor } from "./Popover";
 import { sourceName, SourceIcon } from "./SourceIcon";
 import { syncAll, SyncPanel, syncStore } from "./SyncPanel";
 
+const tr = translator(shellTitleBar);
+
 async function runAddOption(item: AddGameMenuItem) {
   try {
     await api.addGameWithOption(item.providerId, item.optionId);
-    store.pushToast(
-      "info",
-      `Opened ${item.providerName}. The new game appears here once it is set up there.`,
-    );
+    store.pushToast("info", tr("opened", { provider: item.providerName }));
   } catch (error) {
     store.pushToast("error", errorMessage(error));
   }
@@ -48,7 +49,7 @@ async function openLauncher(id: string) {
 
 const launcherEntries = (): MenuEntry[] =>
   store.launchers().length === 0
-    ? [{ label: "No store launchers found", disabled: true, onSelect: () => {} }]
+    ? [{ label: tr("noLaunchers"), disabled: true, onSelect: () => {} }]
     : store.launchers().map((id) => ({
         label: sourceName(id),
         icon: () => <SourceIcon source={id} />,
@@ -57,7 +58,7 @@ const launcherEntries = (): MenuEntry[] =>
 
 const syncEntries = (): MenuEntry[] => [
   {
-    label: "Sync all",
+    label: tr("syncAll"),
     icon: () => <RefreshCw class="icon" aria-hidden="true" />,
     disabled: store.syncState().active,
     onSelect: () => void syncAll(),
@@ -79,10 +80,10 @@ const warningCount = () => store.accountWarnings().length;
 const syncButtonLabel = () => {
   const label = store.syncBusy()
     ? syncLabel(store.syncState())
-    : (store.backgroundWorkLabel() ?? "Sync");
+    : (store.backgroundWorkLabel() ?? tr("sync"));
   const count = warningCount();
   if (count === 0) return label;
-  return `${label} (${count} ${count === 1 ? "account" : "accounts"} signed out)`;
+  return tr("signedOut", { label, count });
 };
 
 type Open = "app" | "add" | "launch" | "apps" | "sync" | null;
@@ -144,7 +145,7 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
     const options = addGameMenuItems(store.providers());
     return [
       {
-        label: "Add a game…",
+        label: tr("addGameEllipsis"),
         icon: () => <Plus class="icon" aria-hidden="true" />,
         onSelect: props.onAdd,
       },
@@ -160,7 +161,7 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
 
   const appEntries = (): MenuEntry[] => [
     {
-      label: "Edit views",
+      label: tr("editViews"),
       icon: () => <Pencil class="icon" aria-hidden="true" />,
       onSelect: () => {
         store.showLibrary();
@@ -170,35 +171,35 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
     { kind: "separator" },
     {
       kind: "submenu",
-      label: "Add game",
+      label: tr("addGame"),
       icon: () => <Plus class="icon" aria-hidden="true" />,
       entries: addEntries,
     },
     {
       kind: "submenu",
-      label: "Open launcher",
+      label: tr("openLauncher"),
       icon: () => <Rocket class="icon" aria-hidden="true" />,
       entries: launcherEntries,
     },
     {
       kind: "submenu",
-      label: "Sync",
+      label: tr("sync"),
       icon: () => <RefreshCw class="icon" aria-hidden="true" />,
       entries: syncEntries,
     },
     {
-      label: "Games in several stores…",
+      label: tr("severalStores"),
       icon: () => <Combine class="icon" aria-hidden="true" />,
       onSelect: () => store.setDuplicatesOpen(true),
     },
     { kind: "separator" },
     {
-      label: "Settings",
+      label: tr("settings"),
       icon: () => <Settings class="icon" aria-hidden="true" />,
       onSelect: () => store.showSettings(),
     },
     {
-      label: "Exit Questkeep",
+      label: tr("exit"),
       icon: () => <Power class="icon" aria-hidden="true" />,
       onSelect: () => void api.exitApp(),
     },
@@ -236,8 +237,8 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
           type="button"
           class="titlebar__brand"
           classList={{ "titlebar__brand--open": open() === "app" }}
-          aria-label="Questkeep menu"
-          title="Questkeep menu"
+          aria-label={tr("questkeepMenu")}
+          title={tr("questkeepMenu")}
           aria-haspopup="menu"
           aria-expanded={open() === "app"}
           onClick={() => toggle("app")}
@@ -246,13 +247,13 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
           <span class="titlebar__wordmark">Questkeep</span>
           <ChevronDown class="icon titlebar__brand-arrow" aria-hidden="true" />
         </button>
-        {toolButton("add", "Add game", () => (
+        {toolButton("add", tr("addGame"), () => (
           <Plus class="icon" aria-hidden="true" />
         ))}
-        {toolButton("launch", "Open launcher", () => (
+        {toolButton("launch", tr("openLauncher"), () => (
           <Rocket class="icon" aria-hidden="true" />
         ))}
-        {toolButton("apps", "Apps", () => (
+        {toolButton("apps", tr("apps"), () => (
           <LayoutGrid class="icon" aria-hidden="true" />
         ))}
         <span class="titlebar__sync">
@@ -280,11 +281,11 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
             <button
               type="button"
               class="titlebar__update"
-              aria-label={`Update to ${update().version}`}
-              title={`Questkeep ${update().version} is available`}
+              aria-label={tr("updateTo", { version: update().version })}
+              title={tr("updateAvailable", { version: update().version })}
               onClick={() => store.setUpdateOpen(true)}
             >
-              <Download class="icon" aria-hidden="true" /> Update
+              <Download class="icon" aria-hidden="true" /> {tr("update")}
             </button>
           )}
         </Show>
@@ -292,8 +293,8 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
           type="button"
           class="titlebar__tool"
           classList={{ "titlebar__tool--open": store.page() === "settings" }}
-          aria-label="Settings"
-          title="Settings"
+          aria-label={tr("settings")}
+          title={tr("settings")}
           aria-current={store.page() === "settings" ? "page" : undefined}
           onClick={() => store.showSettings()}
         >
@@ -305,8 +306,8 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
             type="button"
             class="titlebar__button"
             tabIndex={-1}
-            aria-label="Minimize"
-            title="Minimize"
+            aria-label={tr("minimize")}
+            title={tr("minimize")}
             onClick={() => void api.minimizeWindow()}
           >
             <Minus class="titlebar__icon" aria-hidden="true" />
@@ -315,8 +316,8 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
             type="button"
             class="titlebar__button"
             tabIndex={-1}
-            aria-label={maximized() ? "Restore" : "Maximize"}
-            title={maximized() ? "Restore" : "Maximize"}
+            aria-label={maximized() ? tr("restore") : tr("maximize")}
+            title={maximized() ? tr("restore") : tr("maximize")}
             onClick={() => void api.toggleMaximizeWindow()}
           >
             <Show
@@ -333,8 +334,8 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
             type="button"
             class="titlebar__button titlebar__button--close"
             tabIndex={-1}
-            aria-label="Close"
-            title="Close"
+            aria-label={tr("close")}
+            title={tr("close")}
             onClick={() => void api.closeWindow()}
           >
             <X class="titlebar__icon" aria-hidden="true" />
@@ -345,7 +346,9 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
         {(at) => (
           <Menu
             anchor={at()}
-            label={open() === "app" ? "Questkeep" : open() === "add" ? "Add game" : "Open launcher"}
+            label={
+              open() === "app" ? "Questkeep" : open() === "add" ? tr("addGame") : tr("openLauncher")
+            }
             inside={() => [buttons[open() ?? "app"]]}
             onClose={close}
             entries={

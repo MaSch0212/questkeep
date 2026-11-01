@@ -10,12 +10,16 @@ import Star from "lucide-solid/icons/star";
 import Trash from "lucide-solid/icons/trash";
 import { createSignal, Show } from "solid-js";
 import type { Game } from "../bindings/Game";
+import { translator } from "../i18n";
+import { shellMenus } from "../i18n/shellMenus";
 import { changeAll, installAll, refreshAll, removeAll } from "../lib/bulkActions";
 import { categoryCoverage, common } from "../lib/selection";
 import { store } from "../lib/store";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { Menu, type MenuEntry } from "./Menu";
 import type { PopoverAnchor } from "./Popover";
+
+const tr = translator(shellMenus);
 
 const iconOf = (Icon: typeof Star) => () => <Icon class="icon" aria-hidden="true" />;
 const NO_CATEGORIES = { addCategories: [], removeCategories: [] };
@@ -36,7 +40,7 @@ export function MultiContextMenu(props: {
 
   const statusEntries = (): MenuEntry[] => [
     {
-      label: "None",
+      label: tr("none"),
       checked: status() === null,
       onSelect: () => void store.setCompletionStatus(ids(), null),
     },
@@ -49,13 +53,13 @@ export function MultiContextMenu(props: {
 
   const categoryEntries = (): MenuEntry[] =>
     store.categories().length === 0
-      ? [{ label: "No categories yet", disabled: true, onSelect: () => undefined }]
+      ? [{ label: tr("noCategories"), disabled: true, onSelect: () => undefined }]
       : store.categories().map((category) => {
           const coverage = categoryCoverage(props.games, category.id);
           return {
             label: category.name,
             checked: coverage === "all",
-            hint: coverage === "some" ? "Some" : undefined,
+            hint: coverage === "some" ? tr("some") : undefined,
             keepOpen: true,
             onSelect: () =>
               void changeAll(props.games, {
@@ -69,7 +73,7 @@ export function MultiContextMenu(props: {
     ...(props.games.some((g) => !g.installed)
       ? [
           {
-            label: "Install all",
+            label: tr("installAll"),
             icon: iconOf(Download),
             onSelect: () => void installAll(props.games),
           },
@@ -77,40 +81,46 @@ export function MultiContextMenu(props: {
         ]
       : []),
     {
-      label: favorite() === true ? "Remove all from favorites" : "Add all to favorites",
+      label: favorite() === true ? tr("removeAllFromFavorites") : tr("addAllToFavorites"),
       icon: iconOf(Star),
       onSelect: () =>
         void changeAll(props.games, { favorite: favorite() !== true, ...NO_CATEGORIES }),
     },
-    { kind: "submenu", label: "Completion status", entries: statusEntries },
-    { kind: "submenu", label: "Categories", entries: categoryEntries },
-    { label: "Edit…", icon: iconOf(Pencil), hint: "F2", disabled: true, onSelect: () => undefined },
+    { kind: "submenu", label: tr("completionStatus"), entries: statusEntries },
+    { kind: "submenu", label: tr("categories"), entries: categoryEntries },
+    {
+      label: tr("edit"),
+      icon: iconOf(Pencil),
+      hint: "F2",
+      disabled: true,
+      onSelect: () => undefined,
+    },
     { kind: "separator" },
     {
-      label: "Refresh metadata",
+      label: tr("refreshMetadata"),
       icon: iconOf(RefreshCw),
       onSelect: () => void refreshAll(props.games),
     },
     {
-      label: "Combine into one game…",
+      label: tr("combineInto"),
       icon: iconOf(Combine),
       onSelect: () => store.openCombine(ids()),
     },
     {
-      label: allApps() ? "Mark all as games" : "Mark all as apps",
+      label: allApps() ? tr("markAllAsGames") : tr("markAllAsApps"),
       icon: iconOf(allApps() ? Gamepad : AppWindow),
       onSelect: () =>
         void changeAll(props.games, { kind: allApps() ? "game" : "app", ...NO_CATEGORIES }),
     },
     {
-      label: hidden() === true ? "Unhide all" : "Hide all",
+      label: hidden() === true ? tr("unhideAll") : tr("hideAll"),
       icon: iconOf(hidden() === true ? Eye : EyeOff),
-      hint: "Del",
+      hint: tr("delKey"),
       onSelect: () => void changeAll(props.games, { hidden: hidden() !== true, ...NO_CATEGORIES }),
     },
     { kind: "separator" },
     {
-      label: "Remove from library…",
+      label: tr("removeFromLibrary"),
       icon: iconOf(Trash),
       danger: true,
       onSelect: () => setRemoving(true),
@@ -128,16 +138,16 @@ export function MultiContextMenu(props: {
       <Show when={!removing()}>
         <Menu
           anchor={props.anchor}
-          label={`${count()} selected games`}
+          label={tr("selectedGames", { count: count() })}
           entries={entries()}
           onClose={menuClosed}
         />
       </Show>
       <Show when={removing()}>
         <ConfirmDialog
-          title="Remove games"
-          message={<>Remove {count()} games from your library?</>}
-          confirmLabel="Remove"
+          title={tr("removeGamesTitle")}
+          message={tr("removeGamesMessage", { count: count() })}
+          confirmLabel={tr("remove")}
           onConfirm={() => void removeAll(props.games)}
           onClose={() => props.onDone(true)}
         />

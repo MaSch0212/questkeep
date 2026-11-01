@@ -1,8 +1,12 @@
 import { createSignal, Show } from "solid-js";
 import * as api from "../lib/api";
+import { translator } from "../i18n";
+import { shellDialogs } from "../i18n/shellDialogs";
 import { errorMessage } from "../lib/errors";
 import { store } from "../lib/store";
 import { Modal } from "./Modal";
+
+const tr = translator(shellDialogs);
 
 /** The user stays: the held-back quit is dropped. */
 function stay() {
@@ -25,26 +29,20 @@ export function QuitDuringBackupDialog() {
   }
 
   return (
-    <Modal title="A backup is running" onClose={stay}>
-      <Show
-        when={waiting()}
-        fallback={
-          <p>
-            Questkeep is writing a backup. Quitting now cancels it and deletes the unfinished
-            archive.
-          </p>
-        }
-      >
+    <Modal title={tr("backupTitle")} onClose={stay}>
+      <Show when={waiting()} fallback={<p>{tr("backupWriting")}</p>}>
         <p role="status">
-          {store.backgroundWorkLabel() ?? "Finishing the backup…"} Questkeep quits when it is done.
+          {tr("quitsWhenDone", {
+            label: store.backgroundWorkLabel() ?? tr("finishingBackup"),
+          })}
         </p>
       </Show>
       <div class="form__actions">
         <button type="button" class="btn" onClick={stay}>
-          Keep Questkeep open
+          {tr("keepOpen")}
         </button>
         <button type="button" class="btn" onClick={() => void quit(false)}>
-          Quit now
+          {tr("quitNow")}
         </button>
         <button
           type="button"
@@ -53,7 +51,7 @@ export function QuitDuringBackupDialog() {
           disabled={waiting()}
           onClick={() => void quit(true)}
         >
-          Wait and quit
+          {tr("waitAndQuit")}
         </button>
       </div>
     </Modal>

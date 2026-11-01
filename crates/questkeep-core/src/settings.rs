@@ -62,6 +62,8 @@ pub struct Settings {
     pub sort_prefixes: SortPrefixes,
     /// Automatic backups (kept from the current install when a backup is restored).
     pub backups: BackupSettings,
+    /// UI language (`en`, `de`, `fr`, `it`, `es`, `pt`); `None` follows the system.
+    pub language: Option<String>,
 }
 
 /// Words like "The" that sorting skips at the start of a name ("The Witcher" sorts under W).
@@ -145,6 +147,7 @@ impl Default for Settings {
             metadata_priority: MetadataPriority::default(),
             sort_prefixes: SortPrefixes::default(),
             backups: BackupSettings::default(),
+            language: None,
         }
     }
 }
@@ -467,6 +470,7 @@ mod tests {
                 frequency: crate::backup::BackupFrequency::Daily,
                 keep: 3,
             },
+            language: Some("de".into()),
         };
         store.save(&custom).unwrap();
         let raw = std::fs::read_to_string(&path).unwrap();

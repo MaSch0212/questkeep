@@ -1,3 +1,5 @@
+import { intlLocale, translator } from "../i18n";
+import { gameSections } from "../i18n/gameSections";
 import { For, Show, type JSX } from "solid-js";
 import type { Achievements } from "../bindings/Achievements";
 import type { Game } from "../bindings/Game";
@@ -8,6 +10,8 @@ import { formatDate, formatPlaytime } from "../lib/format";
 import { activitySummary, exploreFor, formatHours, rarestUnlocked, ttbBar } from "../lib/gamePage";
 import { store } from "../lib/store";
 import { openLink } from "./settings/openLink";
+
+const tr = translator(gameSections);
 
 let sectionSeq = 0;
 
@@ -44,7 +48,7 @@ export function FilterChip(props: { field: ListField; value: string; plain?: boo
       type="button"
       class="chip chip--link"
       classList={{ "chip--plain": props.plain }}
-      title={`Show games with “${props.value}”`}
+      title={tr("showGamesWith", { value: props.value })}
       onClick={() => store.openExplore(exploreFor(props.field, props.value))}
     >
       {props.value}
@@ -62,7 +66,7 @@ export function FilterValues(props: { field: ListField; values: string[] }) {
           <button
             type="button"
             class="link-value"
-            title={`Show games with “${value}”`}
+            title={tr("showGamesWith", { value })}
             onClick={() => store.openExplore(exploreFor(props.field, value))}
           >
             {value}
@@ -80,25 +84,28 @@ function Ring(props: { value: number }) {
       class="score-ring"
       style={{ "--score": props.value }}
       role="img"
-      aria-label={`${props.value} of 100`}
+      aria-label={tr("ringAria", { value: props.value })}
     >
       <span aria-hidden="true">{props.value}</span>
     </div>
   );
 }
 
+/** A score's source; the edit dialog stores "Your score" in English. */
+const scoreSource = (source: string) => (source === "Your score" ? tr("yourScore") : source);
+
 export function ScoresCard(props: { game: Game }) {
   return (
     <Show when={props.game.criticScore || props.game.communityScore}>
-      <Card title="Scores" order={2}>
+      <Card title={tr("scores")} order={2}>
         <div class="scores">
           <Show when={props.game.criticScore}>
             {(score) => (
               <div class="score">
                 <Ring value={score().value} />
                 <div class="score__text">
-                  <b>Critics</b>
-                  <small>{score().source}</small>
+                  <b>{tr("critics")}</b>
+                  <small>{scoreSource(score().source)}</small>
                 </div>
               </div>
             )}
@@ -108,8 +115,8 @@ export function ScoresCard(props: { game: Game }) {
               <div class="score">
                 <Ring value={score().value} />
                 <div class="score__text">
-                  <b>Players</b>
-                  <small>{score().source}</small>
+                  <b>{tr("players")}</b>
+                  <small>{scoreSource(score().source)}</small>
                 </div>
               </div>
             )}
@@ -131,7 +138,7 @@ export function TimeToBeatCard(props: { game: Game }) {
   return (
     <Show when={bar()}>
       {(b) => (
-        <Card title="Time to beat" order={3}>
+        <Card title={tr("timeToBeat")} order={3}>
           <div class="ttb-bar" aria-hidden="true">
             <For each={b().segments}>
               {(segment) => (
@@ -148,7 +155,7 @@ export function TimeToBeatCard(props: { game: Game }) {
                   classList={{ "ttb-bar__you--end": b().youAtEnd }}
                   style={{ left: `${you()}%` }}
                 >
-                  <b>You · {formatHours(props.game.playtimeSeconds)}</b>
+                  <b>{tr("you", { hours: formatHours(props.game.playtimeSeconds) })}</b>
                 </div>
               )}
             </Show>
@@ -164,7 +171,7 @@ export function TimeToBeatCard(props: { game: Game }) {
             </For>
           </dl>
           <Show when={source()}>
-            <p class="details-card__source">From {source()}</p>
+            <p class="details-card__source">{tr("from", { source: source() ?? "" })}</p>
           </Show>
         </Card>
       )}
@@ -183,17 +190,15 @@ export function AchievementsCard(props: { achievements: Achievements | null | un
         const percent = () => Math.round((unlocked() / a().total) * 100);
         const rarest = () => rarestUnlocked(a());
         return (
-          <Card title="Achievements" order={4}>
+          <Card title={tr("achievements")} order={4}>
             <div class="ach__summary">
-              <b>
-                {unlocked()} of {a().total}
-              </b>
+              <b>{tr("achievementsOf", { unlocked: unlocked(), total: a().total })}</b>
               <span class="muted">{percent()}%</span>
             </div>
             <div
               class="progress"
               role="progressbar"
-              aria-label="Achievements unlocked"
+              aria-label={tr("achievementsUnlocked")}
               aria-valuenow={percent()}
               aria-valuemin={0}
               aria-valuemax={100}
@@ -201,7 +206,7 @@ export function AchievementsCard(props: { achievements: Achievements | null | un
               <i style={{ width: `${percent()}%` }} />
             </div>
             <Show when={unlocked() > 0}>
-              <ul class="ach__icons" aria-label="Unlocked achievements, newest first">
+              <ul class="ach__icons" aria-label={tr("unlockedNewest")}>
                 <For each={a().unlocked.slice(0, 16)}>
                   {(item) => (
                     <li
@@ -223,7 +228,12 @@ export function AchievementsCard(props: { achievements: Achievements | null | un
                   <div>
                     <b>{r().name}</b>
                     <small>
-                      Rarest you have · {r().percent?.toFixed(1)}% of players
+                      {tr("rarest", {
+                        percent: (r().percent ?? 0).toLocaleString(intlLocale(), {
+                          minimumFractionDigits: 1,
+                          maximumFractionDigits: 1,
+                        }),
+                      })}
                       <Show when={r().unlockedAt}> · {shortDate(r().unlockedAt)}</Show>
                     </small>
                   </div>
@@ -238,36 +248,45 @@ export function AchievementsCard(props: { achievements: Achievements | null | un
 }
 
 const weekLabel = (start: string) =>
-  new Date(`${start}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  new Date(`${start}T00:00:00`).toLocaleDateString(intlLocale(), {
+    month: "short",
+    day: "numeric",
+  });
 
 export function ActivityCard(props: { activity: GameActivity | null | undefined }) {
   const summary = () => (props.activity ? activitySummary(props.activity) : null);
   return (
     <Show when={props.activity && summary()}>
       {(s) => (
-        <Card title="Your activity" order={5}>
+        <Card title={tr("activity")} order={5}>
           <dl class="act__sum">
             <div>
-              <dt>Last 12 weeks</dt>
+              <dt>{tr("last12Weeks")}</dt>
               <dd>{formatPlaytime(s().total)}</dd>
             </div>
             <div>
-              <dt>This week</dt>
+              <dt>{tr("thisWeek")}</dt>
               <dd>{formatPlaytime(s().thisWeek)}</dd>
             </div>
             <div>
-              <dt>Sessions</dt>
+              <dt>{tr("sessions")}</dt>
               <dd>{props.activity?.sessions ?? 0}</dd>
             </div>
           </dl>
-          <ol class="act__bars" aria-label="Playtime per week">
+          <ol class="act__bars" aria-label={tr("playtimePerWeek")}>
             <For each={props.activity?.weeks ?? []}>
               {(week, index) => (
                 <li
                   class="act__bar"
                   classList={{ "act__bar--zero": week.seconds === 0 }}
-                  title={`Week of ${weekLabel(week.start)}: ${formatPlaytime(week.seconds)}`}
-                  aria-label={`Week of ${weekLabel(week.start)}: ${formatPlaytime(week.seconds)}`}
+                  title={tr("weekOf", {
+                    date: weekLabel(week.start),
+                    time: formatPlaytime(week.seconds),
+                  })}
+                  aria-label={tr("weekOf", {
+                    date: weekLabel(week.start),
+                    time: formatPlaytime(week.seconds),
+                  })}
                 >
                   <i style={{ height: `${s().bars[index()] ?? 0}%` }} />
                 </li>
@@ -276,7 +295,7 @@ export function ActivityCard(props: { activity: GameActivity | null | undefined 
           </ol>
           <div class="act__axis" aria-hidden="true">
             <span>{weekLabel(props.activity?.weeks[0]?.start ?? "")}</span>
-            <span>this week</span>
+            <span>{tr("thisWeekAxis")}</span>
           </div>
         </Card>
       )}
@@ -289,13 +308,13 @@ export function NewsCard(props: { news: GameNews | null | undefined }) {
     <Show when={props.news && props.news.items.length > 0 && props.news}>
       {(news) => (
         <Card
-          title="News"
+          title={tr("news")}
           order={6}
           action={
             <Show when={news().allUrl}>
               {(url) => (
                 <button type="button" class="link-btn" onClick={() => void openLink(url())}>
-                  Open all news ↗
+                  {tr("openAllNews")}
                 </button>
               )}
             </Show>

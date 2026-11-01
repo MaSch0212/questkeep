@@ -1,10 +1,14 @@
 import Search from "lucide-solid/icons/search";
 import X from "lucide-solid/icons/x";
 import { createEffect, createSignal, onCleanup } from "solid-js";
+import { translator } from "../i18n";
+import { libraryKeyword } from "../i18n/libraryKeyword";
 import { normalizeSearch } from "../lib/query";
 import { store } from "../lib/store";
 
 const DEBOUNCE_MS = 80;
+
+const tr = translator(libraryKeyword);
 
 /** What the library page can do with the keyword field (App's keyboard shortcuts). */
 export interface KeywordFilterHandle {
@@ -71,8 +75,8 @@ export function KeywordFilter(props: { ref?: (handle: KeywordFilterHandle) => vo
       <button
         type="button"
         class="keyword__icon"
-        aria-label="Filter this view by name (Ctrl+F)"
-        title="Filter this view (Ctrl+F)"
+        aria-label={tr("iconLabel")}
+        title={tr("iconTitle")}
         aria-expanded={expanded() || active()}
         // Keeps focus in the field, so clicking the icon of an open, empty field closes it.
         onPointerDown={(event) => event.preventDefault()}
@@ -84,8 +88,8 @@ export function KeywordFilter(props: { ref?: (handle: KeywordFilterHandle) => vo
         ref={(el) => (input = el)}
         class="keyword__input"
         type="text"
-        placeholder="Filter this view…"
-        aria-label="Filter this view by name"
+        placeholder={tr("placeholder")}
+        aria-label={tr("inputLabel")}
         spellcheck={false}
         autocomplete="off"
         tabIndex={expanded() || active() ? 0 : -1}
@@ -106,8 +110,8 @@ export function KeywordFilter(props: { ref?: (handle: KeywordFilterHandle) => vo
       <button
         type="button"
         class="keyword__clear"
-        aria-label="Clear the filter"
-        title="Clear (Esc)"
+        aria-label={tr("clearLabel")}
+        title={tr("clearTitle")}
         tabIndex={expanded() || active() ? 0 : -1}
         onClick={clear}
       >

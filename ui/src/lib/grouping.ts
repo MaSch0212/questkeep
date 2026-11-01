@@ -2,6 +2,8 @@ import type { Category } from "../bindings/Category";
 import type { CompletionStatus } from "../bindings/CompletionStatus";
 import type { Game } from "../bindings/Game";
 import type { GroupBy } from "../bindings/GroupBy";
+import { intlLocale, translator } from "../i18n";
+import { libraryGrouping } from "../i18n/libraryGrouping";
 import { storesOf } from "./copies";
 import type { NavKey } from "./gridNav";
 import { valueKey } from "./filters";
@@ -20,7 +22,7 @@ export interface GameGroup {
   games: Game[];
 }
 
-const collator = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
+const tr = translator(libraryGrouping);
 
 /** What grouping needs besides the games. */
 export interface GroupContext {
@@ -33,6 +35,7 @@ export interface GroupContext {
 }
 
 interface Bucket {
+  /** Read at use time, so it follows the language. */
   label: string;
   /** Whether a value (seconds, bytes, a score) belongs here. */
   test: (value: number) => boolean;
@@ -42,37 +45,64 @@ const HOUR = 3600;
 const GB = 1024 ** 3;
 const DAY = 86400;
 
+type BucketKey =
+  | "neverPlayed"
+  | "under1Hour"
+  | "hours1to10"
+  | "hours10to50"
+  | "hours50to100"
+  | "hours100plus"
+  | "under1GB"
+  | "gb100plus"
+  | "under50"
+  | "today"
+  | "thisWeek"
+  | "thisMonth"
+  | "thisYear"
+  | "overYearAgo";
+
+/** A bucket named by a message. */
+const named = (key: BucketKey, test: (value: number) => boolean): Bucket => ({
+  get label() {
+    return tr(key);
+  },
+  test,
+});
+
+/** A bucket named by numbers only. */
+const plain = (label: string, test: (value: number) => boolean): Bucket => ({ label, test });
+
 const PLAYTIME_BUCKETS: Bucket[] = [
-  { label: "Never played", test: (v) => v === 0 },
-  { label: "Under 1 hour", test: (v) => v < HOUR },
-  { label: "1–10 hours", test: (v) => v < 10 * HOUR },
-  { label: "10–50 hours", test: (v) => v < 50 * HOUR },
-  { label: "50–100 hours", test: (v) => v < 100 * HOUR },
-  { label: "100 hours or more", test: () => true },
+  named("neverPlayed", (v) => v === 0),
+  named("under1Hour", (v) => v < HOUR),
+  named("hours1to10", (v) => v < 10 * HOUR),
+  named("hours10to50", (v) => v < 50 * HOUR),
+  named("hours50to100", (v) => v < 100 * HOUR),
+  named("hours100plus", () => true),
 ];
 
 const SIZE_BUCKETS: Bucket[] = [
-  { label: "Under 1 GB", test: (v) => v < GB },
-  { label: "1–10 GB", test: (v) => v < 10 * GB },
-  { label: "10–50 GB", test: (v) => v < 50 * GB },
-  { label: "50–100 GB", test: (v) => v < 100 * GB },
-  { label: "100 GB or more", test: () => true },
+  named("under1GB", (v) => v < GB),
+  plain("1–10 GB", (v) => v < 10 * GB),
+  plain("10–50 GB", (v) => v < 50 * GB),
+  plain("50–100 GB", (v) => v < 100 * GB),
+  named("gb100plus", () => true),
 ];
 
 const SCORE_BUCKETS: Bucket[] = [
-  { label: "90–100", test: (v) => v >= 90 },
-  { label: "75–89", test: (v) => v >= 75 },
-  { label: "50–74", test: (v) => v >= 50 },
-  { label: "Under 50", test: () => true },
+  plain("90–100", (v) => v >= 90),
+  plain("75–89", (v) => v >= 75),
+  plain("50–74", (v) => v >= 50),
+  named("under50", () => true),
 ];
 
 /** Seconds since last played. */
 const LAST_PLAYED_BUCKETS: Bucket[] = [
-  { label: "Today", test: (v) => v < DAY },
-  { label: "This week", test: (v) => v < 7 * DAY },
-  { label: "This month", test: (v) => v < 30 * DAY },
-  { label: "This year", test: (v) => v < 365 * DAY },
-  { label: "Over a year ago", test: () => true },
+  named("today", (v) => v < DAY),
+  named("thisWeek", (v) => v < 7 * DAY),
+  named("thisMonth", (v) => v < 30 * DAY),
+  named("thisYear", (v) => v < 365 * DAY),
+  named("overYearAgo", () => true),
 ];
 
 const LIST_FIELDS = {
@@ -93,13 +123,13 @@ const LIST_FIELDS = {
 export function noValueLabel(by: GroupBy): string {
   switch (by) {
     case "category":
-      return "No category";
+      return tr("noCategory");
     case "completionStatus":
-      return "No status";
+      return tr("noStatus");
     case "lastPlayed":
-      return "Never played";
+      return tr("neverPlayed");
     default:
-      return "None";
+      return tr("none");
   }
 }
 
@@ -177,6 +207,7 @@ function placements(game: Game, by: GroupBy, ctx: GroupContext): Placement[] {
  */
 export function groupGames(games: readonly Game[], by: GroupBy, ctx: GroupContext): GameGroup[] {
   if (by === "none") return [{ key: "", label: "", source: null, games: [...games] }];
+  const collator = new Intl.Collator(intlLocale(), { sensitivity: "base", numeric: true });
   const groups = new Map<string, GameGroup & { rank: number }>();
   for (const game of games) {
     const places = placements(game, by, ctx);
@@ -417,8 +448,14 @@ export function stickyHeader(
 export function groupSummary(games: readonly Game[]): string {
   const installed = games.filter((g) => g.installed).length;
   const hours = Math.round(games.reduce((sum, g) => sum + g.playtimeSeconds, 0) / 3600);
-  const installedText = installed === 0 ? "None installed" : `${installed} installed`;
-  return hours > 0 ? `${installedText} · ${hours.toLocaleString()}h` : installedText;
+  const installedText =
+    installed === 0 ? tr("noneInstalled") : tr("installed", { count: installed });
+  return hours > 0
+    ? tr("installedWithHours", {
+        installed: installedText,
+        hours: hours.toLocaleString(intlLocale()),
+      })
+    : installedText;
 }
 
 /**

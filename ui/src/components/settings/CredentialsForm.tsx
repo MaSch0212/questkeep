@@ -3,8 +3,12 @@ import EyeOff from "lucide-solid/icons/eye-off";
 import { createSignal, For, Show } from "solid-js";
 import type { CredentialField } from "../../bindings/CredentialField";
 import type { StoreCredentials } from "../../bindings/StoreCredentials";
+import { translator } from "../../i18n";
+import { settingsAccounts } from "../../i18n/settingsAccounts";
 import { openLink } from "./openLink";
 import type { SettingsModel } from "./useSettings";
+
+const tr = translator(settingsAccounts);
 
 /** A store's credentials (Steam's Web API key), the alternative to signing in. */
 export function CredentialsForm(props: {
@@ -32,7 +36,7 @@ export function CredentialsForm(props: {
           {(link) => (
             <>
               {" "}
-              Get one at{" "}
+              {tr("getOneAt")}{" "}
               <button type="button" class="link-btn" onClick={() => void openLink(link())}>
                 {link()}
               </button>
@@ -53,7 +57,7 @@ export function CredentialsForm(props: {
       </For>
       <div class="form__actions">
         <button type="submit" class="btn btn--primary" disabled={saving() || missing()}>
-          {saving() ? "Saving…" : `Save ${props.credentials.noun}`}
+          {saving() ? tr("saving") : tr("saveNoun", { noun: props.credentials.noun })}
         </button>
       </div>
     </form>
@@ -91,9 +95,9 @@ function Field(props: {
           <button
             type="button"
             class="icon-btn icon-btn--bordered"
-            aria-label={`${shown() ? "Hide" : "Show"} ${props.field.label}`}
+            aria-label={tr(shown() ? "hideField" : "showField", { label: props.field.label })}
             aria-pressed={shown()}
-            title={`${shown() ? "Hide" : "Show"} ${props.field.label}`}
+            title={tr(shown() ? "hideField" : "showField", { label: props.field.label })}
             onClick={() => setShown((v) => !v)}
           >
             <Show when={shown()} fallback={<Eye class="icon" aria-hidden="true" />}>

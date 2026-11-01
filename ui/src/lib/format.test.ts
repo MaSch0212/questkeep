@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { intlLocale, setLanguage } from "../i18n";
 import {
   formatAgo,
   formatDate,
   formatPlaytime,
   formatRelativeDate,
+  formatSize,
   formatReleaseDate,
   releaseYear,
 } from "./format";
@@ -39,7 +41,18 @@ describe("formatRelativeDate", () => {
   });
   it("falls back to the locale date", () => {
     const old = new Date(2026, 4, 1, 8);
-    expect(formatRelativeDate(old.toISOString(), now)).toBe(old.toLocaleDateString());
+    expect(formatRelativeDate(old.toISOString(), now)).toBe(old.toLocaleDateString(intlLocale()));
+  });
+});
+
+describe("formats in the UI language", () => {
+  it("translates relative dates and play times", () => {
+    setLanguage("de");
+    const now = new Date(2026, 5, 15, 12);
+    expect(formatRelativeDate(new Date(2026, 5, 14, 8).toISOString(), now)).toBe("Gestern");
+    expect(formatRelativeDate(new Date(2026, 5, 12, 8).toISOString(), now)).toBe("Vor 3 Tagen");
+    expect(formatPlaytime(3 * 3600 + 5 * 60)).toBe("3 Std. 5 Min.");
+    expect(formatSize(1.5 * 1024 ** 3)).toBe("1,5 GB");
   });
 });
 
@@ -66,7 +79,7 @@ describe("formatReleaseDate", () => {
 describe("formatDate", () => {
   it("formats valid dates and rejects invalid ones", () => {
     const d = new Date(2026, 0, 2, 8);
-    expect(formatDate(d.toISOString())).toBe(d.toLocaleDateString());
+    expect(formatDate(d.toISOString())).toBe(d.toLocaleDateString(intlLocale()));
     expect(formatDate(null)).toBe("Unknown");
     expect(formatDate("x")).toBe("Unknown");
   });
@@ -86,8 +99,7 @@ describe("formatAgo", () => {
 });
 
 describe("formatSize", () => {
-  it("uses 1024-based units", async () => {
-    const { formatSize } = await import("./format");
+  it("uses 1024-based units", () => {
     expect(formatSize(158.7 * 1024 ** 3)).toBe("158.7 GB");
     expect(formatSize(512 * 1024 ** 2)).toBe("512 MB");
     expect(formatSize(100)).toBe("100 B");

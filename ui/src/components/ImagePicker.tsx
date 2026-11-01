@@ -1,3 +1,5 @@
+import { translator } from "../i18n";
+import { gameImages } from "../i18n/gameImages";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import Check from "lucide-solid/icons/check";
 import Search from "lucide-solid/icons/search";
@@ -10,11 +12,13 @@ import { webQuery } from "../lib/editGame";
 import { errorMessage } from "../lib/errors";
 import { Modal } from "./Modal";
 
-const TITLES: Record<ImageSlot, string> = {
-  cover: "Choose a cover",
-  background: "Choose a background",
-  icon: "Choose an icon",
-};
+const TITLES = {
+  cover: "chooseCover",
+  background: "chooseBackground",
+  icon: "chooseIcon",
+} as const satisfies Record<ImageSlot, string>;
+
+const tr = translator(gameImages);
 
 const WEB = "web";
 const ALL = "all";
@@ -142,9 +146,9 @@ export function ImagePicker(props: {
   }
 
   return (
-    <Modal title={TITLES[props.slot]} wide onClose={props.onClose}>
+    <Modal title={tr(TITLES[props.slot])} wide onClose={props.onClose}>
       <div class={`image-picker image-picker--${props.slot}`}>
-        <div class="image-picker__tabs segmented" role="tablist" aria-label="Image sources">
+        <div class="image-picker__tabs segmented" role="tablist" aria-label={tr("imageSources")}>
           <button
             type="button"
             role="tab"
@@ -152,7 +156,7 @@ export function ImagePicker(props: {
             aria-selected={tab() === ALL}
             onClick={() => openTab(ALL)}
           >
-            All {all().length}
+            {tr("all", { count: all().length })}
           </button>
           <For each={loaded()}>
             {(entry) => (
@@ -174,7 +178,7 @@ export function ImagePicker(props: {
             aria-selected={tab() === WEB}
             onClick={() => openTab(WEB)}
           >
-            <Search class="icon icon--xs" aria-hidden="true" /> Web
+            <Search class="icon icon--xs" aria-hidden="true" /> {tr("web")}
           </button>
         </div>
         <Show when={tab() === WEB}>
@@ -187,11 +191,11 @@ export function ImagePicker(props: {
           >
             <input
               class="input"
-              aria-label="Search the web for images"
+              aria-label={tr("searchWeb")}
               value={query()}
               onInput={(event) => setQuery(event.currentTarget.value)}
             />
-            <div class="segmented" role="radiogroup" aria-label="Image size">
+            <div class="segmented" role="radiogroup" aria-label={tr("imageSize")}>
               <button
                 type="button"
                 role="radio"
@@ -199,7 +203,7 @@ export function ImagePicker(props: {
                 aria-checked={!large()}
                 onClick={() => setLarge(false)}
               >
-                Any size
+                {tr("anySize")}
               </button>
               <button
                 type="button"
@@ -208,11 +212,11 @@ export function ImagePicker(props: {
                 aria-checked={large()}
                 onClick={() => setLarge(true)}
               >
-                Large
+                {tr("large")}
               </button>
             </div>
             <button type="submit" class="btn btn--primary" disabled={searching()}>
-              Search
+              {tr("search")}
             </button>
           </form>
         </Show>
@@ -224,7 +228,7 @@ export function ImagePicker(props: {
         <div
           class="image-picker__grid"
           role="listbox"
-          aria-label="Images"
+          aria-label={tr("images")}
           tabindex="0"
           onKeyDown={onGridKey}
         >
@@ -232,7 +236,7 @@ export function ImagePicker(props: {
             <div class="image-picker__item image-picker__item--current" aria-hidden="true">
               <img src={imageSrc(props.current ?? "")} alt="" />
               <small>
-                <Check class="icon icon--xs" aria-hidden="true" /> Current
+                <Check class="icon icon--xs" aria-hidden="true" /> {tr("current")}
               </small>
             </div>
           </Show>
@@ -265,7 +269,7 @@ export function ImagePicker(props: {
           </For>
           <Show when={(tab() === WEB ? searching() : pending()) && shown().length === 0}>
             <div class="image-picker__item image-picker__item--loading">
-              <small>Loading…</small>
+              <small>{tr("loading")}</small>
             </div>
           </Show>
         </div>
@@ -278,22 +282,19 @@ export function ImagePicker(props: {
           }
         >
           <p class="muted image-picker__empty">
-            {tab() === WEB ? "No images found." : "No images from these sources."}
+            {tab() === WEB ? tr("noWebImages") : tr("noSourceImages")}
           </p>
         </Show>
         <div class="image-picker__footer">
           <span class="field__hint">
-            {footer() ??
-              (tab() === WEB
-                ? "Results from DuckDuckGo image search. Images belong to their owners."
-                : "Select an image.")}
+            {footer() ?? (tab() === WEB ? tr("webHint") : tr("selectImage"))}
           </span>
           <span class="image-picker__actions">
             <button type="button" class="btn" onClick={props.onClose}>
-              Cancel
+              {tr("cancel")}
             </button>
             <button type="button" class="btn btn--primary" disabled={!selected()} onClick={use}>
-              Use this image
+              {tr("useImage")}
             </button>
           </span>
         </div>

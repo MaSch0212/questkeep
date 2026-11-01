@@ -22,6 +22,8 @@ import {
   uninstallGame,
   updateGame,
 } from "../lib/actions";
+import { translator } from "../i18n";
+import { shellMenus } from "../i18n/shellMenus";
 import { launchProfiles } from "../lib/api";
 import { playCopy } from "../lib/copies";
 import { store } from "../lib/store";
@@ -31,6 +33,8 @@ import { EditGameDialog } from "./EditGameDialog";
 import { Menu, type MenuEntry } from "./Menu";
 import type { PopoverAnchor } from "./Popover";
 import { SourceIcon } from "./SourceIcon";
+
+const tr = translator(shellMenus);
 
 type Step = "menu" | "edit" | "combine" | "uninstall" | "remove";
 
@@ -88,12 +92,12 @@ export function GameContextMenu(props: {
     return [
       {
         kind: "submenu",
-        label: "Play with",
+        label: tr("playWith"),
         entries: () =>
           installed.map((profile) => ({
             label: profile.name,
             icon: sourceIcon(profile.source),
-            hint: profile.id === list.playId ? "Default" : undefined,
+            hint: profile.id === list.playId ? tr("defaultProfile") : undefined,
             disabled: running(),
             onSelect: () => void report(launchGame(game().id, null, profile.id)),
           })),
@@ -103,7 +107,7 @@ export function GameContextMenu(props: {
 
   const statusEntries = (): MenuEntry[] => [
     {
-      label: "None",
+      label: tr("none"),
       checked: game().completionStatus === null,
       onSelect: () => void store.setCompletionStatus([game().id], null),
     },
@@ -116,7 +120,7 @@ export function GameContextMenu(props: {
 
   const categoryEntries = (): MenuEntry[] =>
     store.categories().length === 0
-      ? [{ label: "No categories yet", disabled: true, onSelect: () => undefined }]
+      ? [{ label: tr("noCategories"), disabled: true, onSelect: () => undefined }]
       : store.categories().map((category) => {
           const has = game().categories.includes(category.id);
           return {
@@ -139,23 +143,23 @@ export function GameContextMenu(props: {
   const entries = (): MenuEntry[] => [
     game().installed
       ? {
-          label: running() ? "Running" : "Play",
+          label: running() ? tr("running") : tr("play"),
           icon: iconOf(Play),
-          hint: "Enter",
+          hint: tr("enterKey"),
           disabled: running(),
           onSelect: () => void activateGame(game().id),
         }
       : {
-          label: "Install",
+          label: tr("install"),
           icon: iconOf(Download),
-          hint: "Enter",
+          hint: tr("enterKey"),
           onSelect: () => void activateGame(game().id),
         },
     ...playWith(),
-    { label: "Open game page", onSelect: () => store.selectAndOpen(game().id) },
+    { label: tr("openGamePage"), onSelect: () => store.selectAndOpen(game().id) },
     { kind: "separator" },
     {
-      label: game().favorite ? "Remove from favorites" : "Add to favorites",
+      label: game().favorite ? tr("removeFromFavorites") : tr("addToFavorites"),
       icon: iconOf(Star),
       onSelect: () => void report(updateGame(game().id, { favorite: !game().favorite })),
     },
@@ -165,34 +169,34 @@ export function GameContextMenu(props: {
       : [
           {
             kind: "submenu" as const,
-            label: "Completion status",
+            label: tr("completionStatus"),
             hint: statusName(),
             entries: statusEntries,
           },
         ]),
-    { kind: "submenu", label: "Categories", entries: categoryEntries },
-    { label: "Edit…", icon: iconOf(Pencil), hint: "F2", onSelect: () => setStep("edit") },
+    { kind: "submenu", label: tr("categories"), entries: categoryEntries },
+    { label: tr("edit"), icon: iconOf(Pencil), hint: "F2", onSelect: () => setStep("edit") },
     { kind: "separator" },
     {
-      label: "Refresh metadata",
+      label: tr("refreshMetadata"),
       icon: iconOf(RefreshCw),
-      onSelect: () => void report(refreshMetadata(game().id), "Refreshing metadata…"),
+      onSelect: () => void report(refreshMetadata(game().id), tr("refreshingMetadata")),
     },
     {
-      label: "Combine with another game…",
+      label: tr("combineWith"),
       icon: iconOf(Combine),
       onSelect: () => setStep("combine"),
     },
     {
-      label: game().kind === "app" ? "Mark as game" : "Mark as app",
+      label: game().kind === "app" ? tr("markAsGame") : tr("markAsApp"),
       icon: iconOf(game().kind === "app" ? Gamepad : AppWindow),
       onSelect: () =>
         void report(updateGame(game().id, { kind: game().kind === "app" ? "game" : "app" })),
     },
     {
-      label: game().hidden ? "Unhide" : "Hide",
+      label: game().hidden ? tr("unhide") : tr("hide"),
       icon: iconOf(game().hidden ? Eye : EyeOff),
-      hint: "Del",
+      hint: tr("delKey"),
       onSelect: () => void report(updateGame(game().id, { hidden: !game().hidden })),
     },
     { kind: "separator" },
@@ -200,7 +204,7 @@ export function GameContextMenu(props: {
       ? []
       : [
           {
-            label: "Open install folder",
+            label: tr("openInstallFolder"),
             icon: iconOf(FolderOpen),
             onSelect: () => void report(openInstallFolder(game().id)),
           },
@@ -208,7 +212,7 @@ export function GameContextMenu(props: {
     ...(canUninstall()
       ? [
           {
-            label: "Uninstall…",
+            label: tr("uninstallEllipsis"),
             icon: iconOf(PackageMinus),
             danger: true,
             onSelect: () => setStep("uninstall"),
@@ -216,7 +220,7 @@ export function GameContextMenu(props: {
         ]
       : []),
     {
-      label: "Remove from library…",
+      label: tr("removeFromLibrary"),
       icon: iconOf(Trash),
       danger: true,
       onSelect: () => setStep("remove"),
@@ -235,7 +239,7 @@ export function GameContextMenu(props: {
       <Show when={step() === "menu"}>
         <Menu
           anchor={props.anchor}
-          label={`${game().name} actions`}
+          label={tr("actionsLabel", { name: game().name })}
           entries={entries()}
           onClose={menuClosed}
         />
@@ -257,13 +261,13 @@ export function GameContextMenu(props: {
       </Show>
       <Show when={step() === "uninstall"}>
         <ConfirmDialog
-          title="Uninstall game"
-          message={<>Uninstall “{game().name}”? The store will ask to confirm.</>}
-          confirmLabel="Uninstall"
+          title={tr("uninstallTitle")}
+          message={tr("uninstallMessage", { name: game().name })}
+          confirmLabel={tr("uninstall")}
           onConfirm={() =>
             void report(
               uninstallGame(game().id, uninstallCopy()?.id ?? null),
-              "Uninstall handed to the store client",
+              tr("uninstallHanded"),
             )
           }
           onClose={() => props.onDone(true)}
@@ -271,9 +275,9 @@ export function GameContextMenu(props: {
       </Show>
       <Show when={step() === "remove"}>
         <ConfirmDialog
-          title="Remove game"
-          message={<>Remove “{game().name}” from your library?</>}
-          confirmLabel="Remove"
+          title={tr("removeTitle")}
+          message={tr("removeMessage", { name: game().name })}
+          confirmLabel={tr("remove")}
           onConfirm={() => void report(removeGame(game().id))}
           onClose={() => props.onDone(true)}
         />

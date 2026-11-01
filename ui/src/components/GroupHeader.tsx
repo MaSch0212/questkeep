@@ -1,8 +1,14 @@
 import ChevronRight from "lucide-solid/icons/chevron-right";
 import { Show } from "solid-js";
+import { translator } from "../i18n";
+import { libraryCommon } from "../i18n/libraryCommon";
+import { libraryGrouping } from "../i18n/libraryGrouping";
 import { store } from "../lib/store";
 import { groupSummary, type GameGroup } from "../lib/grouping";
 import { SourceIcon } from "./SourceIcon";
+
+const tr = translator(libraryGrouping);
+const trCommon = translator(libraryCommon);
 
 /**
  * The header band of a group in the grid or a list: chevron, store icon (grouped by store),
@@ -25,8 +31,8 @@ export function GroupHeader(props: {
       class="group-header"
       tabindex={props.tabbable === false ? -1 : undefined}
       aria-expanded={!props.collapsed}
-      aria-label={`${props.group.label}, ${count()} ${count() === 1 ? "game" : "games"}`}
-      title={props.collapsed ? "Show this group" : "Collapse this group"}
+      aria-label={`${props.group.label}, ${trCommon("gamesCount", { count: count() })}`}
+      title={props.collapsed ? tr("showGroup") : tr("collapseGroup")}
       onClick={() => props.onToggle()}
     >
       <ChevronRight
@@ -41,9 +47,9 @@ export function GroupHeader(props: {
       </span>
       <span class="group-header__meta" aria-hidden="true">
         {picked() > 0
-          ? `${picked()} of ${count()} selected`
+          ? tr("selectedOf", { picked: picked(), count: count() })
           : props.collapsed
-            ? "Collapsed"
+            ? tr("collapsed")
             : groupSummary(props.group.games)}
       </span>
     </button>

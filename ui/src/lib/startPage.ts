@@ -1,4 +1,8 @@
 import type { StartupPage } from "../bindings/StartupPage";
+import { intlLocale, locale, translator } from "../i18n";
+import { shellHome } from "../i18n/shellHome";
+
+const tr = translator(shellHome);
 
 /** Where Questkeep opens: the start page or a view. */
 export type StartTarget = { kind: "home" } | { kind: "view"; id: string | null };
@@ -44,27 +48,40 @@ function localMidnight(date: Date): number {
 export function relativeDay(iso: string, now: Date = new Date()): string {
   const date = new Date(iso);
   const days = Math.round((localMidnight(now) - localMidnight(date)) / DAY_MS);
-  if (days <= 0) return "Today";
-  if (days === 1) return "Yesterday";
-  if (days < 7) return `${days} days ago`;
-  if (days < 28) {
-    const weeks = Math.floor(days / 7);
-    return weeks === 1 ? "1 week ago" : `${weeks} weeks ago`;
+  if (days <= 0) return tr("today");
+  if (days === 1) return tr("yesterday");
+  if (days < 7) return tr("daysAgo", { days });
+  if (days < 28) return tr("weeksAgo", { count: Math.floor(days / 7) });
+  if (locale() !== "en") {
+    return date.toLocaleDateString(intlLocale(), {
+      day: "numeric",
+      month: "short",
+      ...(date.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }),
+    });
   }
   const short = `${date.getDate()} ${MONTHS[date.getMonth()]}`;
   return date.getFullYear() === now.getFullYear() ? short : `${short} ${date.getFullYear()}`;
 }
 
+/** A number with one decimal in the UI language ("1.5", "1,5"), without digit grouping. */
+export function oneDecimal(value: number): string {
+  return value.toLocaleString(intlLocale(), {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+    useGrouping: false,
+  });
+}
+
 /** Hours with one decimal ("1.5"), "<0.1" for a few minutes, or "–" for none. */
 export function hoursLabel(seconds: number): string {
   if (seconds <= 0) return "–";
-  return seconds < 180 ? "<0.1" : (seconds / 3600).toFixed(1);
+  return seconds < 180 ? `<${oneDecimal(0.1)}` : oneDecimal(seconds / 3600);
 }
 
 /** A short weekday name for a `YYYY-MM-DD` day, or "Today". */
 export function dayLabel(day: string, now: Date = new Date()): string {
   const [y, m, d] = day.split("-").map(Number);
   const date = new Date(y ?? 0, (m ?? 1) - 1, d ?? 1);
-  if (localMidnight(date) === localMidnight(now)) return "Today";
-  return date.toLocaleDateString("en", { weekday: "short" });
+  if (localMidnight(date) === localMidnight(now)) return tr("today");
+  return date.toLocaleDateString(intlLocale(), { weekday: "short" });
 }

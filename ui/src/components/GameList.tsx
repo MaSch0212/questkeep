@@ -1,3 +1,5 @@
+import { translator } from "../i18n";
+import { libraryList } from "../i18n/libraryList";
 import {
   createEffect,
   createMemo,
@@ -31,6 +33,8 @@ import { StickyGroupHeader } from "./StickyGroupHeader";
 import { TableHeader } from "./TableHeader";
 import { columnsMinWidth, columnTemplate, shownColumns } from "../lib/columns";
 import { Logo } from "./Logo";
+
+const tr = translator(libraryList);
 
 const FALLBACK_HEIGHT = 700;
 const DEFAULT_ROW_HEIGHT = 36;
@@ -239,7 +243,7 @@ export function GameList(props: { compact?: boolean }) {
         class="list__scroller"
         role="listbox"
         tabindex="0"
-        aria-label="Games"
+        aria-label={tr("games")}
         aria-activedescendant={activeDescendant()}
         onKeyDown={onKeyDown}
       >
@@ -318,7 +322,7 @@ export function GameList(props: { compact?: boolean }) {
         <Show when={store.games().length === 0 && !store.loading()}>
           <div class="grid__empty">
             <Logo class="logo logo--muted" />
-            <p>No games to show. Add a game, or scan a store from Settings.</p>
+            <p>{tr("empty")}</p>
           </div>
         </Show>
       </div>

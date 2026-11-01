@@ -3,6 +3,8 @@ import Play from "lucide-solid/icons/play";
 import Search from "lucide-solid/icons/search";
 import { createSignal, For, onCleanup, Show } from "solid-js";
 import type { Game } from "../bindings/Game";
+import { translator } from "../i18n";
+import { shellCommandBar } from "../i18n/shellCommandBar";
 import { installWithToast, launchWithToast } from "../lib/actions";
 import * as api from "../lib/api";
 import { rankMatches, splitMatch } from "../lib/commandBar";
@@ -11,6 +13,8 @@ import { defaultQuery } from "../lib/query";
 import { store } from "../lib/store";
 import { GameIcon } from "./GameIcon";
 import { sourceName, SourceIcon } from "./SourceIcon";
+
+const tr = translator(shellCommandBar);
 
 const DEBOUNCE_MS = 80;
 const RECENT_COUNT = 5;
@@ -134,12 +138,12 @@ export function CommandBar(props: { ref?: (handle: CommandBarHandle) => void }) 
           class="command__input"
           type="text"
           role="combobox"
-          aria-label="Find a game"
+          aria-label={tr("findGame")}
           aria-expanded={open()}
           aria-controls="command-results"
           aria-activedescendant={open() && results().length > 0 ? optionId(selected()) : undefined}
           aria-autocomplete="list"
-          placeholder="Find a game…"
+          placeholder={tr("findGameEllipsis")}
           spellcheck={false}
           autocomplete="off"
           value={text()}
@@ -159,9 +163,9 @@ export function CommandBar(props: { ref?: (handle: CommandBarHandle) => void }) 
       <Show when={open()}>
         <div class="command__panel">
           <Show when={text().trim() === "" && results().length > 0}>
-            <div class="command__heading">Recently played</div>
+            <div class="command__heading">{tr("recentlyPlayed")}</div>
           </Show>
-          <ul id="command-results" class="command__results" role="listbox" aria-label="Games">
+          <ul id="command-results" class="command__results" role="listbox" aria-label={tr("games")}>
             <For each={results()}>
               {(game, index) => {
                 const action = () => primaryAction(game, store.isRunning(game.id));
@@ -191,9 +195,9 @@ export function CommandBar(props: { ref?: (handle: CommandBarHandle) => void }) 
                     <span class="command__meta">
                       <SourceIcon source={game.source} />
                       <span class="visually-hidden">{sourceName(game.source)}, </span>
-                      {game.kind === "app" ? "App · " : ""}
-                      {game.hidden ? "Hidden · " : ""}
-                      {game.installed ? "Installed" : "Not installed"}
+                      {game.kind === "app" ? tr("app") : ""}
+                      {game.hidden ? tr("hidden") : ""}
+                      {game.installed ? tr("installed") : tr("notInstalled")}
                     </span>
                     <Show when={action() === "play" || action() === "install"}>
                       <button
@@ -201,8 +205,12 @@ export function CommandBar(props: { ref?: (handle: CommandBarHandle) => void }) 
                         class="command__act"
                         classList={{ "command__act--play": action() === "play" }}
                         tabIndex={-1}
-                        aria-label={`${action() === "play" ? "Play" : "Install"} ${game.name}`}
-                        title={`${action() === "play" ? "Play" : "Install"} (Ctrl+Enter)`}
+                        aria-label={
+                          action() === "play"
+                            ? tr("playNamed", { name: game.name })
+                            : tr("installNamed", { name: game.name })
+                        }
+                        title={action() === "play" ? tr("playHint") : tr("installHint")}
                       >
                         <Show
                           when={action() === "play"}
@@ -210,7 +218,7 @@ export function CommandBar(props: { ref?: (handle: CommandBarHandle) => void }) 
                         >
                           <Play class="icon" aria-hidden="true" />
                         </Show>
-                        {action() === "play" ? "Play" : "Install"}
+                        {action() === "play" ? tr("play") : tr("install")}
                       </button>
                     </Show>
                   </li>
@@ -219,20 +227,20 @@ export function CommandBar(props: { ref?: (handle: CommandBarHandle) => void }) 
             </For>
           </ul>
           <Show when={results().length === 0 && text().trim() !== ""}>
-            <p class="command__empty">No game matches “{text().trim()}”.</p>
+            <p class="command__empty">{tr("noMatch", { text: text().trim() })}</p>
           </Show>
           <div class="command__hints" aria-hidden="true">
             <span>
-              <kbd>↑</kbd> <kbd>↓</kbd> select
+              <kbd>↑</kbd> <kbd>↓</kbd> {tr("select")}
             </span>
             <span>
-              <kbd>Enter</kbd> open page
+              <kbd>{tr("enterKey")}</kbd> {tr("openPage")}
             </span>
             <span>
-              <kbd>Ctrl Enter</kbd> play or install
+              <kbd>{tr("ctrlEnterKey")}</kbd> {tr("playOrInstall")}
             </span>
             <span>
-              <kbd>Esc</kbd> close
+              <kbd>{tr("escKey")}</kbd> {tr("closeHint")}
             </span>
           </div>
         </div>

@@ -4,12 +4,20 @@ import type { HiddenFilter } from "../bindings/HiddenFilter";
 import type { KindFilter } from "../bindings/KindFilter";
 import type { PlayedFilter } from "../bindings/PlayedFilter";
 import type { TriState } from "../bindings/TriState";
+import { translator } from "../i18n";
+import { libraryCommon } from "../i18n/libraryCommon";
+import { libraryFilterPanel } from "../i18n/libraryFilterPanel";
+import { libraryFilters } from "../i18n/libraryFilters";
 import { toggleSource } from "../lib/query";
 import { store } from "../lib/store";
 import { activeFilterCount, clearedFilters, NO_CATEGORY } from "../lib/views";
 import { FilterTree } from "./FilterTree";
 import { Popover, type PopoverAnchor } from "./Popover";
 import { SourceIcon } from "./SourceIcon";
+
+const tr = translator(libraryFilterPanel);
+const trCommon = translator(libraryCommon);
+const trFilters = translator(libraryFilters);
 
 /** A row of mutually exclusive choices (radio buttons styled as a segmented control). */
 function Choice<T extends string>(props: {
@@ -43,10 +51,10 @@ function Choice<T extends string>(props: {
   );
 }
 
-const YES_NO: readonly (readonly [TriState, string])[] = [
-  ["any", "Any"],
-  ["yes", "Yes"],
-  ["no", "No"],
+const yesNo = (): readonly (readonly [TriState, string])[] => [
+  ["any", tr("any")],
+  ["yes", tr("yes")],
+  ["no", tr("no")],
 ];
 
 const query = () => store.query();
@@ -67,22 +75,24 @@ export function FilterPanel(props: {
       anchor={props.anchor}
       class="filters"
       role="dialog"
-      label="Filters"
+      label={tr("title")}
       ref={(el) => (panel = el)}
       inside={props.inside}
       onClose={props.onClose}
     >
       <div class="filters__head">
-        <h2 class="filters__title">Filters</h2>
+        <h2 class="filters__title">{tr("title")}</h2>
         <span class="filters__summary">
-          {activeFilterCount(query())} active · {store.games().length}{" "}
-          {store.games().length === 1 ? "game" : "games"}
+          {tr("summary", {
+            active: activeFilterCount(query()),
+            games: trCommon("gamesCount", { count: store.games().length }),
+          })}
         </span>
       </div>
       <div class="filters__body">
         <div class="filters__grid">
           <span class="filters__label" id="filter-stores">
-            Store
+            {trFilters("source")}
           </span>
           <div class="filters__stores" role="group" aria-labelledby="filter-stores">
             <For each={store.sources()}>
@@ -104,14 +114,16 @@ export function FilterPanel(props: {
             </For>
           </div>
           <span class="filters__label" id="filter-categories">
-            Category
+            {trFilters("category")}
           </span>
           <Show
             when={store.categories().length > 0}
-            fallback={<p class="filters__hint">No categories yet. Add them on a game's page.</p>}
+            fallback={<p class="filters__hint">{tr("noCategories")}</p>}
           >
             <div class="filters__stores" role="group" aria-labelledby="filter-categories">
-              <For each={[...store.categories(), { id: NO_CATEGORY, name: "No category" }]}>
+              <For
+                each={[...store.categories(), { id: NO_CATEGORY, name: trCommon("noCategory") }]}
+              >
                 {(category) => {
                   const on = () => query().categories.includes(category.id);
                   return (
@@ -132,44 +144,44 @@ export function FilterPanel(props: {
             </div>
           </Show>
           <Choice<KindFilter>
-            label="Type"
+            label={tr("type")}
             value={query().kind}
             options={[
-              ["games", "Games"],
-              ["apps", "Apps"],
-              ["both", "Both"],
+              ["games", tr("games")],
+              ["apps", tr("apps")],
+              ["both", tr("both")],
             ]}
             onChange={(kind) => set({ kind })}
           />
           <Choice
-            label="Installed"
+            label={tr("installed")}
             value={query().installed}
-            options={YES_NO}
+            options={yesNo()}
             onChange={(installed) => set({ installed })}
           />
           <Choice
-            label="Favorite"
+            label={tr("favorite")}
             value={query().favorite}
-            options={YES_NO}
+            options={yesNo()}
             onChange={(favorite) => set({ favorite })}
           />
           <Choice<PlayedFilter>
-            label="Played"
+            label={tr("played")}
             value={query().played}
             options={[
-              ["any", "Any"],
-              ["played", "Played"],
-              ["never", "Never"],
+              ["any", tr("any")],
+              ["played", tr("played")],
+              ["never", tr("never")],
             ]}
             onChange={(played) => set({ played })}
           />
           <Choice<HiddenFilter>
-            label="Hidden games"
+            label={tr("hiddenGames")}
             value={query().hidden}
             options={[
-              ["visible", "Leave out"],
-              ["all", "Include"],
-              ["hidden", "Only"],
+              ["visible", tr("leaveOut")],
+              ["all", tr("include")],
+              ["hidden", tr("only")],
             ]}
             onChange={(hidden) => set({ hidden })}
           />
@@ -190,10 +202,10 @@ export function FilterPanel(props: {
             set(cleared);
           }}
         >
-          Clear filters
+          {tr("clearFilters")}
         </button>
         <button type="button" class="btn" onClick={() => props.onClose(true)}>
-          Done
+          {tr("done")}
         </button>
       </div>
     </Popover>

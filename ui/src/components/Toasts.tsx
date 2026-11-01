@@ -1,6 +1,10 @@
 import X from "lucide-solid/icons/x";
 import { For, Show } from "solid-js";
+import { translator } from "../i18n";
+import { shellCommon } from "../i18n/shellCommon";
 import { store } from "../lib/store";
+
+const tr = translator(shellCommon);
 
 export function Toasts() {
   return (
@@ -26,7 +30,7 @@ export function Toasts() {
             <button
               class="icon-btn"
               type="button"
-              aria-label="Dismiss notification"
+              aria-label={tr("dismissNotification")}
               onClick={() => store.dismissToast(toast.id)}
             >
               <X class="icon" aria-hidden="true" />

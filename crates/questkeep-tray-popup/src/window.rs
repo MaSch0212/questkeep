@@ -709,7 +709,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{PopupGame, PopupGames};
+    use crate::{PopupGame, PopupGames, PopupTexts};
     use uuid::Uuid;
     use windows::Win32::System::Com::{
         CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx,
@@ -739,6 +739,7 @@ mod tests {
                 icon: crate::test_icons::STEAM.into(),
             }],
             update: None,
+            texts: PopupTexts::default(),
         };
         let anchor = ScreenRect {
             x: 100,

@@ -8,12 +8,17 @@ import type { ListFilter } from "../bindings/ListFilter";
 import type { ListMode } from "../bindings/ListMode";
 import type { MatchMode } from "../bindings/MatchMode";
 import type { RangeFilter } from "../bindings/RangeFilter";
+import { translator } from "../i18n";
+import { libraryCommon } from "../i18n/libraryCommon";
+import { libraryFilters } from "../i18n/libraryFilters";
+import { libraryFilterTree } from "../i18n/libraryFilterTree";
 import {
   appendTo,
   duplicateAt,
   emptyGroup,
   FIELDS,
   fromInput,
+  joinerWord,
   listInfo,
   newFilter,
   NO_VALUE,
@@ -31,6 +36,10 @@ import { store } from "../lib/store";
 import { Menu } from "./Menu";
 import type { PopoverAnchor } from "./Popover";
 import { SearchPicker } from "./SearchPicker";
+
+const tr = translator(libraryFilterTree);
+const trCommon = translator(libraryCommon);
+const trFilters = translator(libraryFilters);
 
 type Change = (tree: FilterGroup) => FilterGroup;
 
@@ -61,14 +70,14 @@ function Segmented<T extends string>(props: {
   );
 }
 
-const MATCH: readonly (readonly [MatchMode, string])[] = [
-  ["all", "all"],
-  ["any", "any"],
+const match = (): readonly (readonly [MatchMode, string])[] => [
+  ["all", tr("matchAll")],
+  ["any", tr("matchAny")],
 ];
-const LIST_MODES: readonly (readonly [ListMode, string])[] = [
-  ["any", "Any of"],
-  ["all", "All of"],
-  ["none", "None of"],
+const listModes = (): readonly (readonly [ListMode, string])[] => [
+  ["any", tr("anyOf")],
+  ["all", tr("allOf")],
+  ["none", tr("noneOf")],
 ];
 
 const anchorOf = (el: HTMLElement | undefined): PopoverAnchor | null => {
@@ -96,19 +105,19 @@ function AddFilter(props: {
         onClick={() => setAnchor(anchor() ? null : anchorOf(button))}
       >
         <Plus class="icon" aria-hidden="true" />
-        {props.small ? "Filter" : "Add filter"}
+        {props.small ? tr("filterShort") : tr("addFilter")}
       </button>
       <Show when={anchor()}>
         {(at) => (
           <SearchPicker
             anchor={at()}
-            label="Add filter"
-            placeholder="Filter by…"
+            label={tr("addFilter")}
+            placeholder={tr("filterBy")}
             items={FIELDS.map((info) => ({
               id: info.field,
               label: info.label,
               section: SECTION_LABELS[info.section],
-              hint: props.used.has(info.field) ? "active" : undefined,
+              hint: props.used.has(info.field) ? tr("activeHint") : undefined,
             }))}
             onPick={(id) => {
               const info = FIELDS.find((f) => f.field === id);
@@ -134,7 +143,7 @@ function AddGroup(props: { small?: boolean; onAdd: () => void }) {
       onClick={() => props.onAdd()}
     >
       <Plus class="icon" aria-hidden="true" />
-      {props.small ? "Group" : "Add group"}
+      {props.small ? tr("groupShort") : tr("addGroup")}
     </button>
   );
 }
@@ -168,22 +177,24 @@ function ListRow(props: { filter: ListFilter; path: Path; change: (c: Change) =>
         : [...props.filter.values, key],
     });
   const name = (key: string) =>
-    key === NO_VALUE ? `No ${info().plural}` : store.valueName(props.filter.field, key);
+    key === NO_VALUE
+      ? trFilters("noValue", { plural: info().plural })
+      : store.valueName(props.filter.field, key);
 
   onMount(() => void store.loadValues(props.filter.field));
 
   return (
-    <div class="filter-row" role="group" aria-label={`${info().label} filter`}>
+    <div class="filter-row" role="group" aria-label={tr("rowLabel", { label: info().label })}>
       <div class="filter-row__head">
         <span class="filter-row__label">{info().label}</span>
         <Segmented
-          label={`How ${info().plural} combine`}
+          label={tr("howCombine", { plural: info().plural })}
           value={props.filter.mode}
-          options={LIST_MODES}
+          options={listModes()}
           onChange={(mode) => update({ mode })}
         />
         <RemoveButton
-          label={`Remove ${info().label} filter`}
+          label={tr("removeFilter", { label: info().label })}
           onClick={() => props.change((tree) => removeAt(tree, props.path))}
         />
       </div>
@@ -195,7 +206,7 @@ function ListRow(props: { filter: ListFilter; path: Path; change: (c: Change) =>
               <button
                 type="button"
                 class="value-chip__remove"
-                aria-label={`Remove ${name(key)}`}
+                aria-label={tr("removeValue", { name: name(key) })}
                 onClick={() => toggle(key)}
               >
                 <X class="icon" aria-hidden="true" />
@@ -215,18 +226,20 @@ function ListRow(props: { filter: ListFilter; path: Path; change: (c: Change) =>
           }}
         >
           <Plus class="icon" aria-hidden="true" />
-          Add {info().noun}
+          {tr("addNoun", { noun: info().noun })}
         </button>
       </div>
       <Show when={anchor()}>
         {(at) => (
           <SearchPicker
             anchor={at()}
-            label={`${info().label} values`}
-            placeholder={`Search ${info().plural}`}
+            label={tr("valuesLabel", { label: info().label })}
+            placeholder={tr("searchPlural", { plural: info().plural })}
             keepOpen
             empty={
-              store.valueLists()[props.filter.field] === undefined ? "Loading…" : "Nothing found"
+              store.valueLists()[props.filter.field] === undefined
+                ? tr("loading")
+                : trCommon("nothingFound")
             }
             items={[
               ...(store.valueLists()[props.filter.field] ?? []).map((value) => ({
@@ -241,8 +254,8 @@ function ListRow(props: { filter: ListFilter; path: Path; change: (c: Change) =>
                 : [
                     {
                       id: NO_VALUE,
-                      label: `No ${info().plural}`,
-                      section: "Special",
+                      label: trFilters("noValue", { plural: info().plural }),
+                      section: tr("special"),
                       special: true,
                       checked: props.filter.values.includes(NO_VALUE),
                     },
@@ -274,8 +287,8 @@ function RangeRow(props: { filter: RangeFilter; path: Path; change: (c: Change) 
         type={inputType()}
         inputmode={info().unit === "date" ? undefined : "decimal"}
         class="range-input__field"
-        aria-label={`${info().label} ${which === "min" ? "from" : "to"}`}
-        placeholder={which === "min" ? "Min" : "Max"}
+        aria-label={tr(which === "min" ? "rangeFrom" : "rangeTo", { label: info().label })}
+        placeholder={which === "min" ? tr("min") : tr("max")}
         value={toInput(info().unit, props.filter[which])}
         onChange={(event) => {
           const value = fromInput(info().unit, event.currentTarget.value);
@@ -293,13 +306,13 @@ function RangeRow(props: { filter: RangeFilter; path: Path; change: (c: Change) 
       <div class="filter-row__head">
         <span class="filter-row__label">{info().label}</span>
         <RemoveButton
-          label={`Remove ${info().label} filter`}
+          label={tr("removeFilter", { label: info().label })}
           onClick={() => props.change((tree) => removeAt(tree, props.path))}
         />
       </div>
       <div class="filter-row__range">
         {bound("min")}
-        <span class="filter-row__to">to</span>
+        <span class="filter-row__to">{tr("to")}</span>
         {bound("max")}
         <For each={presetsOf(info())}>
           {(preset) => (
@@ -353,7 +366,7 @@ function GroupItems(props: {
                 class="filter-joiner"
                 classList={{ "filter-joiner--or": props.group.mode === "any" }}
               >
-                {props.group.mode === "all" ? "and" : "or"}
+                {joinerWord(props.group.mode === "all" ? "and" : "or")}
               </span>
             </Show>
             <Switch>
@@ -407,25 +420,25 @@ function GroupFrame(props: {
   const [menu, setMenu] = createSignal<PopoverAnchor | null>(null);
   let more: HTMLButtonElement | undefined;
   return (
-    <div class="filter-group" role="group" aria-label="Filter group">
+    <div class="filter-group" role="group" aria-label={tr("filterGroup")}>
       <div class="filter-group__head">
         <Segmented
-          label="Group matches"
+          label={tr("groupMatches")}
           value={props.group.mode}
           options={[
-            ["all", "All"],
-            ["any", "Any"],
+            ["all", tr("groupAll")],
+            ["any", tr("groupAny")],
           ]}
           onChange={(mode) => props.change((tree) => setMode(tree, props.path, mode))}
         />
-        <span class="filter-group__caption">of this group</span>
+        <span class="filter-group__caption">{tr("ofThisGroup")}</span>
         <span class="filter-group__spacer" />
         <button
           ref={(el) => (more = el)}
           type="button"
           class="icon-btn icon-btn--small"
-          aria-label="Group actions"
-          title="Group actions"
+          aria-label={tr("groupActions")}
+          title={tr("groupActions")}
           aria-haspopup="menu"
           aria-expanded={menu() !== null}
           onClick={() => setMenu(menu() ? null : anchorOf(more))}
@@ -433,7 +446,7 @@ function GroupFrame(props: {
           <Ellipsis class="icon" aria-hidden="true" />
         </button>
         <RemoveButton
-          label="Remove group"
+          label={tr("removeGroup")}
           onClick={() => props.change((tree) => removeAt(tree, props.path))}
         />
       </div>
@@ -448,7 +461,7 @@ function GroupFrame(props: {
         {(at) => (
           <Menu
             anchor={at()}
-            label="Group actions"
+            label={tr("groupActions")}
             inside={() => [more]}
             onClose={(returnFocus) => {
               setMenu(null);
@@ -456,11 +469,11 @@ function GroupFrame(props: {
             }}
             entries={[
               {
-                label: "Ungroup",
+                label: tr("ungroup"),
                 onSelect: () => props.change((tree) => ungroupAt(tree, props.path)),
               },
               {
-                label: "Duplicate",
+                label: tr("duplicate"),
                 onSelect: () => props.change((tree) => duplicateAt(tree, props.path)),
               },
             ]}
@@ -477,14 +490,14 @@ export function FilterTree(props: { tree: FilterGroup; onChange: (tree: FilterGr
   return (
     <div class="filter-tree">
       <div class="filter-tree__match">
-        Games must match
+        {tr("gamesMustMatch")}
         <Segmented
-          label="Games must match"
+          label={tr("gamesMustMatch")}
           value={props.tree.mode}
-          options={MATCH}
+          options={match()}
           onChange={(mode) => change((tree) => setMode(tree, [], mode))}
         />
-        of these
+        {tr("ofThese")}
       </div>
       <GroupItems group={props.tree} path={[]} root={props.tree} change={change} />
     </div>

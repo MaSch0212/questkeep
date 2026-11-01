@@ -3,6 +3,8 @@ import { listen } from "@tauri-apps/api/event";
 import { batch, createEffect, createMemo, createRoot, createSignal, on, onCleanup } from "solid-js";
 import { createStore } from "solid-js/store";
 import type { AccountWarning } from "../bindings/AccountWarning";
+import { setLanguage, translator } from "../i18n";
+import { shellCommon } from "../i18n/shellCommon";
 import type { AppInfo } from "../bindings/AppInfo";
 import type { Category } from "../bindings/Category";
 import type { CompletionSettings } from "../bindings/CompletionSettings";
@@ -54,6 +56,8 @@ import { takeLegacyViewMode, type ViewMode } from "./viewMode";
 import { HOME_PAGE, startupTarget } from "./startPage";
 import { rangeSelection, toggleSelected } from "./selection";
 import { DEFAULT_VIEW_UI, collapsedKeys, createDebouncedSaver, toggleCollapsed } from "./viewUi";
+
+const tr = translator(shellCommon);
 
 /** What "Save as new view" asks for. */
 export interface NewViewInput {
@@ -267,13 +271,10 @@ function createAppStore() {
     const fresh = keys.filter((key) => !notifiedDuplicates.has(key)).length;
     for (const key of keys) notifiedDuplicates.add(key);
     if (fresh === 0) return;
-    pushToast(
-      "info",
-      found.length === 1
-        ? "1 game looks like it's in more than one store"
-        : `${found.length} games look like they're in more than one store`,
-      { label: "Review", run: () => setDuplicatesOpen(true) },
-    );
+    pushToast("info", tr("duplicatesFound", { count: found.length }), {
+      label: tr("review"),
+      run: () => setDuplicatesOpen(true),
+    });
   }
 
   // One status for every scan, however it started; one toast when the run ends.
@@ -504,6 +505,7 @@ function createAppStore() {
 
   /** Applies saved settings the app shell depends on (the start page switch). */
   function applySettings(settings: Settings) {
+    setLanguage(settings.language);
     setShowStartPage(settings.showStartPage);
     if (!settings.showStartPage && page() === "home") {
       const first = allViews(sections())[0];
@@ -885,7 +887,7 @@ function createAppStore() {
           setBackupProgress(null);
           setBackupsChanged((n) => n + 1);
         });
-        if (event.error !== null) pushToast("error", `Backup failed: ${event.error}`);
+        if (event.error !== null) pushToast("error", tr("backupFailed", { error: event.error }));
         break;
       case "quitDuringBackup":
         setQuitDuringBackup(true);
@@ -992,7 +994,10 @@ function createAppStore() {
         optional(api.lastPage),
         loadViewUi().catch(() => undefined),
       ]).then(([, settings, lastPage]) => {
-        if (settings) setShowStartPage(settings.showStartPage);
+        if (settings) {
+          setLanguage(settings.language);
+          setShowStartPage(settings.showStartPage);
+        }
         openStartupPage(settings?.startupPage ?? { kind: "start" }, lastPage ?? null);
         return refresh();
       }),

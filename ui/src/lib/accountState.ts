@@ -2,6 +2,10 @@ import type { AccountStatus } from "../bindings/AccountStatus";
 import type { ProviderInfo } from "../bindings/ProviderInfo";
 import type { StoreCredentials } from "../bindings/StoreCredentials";
 import type { StoreSettings } from "../bindings/StoreSettings";
+import { translator } from "../i18n";
+import { settingsAccounts } from "../i18n/settingsAccounts";
+
+const tr = translator(settingsAccounts);
 
 /** How a store account is connected: signed in, saved credentials (Steam's Web API key), or not at all. */
 export type AccountConnection = "signedIn" | "credentials" | "none";
@@ -22,20 +26,20 @@ export function accountState(
   if (account.signedIn) {
     return {
       connection: "signedIn",
-      badge: "Signed in",
-      detail: `Signed in as ${account.displayName ?? "your account"}`,
+      badge: tr("signedIn"),
+      detail: tr("signedInAs", { name: account.displayName ?? tr("yourAccount") }),
     };
   }
   if (saved !== null) {
     return { connection: "credentials", badge: saved.badge, detail: saved.detail };
   }
-  return { connection: "none", badge: "Not signed in", detail: "Owned games are not imported" };
+  return { connection: "none", badge: tr("notSignedIn"), detail: tr("ownedNotImported") };
 }
 
 /** "3 of 7 accounts connected". */
 export function connectedSummary(states: AccountState[]): string {
   const connected = states.filter((s) => s.connection !== "none").length;
-  return `${connected} of ${states.length} ${states.length === 1 ? "account" : "accounts"} connected`;
+  return tr("connectedSummary", { connected, total: states.length });
 }
 
 /** One row of the Stores settings: a store, and its account when it has a sign-in. */

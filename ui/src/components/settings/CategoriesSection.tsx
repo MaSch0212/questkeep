@@ -5,11 +5,15 @@ import Trash from "lucide-solid/icons/trash";
 import Unlink from "lucide-solid/icons/unlink";
 import { createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import type { Category } from "../../bindings/Category";
+import { translator } from "../../i18n";
+import { settingsLibrary } from "../../i18n/settingsLibrary";
 import { dropIndexAt, moveBefore, nudge } from "../../lib/categoryOrder";
 import { store } from "../../lib/store";
 import { Menu } from "../Menu";
 import type { PopoverAnchor } from "../Popover";
 import { SourceIcon, sourceName } from "../SourceIcon";
+
+const tr = translator(settingsLibrary);
 
 const sameName = (a: string, b: string) =>
   a.localeCompare(b, undefined, { sensitivity: "base" }) === 0;
@@ -75,13 +79,8 @@ export function CategoriesSection() {
 
   return (
     <div class="form">
-      <p class="muted">
-        Categories group games in views (Group by → Category) and filter them, in this order: drag a
-        row by its handle or press Alt+Up/Down to move it. Steam collections, GOG Galaxy tags and
-        Lutris categories sync into the category of the same name; merge categories to sync several
-        store categories into one. New categories are added on a game's page.
-      </p>
-      <Show when={ids().length > 0} fallback={<p class="muted">No categories yet.</p>}>
+      <p class="muted">{tr("categoriesIntro")}</p>
+      <Show when={ids().length > 0} fallback={<p class="muted">{tr("noCategories")}</p>}>
         <ul
           class="category-list"
           classList={{ "category-list--dragging": dragged() !== null }}
@@ -127,8 +126,7 @@ function CategoryRow(props: {
   const [confirm, setConfirm] = createSignal<Confirm | null>(null);
   const [mergeMenu, setMergeMenu] = createSignal<PopoverAnchor | null>(null);
   let mergeButton: HTMLButtonElement | undefined;
-  const games = () =>
-    `${props.category.gameCount} ${props.category.gameCount === 1 ? "game" : "games"}`;
+  const games = () => tr("games", { count: props.category.gameCount });
   const others = () => store.categories().filter((c) => c.id !== props.category.id);
   const mergeInto = () => {
     const current = confirm();
@@ -152,7 +150,7 @@ function CategoryRow(props: {
     >
       <span
         class="category-list__handle"
-        title="Drag to move (or Alt+Up/Down)"
+        title={tr("dragTitle")}
         aria-hidden="true"
         onPointerDown={(event) => props.onDragStart(event)}
       >
@@ -165,7 +163,7 @@ function CategoryRow(props: {
         <input
           ref={(el) => queueMicrotask(() => el.select())}
           class="input category-list__input"
-          aria-label="Category name"
+          aria-label={tr("categoryName")}
           value={props.category.name}
           onBlur={(event) => void rename(event.currentTarget.value)}
           onKeyDown={(event) => {
@@ -187,7 +185,7 @@ function CategoryRow(props: {
             return (
               <span
                 class="category-list__source"
-                title={`Synced with ${sourceName(source.source)}: “${source.name}”`}
+                title={tr("syncedWith", { store: sourceName(source.source), name: source.name })}
               >
                 <SourceIcon source={source.source} />
                 <Show when={!own()}>
@@ -195,8 +193,11 @@ function CategoryRow(props: {
                   <button
                     type="button"
                     class="category-list__separate"
-                    aria-label={`Separate ${sourceName(source.source)}'s “${source.name}”`}
-                    title="Give it its own category again"
+                    aria-label={tr("separate", {
+                      store: sourceName(source.source),
+                      name: source.name,
+                    })}
+                    title={tr("separateTitle")}
                     onClick={() =>
                       void store.separateCategorySource(
                         props.category.id,
@@ -218,8 +219,8 @@ function CategoryRow(props: {
         ref={(el) => (mergeButton = el)}
         type="button"
         class="icon-btn icon-btn--small"
-        aria-label={`Merge ${props.category.name} into…`}
-        title="Merge into another category"
+        aria-label={tr("mergeAria", { name: props.category.name })}
+        title={tr("mergeTitle")}
         aria-haspopup="menu"
         aria-expanded={mergeMenu() !== null}
         disabled={others().length === 0}
@@ -233,8 +234,8 @@ function CategoryRow(props: {
       <button
         type="button"
         class="icon-btn icon-btn--small"
-        aria-label={`Rename ${props.category.name}`}
-        title="Rename"
+        aria-label={tr("rename", { name: props.category.name })}
+        title={tr("renameTitle")}
         onClick={() => setEditing(true)}
       >
         <Pencil class="icon" aria-hidden="true" />
@@ -242,8 +243,8 @@ function CategoryRow(props: {
       <button
         type="button"
         class="icon-btn icon-btn--small category-list__delete"
-        aria-label={`Delete ${props.category.name}`}
-        title="Delete"
+        aria-label={tr("delete", { name: props.category.name })}
+        title={tr("deleteTitle")}
         onClick={() => setConfirm({ kind: "delete" })}
       >
         <Trash class="icon" aria-hidden="true" />
@@ -252,14 +253,14 @@ function CategoryRow(props: {
         {(anchor) => (
           <Menu
             anchor={anchor()}
-            label={`Merge ${props.category.name} into`}
+            label={tr("mergeMenu", { name: props.category.name })}
             inside={() => [mergeButton]}
             onClose={(returnFocus) => {
               setMergeMenu(null);
               if (returnFocus) mergeButton?.focus();
             }}
             entries={[
-              { kind: "heading", label: "Merge into" },
+              { kind: "heading", label: tr("mergeHeading") },
               ...others().map((into) => ({
                 label: into.name,
                 hint: String(into.gameCount),
@@ -272,14 +273,11 @@ function CategoryRow(props: {
       <Show when={confirm()?.kind === "delete"}>
         <div class="category-list__confirm" role="alert">
           <span>
-            Delete “{props.category.name}”? {games()} lose it; the games stay.
-            <Show when={props.category.sources.length > 0}>
-              {" "}
-              Synced store categories bring it back on the next sync.
-            </Show>
+            {tr("deleteConfirm", { name: props.category.name, count: props.category.gameCount })}
+            <Show when={props.category.sources.length > 0}> {tr("deleteSynced")}</Show>
           </span>
           <button type="button" class="btn btn--small" onClick={() => setConfirm(null)}>
-            Cancel
+            {tr("cancel")}
           </button>
           <button
             type="button"
@@ -289,19 +287,16 @@ function CategoryRow(props: {
               void store.deleteCategory(props.category.id);
             }}
           >
-            Delete
+            {tr("deleteButton")}
           </button>
         </div>
       </Show>
       <Show when={mergeInto()}>
         {(into) => (
           <div class="category-list__confirm category-list__confirm--merge" role="alert">
-            <span>
-              Merge “{props.category.name}” into “{into().name}”? Its games and store categories
-              move over, and “{props.category.name}” is removed.
-            </span>
+            <span>{tr("mergeConfirm", { name: props.category.name, into: into().name })}</span>
             <button type="button" class="btn btn--small" onClick={() => setConfirm(null)}>
-              Cancel
+              {tr("cancel")}
             </button>
             <button
               type="button"
@@ -312,7 +307,7 @@ function CategoryRow(props: {
                 void store.mergeCategories(props.category.id, target);
               }}
             >
-              Merge
+              {tr("mergeButton")}
             </button>
           </div>
         )}

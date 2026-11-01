@@ -1,9 +1,13 @@
+import { translator } from "../i18n";
+import { gameChrome } from "../i18n/gameChrome";
 import { createEffect, Show } from "solid-js";
 import { store } from "../lib/store";
 import { DetailsPanel } from "./DetailsPanel";
 import { GameList } from "./GameList";
 import { MultiSelectPanel } from "./MultiSelectPanel";
 import { Splitter } from "./Splitter";
+
+const tr = translator(gameChrome);
 
 /**
  * The "details" library view: a narrow, virtualized list on the left and the selected game's
@@ -28,7 +32,7 @@ export function DetailsView(props: {
         <GameList compact />
       </div>
       <Splitter
-        label="List width"
+        label={tr("listWidth")}
         value={props.listWidth}
         min={props.minListWidth}
         max={props.maxListWidth}
@@ -41,7 +45,7 @@ export function DetailsView(props: {
           fallback={
             <Show
               when={store.selectedGame()}
-              fallback={<p class="dview__empty muted">Select a game to see its details.</p>}
+              fallback={<p class="dview__empty muted">{tr("selectToSee")}</p>}
             >
               {(game) => (
                 <DetailsPanel game={game()} variant="page" onClose={() => store.closeDetails()} />
