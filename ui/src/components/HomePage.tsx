@@ -156,7 +156,9 @@ function Shelf(props: { title: string; games: ShelfGame[]; empty: string }) {
                   date={relativeDay(item.date)}
                   onSelect={(id) => {
                     setSelected(id);
-                    scroller?.focus({ preventScroll: true });
+                    // A click opens the game, like Enter: the shelf has nothing to do with a
+                    // selection of its own.
+                    store.openGamePage(item.game);
                   }}
                   onLaunch={(id) => void activateGame(id)}
                 />
