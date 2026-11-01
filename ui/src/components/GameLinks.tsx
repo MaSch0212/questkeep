@@ -8,7 +8,7 @@ import Newspaper from "lucide-solid/icons/newspaper";
 import ShoppingBag from "lucide-solid/icons/shopping-bag";
 import Trophy from "lucide-solid/icons/trophy";
 import Wrench from "lucide-solid/icons/wrench";
-import { createSignal, For, onCleanup, onMount, Show, type JSX } from "solid-js";
+import { createEffect, createSignal, For, on, onCleanup, onMount, Show, type JSX } from "solid-js";
 import { Dynamic } from "solid-js/web";
 import type { GameLink } from "../bindings/GameLink";
 import { linkKind, linksThatFit, type LinkKind } from "../lib/gamePage";
@@ -74,10 +74,14 @@ export function GameLinks(props: { links: GameLink[] }) {
 
   onMount(() => {
     fit();
+    // The row's width, and the copy's: other links, names or language change what fits while
+    // the row keeps its width.
     const observer = new ResizeObserver(() => fit());
     if (row) observer.observe(row);
+    if (measure) observer.observe(measure);
     onCleanup(() => observer.disconnect());
   });
+  createEffect(on(() => props.links, fit, { defer: true }));
 
   const shown = () => props.links.slice(0, visible());
   const hidden = () => props.links.slice(visible());
