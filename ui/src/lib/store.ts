@@ -180,11 +180,13 @@ function createAppStore() {
     const view = activeView();
     return view
       ? effectiveState(view, drafts())
-      : { query: defaultQuery(), layout: "grid", group: "none", columns: [] };
+      : { query: defaultQuery(), layout: "grid", group: "none", groupList: false, columns: [] };
   });
   const query = createMemo<GameQuery>(() => ({ ...viewState().query, search: keyword() }));
   const viewMode = createMemo<ViewMode>(() => viewState().layout);
   const groupBy = createMemo<GroupBy>(() => viewState().group);
+  /** The open view lists its groups beside the games. */
+  const groupList = createMemo(() => viewState().groupList && groupBy() !== "none");
 
   const indexById = createMemo(() => {
     const map = new Map<string, number>();
@@ -220,7 +222,8 @@ function createAppStore() {
     return previous?.id === id ? previous : undefined;
   });
   const sources = createMemo(() => mergeSources(providers(), seenSources()));
-  const groups = createMemo(() => {
+  /** Every group of the open view (the group list shows them all). */
+  const allGroups = createMemo(() => {
     const names = new Map(sources().map((s) => [s.id, s.name]));
     return groupGames(games(), groupBy(), {
       categories: categories(),
@@ -229,6 +232,19 @@ function createAppStore() {
       statuses: completion().statuses,
     });
   });
+  /** The group picked in the group list, while it still exists; null: all groups. */
+  const pickedGroup = createMemo<string | null>(() => {
+    if (!groupList()) return null;
+    const key = activeUi().pickedGroup[groupBy()];
+    return key !== undefined && allGroups().some((g) => g.key === key) ? key : null;
+  });
+  /** The groups the games show in: only the picked one, else all. */
+  const groups = createMemo(() => {
+    const picked = pickedGroup();
+    return picked === null ? allGroups() : allGroups().filter((g) => g.key === picked);
+  });
+  /** Group headers show while grouped, unless a single group is picked. */
+  const showGroupHeaders = () => groupBy() !== "none" && pickedGroup() === null;
   const collapsedGroups = createMemo<ReadonlySet<string>>(
     () => new Set(collapsedKeys(activeUi(), groupBy())),
   );
@@ -424,6 +440,7 @@ function createAppStore() {
         query: state.query,
         layout: state.layout,
         group: state.group,
+        groupList: state.groupList,
         columns: state.columns,
       }),
     );
@@ -444,6 +461,7 @@ function createAppStore() {
         query: state.query,
         layout: state.layout,
         group: state.group,
+        groupList: state.groupList,
         columns: state.columns,
       });
       created = view.id;
@@ -671,8 +689,22 @@ function createAppStore() {
     updateUi(activeViewId(), (state) => toggleCollapsed(state, groupBy(), key));
   }
 
-  /** Expands a group if needed and asks the open grid or list to scroll to it. */
+  /** Shows only one group of the group list; null shows all of them (remembered per view). */
+  function pickGroup(key: string | null) {
+    const field = groupBy();
+    updateUi(activeViewId(), (state) => {
+      const { [field]: _old, ...rest } = state.pickedGroup;
+      return { ...state, pickedGroup: key === null ? rest : { ...rest, [field]: key } };
+    });
+  }
+
+  /** Expands a group if needed and asks the open grid or list to scroll to it; with the group
+   *  list, picks it there. */
   function jumpToGroup(key: string) {
+    if (groupList()) {
+      pickGroup(key);
+      return;
+    }
     if (collapsedGroups().has(key)) toggleGroup(key);
     setGroupJump({ key, seq: ++jumpSeq });
   }
@@ -747,6 +779,14 @@ function createAppStore() {
 
   function setGroupBy(group: GroupBy) {
     changeView((state) => ({ ...state, group }));
+  }
+
+  /** Lists the open view's groups beside the games (a draft until saved, like its grouping). */
+  function setGroupList(shown: boolean) {
+    const view = activeView();
+    if (!view) return;
+    // Which games load doesn't change: no reload.
+    setDrafts((current) => withChange(current, view, (state) => ({ ...state, groupList: shown })));
   }
 
   /** Changes the open view's table columns (a draft until saved, like its sort). */
@@ -1126,6 +1166,12 @@ function createAppStore() {
     setViewMode,
     groupBy,
     setGroupBy,
+    groupList,
+    setGroupList,
+    allGroups,
+    pickedGroup,
+    pickGroup,
+    showGroupHeaders,
     /** The open view's table columns as stored (empty: the defaults). */
     columns: () => viewState().columns,
     changeColumns,

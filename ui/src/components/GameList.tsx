@@ -81,7 +81,7 @@ export function GameList(props: { compact?: boolean; docked?: boolean }) {
       rowHeight: rowHeight(),
       headerHeight: headerHeight(),
       padding: padding(),
-      headers: store.groupBy() !== "none",
+      headers: store.showGroupHeaders(),
       collapsed: store.collapsedGroups(),
     }),
   );

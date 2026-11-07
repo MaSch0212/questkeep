@@ -387,6 +387,10 @@ pub(crate) const MIGRATIONS: &[&str] = &[
         g.completion_status, g.user_score, g.notes, g.kind, g.kind_user
     FROM games g WHERE g.merged_into IS NULL;
     "#,
+    // 15: a grouped view can list its groups beside the games (pick one to see only its games).
+    r#"
+    ALTER TABLE views ADD COLUMN group_list INTEGER NOT NULL DEFAULT 0;
+    "#,
 ];
 
 /// Latest schema version this build knows.

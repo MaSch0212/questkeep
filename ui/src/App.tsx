@@ -21,6 +21,7 @@ import { UpdateDialog } from "./components/UpdateDialog";
 import { DetailsView } from "./components/DetailsView";
 import { EmptyDetails, type PanelPin } from "./components/PanelHeader";
 import { Splitter } from "./components/Splitter";
+import { GroupList } from "./components/GroupList";
 import { GameGrid } from "./components/GameGrid";
 import { GameList } from "./components/GameList";
 import { HomePage } from "./components/HomePage";
@@ -189,6 +190,9 @@ export function App() {
             ref={observeContent}
             style={{ "--qk-panel-width": `${panelWidth()}px` }}
           >
+            <Show when={store.groupList()}>
+              <GroupList />
+            </Show>
             <Show
               when={isPanelView()}
               fallback={

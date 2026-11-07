@@ -80,8 +80,11 @@ const changed = () => {
   const view = store.activeView();
   return view !== null && store.hasDraft(view.id);
 };
-/** "N games", or "N of M games" while the keyword filter narrows the view. */
+/** "N games", or "N of M games" while the keyword filter or a picked group narrows the view. */
 const count = () => {
+  if (store.pickedGroup() !== null) {
+    return { shown: store.groups()[0]?.games.length ?? 0, total: store.games().length };
+  }
   const shown = store.games().length;
   const total = store.viewCounts()[store.activeViewId() ?? ""];
   if (store.keyword() !== null && total !== undefined) return { shown, total };
@@ -271,7 +274,7 @@ export function TopBar(props: { keywordRef?: (handle: KeywordFilterHandle) => vo
             label={tr("jumpToGroup")}
             placeholder={tr("typeToFind")}
             empty={tr("noGroupMatches")}
-            items={store.groups().map((group) => ({
+            items={store.allGroups().map((group) => ({
               id: group.key,
               label: group.label,
               hint: String(group.games.length),
@@ -327,6 +330,13 @@ export function TopBar(props: { keywordRef?: (handle: KeywordFilterHandle) => vo
                 label: tr("timeNumbers"),
                 hint: NUMBER_GROUPS.find((g) => g.id === store.groupBy())?.label,
                 entries: () => NUMBER_GROUPS.map(groupEntry),
+              },
+              { kind: "separator" },
+              {
+                label: tr("groupList"),
+                checked: store.groupList(),
+                disabled: store.groupBy() === "none",
+                onSelect: () => store.setGroupList(!store.groupList()),
               },
             ]}
           />

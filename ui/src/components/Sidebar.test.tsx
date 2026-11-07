@@ -23,6 +23,7 @@ function view(id: string, name: string, query: Partial<GameQuery> = {}): Library
     query: { ...defaultQuery(), ...query },
     layout: "grid",
     group: "none",
+    groupList: false,
     columns: [],
   };
 }

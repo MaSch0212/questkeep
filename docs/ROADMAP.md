@@ -46,6 +46,7 @@ Also: GOG playtime from GOG Galaxy's local database; IGDB fills missing genres (
 - **Edit all game details**: hand-edit description, genres, release date, developers and
   publishers in the Edit dialog; user values must survive "Refresh metadata" (per-field override
   flags or a separate user-values table).
+- **Group combining**: merge several groups of a grouped view into one (e.g. "Shooters" for FPS and TPS), in the headers and the group list alike.
 - **Command bar commands**: run app actions (sync a store, open settings, switch views) from
   Ctrl+K, not only games.
 

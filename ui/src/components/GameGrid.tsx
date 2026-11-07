@@ -107,7 +107,7 @@ export function GameGrid(props: { docked?: boolean }) {
       rowHeight: rowHeight(),
       headerHeight: metrics().headerHeight,
       padding: metrics().padding,
-      headers: store.groupBy() !== "none",
+      headers: store.showGroupHeaders(),
       collapsed: store.collapsedGroups(),
     }),
   );

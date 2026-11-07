@@ -7,4 +7,4 @@ import type { ViewLayout } from "./ViewLayout";
 /**
  * A view to create at the end of a section.
  */
-export type NewView = { sectionId: string, name: string, icon: string, query: GameQuery, layout: ViewLayout, group: GroupBy, columns: Array<ViewColumn>, };
+export type NewView = { sectionId: string, name: string, icon: string, query: GameQuery, layout: ViewLayout, group: GroupBy, groupList: boolean, columns: Array<ViewColumn>, };

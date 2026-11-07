@@ -8,6 +8,7 @@ export const DEFAULT_VIEW_UI: ViewUiState = {
   listWidth: null,
   selected: null,
   collapsed: {},
+  pickedGroup: {},
 };
 
 /**

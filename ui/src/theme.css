@@ -112,6 +112,7 @@
 
   /* Component sizes */
   --qk-sidebar-width: 220px;
+  --qk-group-list-width: 200px;
   --qk-titlebar-height: 44px;
   --qk-titlebar-button-width: 46px;
   --qk-titlebar-logo-size: 20px;

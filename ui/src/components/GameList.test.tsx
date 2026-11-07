@@ -121,6 +121,7 @@ describe("GameList", () => {
             query: defaultQuery(),
             layout: "list",
             group: "none",
+            groupList: false,
             columns: [],
           },
         ],

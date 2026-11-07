@@ -28,6 +28,7 @@ const sections: ViewSection[] = [
         query: defaultQuery(),
         layout: "grid",
         group: "none",
+        groupList: false,
         columns: [],
       },
     ],

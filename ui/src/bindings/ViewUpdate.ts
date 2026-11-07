@@ -7,4 +7,4 @@ import type { ViewLayout } from "./ViewLayout";
 /**
  * Fields of a view to change; `None` keeps the current value.
  */
-export type ViewUpdate = { name?: string, icon?: string, query?: GameQuery, layout?: ViewLayout, group?: GroupBy, columns?: Array<ViewColumn>, };
+export type ViewUpdate = { name?: string, icon?: string, query?: GameQuery, layout?: ViewLayout, group?: GroupBy, groupList?: boolean, columns?: Array<ViewColumn>, };

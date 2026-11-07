@@ -19,6 +19,8 @@ export interface ViewState {
   query: GameQuery;
   layout: ViewLayout;
   group: GroupBy;
+  /** The groups are listed beside the games (only while grouped). */
+  groupList: boolean;
   /** Table columns; empty: the default ones. */
   columns: ViewColumn[];
 }
@@ -53,6 +55,7 @@ export function exploreView(preset: Partial<GameQuery> = {}): LibraryView {
     query: { ...defaultQuery(), ...preset },
     layout: "list",
     group: "none",
+    groupList: false,
     columns: [],
   };
 }
@@ -66,6 +69,7 @@ export function savedState(view: LibraryView): ViewState {
     query: { ...view.query, search: null },
     layout: view.layout,
     group: view.group,
+    groupList: view.groupList,
     columns: view.columns,
   };
 }
@@ -102,6 +106,7 @@ export function differsFromSaved(view: LibraryView, state: ViewState): boolean {
   return (
     state.layout !== view.layout ||
     state.group !== view.group ||
+    state.groupList !== view.groupList ||
     !sameColumns(state.columns, view.columns) ||
     !sameQuery(state.query, view.query)
   );

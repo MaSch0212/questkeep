@@ -33,6 +33,7 @@ function view(id: string, query: Partial<GameQuery> = {}): LibraryView {
     query: { ...defaultQuery(), ...query },
     layout: "grid",
     group: "none",
+    groupList: false,
     columns: [],
   };
 }
@@ -66,6 +67,7 @@ describe("drafts", () => {
         query: { ...steam.query, search: "zelda", sources: ["gog", "steam"] },
         layout: "grid",
         group: "none",
+        groupList: false,
         columns: [],
       }),
     ).toBe(false);
@@ -74,6 +76,7 @@ describe("drafts", () => {
         query: { ...steam.query, descending: true },
         layout: "grid",
         group: "none",
+        groupList: false,
         columns: [],
       }),
     ).toBe(true);

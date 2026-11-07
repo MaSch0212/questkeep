@@ -127,6 +127,7 @@ function mockViews(layout: ViewLayout = "grid") {
           query: defaultQuery(),
           layout,
           group: "none",
+          groupList: false,
           columns: [],
         },
       ],
@@ -330,6 +331,7 @@ describe("App", () => {
         listWidth: null,
         selected: "2",
         collapsed: { source: ["steam"] },
+        pickedGroup: {},
       },
     });
     const { container } = render(() => <App />);

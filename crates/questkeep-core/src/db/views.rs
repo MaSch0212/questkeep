@@ -65,7 +65,7 @@ fn not_found(what: &str) -> CoreError {
     CoreError::Invalid(format!("That {what} no longer exists."))
 }
 
-const VIEW_COLUMNS: &str = "id, name, icon, query, layout, group_by, columns";
+const VIEW_COLUMNS: &str = "id, name, icon, query, layout, group_by, columns, group_list";
 
 fn columns_json(columns: &[ViewColumn]) -> Result<String> {
     Ok(serde_json::to_string(columns)?)
@@ -87,6 +87,7 @@ fn row_to_view(row: &Row<'_>) -> rusqlite::Result<LibraryView> {
         }),
         layout: parse_layout(&layout),
         group: parse_group(&group),
+        group_list: row.get(7)?,
         // Unreadable columns fall back to the default ones.
         columns: serde_json::from_str(&columns).unwrap_or_default(),
     })
@@ -149,10 +150,11 @@ impl Database {
             }
             tx.execute(
                 "INSERT INTO views
-                     (id, section_id, position, name, icon, query, layout, group_by, columns)
+                     (id, section_id, position, name, icon, query, layout, group_by, columns,
+                      group_list)
                  VALUES (?1, ?2,
                      (SELECT COALESCE(MAX(position) + 1, 0) FROM views WHERE section_id = ?2),
-                     ?3, ?4, ?5, ?6, ?7, ?8)",
+                     ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                 params![
                     id,
                     view.section_id,
@@ -161,7 +163,8 @@ impl Database {
                     query_json(&view.query)?,
                     layout_text(view.layout),
                     group_text(view.group),
-                    columns_json(&view.columns)?
+                    columns_json(&view.columns)?,
+                    view.group_list
                 ],
             )?;
             tx.commit()?;
@@ -180,9 +183,10 @@ impl Database {
         let layout = update.layout.unwrap_or(current.layout);
         let group = update.group.unwrap_or(current.group);
         let columns = update.columns.as_ref().unwrap_or(&current.columns);
+        let group_list = update.group_list.unwrap_or(current.group_list);
         self.conn().execute(
             "UPDATE views SET name = ?2, icon = ?3, query = ?4, layout = ?5, group_by = ?6, \
-             columns = ?7 WHERE id = ?1",
+             columns = ?7, group_list = ?8 WHERE id = ?1",
             params![
                 id,
                 name,
@@ -190,7 +194,8 @@ impl Database {
                 query_json(query)?,
                 layout_text(layout),
                 group_text(group),
-                columns_json(columns)?
+                columns_json(columns)?,
+                group_list
             ],
         )?;
         self.get_view(id)
@@ -216,9 +221,10 @@ impl Database {
             )?;
             tx.execute(
                 "INSERT INTO views
-                     (id, section_id, position, name, icon, query, layout, group_by, columns)
+                     (id, section_id, position, name, icon, query, layout, group_by, columns,
+                      group_list)
                  SELECT ?2, section_id, position + 1, name || ' (copy)', icon, query, layout,
-                     group_by, columns
+                     group_by, columns, group_list
                  FROM views WHERE id = ?1",
                 params![id, copy],
             )?;
@@ -416,6 +422,7 @@ mod tests {
                 query: GameQuery::default(),
                 layout: ViewLayout::Grid,
                 group: GroupBy::None,
+                group_list: false,
                 columns: Vec::new(),
             })
             .unwrap();
@@ -476,6 +483,7 @@ mod tests {
             query: GameQuery::default(),
             layout: ViewLayout::List,
             group: GroupBy::Category,
+            group_list: true,
             columns: vec![ViewColumn {
                 id: "playtime".into(),
                 width: None,
@@ -549,6 +557,18 @@ mod tests {
             .unwrap();
         assert_eq!(ungrouped.group, GroupBy::Source);
         assert_eq!(ungrouped.columns[0].id, "playtime");
+        assert!(ungrouped.group_list, "kept from the new view");
+        let listless = db
+            .update_view(
+                &created.id,
+                &ViewUpdate {
+                    group_list: Some(false),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        assert!(!listless.group_list);
+        assert_eq!(listless.group, GroupBy::Source);
 
         let wide = vec![ViewColumn {
             id: "criticScore".into(),
@@ -565,6 +585,7 @@ mod tests {
             .unwrap();
         assert_eq!(resized.columns, wide);
         assert_eq!(db.duplicate_view(&created.id).unwrap().columns, wide);
+        assert!(!db.duplicate_view(&created.id).unwrap().group_list);
         assert_eq!(
             db.duplicate_view(&created.id).unwrap().group,
             GroupBy::Source

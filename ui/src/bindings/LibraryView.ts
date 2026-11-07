@@ -17,6 +17,10 @@ icon: string,
  */
 query: GameQuery, layout: ViewLayout, group: GroupBy, 
 /**
+ * Lists the groups beside the games, so one can be picked (only while grouped).
+ */
+groupList: boolean, 
+/**
  * Table columns after Name, in order; empty is the default columns.
  */
 columns: Array<ViewColumn>, };

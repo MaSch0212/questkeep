@@ -9,6 +9,7 @@ import { makeGame } from "../test-utils";
 import { CategoryEditor } from "./CategoryEditor";
 import { GameGrid } from "./GameGrid";
 import { GameList } from "./GameList";
+import { GroupList } from "./GroupList";
 import { CategoriesSection } from "./settings/CategoriesSection";
 import { TopBar } from "./TopBar";
 
@@ -32,7 +33,7 @@ const hades = makeGame({ id: "h", name: "Hades", sortingName: "hades", categorie
 const celeste = makeGame({ id: "c", name: "Celeste", sortingName: "celeste", categories: ["c1"] });
 const doom = makeGame({ id: "d", name: "Doom", sortingName: "doom" });
 
-function sections(group: "none" | "category" = "none"): ViewSection[] {
+function sections(group: "none" | "category" = "none", groupList = false): ViewSection[] {
   return [
     {
       id: "library",
@@ -45,6 +46,7 @@ function sections(group: "none" | "category" = "none"): ViewSection[] {
           query: defaultQuery(),
           layout: "grid",
           group,
+          groupList,
           columns: [],
         },
       ],
@@ -52,10 +54,10 @@ function sections(group: "none" | "category" = "none"): ViewSection[] {
   ];
 }
 
-async function setUp(group: "none" | "category" = "none") {
+async function setUp(group: "none" | "category" = "none", groupList = false) {
   vi.clearAllMocks();
   store.reset();
-  vi.mocked(api.listViews).mockResolvedValue(sections(group));
+  vi.mocked(api.listViews).mockResolvedValue(sections(group, groupList));
   vi.mocked(api.listGames).mockResolvedValue([celeste, doom, hades]);
   vi.mocked(api.countGames).mockResolvedValue([3]);
   vi.mocked(api.listCategories).mockResolvedValue([coop, rpg]);
@@ -238,5 +240,49 @@ describe("CategoriesSection", () => {
     expect(screen.getAllByRole("button", { name: /^Separate/ })).toHaveLength(1);
     await fireEvent.click(screen.getByRole("button", { name: /^Separate .*“Currently playing”$/ }));
     expect(api.separateCategorySource).toHaveBeenCalledWith("c1", "gog", "Currently playing");
+  });
+});
+
+describe("group list", () => {
+  beforeEach(() => setUp("category", true));
+
+  it("lists every group and shows only the picked one, without headers", async () => {
+    render(() => (
+      <>
+        <GroupList />
+        <GameGrid />
+      </>
+    ));
+    const list = screen.getByRole("listbox", { name: "Groups" });
+    const options = within(list).getAllByRole("option");
+    expect(options.map((o) => o.textContent)).toEqual([
+      "All groups3",
+      "Co-op1",
+      "RPG2",
+      "No category1",
+    ]);
+    expect(options[0]).toHaveAttribute("aria-selected", "true");
+
+    await fireEvent.click(options[2] as HTMLElement);
+    expect(tiles()).toEqual(["Celeste", "Hades"]);
+    expect(screen.queryAllByRole("button", { expanded: true })).toHaveLength(0);
+    expect(store.hasDraft("all")).toBe(false);
+
+    await fireEvent.keyDown(list, { key: "ArrowDown" });
+    expect(tiles()).toEqual(["Doom"]);
+    await fireEvent.keyDown(list, { key: "Home" });
+    expect(tiles()).toHaveLength(4);
+    expect(store.pickedGroup()).toBeNull();
+  });
+
+  it("is a view option in the Group by menu", async () => {
+    await setUp("category");
+    render(() => <TopBar />);
+    await fireEvent.click(screen.getByRole("button", { name: /Grouped by/ }));
+    const option = screen.getByRole("menuitemcheckbox", { name: /Show groups as a list/ });
+    expect(option).toHaveAttribute("aria-checked", "false");
+    await fireEvent.click(option);
+    expect(store.groupList()).toBe(true);
+    expect(store.hasDraft("all")).toBe(true);
   });
 });

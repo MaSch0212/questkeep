@@ -25,4 +25,8 @@ selected: string | null,
 /**
  * Collapsed group keys per grouping field (`"source"`, `"category"`, ...).
  */
-collapsed: { [key in string]: Array<string> }, };
+collapsed: { [key in string]: Array<string> }, 
+/**
+ * The group picked in the group list, per grouping field; none means all groups.
+ */
+pickedGroup: { [key in string]: string }, };

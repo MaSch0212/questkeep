@@ -74,6 +74,8 @@ pub struct LibraryView {
     pub query: GameQuery,
     pub layout: ViewLayout,
     pub group: GroupBy,
+    /// Lists the groups beside the games, so one can be picked (only while grouped).
+    pub group_list: bool,
     /// Table columns after Name, in order; empty is the default columns.
     pub columns: Vec<ViewColumn>,
 }
@@ -101,6 +103,8 @@ pub struct NewView {
     #[serde(default)]
     pub group: GroupBy,
     #[serde(default)]
+    pub group_list: bool,
+    #[serde(default)]
     pub columns: Vec<ViewColumn>,
 }
 
@@ -119,6 +123,8 @@ pub struct ViewUpdate {
     pub layout: Option<ViewLayout>,
     #[ts(optional)]
     pub group: Option<GroupBy>,
+    #[ts(optional)]
+    pub group_list: Option<bool>,
     #[ts(optional)]
     pub columns: Option<Vec<ViewColumn>>,
 }
@@ -149,4 +155,6 @@ pub struct ViewUiState {
     pub selected: Option<String>,
     /// Collapsed group keys per grouping field (`"source"`, `"category"`, ...).
     pub collapsed: BTreeMap<String, Vec<String>>,
+    /// The group picked in the group list, per grouping field; none means all groups.
+    pub picked_group: BTreeMap<String, String>,
 }
