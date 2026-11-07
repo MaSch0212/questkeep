@@ -74,6 +74,15 @@ enum Trigger {
     Update,
     /// The language setting changed.
     Language,
+    /// The store order changed: the launchers are listed again in it.
+    StoreOrder,
+}
+
+impl Trigger {
+    /// Whether the launchers have to be read again (they are kept between rebuilds).
+    fn relists_launchers(self) -> bool {
+        matches!(self, Self::Scan | Self::StoreOrder)
+    }
 }
 
 /// Shows (or hides, with `None`) the "Update" entry for a newer app version.
@@ -85,6 +94,11 @@ pub fn set_update(version: Option<String>) {
 /// Rebuilds the menu in the newly chosen language.
 pub fn language_changed() {
     send(Trigger::Language);
+}
+
+/// Lists the launchers again, in the newly chosen store order.
+pub fn store_order_changed() {
+    send(Trigger::StoreOrder);
 }
 
 fn send(trigger: Trigger) {
@@ -168,12 +182,12 @@ fn refresh_loop(app: &AppHandle, state: &AppState, rx: &Receiver<Trigger>) {
         let mut rescan = launchers.is_none();
         if !first {
             match rx.recv() {
-                Ok(trigger) => rescan |= trigger == Trigger::Scan,
+                Ok(trigger) => rescan |= trigger.relists_launchers(),
                 Err(_) => return,
             }
             std::thread::sleep(REBUILD_INTERVAL);
             while let Ok(trigger) = rx.try_recv() {
-                rescan |= trigger == Trigger::Scan;
+                rescan |= trigger.relists_launchers();
             }
         }
         first = false;

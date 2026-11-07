@@ -442,6 +442,9 @@ pub async fn save_settings(
         if before.detect_external_launches != settings.detect_external_launches {
             s.launcher.set_watching(settings.detect_external_launches);
         }
+        if before.store_order != settings.store_order {
+            crate::tray::store_order_changed();
+        }
         if before.language != settings.language {
             crate::tray::language_changed();
         }
