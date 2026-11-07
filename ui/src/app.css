@@ -3227,8 +3227,16 @@ ul {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.sticky-group .group-header {
-  box-shadow: var(--qk-shadow-sticky-group);
+/* Rows scrolling under the pinned header fade out instead of being cut off. */
+.sticky-group__bar::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: var(--qk-sticky-group-fade);
+  background: linear-gradient(var(--qk-color-bg), transparent);
+  pointer-events: none;
 }
 .tool-btn--on {
   border-color: var(--qk-color-accent);

@@ -99,7 +99,7 @@
   --qk-shadow-tile: 0 2px 8px #00000066;
   --qk-shadow-tile-hover: 0 10px 24px #000000aa;
   --qk-shadow-panel: -12px 0 32px #00000066;
-  --qk-shadow-sticky-group: 0 6px 12px #00000088;
+  --qk-sticky-group-fade: 24px; /* fade under a pinned group header */
   --qk-shadow-dialog: 0 24px 64px #000000aa;
   --qk-shadow-badge: 0 1px 4px #00000099;
   --qk-shadow-toast: 0 8px 24px #00000088;
