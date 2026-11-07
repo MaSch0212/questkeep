@@ -89,6 +89,8 @@ describe("groupGames", () => {
     const bySource = groupGames(games, "source", ctx(categories));
     expect(names(bySource)).toEqual(["Epic Games: Celeste", "Steam: Doom, Hades"]);
     expect(bySource[1]?.source).toBe("steam");
+    const ordered = groupGames(games, "source", { ...ctx(categories), storeOrder: ["steam"] });
+    expect(names(ordered)).toEqual(["Steam: Doom, Hades", "Epic Games: Celeste"]);
     const none = groupGames(games, "none", ctx(categories));
     expect(none).toHaveLength(1);
     expect(none[0]?.key).toBe("");

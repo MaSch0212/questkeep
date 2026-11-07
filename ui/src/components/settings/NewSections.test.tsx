@@ -127,6 +127,22 @@ describe("AccountsSection", () => {
     expect(screen.queryByRole("button", { name: "Sync Epic Games" })).toBeNull();
   });
 
+  it("moves a store with Alt+Down and saves the order", async () => {
+    vi.mocked(api.listProviders).mockResolvedValue([
+      info("gog", "GOG", true, true),
+      info("epic", "Epic Games", true, true),
+    ]);
+    await store.loadProviders();
+    vi.mocked(api.accountStatus).mockResolvedValue([]);
+    renderAccounts();
+    const handle = await screen.findByRole("button", { name: /Move GOG/ });
+    await fireEvent.keyDown(handle, { key: "ArrowDown", altKey: true });
+    await vi.waitFor(() =>
+      expect(vi.mocked(api.saveSettings).mock.lastCall?.[0].storeOrder).toEqual(["epic", "gog"]),
+    );
+    expect(api.listProviders).toHaveBeenCalledTimes(2);
+  });
+
   it("renders each store's status", async () => {
     vi.mocked(api.accountStatus).mockResolvedValue([gog(), epic()]);
     renderAccounts();
@@ -321,6 +337,7 @@ function makeSettings(overrides: Partial<Settings> = {}): Settings {
     backups: { enabled: true, folder: null, frequency: "weekly", keep: 5 },
     language: null,
     priceSites: [],
+    storeOrder: [],
     metadataPriority: { order: [], fields: {} },
     providers: { epic: { token: "keep-me" }, steam: { apiKey: "K" } },
     ...overrides,

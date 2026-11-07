@@ -86,4 +86,9 @@ language: string | null,
 /**
  * Price comparison websites, in the order the + menu offers them.
  */
-priceSites: Array<PriceSite>, };
+priceSites: Array<PriceSite>, 
+/**
+ * Store ids in the user's order (Settings → Stores); every list of stores follows it.
+ * Stores missing from it come after, in id order.
+ */
+storeOrder: Array<string>, };

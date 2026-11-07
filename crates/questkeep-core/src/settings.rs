@@ -66,6 +66,9 @@ pub struct Settings {
     pub language: Option<String>,
     /// Price comparison websites, in the order the + menu offers them.
     pub price_sites: Vec<crate::price_sites::PriceSite>,
+    /// Store ids in the user's order (Settings → Stores); every list of stores follows it.
+    /// Stores missing from it come after, in id order.
+    pub store_order: Vec<String>,
 }
 
 /// Words like "The" that sorting skips at the start of a name ("The Witcher" sorts under W).
@@ -123,6 +126,14 @@ pub enum StartupPage {
 }
 
 impl Settings {
+    /// Where a store goes in lists: its place in [`Self::store_order`], else after all of them.
+    pub fn store_rank(&self, id: &str) -> usize {
+        self.store_order
+            .iter()
+            .position(|s| s == id)
+            .unwrap_or(usize::MAX)
+    }
+
     /// The configuration section of one provider (`null` when absent).
     pub fn provider_config(&self, id: &str) -> &serde_json::Value {
         self.providers.get(id).unwrap_or(&serde_json::Value::Null)
@@ -151,6 +162,7 @@ impl Default for Settings {
             backups: BackupSettings::default(),
             language: None,
             price_sites: Vec::new(),
+            store_order: Vec::new(),
         }
     }
 }
@@ -478,6 +490,7 @@ mod tests {
                 name: "GG.deals".into(),
                 url: "https://gg.deals/".into(),
             }],
+            store_order: vec!["gog".into(), "steam".into()],
         };
         store.save(&custom).unwrap();
         let raw = std::fs::read_to_string(&path).unwrap();

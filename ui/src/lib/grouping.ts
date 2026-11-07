@@ -24,10 +24,18 @@ export interface GameGroup {
 
 const tr = translator(libraryGrouping);
 
+/** A store's place in the user's order; stores outside it after all of them. */
+function storeRank(order: readonly string[], id: string): number {
+  const index = order.indexOf(id);
+  return index < 0 ? order.length : index;
+}
+
 /** What grouping needs besides the games. */
 export interface GroupContext {
   categories: readonly Category[];
   sourceName: (id: string) => string;
+  /** Store ids in the user's order (grouping by store follows it); others go after, by name. */
+  storeOrder?: readonly string[];
   /** Completion statuses in list order. */
   statuses: readonly CompletionStatus[];
   /** For the "last played" buckets; defaults to the current time. */
@@ -152,7 +160,12 @@ function bucket(buckets: Bucket[], value: number | null | undefined): Placement[
 function placements(game: Game, by: GroupBy, ctx: GroupContext): Placement[] {
   switch (by) {
     case "source":
-      return storesOf(game).map((s) => ({ key: s, label: ctx.sourceName(s), source: s, rank: 0 }));
+      return storesOf(game).map((s) => ({
+        key: s,
+        label: ctx.sourceName(s),
+        source: s,
+        rank: storeRank(ctx.storeOrder ?? [], s),
+      }));
     case "category": {
       const order = new Map(ctx.categories.map((c, index) => [c.id, index]));
       return game.categories.flatMap((id) => {

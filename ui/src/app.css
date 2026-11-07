@@ -5185,3 +5185,41 @@ ul {
   flex: 1;
   min-width: 0;
 }
+
+/* Store order (Settings → Stores) */
+.account-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-3);
+}
+.account-list--dragging,
+.account-list--dragging * {
+  cursor: grabbing;
+  user-select: none;
+}
+.account--dragged {
+  opacity: var(--qk-dragged-opacity);
+}
+.account-list__drop {
+  height: var(--qk-drop-line-height);
+  margin: calc(var(--qk-space-3) / -2) 0;
+  background: var(--qk-color-accent);
+  border-radius: var(--qk-radius-pill);
+}
+.account__handle {
+  display: grid;
+  place-items: center;
+  width: var(--qk-drag-handle-width);
+  flex: none;
+  align-self: stretch;
+  padding: 0;
+  color: var(--qk-color-text-faint);
+  background: none;
+  border: none;
+  border-radius: var(--qk-radius-sm);
+  cursor: grab;
+  touch-action: none;
+}
+.account__handle:hover {
+  color: var(--qk-color-text-muted);
+}

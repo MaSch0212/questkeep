@@ -35,6 +35,7 @@ const SETTINGS: Settings = {
   backups: { enabled: true, folder: null, frequency: "weekly", keep: 5 },
   language: null,
   priceSites: [],
+  storeOrder: [],
   metadataPriority: { order: [], fields: {} },
   providers: {},
 };

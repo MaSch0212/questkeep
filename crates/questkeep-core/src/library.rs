@@ -417,7 +417,13 @@ impl Library {
             recently_played: shelf(self.db.recently_played(SHELF_SIZE)?),
             recently_added: shelf(self.db.recently_added(SHELF_SIZE)?),
             playtime: playtime_by_day(&self.db.sessions_since(since)?, today, &Local, DAYS),
-            stores: self.db.installed_by_store()?,
+            stores: {
+                // The user's store order first; stores outside it keep "most owned first".
+                let settings = self.settings();
+                let mut stores = self.db.installed_by_store()?;
+                stores.sort_by_key(|s| settings.store_rank(&s.source));
+                stores
+            },
         })
     }
 
@@ -971,10 +977,14 @@ impl Library {
         Ok(())
     }
 
+    /// Every store's info, in the user's store order.
     pub fn provider_infos(&self) -> Vec<ProviderInfo> {
         let settings = self.settings();
-        self.providers
-            .infos(|id| settings.provider_config(id).clone())
+        let mut infos = self
+            .providers
+            .infos(|id| settings.provider_config(id).clone());
+        infos.sort_by_key(|p| settings.store_rank(&p.id));
+        infos
     }
 
     fn account_provider(
@@ -2103,6 +2113,28 @@ mod tests {
             .collect();
         assert_eq!(names.len(), 2);
         assert!(names.contains(&"New Instance".to_string()));
+    }
+
+    #[test]
+    fn stores_follow_the_users_order() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut providers = ProviderRegistry::new();
+        providers.register(Arc::new(AccountStore));
+        providers.register(Arc::new(DialogStore(Mutex::new(Vec::new()))));
+        let (lib, _) = library(tmp.path(), providers);
+        let ids = |lib: &Library| -> Vec<String> {
+            lib.provider_infos()
+                .into_iter()
+                .map(|p| p.id)
+                .filter(|id| id != "manual")
+                .collect()
+        };
+        assert_eq!(ids(&lib), ["acct", "dialog"], "id order by default");
+
+        let mut settings = lib.settings();
+        settings.store_order = vec!["dialog".into()];
+        lib.save_settings(&settings).unwrap();
+        assert_eq!(ids(&lib), ["dialog", "acct"], "ordered stores first");
     }
 
     #[test]

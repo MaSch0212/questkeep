@@ -37,6 +37,7 @@ function makeSettings(overrides: Partial<Settings> = {}): Settings {
     backups: { enabled: true, folder: null, frequency: "weekly", keep: 5 },
     language: null,
     priceSites: [],
+    storeOrder: [],
     metadataPriority: { order: [], fields: {} },
     providers: {
       epic: { token: "keep-me" },
@@ -256,6 +257,7 @@ describe("SettingsPage", () => {
         backups: { enabled: true, folder: null, frequency: "weekly", keep: 5 },
         language: null,
         priceSites: [],
+        storeOrder: [],
         metadataPriority: { order: [], fields: {} },
         providers: {
           epic: { token: "keep-me" },

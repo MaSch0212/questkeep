@@ -225,6 +225,7 @@ function createAppStore() {
     return groupGames(games(), groupBy(), {
       categories: categories(),
       sourceName: (id) => names.get(id) ?? id,
+      storeOrder: providers().map((p) => p.id),
       statuses: completion().statuses,
     });
   });
