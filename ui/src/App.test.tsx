@@ -53,6 +53,7 @@ beforeEach(() => {
       canScanOwned: false,
       canUninstall: false,
       launcherPages: false,
+      shopUrl: null,
       installed: true,
       syncable: false,
       addGameOptions: [],
@@ -66,6 +67,7 @@ beforeEach(() => {
       canScanOwned: true,
       canUninstall: true,
       launcherPages: false,
+      shopUrl: null,
       installed: true,
       syncable: true,
       addGameOptions: [],
@@ -107,6 +109,7 @@ const SETTINGS: Settings = {
   sortPrefixes: { enabled: true, words: ["The", "A", "An"] },
   backups: { enabled: true, folder: null, frequency: "weekly", keep: 5 },
   language: null,
+  priceSites: [],
   metadataPriority: { order: [], fields: {} },
 };
 

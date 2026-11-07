@@ -32,6 +32,7 @@ import type { SectionOrder } from "../bindings/SectionOrder";
 import type { SetupState } from "../bindings/SetupState";
 import type { StartPage } from "../bindings/StartPage";
 import type { Settings } from "../bindings/Settings";
+import type { PriceSiteSuggestions } from "../bindings/PriceSiteSuggestions";
 import type { SyncTimes } from "../bindings/SyncTimes";
 import type { ViewSection } from "../bindings/ViewSection";
 import type { ViewUiState } from "../bindings/ViewUiState";
@@ -186,6 +187,8 @@ export const appInfo = () => invoke<AppInfo>("app_info");
 /** Messages the app queued for the UI (each returned once), e.g. after a second start. */
 export const takeNotices = () => invoke<string[]>("take_notices");
 export const getSettings = () => invoke<Settings>("get_settings");
+/** Price comparison sites for the user's region. */
+export const priceSiteSuggestions = () => invoke<PriceSiteSuggestions>("price_site_suggestions");
 export const saveSettings = (settings: Settings) => invoke<void>("save_settings", { settings });
 /** Opens the app's data or logs folder in the file manager (done by the Rust side). */
 export const openAppFolder = (kind: "data" | "logs") => invoke<void>("open_app_folder", { kind });

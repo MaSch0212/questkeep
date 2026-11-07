@@ -15,6 +15,10 @@ icon: string, canScan: boolean, canScanOwned: boolean, canUninstall: boolean,
  */
 launcherPages: boolean, 
 /**
+ * The store's website for buying games (see [`LibraryProvider::shop_url`]).
+ */
+shopUrl: string | null, 
+/**
  * The store's client is on this PC (see [`LibraryProvider::is_installed`]).
  */
 installed: boolean, 

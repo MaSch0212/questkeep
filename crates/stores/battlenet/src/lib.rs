@@ -436,6 +436,10 @@ impl LibraryProvider for BattleNetProvider {
         "Battle.net"
     }
 
+    fn shop_url(&self) -> Option<&'static str> {
+        Some("https://shop.battle.net/")
+    }
+
     fn icon_svg(&self) -> &'static str {
         crate::ICON
     }

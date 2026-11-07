@@ -400,6 +400,7 @@ pub fn run() {
             commands::launch_game,
             commands::install_game,
             commands::open_launcher_page,
+            commands::price_site_suggestions,
             commands::uninstall_game,
             commands::combine_games,
             commands::separate_copy,

@@ -200,11 +200,39 @@ fn system_languages() -> Vec<String> {
         .collect()
 }
 
+/// The user's country (ISO 3166, e.g. `DE`) from the system's region setting, for regional
+/// suggestions.
+#[cfg(windows)]
+pub fn system_region() -> Option<String> {
+    windows_impl::user_geo_name()
+}
+
+/// The user's country from the locale environment variables (`de_DE.UTF-8` → `DE`).
+#[cfg(not(windows))]
+pub fn system_region() -> Option<String> {
+    ["LC_ALL", "LC_MESSAGES", "LANG"]
+        .iter()
+        .filter_map(|name| std::env::var(name).ok())
+        .find_map(|value| questkeep_core::price_sites::region_of_locale(&value))
+}
+
 // Each call is a plain Win32 FFI call with owned buffers.
 #[cfg(windows)]
 #[allow(unsafe_code)]
 mod windows_impl {
-    use windows_sys::Win32::Globalization::{GetUserPreferredUILanguages, MUI_LANGUAGE_NAME};
+    use windows_sys::Win32::Globalization::{
+        GetUserDefaultGeoName, GetUserPreferredUILanguages, MUI_LANGUAGE_NAME,
+    };
+
+    /// The region set in Windows (a two-letter code; UN M.49 numbers for wider areas are skipped).
+    pub fn user_geo_name() -> Option<String> {
+        let mut buffer = [0u16; 16];
+        // SAFETY: the buffer and its length match; the result is the written length with NUL.
+        let len = unsafe { GetUserDefaultGeoName(buffer.as_mut_ptr(), buffer.len() as i32) };
+        let len = usize::try_from(len).ok()?.checked_sub(1)?;
+        let name = String::from_utf16_lossy(buffer.get(..len)?);
+        (name.len() == 2 && name.bytes().all(|b| b.is_ascii_alphabetic())).then_some(name)
+    }
 
     pub fn preferred_ui_languages() -> Vec<String> {
         let mut count = 0u32;

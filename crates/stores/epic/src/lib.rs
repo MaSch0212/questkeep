@@ -403,6 +403,10 @@ impl LibraryProvider for EpicProvider {
         "Epic Games"
     }
 
+    fn shop_url(&self) -> Option<&'static str> {
+        Some("https://store.epicgames.com/")
+    }
+
     fn icon_svg(&self) -> &'static str {
         crate::ICON
     }

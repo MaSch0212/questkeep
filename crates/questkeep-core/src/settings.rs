@@ -64,6 +64,8 @@ pub struct Settings {
     pub backups: BackupSettings,
     /// UI language (`en`, `de`, `fr`, `it`, `es`, `pt`); `None` follows the system.
     pub language: Option<String>,
+    /// Price comparison websites, in the order the + menu offers them.
+    pub price_sites: Vec<crate::price_sites::PriceSite>,
 }
 
 /// Words like "The" that sorting skips at the start of a name ("The Witcher" sorts under W).
@@ -148,6 +150,7 @@ impl Default for Settings {
             sort_prefixes: SortPrefixes::default(),
             backups: BackupSettings::default(),
             language: None,
+            price_sites: Vec::new(),
         }
     }
 }
@@ -471,6 +474,10 @@ mod tests {
                 keep: 3,
             },
             language: Some("de".into()),
+            price_sites: vec![crate::price_sites::PriceSite {
+                name: "GG.deals".into(),
+                url: "https://gg.deals/".into(),
+            }],
         };
         store.save(&custom).unwrap();
         let raw = std::fs::read_to_string(&path).unwrap();

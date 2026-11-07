@@ -117,6 +117,10 @@ impl LibraryProvider for SteamProvider {
         "Steam"
     }
 
+    fn shop_url(&self) -> Option<&'static str> {
+        Some("https://store.steampowered.com/")
+    }
+
     fn icon_svg(&self) -> &'static str {
         crate::ICON
     }

@@ -17,6 +17,7 @@ pub mod metadata;
 pub mod model;
 pub mod paths;
 pub mod platform;
+pub mod price_sites;
 pub mod providers;
 pub mod seed;
 pub mod settings;

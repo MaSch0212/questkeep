@@ -93,6 +93,10 @@ impl LibraryProvider for AmazonProvider {
         "Amazon Games"
     }
 
+    fn shop_url(&self) -> Option<&'static str> {
+        Some("https://gaming.amazon.com/")
+    }
+
     fn icon_svg(&self) -> &'static str {
         crate::ICON
     }

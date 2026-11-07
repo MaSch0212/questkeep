@@ -300,6 +300,10 @@ impl LibraryProvider for EaProvider {
         "EA app"
     }
 
+    fn shop_url(&self) -> Option<&'static str> {
+        Some("https://www.ea.com/games")
+    }
+
     fn icon_svg(&self) -> &'static str {
         crate::ICON
     }

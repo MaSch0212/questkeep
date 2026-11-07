@@ -2,6 +2,8 @@ import { fireEvent, render, screen, within } from "@solidjs/testing-library";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CoreEvent } from "../bindings/CoreEvent";
 import type { ProviderInfo } from "../bindings/ProviderInfo";
+import type { Settings } from "../bindings/Settings";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { makeGame } from "../test-utils";
 import * as api from "../lib/api";
 import { store } from "../lib/store";
@@ -13,6 +15,7 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn<() => void>(),
 }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn<() => void>() }));
+vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn<() => Promise<void>>() }));
 
 function provider(id: string, name: string, canScan = true): ProviderInfo {
   return {
@@ -23,6 +26,7 @@ function provider(id: string, name: string, canScan = true): ProviderInfo {
     canScanOwned: false,
     canUninstall: false,
     launcherPages: false,
+    shopUrl: null,
     installed: true,
     syncable: canScan,
     addGameOptions: id === "prism" ? [{ id: "new-instance", label: "New Minecraft instance" }] : [],
@@ -135,6 +139,30 @@ describe("Menus", () => {
     await fireEvent.click(within(menu).getByRole("menuitem", { name: /Add a game/ }));
     expect(onAdd).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("menu")).toBeNull();
+  });
+
+  it("offers the store websites and price sites, opened in the browser", async () => {
+    vi.mocked(api.listProviders).mockResolvedValue([
+      { ...provider("steam", "Steam"), shopUrl: "https://store.steampowered.com/" },
+      provider("epic", "Epic Games"),
+    ]);
+    vi.mocked(api.getSettings).mockResolvedValue({
+      language: null,
+      showStartPage: true,
+      startupPage: { kind: "start" },
+      priceSites: [{ name: "GG.deals", url: "https://gg.deals/" }],
+    } as unknown as Settings);
+    store.reset();
+    await store.init();
+    render(() => <TitleBar onAdd={vi.fn<() => void>()} />);
+    await fireEvent.click(screen.getByRole("button", { name: "Add game" }));
+    const menu = screen.getByRole("menu", { name: "Add game" });
+    expect(within(menu).queryByRole("menuitem", { name: "Buy from Epic Games" })).toBeNull();
+    await fireEvent.click(within(menu).getByRole("menuitem", { name: "Buy from Steam" }));
+    expect(openUrl).toHaveBeenLastCalledWith("https://store.steampowered.com/");
+    await fireEvent.click(screen.getByRole("button", { name: "Add game" }));
+    await fireEvent.click(screen.getByRole("menuitem", { name: "Compare on GG.deals" }));
+    expect(openUrl).toHaveBeenLastCalledWith("https://gg.deals/");
   });
 
   it("opens an installed launcher", async () => {

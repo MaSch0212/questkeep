@@ -146,6 +146,10 @@ impl LibraryProvider for XboxProvider {
         "Xbox"
     }
 
+    fn shop_url(&self) -> Option<&'static str> {
+        Some("https://www.xbox.com/")
+    }
+
     fn icon_svg(&self) -> &'static str {
         crate::ICON
     }

@@ -176,6 +176,10 @@ impl LibraryProvider for UbisoftProvider {
         "Ubisoft Connect"
     }
 
+    fn shop_url(&self) -> Option<&'static str> {
+        Some("https://store.ubisoft.com/")
+    }
+
     fn icon_svg(&self) -> &'static str {
         crate::ICON
     }

@@ -224,6 +224,10 @@ impl LibraryProvider for GogProvider {
         "GOG"
     }
 
+    fn shop_url(&self) -> Option<&'static str> {
+        Some("https://www.gog.com/")
+    }
+
     fn icon_svg(&self) -> &'static str {
         crate::ICON
     }

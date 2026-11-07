@@ -823,6 +823,12 @@ pub async fn game_news(state: State<'_, Arc<AppState>>, id: String) -> CmdResult
     blocking(state, move |s| s.library.game_news(parse_id(&id)?)).await
 }
 
+/// Price comparison sites suggested for the user's region (Settings).
+#[tauri::command]
+pub fn price_site_suggestions() -> questkeep_core::price_sites::PriceSiteSuggestions {
+    questkeep_core::price_sites::suggestions(crate::i18n::system_region().as_deref())
+}
+
 /// The user's achievements in a game (game page).
 #[tauri::command]
 pub async fn game_achievements(

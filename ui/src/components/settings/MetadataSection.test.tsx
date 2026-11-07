@@ -36,6 +36,7 @@ function makeSettings(overrides: Partial<Settings> = {}): Settings {
     sortPrefixes: { enabled: true, words: ["The", "A", "An"] },
     backups: { enabled: true, folder: null, frequency: "weekly", keep: 5 },
     language: null,
+    priceSites: [],
     metadataPriority: { order: [], fields: {} },
     providers: { epic: { token: "keep-me" } },
     ...overrides,

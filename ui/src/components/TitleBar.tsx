@@ -10,6 +10,7 @@ import RefreshCw from "lucide-solid/icons/refresh-cw";
 import Rocket from "lucide-solid/icons/rocket";
 import Settings from "lucide-solid/icons/settings";
 import Download from "lucide-solid/icons/download";
+import Globe from "lucide-solid/icons/globe";
 import Square from "lucide-solid/icons/square";
 import X from "lucide-solid/icons/x";
 import { createSignal, onCleanup, onMount, Show, type JSX } from "solid-js";
@@ -17,6 +18,7 @@ import * as api from "../lib/api";
 import { addGameMenuItems, type AddGameMenuItem } from "../lib/addGameOptions";
 import { translator } from "../i18n";
 import { shellTitleBar } from "../i18n/shellTitleBar";
+import { shopping } from "../i18n/shopping";
 import { errorMessage } from "../lib/errors";
 import { store } from "../lib/store";
 import { syncLabel } from "../lib/syncStatus";
@@ -26,9 +28,34 @@ import { Logo } from "./Logo";
 import { Menu, type MenuEntry } from "./Menu";
 import type { PopoverAnchor } from "./Popover";
 import { sourceName, SourceIcon } from "./SourceIcon";
+import { openLink } from "./settings/openLink";
 import { syncAll, SyncPanel, syncStore } from "./SyncPanel";
 
 const tr = translator(shellTitleBar);
+const trShop = translator(shopping);
+
+/** "Buy from …" for each store with a website, then "Compare on …" for each price site, as
+ * separated groups; all open in the user's browser. */
+function shopEntries(): MenuEntry[] {
+  const stores = store
+    .providers()
+    .filter((p) => p.shopUrl !== null)
+    .map((p): MenuEntry => ({
+      label: trShop("buyFrom", { store: p.name }),
+      icon: () => <SourceIcon source={p.id} />,
+      onSelect: () => void openLink(p.shopUrl ?? ""),
+    }));
+  const sites = store.priceSites().map((site): MenuEntry => ({
+    label: trShop("compareOn", { site: site.name }),
+    icon: () => <Globe class="icon" aria-hidden="true" />,
+    onSelect: () => void openLink(site.url),
+  }));
+  const entries: MenuEntry[] = [];
+  for (const group of [stores, sites]) {
+    if (group.length > 0) entries.push({ kind: "separator" }, ...group);
+  }
+  return entries;
+}
 
 async function runAddOption(item: AddGameMenuItem) {
   try {
@@ -156,6 +183,7 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
         icon: () => <SourceIcon source={item.providerId} />,
         onSelect: () => void runAddOption(item),
       })),
+      ...shopEntries(),
     ];
   };
 

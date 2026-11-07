@@ -16,6 +16,7 @@ import type { LibraryView } from "../bindings/LibraryView";
 import type { ListField } from "../bindings/ListField";
 import type { ProviderInfo } from "../bindings/ProviderInfo";
 import type { Settings } from "../bindings/Settings";
+import type { PriceSite } from "../bindings/PriceSite";
 import type { SetupState } from "../bindings/SetupState";
 import type { SortField } from "../bindings/SortField";
 import type { StartPage } from "../bindings/StartPage";
@@ -152,6 +153,8 @@ function createAppStore() {
   const [coverVersions, setCoverVersions] = createStore<Record<string, number>>({});
   const [page, setPage] = createSignal<Page>("library");
   const [showStartPage, setShowStartPage] = createSignal(true);
+  /** Price comparison sites offered in the + menu. */
+  const [priceSites, setPriceSites] = createSignal<PriceSite[]>([]);
   const [startData, setStartData] = createSignal<StartPage | null>(null);
   // Set once the startup page was chosen; from then on the open page is remembered.
   const [started, setStarted] = createSignal(false);
@@ -508,6 +511,7 @@ function createAppStore() {
   function applySettings(settings: Settings) {
     setLanguage(settings.language);
     setShowStartPage(settings.showStartPage);
+    setPriceSites(settings.priceSites);
     if (!settings.showStartPage && page() === "home") {
       const first = allViews(sections())[0];
       if (first) selectView(first.id);
@@ -1013,6 +1017,7 @@ function createAppStore() {
         if (settings) {
           setLanguage(settings.language);
           setShowStartPage(settings.showStartPage);
+          setPriceSites(settings.priceSites);
         }
         openStartupPage(settings?.startupPage ?? { kind: "start" }, lastPage ?? null);
         return refresh();
@@ -1191,6 +1196,7 @@ function createAppStore() {
     setQuitDuringBackup,
     page,
     showSettings: () => setPage("settings"),
+    priceSites,
     showSettingsSection,
     takeSettingsSection: () => {
       const section = settingsSection();

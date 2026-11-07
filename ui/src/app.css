@@ -5130,3 +5130,58 @@ ul {
   align-items: center;
   gap: var(--qk-space-1);
 }
+
+/* Price comparison sites (Settings) */
+.price-sites {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-3);
+}
+.price-sites p {
+  margin: 0;
+}
+.price-sites__list,
+.price-sites__suggestions {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.price-sites__list {
+  flex-direction: column;
+  gap: var(--qk-space-1);
+}
+.price-sites__suggestions {
+  flex-wrap: wrap;
+  gap: var(--qk-space-2);
+}
+.price-sites__item {
+  display: flex;
+  align-items: center;
+  gap: var(--qk-space-2);
+  padding: var(--qk-space-2) var(--qk-space-3);
+  border: 1px solid var(--qk-color-border);
+  border-radius: var(--qk-radius-md);
+}
+.price-sites__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.price-sites__url {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.price-sites__add {
+  display: flex;
+  gap: var(--qk-space-2);
+}
+.price-sites__name-input {
+  flex: 0 0 var(--qk-price-site-name-width);
+}
+.price-sites__address {
+  flex: 1;
+  min-width: 0;
+}

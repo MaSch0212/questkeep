@@ -81,6 +81,11 @@ pub trait LibraryProvider: Send + Sync {
     fn has_launcher_pages(&self) -> bool {
         false
     }
+    /// The store's website where games are bought (an https URL), opened in the user's browser
+    /// from the + menu. `None` for stores without one.
+    fn shop_url(&self) -> Option<&'static str> {
+        None
+    }
     /// Opens the game's own page in the store's launcher (e.g. its Steam library page), usually a
     /// store URI. `None` when the store has no such page for this game.
     fn launcher_page(&self, _source_game_id: &str) -> Option<PlayAction> {
