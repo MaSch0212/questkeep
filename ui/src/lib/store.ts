@@ -874,6 +874,21 @@ function createAppStore() {
       case "gameError":
         pushToast("error", event.message);
         break;
+      case "installFinished":
+        api
+          .getGame(event.id)
+          .then((game) => {
+            upsertGame(game);
+            pushToast("info", tr("installed", { name: game.name }), {
+              label: tr("play"),
+              run: () =>
+                void api.launchGame(game.id).catch((error: unknown) => {
+                  pushToast("error", errorMessage(error));
+                }),
+            });
+          })
+          .catch((error: unknown) => pushToast("error", errorMessage(error)));
+        break;
       case "categoriesChanged":
         void loadCategories();
         break;

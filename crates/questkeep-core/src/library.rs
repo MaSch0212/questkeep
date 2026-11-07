@@ -86,6 +86,8 @@ pub struct Library {
     resolver: MetadataResolver,
     /// Player counts, news and achievements for the game page.
     live: LiveData,
+    /// Installs handed to a store, watched until they finish.
+    installs: crate::installs::InstallWatches,
     /// Whether a backup runs, and how to cancel it.
     backup_run: BackupRun,
     /// Running scans; the automatic backup waits for them.
@@ -140,6 +142,7 @@ impl Library {
         Self {
             resolver,
             live: LiveData::new(providers.clone(), settings.clone(), paths.cache_dir()),
+            installs: crate::installs::InstallWatches::default(),
             images: ImageCache::new(paths.clone()),
             artwork: SteamGridDb::new(loaded.steamgriddb_api_key),
             igdb: Igdb::new(loaded.igdb_client_id, loaded.igdb_client_secret),
@@ -371,6 +374,28 @@ impl Library {
             .into_iter()
             .map(|g| self.resolve_images(g))
             .collect())
+    }
+
+    /// The library entry holding this store game (its own row or a combined copy), hidden ones
+    /// included.
+    pub fn find_store_game(&self, source: &str, source_game_id: &str) -> Result<Option<Uuid>> {
+        let query = GameQuery {
+            sources: vec![source.to_string()],
+            hidden: HiddenFilter::All,
+            ..GameQuery::default()
+        };
+        let is_it = |s: &str, id: Option<&str>| s == source && id == Some(source_game_id);
+        Ok(self
+            .db
+            .list_games(&query)?
+            .into_iter()
+            .find(|g| {
+                is_it(&g.source, g.source_game_id.as_deref())
+                    || g.copies
+                        .iter()
+                        .any(|c| is_it(&c.source, c.source_game_id.as_deref()))
+            })
+            .map(|g| g.id))
     }
 
     /// The start page: both shelves, playtime of the last 7 local days and installs per store.
@@ -1396,20 +1421,76 @@ impl Library {
     /// `copy` picks the store for a game owned in several; by default the first copy (in play
     /// order) that isn't installed and that its store can install.
     pub fn install_game(&self, id: Uuid, copy: Option<Uuid>) -> Result<()> {
-        let action = match copy {
-            Some(copy) => self.install_action(self.copy_of(id, copy)?)?,
+        let target = match copy {
+            Some(copy) => self.copy_of(id, copy)?,
             None => {
                 let entry = self.db.get_entry(id)?;
                 entry
                     .copies
                     .iter()
                     .filter(|c| !c.installed)
-                    .find_map(|c| self.install_action(c.id).ok())
-                    .map_or_else(|| self.install_action(entry.id), Ok)?
+                    .find(|c| self.install_action(c.id).is_ok())
+                    .map_or(entry.id, |c| c.id)
             }
         };
+        let action = self.install_action(target)?;
         run_store_action(&action)
-            .map_err(|err| CoreError::Launch(format!("Could not start the install: {err}")))
+            .map_err(|err| CoreError::Launch(format!("Could not start the install: {err}")))?;
+        let game = self.db.get_game(target)?;
+        if let Some(source_game_id) = &game.source_game_id {
+            self.watch_install(&game.source, source_game_id);
+        }
+        Ok(())
+    }
+
+    /// Watches a store game until its store reports it installed (see [`Self::poll_installs`]).
+    pub fn watch_install(&self, source: &str, source_game_id: &str) {
+        tracing::info!(source, source_game_id, "watching an install");
+        self.installs
+            .add(source, source_game_id, std::time::Instant::now());
+    }
+
+    pub fn has_install_watches(&self) -> bool {
+        !self.installs.is_empty()
+    }
+
+    /// Checks the stores with watched installs (their installed games only, which is cheap). A
+    /// store with a finished install is synced, and each finished game announced as
+    /// `InstallFinished`. Call it every few seconds while [`Self::has_install_watches`].
+    pub fn poll_installs(&self) {
+        for (source, ids) in self.installs.due(std::time::Instant::now()) {
+            let Some(provider) = self.providers.get(&source) else {
+                ids.iter().for_each(|id| self.installs.finish(&source, id));
+                continue;
+            };
+            provider.configure(self.settings().provider_config(&source));
+            let installed = match provider.scan_installed() {
+                Ok(games) => games,
+                Err(err) => {
+                    tracing::debug!(%source, %err, "install watch: scan failed");
+                    continue;
+                }
+            };
+            let done: Vec<&String> = ids
+                .iter()
+                .filter(|id| installed.iter().any(|g| &g.source_game_id == *id))
+                .collect();
+            if done.is_empty() {
+                continue;
+            }
+            if let Err(err) = self.scan(&source) {
+                tracing::warn!(%source, %err, "install watch: sync failed");
+                continue;
+            }
+            for id in done {
+                self.installs.finish(&source, id);
+                match self.find_store_game(&source, id) {
+                    Ok(Some(game)) => self.events.publish(CoreEvent::InstallFinished { id: game }),
+                    Ok(None) => {}
+                    Err(err) => tracing::warn!(%err, "install watch: lookup failed"),
+                }
+            }
+        }
     }
 
     /// The store action that uninstalls an installed game (a store URI or the game's own
@@ -2022,6 +2103,38 @@ mod tests {
             .collect();
         assert_eq!(names.len(), 2);
         assert!(names.contains(&"New Instance".to_string()));
+    }
+
+    #[test]
+    fn a_watched_install_is_announced_once_the_store_has_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Arc::new(DialogStore(Mutex::new(vec![ImportedGame::installed(
+            "1", "Old",
+        )])));
+        let mut providers = ProviderRegistry::new();
+        providers.register(store.clone());
+        let (lib, seen) = library(tmp.path(), providers);
+        lib.scan("dialog").unwrap();
+
+        lib.watch_install("dialog", "2");
+        lib.poll_installs();
+        assert!(lib.has_install_watches(), "still downloading");
+
+        store
+            .0
+            .lock()
+            .unwrap()
+            .push(ImportedGame::installed("2", "Bought"));
+        lib.poll_installs();
+        assert!(!lib.has_install_watches());
+        let game = lib.find_store_game("dialog", "2").unwrap().unwrap();
+        assert!(
+            seen.lock()
+                .unwrap()
+                .iter()
+                .any(|e| matches!(e, CoreEvent::InstallFinished { id } if *id == game))
+        );
+        assert!(lib.get_game(game).unwrap().installed);
     }
 
     /// Store whose client is missing but whose account lists owned games when configured.

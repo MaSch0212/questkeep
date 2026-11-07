@@ -136,6 +136,7 @@ pub fn create(app: &AppHandle, state: &Arc<AppState>) -> tauri::Result<()> {
             | CoreEvent::GameStopped { .. } => Trigger::Games,
             CoreEvent::LibraryScanned { .. } => Trigger::Scan,
             CoreEvent::GameError { .. }
+            | CoreEvent::InstallFinished { .. }
             | CoreEvent::ScansQueued { .. }
             | CoreEvent::ScanStarted { .. }
             | CoreEvent::ScanFailed { .. }

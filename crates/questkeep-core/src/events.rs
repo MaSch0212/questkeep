@@ -51,6 +51,10 @@ pub enum CoreEvent {
         #[ts(type = "number")]
         session_seconds: u64,
     },
+    /// A watched install finished: the game is installed now (see `Library::poll_installs`).
+    InstallFinished {
+        id: Uuid,
+    },
     /// A game could not be launched or tracked.
     GameError {
         id: Uuid,

@@ -213,13 +213,26 @@ fn build_state(app: &tauri::AppHandle) -> Result<(AppState, Option<WorkerGuard>)
 
 /// Startup work that must not delay the window: provider scans and image/metadata downloads.
 fn spawn_startup_tasks(state: Arc<AppState>) {
+    let watcher = state.clone();
     tauri::async_runtime::spawn_blocking(move || {
         if state.library.settings().scan_on_startup {
             state.library.scan_all();
         }
         state.queue_downloads();
     });
+    // Installs handed to a store client: checked until they finish (cheap while none are).
+    std::thread::spawn(move || {
+        loop {
+            std::thread::sleep(INSTALL_POLL);
+            if watcher.library.has_install_watches() {
+                watcher.library.poll_installs();
+            }
+        }
+    });
 }
+
+/// How often watched installs are checked.
+const INSTALL_POLL: Duration = Duration::from_secs(10);
 
 /// A token store that keeps every entry: deleting is logged and skipped (hidden test runs).
 struct NoDeleteTokenStore(KeyringTokenStore);

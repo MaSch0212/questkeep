@@ -9,6 +9,7 @@ pub mod db;
 pub mod error;
 pub mod events;
 pub mod images;
+pub mod installs;
 pub mod launcher;
 pub mod library;
 pub mod live;
