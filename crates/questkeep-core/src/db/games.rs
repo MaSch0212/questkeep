@@ -941,12 +941,14 @@ impl Database {
     }
 
     /// Games without a description or without genres (the fields IGDB can fill), manual ones
-    /// included.
+    /// included, that IGDB was not asked about yet (it is asked once; a manual refresh asks again).
     pub fn games_missing_metadata(&self) -> Result<Vec<GameMissingMetadata>> {
         let conn = self.conn();
         let mut stmt = conn.prepare(
             "SELECT id, source, source_game_id, extra FROM games \
              WHERE (description IS NULL OR genres = '[]') AND merged_into IS NULL \
+             AND NOT EXISTS (SELECT 1 FROM metadata_sources m \
+                 WHERE m.game_id = games.id AND m.source = 'igdb') \
              ORDER BY installed DESC, sorting_name",
         )?;
         let rows = stmt.query_map([], |r| {
@@ -1098,6 +1100,28 @@ mod tests {
 
     fn names(games: &[Game]) -> Vec<&str> {
         games.iter().map(|g| g.name.as_str()).collect()
+    }
+
+    #[test]
+    fn games_igdb_answered_are_not_missing_metadata() {
+        let db = db();
+        let now = Utc::now();
+        let asked = db.insert_game(&manual("Mare Nostrum"), now).unwrap();
+        let fresh = db.insert_game(&manual("Unasked"), now).unwrap();
+        // IGDB knew the game but had no genres for it: still asked, so not listed again.
+        let partial = crate::model::GameMetadata {
+            description: Some("A sea.".into()),
+            ..Default::default()
+        };
+        db.set_source_metadata(asked.id, "igdb", Some(&partial), now)
+            .unwrap();
+        let missing: Vec<Uuid> = db
+            .games_missing_metadata()
+            .unwrap()
+            .into_iter()
+            .map(|g| g.id)
+            .collect();
+        assert_eq!(missing, vec![fresh.id]);
     }
 
     #[test]

@@ -373,6 +373,9 @@ pub struct MetadataJob {
     pub source_game_id: Option<String>,
     /// Ask IGDB about the game's library entry too.
     pub igdb: bool,
+    /// Ask every site again (a manual refresh). Automatic jobs skip the sites that already
+    /// answered for the game, whether they found something or not.
+    pub force: bool,
 }
 
 struct MetadataShared {
@@ -556,10 +559,15 @@ fn process_metadata(
 }
 
 fn fetch_metadata(shared: &MetadataShared, job: &MetadataJob, last_request: &mut Option<Instant>) {
+    // Automatic jobs ask each site once per game; a manual refresh (`force`) asks again.
+    let unread = |game_id: Uuid, source: &str| {
+        job.force || !matches!(shared.db.source_checked(game_id, source), Ok(Some(_)))
+    };
     let store = job
         .source_game_id
         .as_deref()
-        .and_then(|id| shared.providers.get(&job.source).map(|p| (p, id)));
+        .and_then(|id| shared.providers.get(&job.source).map(|p| (p, id)))
+        .filter(|(provider, _)| unread(job.game_id, provider.id()));
     let mut changed = false;
     if let Some((provider, source_id)) = &store {
         if let Some(elapsed) = last_request.map(|t| t.elapsed())
@@ -585,8 +593,13 @@ fn fetch_metadata(shared: &MetadataShared, job: &MetadataJob, last_request: &mut
     }
     changed |= measure_install_size(shared, job.game_id);
     if job.igdb {
-        changed |= fetch_igdb(shared, job.game_id);
-        changed |= fetch_hltb(shared, job.game_id);
+        let entry = shared.db.entry_of(job.game_id).unwrap_or(job.game_id);
+        if unread(entry, IGDB_SOURCE) {
+            changed |= fetch_igdb(shared, job.game_id);
+        }
+        if unread(entry, HLTB_SOURCE) {
+            changed |= fetch_hltb(shared, job.game_id);
+        }
     }
     if changed && let Err(err) = shared.resolver.resolve(job.game_id) {
         tracing::warn!(game = %job.game_id, %err, "could not compute metadata");
@@ -1174,6 +1187,7 @@ mod tests {
             source: "meta".into(),
             source_game_id: g.source_game_id.clone(),
             igdb: false,
+            force: false,
         });
         assert_eq!(fetcher.enqueue(jobs), 3);
 
@@ -1193,6 +1207,84 @@ mod tests {
         );
         let g3 = db.get_game(games[2].id).unwrap();
         assert!(g3.metadata_updated_at.is_none(), "errors are retried later");
+    }
+
+    /// Answers every metadata request with the same game and counts the requests.
+    struct CountingStore(std::sync::atomic::AtomicUsize);
+    impl LibraryProvider for CountingStore {
+        fn id(&self) -> &str {
+            "count"
+        }
+        fn name(&self) -> &str {
+            "Count"
+        }
+        fn icon_svg(&self) -> &'static str {
+            "<svg/>"
+        }
+        fn scan_installed(&self) -> Result<Vec<ImportedGame>, ProviderError> {
+            Ok(vec![])
+        }
+        fn metadata(&self, _id: &str) -> Result<Option<GameMetadata>, ProviderError> {
+            self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(None)
+        }
+    }
+
+    #[test]
+    fn automatic_jobs_skip_sites_already_read_until_forced() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = DataPaths::new(tmp.path().join("data"));
+        paths.ensure_dirs().unwrap();
+        let db = Arc::new(Database::open_in_memory().unwrap());
+        let game = db
+            .insert_game(
+                &NewGameRecord {
+                    name: "Delisted".into(),
+                    source: "count".into(),
+                    source_game_id: Some("7".into()),
+                    ..Default::default()
+                },
+                Utc::now(),
+            )
+            .unwrap();
+        let store = Arc::new(CountingStore(std::sync::atomic::AtomicUsize::new(0)));
+        let mut providers = ProviderRegistry::new();
+        providers.register(store.clone());
+        let fetcher = MetadataFetcher::new(
+            db.clone(),
+            ImageCache::new(paths),
+            providers,
+            EventBus::new(),
+            SteamGridDb::new(None),
+            Igdb::new(None, None),
+            MetadataResolver::new(db.clone(), &ProviderRegistry::new(), Default::default()),
+            Duration::ZERO,
+        );
+        let job = |force: bool| MetadataJob {
+            game_id: game.id,
+            source: "count".into(),
+            source_game_id: Some("7".into()),
+            igdb: true,
+            force,
+        };
+        let asked = || store.0.load(std::sync::atomic::Ordering::SeqCst);
+        let wait_for = |count: usize| {
+            let start = Instant::now();
+            while asked() < count || !fetcher.shared.queued.lock().unwrap().is_empty() {
+                assert!(start.elapsed() < Duration::from_secs(5));
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        };
+
+        fetcher.enqueue([job(false)]);
+        wait_for(1);
+        fetcher.enqueue([job(false)]);
+        wait_for(1);
+        assert_eq!(asked(), 1, "the store's answer (none) is remembered");
+
+        fetcher.enqueue([job(true)]);
+        wait_for(2);
+        assert_eq!(asked(), 2, "a manual refresh asks again");
     }
 
     struct IconStore(std::path::PathBuf);
@@ -1523,6 +1615,7 @@ mod tests {
             source: g.source.clone(),
             source_game_id: g.source_game_id.clone(),
             igdb: g.id != err.id,
+            force: false,
         });
         assert_eq!(fetcher.enqueue(jobs), 4);
 

@@ -1323,6 +1323,7 @@ impl Library {
                 source,
                 source_game_id: Some(source_game_id),
                 igdb: true,
+                force: false,
             })
             .collect();
         if self.igdb.is_configured() {
@@ -1341,6 +1342,7 @@ impl Library {
                         source: g.source,
                         source_game_id: None,
                         igdb: true,
+                        force: false,
                     }),
             );
         }
@@ -1392,6 +1394,7 @@ impl Library {
                 source: c.source.clone(),
                 source_game_id: c.source_game_id.clone(),
                 igdb: false,
+                force: true,
             })
             .collect();
         match jobs.first_mut() {
@@ -1401,6 +1404,7 @@ impl Library {
                 source: entry.source.clone(),
                 source_game_id: None,
                 igdb: true,
+                force: true,
             }),
         }
         jobs
