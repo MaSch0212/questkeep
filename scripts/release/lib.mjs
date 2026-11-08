@@ -155,9 +155,16 @@ export function buildLatestJson({ version, notes, pubDate, repo, assets }) {
   return { version, notes, pub_date: pubDate, platforms };
 }
 
-/** Maps a built file name to its updater platform key, or `null` if it is not an updater bundle. */
-export function updaterPlatform(file) {
-  if (/-setup\.exe$/i.test(file)) return "windows-x86_64";
-  if (/\.AppImage$/i.test(file)) return "linux-x86_64";
-  return null;
+/**
+ * Maps a built file name to its updater platform keys (empty if it is not an updater bundle). The
+ * updater asks for `<os>-<arch>-<bundle>` first, so each package type updates with its own kind;
+ * the plain `<os>-<arch>` key (NSIS, AppImage) serves versions that only ask for that one.
+ */
+export function updaterPlatforms(file) {
+  if (/-setup\.exe$/i.test(file)) return ["windows-x86_64", "windows-x86_64-nsis"];
+  if (/\.msi$/i.test(file)) return ["windows-x86_64-msi"];
+  if (/\.AppImage$/i.test(file)) return ["linux-x86_64", "linux-x86_64-appimage"];
+  if (/\.deb$/i.test(file)) return ["linux-x86_64-deb"];
+  if (/\.rpm$/i.test(file)) return ["linux-x86_64-rpm"];
+  return [];
 }

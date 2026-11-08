@@ -8,6 +8,9 @@ const en = {
   later: "Later",
   installing: "Installing…",
   installAndRestart: "Install and restart",
+  manualUpdateHint:
+    "This copy was downloaded rather than installed, so it can't update itself. Download the new version from the release page.",
+  openReleasePage: "Open download page",
   // QuitDuringBackupDialog
   backupTitle: "A backup is running",
   backupWriting:
@@ -29,6 +32,9 @@ export const shellDialogs: Translations<typeof en> = {
     later: "Später",
     installing: "Wird installiert…",
     installAndRestart: "Installieren und neu starten",
+    manualUpdateHint:
+      "Diese Kopie wurde heruntergeladen statt installiert und kann sich daher nicht selbst aktualisieren. Lade die neue Version von der Release-Seite herunter.",
+    openReleasePage: "Download-Seite öffnen",
     backupTitle: "Eine Sicherung läuft",
     backupWriting:
       "Questkeep schreibt gerade eine Sicherung. Beendest du jetzt, wird sie abgebrochen und das unfertige Archiv gelöscht.",
@@ -45,6 +51,9 @@ export const shellDialogs: Translations<typeof en> = {
     later: "Plus tard",
     installing: "Installation…",
     installAndRestart: "Installer et redémarrer",
+    manualUpdateHint:
+      "Cette copie a été téléchargée et non installée : elle ne peut pas se mettre à jour seule. Téléchargez la nouvelle version depuis la page de la version.",
+    openReleasePage: "Ouvrir la page de téléchargement",
     backupTitle: "Une sauvegarde est en cours",
     backupWriting:
       "Questkeep est en train d'écrire une sauvegarde. Quitter maintenant l'annule et supprime l'archive inachevée.",
@@ -61,6 +70,9 @@ export const shellDialogs: Translations<typeof en> = {
     later: "Più tardi",
     installing: "Installazione…",
     installAndRestart: "Installa e riavvia",
+    manualUpdateHint:
+      "Questa copia è stata scaricata, non installata, quindi non può aggiornarsi da sola. Scarica la nuova versione dalla pagina della release.",
+    openReleasePage: "Apri la pagina di download",
     backupTitle: "Un backup è in corso",
     backupWriting:
       "Questkeep sta scrivendo un backup. Uscire ora lo annulla ed elimina l'archivio non completato.",
@@ -77,6 +89,9 @@ export const shellDialogs: Translations<typeof en> = {
     later: "Más tarde",
     installing: "Instalando…",
     installAndRestart: "Instalar y reiniciar",
+    manualUpdateHint:
+      "Esta copia se descargó en lugar de instalarse, así que no puede actualizarse sola. Descarga la nueva versión desde la página de la versión.",
+    openReleasePage: "Abrir la página de descarga",
     backupTitle: "Hay una copia de seguridad en curso",
     backupWriting:
       "Questkeep está escribiendo una copia de seguridad. Si sales ahora, se cancela y se elimina el archivo sin terminar.",
@@ -93,6 +108,9 @@ export const shellDialogs: Translations<typeof en> = {
     later: "Mais tarde",
     installing: "Instalando…",
     installAndRestart: "Instalar e reiniciar",
+    manualUpdateHint:
+      "Esta cópia foi baixada em vez de instalada, por isso não pode se atualizar sozinha. Baixe a nova versão na página da versão.",
+    openReleasePage: "Abrir a página de download",
     backupTitle: "Um backup está em andamento",
     backupWriting:
       "O Questkeep está gravando um backup. Sair agora o cancela e exclui o arquivo inacabado.",

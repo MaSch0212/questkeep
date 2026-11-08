@@ -13,7 +13,12 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn<() => void>() }));
 
-const update: api.UpdateInfo = { version: "0.3.0", notes: "Faster grid.", date: null };
+const update: api.UpdateInfo = {
+  version: "0.3.0",
+  notes: "Faster grid.",
+  date: null,
+  manual: false,
+};
 const handlers = new Map<string, (event: { payload: unknown }) => void>();
 
 beforeEach(async () => {
@@ -75,6 +80,20 @@ describe("updates", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("offline");
     await fireEvent.click(screen.getByRole("button", { name: "Later" }));
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("sends a downloaded copy to the release page", async () => {
+    vi.mocked(api.availableUpdate).mockResolvedValue({ ...update, manual: true });
+    vi.mocked(api.installUpdate).mockResolvedValueOnce(undefined);
+    await store.init();
+    renderShell();
+    await fireEvent.click(screen.getByRole("button", { name: "Update to 0.3.0" }));
+    const dialog = screen.getByRole("dialog", { name: "Update available" });
+    expect(dialog).toHaveTextContent("can't update itself");
+    expect(screen.queryByRole("button", { name: "Install and restart" })).toBeNull();
+    await fireEvent.click(screen.getByRole("button", { name: "Open download page" }));
+    expect(api.installUpdate).toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 
   it("shows the button when a check finds an update later", async () => {

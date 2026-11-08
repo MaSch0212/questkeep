@@ -14,7 +14,7 @@ import {
   setCargoLockVersions,
   setJsonVersion,
   setTomlVersion,
-  updaterPlatform,
+  updaterPlatforms,
 } from "./lib.mjs";
 
 test("parseSemver is strict", () => {
@@ -138,10 +138,19 @@ test("localCargoPackages lists the packages built from this repository", () => {
   assert.deepEqual(localCargoPackages(lock), ["questkeep-store-steam", "questkeep"]);
 });
 
-test("updaterPlatform and buildLatestJson", () => {
-  assert.equal(updaterPlatform("Questkeep_0.2.0_x64-setup.exe"), "windows-x86_64");
-  assert.equal(updaterPlatform("Questkeep_0.2.0_amd64.AppImage"), "linux-x86_64");
-  assert.equal(updaterPlatform("Questkeep_0.2.0_x64_en-US.msi"), null);
+test("updaterPlatforms and buildLatestJson", () => {
+  assert.deepEqual(updaterPlatforms("Questkeep_0.2.0_x64-setup.exe"), [
+    "windows-x86_64",
+    "windows-x86_64-nsis",
+  ]);
+  assert.deepEqual(updaterPlatforms("Questkeep_0.2.0_x64_en-US.msi"), ["windows-x86_64-msi"]);
+  assert.deepEqual(updaterPlatforms("Questkeep_0.2.0_amd64.AppImage"), [
+    "linux-x86_64",
+    "linux-x86_64-appimage",
+  ]);
+  assert.deepEqual(updaterPlatforms("Questkeep_0.2.0_amd64.deb"), ["linux-x86_64-deb"]);
+  assert.deepEqual(updaterPlatforms("Questkeep-0.2.0-1.x86_64.rpm"), ["linux-x86_64-rpm"]);
+  assert.deepEqual(updaterPlatforms("Questkeep_0.2.0_x64_portable.exe"), []);
   const json = buildLatestJson({
     version: "0.2.0",
     notes: "n",

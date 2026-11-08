@@ -37,8 +37,14 @@ pnpm changeset status                                 # current version, pending
    1. `prepare` computes current/next version and the notes. No changesets: stop.
    2. `build` (Windows, Ubuntu 22.04) writes the version into `src-tauri/tauri.conf.json`,
       `Cargo.toml` (workspace version both crates inherit), `ui/package.json` and the two crate
-      entries in `Cargo.lock`, then runs `pnpm tauri build`. Bundles: NSIS `.exe` and `.msi`
-      (Windows), `.AppImage` and `.deb` (Linux), plus their `.sig` updater signatures.
+      entries in `Cargo.lock`, then runs `pnpm tauri build`. Bundles: NSIS `.exe`, `.msi` and the
+      portable exe (`Questkeep_X.Y.Z_x64_portable.exe`, a copy of `target/release/questkeep.exe`)
+      for Windows; `.AppImage`, `.deb` and `.rpm` for Linux; plus the `.sig` updater signatures.
+      `latest.json` gets one entry per package type (`windows-x86_64-nsis`, `-msi`,
+      `linux-x86_64-appimage`, `-deb`, `-rpm`) and the plain `windows-x86_64` / `linux-x86_64`
+      keys (NSIS, AppImage) for older versions. The portable exe has no entry: a copy that isn't
+      installed (Windows: no installer registry entry or `uninstall.exe` for its folder) links to
+      the release page instead of updating. The release notes get a "Portable use" note.
    3. `release` (not on dry runs) fails if `main` moved during the build, then commits
       `chore(release): vX.Y.Z` (version files + deleted changesets) as `github-actions[bot]`,
       pushes it, pushes the annotated tag `vX.Y.Z`, generates `latest.json` from the `.sig` files
@@ -87,7 +93,8 @@ not affected. The update commands return "no update" in debug builds.
 ## Update commands (for the UI)
 
 - `check_update() -> Option<UpdateInfo>` where
-  `UpdateInfo { version: string, notes: string | null, date: string | null }` (`date` is RFC 3339).
+  `UpdateInfo { version: string, notes: string | null, date: string | null, manual: boolean }`
+  (`manual`: a downloaded copy; `install_update` opens the release page instead) (`date` is RFC 3339).
   Rejects with a user-readable string if the endpoint or signature setup is broken.
 - `install_update() -> ()` downloads, installs and restarts the app (on Windows the installer runs
   in passive mode). It returns normally only when there was no newer release.

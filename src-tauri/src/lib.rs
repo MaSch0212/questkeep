@@ -4,6 +4,7 @@ mod autostart;
 mod backups;
 mod commands;
 mod i18n;
+mod install_kind;
 mod signin;
 mod tray;
 mod tray_theme;

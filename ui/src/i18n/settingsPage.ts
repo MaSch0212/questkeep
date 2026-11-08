@@ -29,6 +29,9 @@ const en = {
   installing: "Installing…",
   install: "Install and restart",
   confirmInstall: "Questkeep will download the update and restart. Continue?",
+  manualUpdateHint:
+    "This copy was downloaded rather than installed, so it can't update itself. Download the new version from the release page.",
+  openReleasePage: "Open download page",
   installNow: "Install and restart now",
   cancel: "Cancel",
 };
@@ -65,6 +68,9 @@ export const settingsPage: Translations<typeof en> = {
     installing: "Wird installiert…",
     install: "Installieren und neu starten",
     confirmInstall: "Questkeep lädt das Update herunter und startet neu. Fortfahren?",
+    manualUpdateHint:
+      "Diese Kopie wurde heruntergeladen statt installiert und kann sich daher nicht selbst aktualisieren. Lade die neue Version von der Release-Seite herunter.",
+    openReleasePage: "Download-Seite öffnen",
     installNow: "Jetzt installieren und neu starten",
     cancel: "Abbrechen",
   },
@@ -97,6 +103,9 @@ export const settingsPage: Translations<typeof en> = {
     installing: "Installation…",
     install: "Installer et redémarrer",
     confirmInstall: "Questkeep va télécharger la mise à jour et redémarrer. Continuer ?",
+    manualUpdateHint:
+      "Cette copie a été téléchargée et non installée : elle ne peut pas se mettre à jour seule. Téléchargez la nouvelle version depuis la page de la version.",
+    openReleasePage: "Ouvrir la page de téléchargement",
     installNow: "Installer et redémarrer maintenant",
     cancel: "Annuler",
   },
@@ -129,6 +138,9 @@ export const settingsPage: Translations<typeof en> = {
     installing: "Installazione…",
     install: "Installa e riavvia",
     confirmInstall: "Questkeep scaricherà l'aggiornamento e si riavvierà. Continuare?",
+    manualUpdateHint:
+      "Questa copia è stata scaricata, non installata, quindi non può aggiornarsi da sola. Scarica la nuova versione dalla pagina della release.",
+    openReleasePage: "Apri la pagina di download",
     installNow: "Installa e riavvia ora",
     cancel: "Annulla",
   },
@@ -161,6 +173,9 @@ export const settingsPage: Translations<typeof en> = {
     installing: "Instalando…",
     install: "Instalar y reiniciar",
     confirmInstall: "Questkeep descargará la actualización y se reiniciará. ¿Continuar?",
+    manualUpdateHint:
+      "Esta copia se descargó en lugar de instalarse, así que no puede actualizarse sola. Descarga la nueva versión desde la página de la versión.",
+    openReleasePage: "Abrir la página de descarga",
     installNow: "Instalar y reiniciar ahora",
     cancel: "Cancelar",
   },
@@ -193,6 +208,9 @@ export const settingsPage: Translations<typeof en> = {
     installing: "Instalando…",
     install: "Instalar e reiniciar",
     confirmInstall: "O Questkeep vai baixar a atualização e reiniciar. Continuar?",
+    manualUpdateHint:
+      "Esta cópia foi baixada em vez de instalada, por isso não pode se atualizar sozinha. Baixe a nova versão na página da versão.",
+    openReleasePage: "Abrir a página de download",
     installNow: "Instalar e reiniciar agora",
     cancel: "Cancelar",
   },

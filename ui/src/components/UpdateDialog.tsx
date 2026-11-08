@@ -1,4 +1,5 @@
 import Download from "lucide-solid/icons/download";
+import ExternalLink from "lucide-solid/icons/external-link";
 import { createSignal, Show } from "solid-js";
 import type { UpdateInfo } from "../lib/api";
 import * as api from "../lib/api";
@@ -10,7 +11,8 @@ import { Modal } from "./Modal";
 
 const tr = translator(shellDialogs);
 
-/** Offers the update found after start: install it now (the app restarts) or later. */
+/** Offers the update found after start: install it now (the app restarts) or later. A
+ * downloaded copy links to the release page instead. */
 export function UpdateDialog(props: { update: UpdateInfo; onClose: () => void }) {
   const [installing, setInstalling] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
@@ -20,6 +22,7 @@ export function UpdateDialog(props: { update: UpdateInfo; onClose: () => void })
     setInstalling(true);
     try {
       await api.installUpdate();
+      if (props.update.manual) props.onClose();
     } catch (failure) {
       setError(errorMessage(failure));
     }
@@ -36,6 +39,9 @@ export function UpdateDialog(props: { update: UpdateInfo; onClose: () => void })
           })}
         </p>
         <Show when={props.update.notes}>{(notes) => <p class="update-notes">{notes()}</p>}</Show>
+        <Show when={props.update.manual}>
+          <p>{tr("manualUpdateHint")}</p>
+        </Show>
         <Show when={error()}>
           <p class="error-text" role="alert">
             {error()}
@@ -52,8 +58,17 @@ export function UpdateDialog(props: { update: UpdateInfo; onClose: () => void })
             disabled={installing()}
             onClick={() => void install()}
           >
-            <Download class="icon" aria-hidden="true" />{" "}
-            {installing() ? tr("installing") : tr("installAndRestart")}
+            <Show
+              when={props.update.manual}
+              fallback={
+                <>
+                  <Download class="icon" aria-hidden="true" />{" "}
+                  {installing() ? tr("installing") : tr("installAndRestart")}
+                </>
+              }
+            >
+              <ExternalLink class="icon" aria-hidden="true" /> {tr("openReleasePage")}
+            </Show>
           </button>
         </div>
       </div>

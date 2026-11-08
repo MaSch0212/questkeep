@@ -408,6 +408,7 @@ describe("UpdatesSection", () => {
       version: "1.2.0",
       notes: "Line one\nLine two",
       date: null,
+      manual: false,
     });
     vi.mocked(api.installUpdate).mockResolvedValue(undefined);
     render(() => <UpdatesSection />);

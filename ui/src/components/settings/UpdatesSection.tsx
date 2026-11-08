@@ -1,4 +1,5 @@
 import Download from "lucide-solid/icons/download";
+import ExternalLink from "lucide-solid/icons/external-link";
 import RefreshCw from "lucide-solid/icons/refresh-cw";
 import { createSignal, Show } from "solid-js";
 import * as api from "../../lib/api";
@@ -30,6 +31,14 @@ export function UpdatesSection() {
       const update = await api.checkUpdate();
       store.setUpdate(update);
       setState(update ? { kind: "available", update, confirming: false } : { kind: "current" });
+    } catch (error) {
+      setState({ kind: "error", message: errorMessage(error) });
+    }
+  }
+
+  async function openReleasePage() {
+    try {
+      await api.installUpdate();
     } catch (error) {
       setState({ kind: "error", message: errorMessage(error) });
     }
@@ -86,12 +95,26 @@ export function UpdatesSection() {
           <div class="form">
             <p role="status">{tr("available", { version: update().version })}</p>
             <Show when={update().notes}>{(notes) => <p class="update-notes">{notes()}</p>}</Show>
-            <Show
-              when={installing() === null}
-              fallback={
-                <button type="button" class="btn btn--primary" disabled>
-                  {tr("installing")}
+            <Show when={update().manual}>
+              <p>{tr("manualUpdateHint")}</p>
+              <div>
+                <button
+                  type="button"
+                  class="btn btn--primary"
+                  onClick={() => void openReleasePage()}
+                >
+                  <ExternalLink class="icon" aria-hidden="true" /> {tr("openReleasePage")}
                 </button>
+              </div>
+            </Show>
+            <Show
+              when={!update().manual && installing() === null}
+              fallback={
+                <Show when={!update().manual}>
+                  <button type="button" class="btn btn--primary" disabled>
+                    {tr("installing")}
+                  </button>
+                </Show>
               }
             >
               <Show

@@ -215,6 +215,8 @@ export interface UpdateInfo {
   version: string;
   notes: string | null;
   date: string | null;
+  /** A downloaded copy can't install it; installing opens the release page instead. */
+  manual: boolean;
 }
 /** Resolves `null` when up to date (always in dev builds). */
 export const checkUpdate = () => invoke<UpdateInfo | null>("check_update");
@@ -222,7 +224,7 @@ export const checkUpdate = () => invoke<UpdateInfo | null>("check_update");
 export const availableUpdate = () => invoke<UpdateInfo | null>("available_update");
 /** Whether the tray asked to show the update dialog before the window listened. */
 export const takeUpdateRequest = () => invoke<boolean>("take_update_request");
-/** Downloads, installs and restarts the app. */
+/** Downloads, installs and restarts the app; a downloaded copy opens the release page. */
 export const installUpdate = () => invoke<void>("install_update");
 
 // Window controls for the custom title bar. Close and minimize still go through the shell's

@@ -4,11 +4,12 @@
 //   node scripts/release/latest-json.mjs --dir <assets-dir> --version <X.Y.Z> --notes <file> \
 //        --repo <owner/name> --out <latest.json>
 //
-// Every `<bundle>.sig` next to a Windows NSIS installer (`*-setup.exe`) or a Linux `*.AppImage`
-// becomes a platform entry. Exits non-zero when no signed updater bundle is found.
+// Every `<bundle>.sig` next to an installer or package (NSIS, MSI, AppImage, deb, rpm) becomes
+// platform entries (see `updaterPlatforms`); the portable exe has none. Exits non-zero when no
+// signed updater bundle is found.
 import fs from "node:fs";
 import path from "node:path";
-import { buildLatestJson, updaterPlatform } from "./lib.mjs";
+import { buildLatestJson, updaterPlatforms } from "./lib.mjs";
 
 function option(name) {
   const i = process.argv.indexOf(`--${name}`);
@@ -27,13 +28,14 @@ const repo = option("repo");
 
 const assets = [];
 for (const file of fs.readdirSync(dir).sort()) {
-  const platform = updaterPlatform(file);
   const sig = path.join(dir, `${file}.sig`);
-  if (!platform || !fs.existsSync(sig)) continue;
-  assets.push({ platform, file, signature: fs.readFileSync(sig, "utf8") });
+  if (!fs.existsSync(sig)) continue;
+  for (const platform of updaterPlatforms(file)) {
+    assets.push({ platform, file, signature: fs.readFileSync(sig, "utf8") });
+  }
 }
 if (assets.length === 0) {
-  console.error(`error: no signed updater bundles (*-setup.exe, *.AppImage with .sig) in ${dir}`);
+  console.error(`error: no signed updater bundles (installers or packages with a .sig) in ${dir}`);
   process.exit(1);
 }
 

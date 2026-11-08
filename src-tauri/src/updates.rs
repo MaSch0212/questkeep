@@ -14,6 +14,9 @@ pub const AVAILABLE_EVENT: &str = "update-available";
 /// Event asking the window to show the update dialog (the tray's "Update" entry).
 pub const SHOW_EVENT: &str = "show-update";
 
+/// Where a downloaded copy sends the user for a new version.
+const RELEASES_URL: &str = "https://github.com/MaSch0212/questkeep/releases";
+
 /// Wait after start before checking, so the check doesn't compete with the first scan.
 const STARTUP_DELAY: Duration = Duration::from_secs(5);
 
@@ -25,6 +28,9 @@ pub struct UpdateInfo {
     pub notes: Option<String>,
     /// Publication date as RFC 3339, if the manifest has one.
     pub date: Option<String>,
+    /// This copy can't install it (a downloaded exe, not an installed copy): the user downloads
+    /// it from the release page.
+    pub manual: bool,
 }
 
 /// The newest update found, and whether the tray asked the window to show it before the window
@@ -76,6 +82,7 @@ pub async fn check(app: &AppHandle) -> CmdResult<Option<UpdateInfo>> {
                 .date
                 .and_then(|d| chrono::DateTime::from_timestamp(d.unix_timestamp(), 0))
                 .map(|d| d.to_rfc3339()),
+            manual: !crate::install_kind::self_updating(),
         })
     };
     remember(app, info.clone());
@@ -128,6 +135,7 @@ fn fake_update() -> Option<UpdateInfo> {
         version,
         notes: Some("A pretend update for testing (QUESTKEEP_FAKE_UPDATE).".into()),
         date: None,
+        manual: !crate::install_kind::self_updating(),
     })
 }
 
@@ -148,8 +156,11 @@ async fn find(app: &AppHandle) -> CmdResult<Option<tauri_plugin_updater::Update>
 }
 
 /// Downloads and installs the newest release, then restarts the app. Does nothing (and returns
-/// normally) when no newer release exists.
+/// normally) when no newer release exists. A downloaded copy opens the release page instead.
 pub async fn install(app: &AppHandle) -> CmdResult<()> {
+    if !crate::install_kind::self_updating() {
+        return open_release_page(app);
+    }
     if crate::backups::hold_quit(app, crate::backups::PendingQuit::Update) {
         return Ok(());
     }
@@ -165,4 +176,20 @@ pub async fn install(app: &AppHandle) -> CmdResult<()> {
             format!("Could not install the update: {e}")
         })?;
     app.restart()
+}
+
+/// Opens the page of the newest release found, or the list of releases.
+fn open_release_page(app: &AppHandle) -> CmdResult<()> {
+    use tauri_plugin_opener::OpenerExt;
+    let url = app
+        .try_state::<Updates>()
+        .and_then(|u| u.available())
+        .map_or_else(
+            || format!("{RELEASES_URL}/latest"),
+            |info| format!("{RELEASES_URL}/tag/v{}", info.version),
+        );
+    app.opener().open_url(url, None::<&str>).map_err(|e| {
+        tracing::warn!(error = %e, "could not open the release page");
+        format!("Could not open the release page: {e}")
+    })
 }
