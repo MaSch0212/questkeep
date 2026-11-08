@@ -21,6 +21,8 @@ vi.mock("@tauri-apps/plugin-opener", () => ({
 function makeSettings(overrides: Partial<Settings> = {}): Settings {
   return {
     scanOnStartup: true,
+    autoSyncMinutes: 15,
+    watchInstallFolders: true,
     downloadCovers: true,
     fetchMetadata: true,
     steamGridDbApiKey: null,
@@ -241,6 +243,8 @@ describe("SettingsPage", () => {
     await waitFor(() =>
       expect(api.saveSettings).toHaveBeenCalledWith({
         scanOnStartup: true,
+        autoSyncMinutes: 15,
+        watchInstallFolders: true,
         downloadCovers: true,
         fetchMetadata: true,
         steamGridDbApiKey: null,

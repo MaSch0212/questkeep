@@ -321,6 +321,8 @@ describe("AccountsSection", () => {
 function makeSettings(overrides: Partial<Settings> = {}): Settings {
   return {
     scanOnStartup: true,
+    autoSyncMinutes: 15,
+    watchInstallFolders: true,
     downloadCovers: true,
     fetchMetadata: true,
     steamGridDbApiKey: null,

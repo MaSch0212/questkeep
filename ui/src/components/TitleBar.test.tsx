@@ -82,8 +82,8 @@ describe("Sync", () => {
   it("spins while a run is busy and names the progress", () => {
     render(() => <TitleBar onAdd={vi.fn<() => void>()} />);
     expect(screen.getByRole("button", { name: "Sync" }).querySelector(".icon--spin")).toBeNull();
-    send({ type: "scansQueued", providers: ["steam", "epic"] });
-    send({ type: "scanStarted", provider: "steam" });
+    send({ type: "scansQueued", providers: ["steam", "epic"], background: false });
+    send({ type: "scanStarted", provider: "steam", background: false });
     const busy = screen.getByRole("button", { name: "Syncing 1 of 2…" });
     expect(busy.querySelector(".icon--spin")).not.toBeNull();
   });
@@ -106,7 +106,7 @@ describe("Sync", () => {
     await fireEvent.click(within(dialog).getByRole("button", { name: /Sync all/ }));
     expect(api.scanAllLibraries).toHaveBeenCalledTimes(1);
 
-    send({ type: "scanStarted", provider: "epic" });
+    send({ type: "scanStarted", provider: "epic", background: false });
     expect(rows[1]).toHaveTextContent("Scanning…");
     send({ type: "scanFailed", provider: "epic", message: "No network" });
     expect(rows[1]).toHaveTextContent("No network");
@@ -115,10 +115,10 @@ describe("Sync", () => {
   it("shows one toast for the whole run", () => {
     vi.useFakeTimers();
     render(() => <TitleBar onAdd={vi.fn<() => void>()} />);
-    send({ type: "scansQueued", providers: ["steam", "epic"] });
-    send({ type: "scanStarted", provider: "steam" });
+    send({ type: "scansQueued", providers: ["steam", "epic"], background: false });
+    send({ type: "scanStarted", provider: "steam", background: false });
     send(scanned("steam", 3, 1));
-    send({ type: "scanStarted", provider: "epic" });
+    send({ type: "scanStarted", provider: "epic", background: false });
     send({ type: "scanFailed", provider: "epic", message: "No network" });
     vi.advanceTimersByTime(1500);
     expect(store.toasts().map((t) => t.message)).toEqual([

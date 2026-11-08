@@ -31,9 +31,14 @@ pub enum CoreEvent {
     /// A full sync is about to scan these providers, one after another.
     ScansQueued {
         providers: Vec<String>,
+        /// Started by Questkeep itself (the automatic sync), not by the user: the UI shows no
+        /// result message for it.
+        background: bool,
     },
     ScanStarted {
         provider: String,
+        /// See `ScansQueued::background`.
+        background: bool,
     },
     LibraryScanned {
         provider: String,

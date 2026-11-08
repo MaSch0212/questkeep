@@ -36,9 +36,17 @@ export interface SyncState {
   active: boolean;
   /** When the last run ended (ms since epoch); null before the first run ends. */
   finishedAt: number | null;
+  /** Questkeep started the run itself (the automatic sync): it ends without a message. A scan
+   *  the user starts while it runs makes the whole run the user's. */
+  background: boolean;
 }
 
-export const IDLE_SYNC: SyncState = { entries: [], active: false, finishedAt: null };
+export const IDLE_SYNC: SyncState = {
+  entries: [],
+  active: false,
+  finishedAt: null,
+  background: false,
+};
 
 /** How long after the last store finished a run stays open for a follow-up scan to join. */
 export const SYNC_END_DEBOUNCE_MS = 1500;
@@ -61,6 +69,8 @@ function setEntry(entries: SyncEntry[], next: SyncEntry): SyncEntry[] {
 /** The state after one scan event. Pure; a run starts with the first event while not `active`. */
 export function applySyncEvent(state: SyncState, event: SyncEvent): SyncState {
   let entries = state.active ? state.entries : [];
+  const own = "background" in event ? event.background : !state.active || state.background;
+  const background = state.active ? state.background && own : own;
   switch (event.type) {
     case "scansQueued":
       for (const provider of event.providers) {
@@ -85,7 +95,12 @@ export function applySyncEvent(state: SyncState, event: SyncEvent): SyncState {
       });
       break;
   }
-  return { entries, active: true, finishedAt: state.active ? state.finishedAt : null };
+  return {
+    entries,
+    active: true,
+    finishedAt: state.active ? state.finishedAt : null,
+    background,
+  };
 }
 
 /** Some store is waiting for its turn or being scanned. */

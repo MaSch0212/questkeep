@@ -88,6 +88,8 @@ pub struct Library {
     live: LiveData,
     /// Installs handed to a store, watched until they finish.
     installs: crate::installs::InstallWatches,
+    /// The folders installed games are in, watched for installs done in the store clients.
+    folders: crate::install_folders::InstallFolders,
     /// Whether a backup runs, and how to cancel it.
     backup_run: BackupRun,
     /// Running scans; the automatic backup waits for them.
@@ -143,6 +145,7 @@ impl Library {
             resolver,
             live: LiveData::new(providers.clone(), settings.clone(), paths.cache_dir()),
             installs: crate::installs::InstallWatches::default(),
+            folders: crate::install_folders::InstallFolders::default(),
             images: ImageCache::new(paths.clone()),
             artwork: SteamGridDb::new(loaded.steamgriddb_api_key),
             igdb: Igdb::new(loaded.igdb_client_id, loaded.igdb_client_secret),
@@ -328,6 +331,7 @@ impl Library {
             settings.igdb_client_id.clone(),
             settings.igdb_client_secret.clone(),
         );
+        self.watch_install_folders();
         if self
             .resolver
             .set_priority(settings.metadata_priority.clone())
@@ -1092,16 +1096,24 @@ impl Library {
     /// scanned. Announced as `ScanStarted`, then `LibraryScanned` or `ScanFailed`, so the UI can
     /// show one sync status for all scans.
     pub fn scan(&self, provider_id: &str) -> Result<ScanSummary> {
+        self.scan_as(provider_id, false)
+    }
+
+    /// [`Self::scan`], marked as started by Questkeep itself when `background` (no result
+    /// message in the UI).
+    pub fn scan_as(&self, provider_id: &str, background: bool) -> Result<ScanSummary> {
         let _running = self.scans.enter();
         self.events.publish(CoreEvent::ScanStarted {
             provider: provider_id.to_string(),
+            background,
         });
         let result = self.scan_provider(provider_id);
-        if let Err(err) = &result {
-            self.events.publish(CoreEvent::ScanFailed {
+        match &result {
+            Ok(_) => self.watch_install_folders(),
+            Err(err) => self.events.publish(CoreEvent::ScanFailed {
                 provider: provider_id.to_string(),
                 message: err.to_string(),
-            });
+            }),
         }
         result
     }
@@ -1210,6 +1222,36 @@ impl Library {
 
     /// Scans every provider that supports scanning; failures are logged, not fatal.
     pub fn scan_all(&self) -> Vec<(String, Result<ScanSummary>)> {
+        self.scan_all_as(false)
+    }
+
+    /// Whether the automatic sync is due: turned on, and the last full sync (manual or automatic)
+    /// is at least the chosen interval ago (or there was none).
+    pub fn auto_sync_due(&self, now: chrono::DateTime<Utc>) -> bool {
+        let minutes = self.settings().auto_sync_minutes;
+        if minutes == 0 {
+            return false;
+        }
+        let last = match self.db.sync_times() {
+            Ok(times) => times.all,
+            Err(err) => {
+                tracing::warn!(%err, "could not read the sync times");
+                return false;
+            }
+        };
+        last.and_then(|at| chrono::DateTime::parse_from_rfc3339(&at).ok())
+            .is_none_or(|at| {
+                now - at.with_timezone(&Utc) >= chrono::Duration::minutes(minutes.into())
+            })
+    }
+
+    /// No scan runs right now.
+    pub fn is_scan_idle(&self) -> bool {
+        self.scans.is_idle()
+    }
+
+    /// [`Self::scan_all`], marked as started by Questkeep itself when `background`.
+    pub fn scan_all_as(&self, background: bool) -> Vec<(String, Result<ScanSummary>)> {
         // Counts as one run, so a waiting backup does not start between two stores.
         let _running = self.scans.enter();
         // Stores whose client is missing are skipped unless an account reads their owned games.
@@ -1221,11 +1263,12 @@ impl Library {
         // Lets the UI list the stores still waiting, so the sync isn't "done" between two scans.
         self.events.publish(CoreEvent::ScansQueued {
             providers: scannable.iter().map(|p| p.id.clone()).collect(),
+            background,
         });
         let results = scannable
             .into_iter()
             .map(|p| {
-                let result = self.scan(&p.id);
+                let result = self.scan_as(&p.id, background);
                 if let Err(err) = &result {
                     tracing::warn!(provider = %p.id, %err, "scan failed");
                 }
@@ -1507,6 +1550,90 @@ impl Library {
         }
     }
 
+    /// Watches the folders the installed store games are in (or stops, when the setting is
+    /// off). Called after every scan, so new install folders are covered.
+    pub fn watch_install_folders(&self) {
+        if !self.settings().watch_install_folders {
+            self.folders.stop();
+            return;
+        }
+        match self.db.installed_store_dirs() {
+            Ok(dirs) => {
+                let dirs: Vec<(String, String)> = dirs
+                    .into_iter()
+                    .filter(|(store, _)| self.providers.get(store).is_some())
+                    .collect();
+                self.folders.watch(&dirs);
+            }
+            Err(err) => tracing::warn!(%err, "could not list the install folders"),
+        }
+    }
+
+    /// Acts on what the install folder watch noticed: a store whose install folder was removed is
+    /// synced; a new folder is checked against its store's installed games, and once a game is
+    /// installed in it the store is synced and the game announced as `InstallFinished`. Call it
+    /// every few seconds; it checks each new folder only every
+    /// [`crate::install_folders::CHECK_EVERY`].
+    pub fn poll_install_folders(&self) {
+        self.poll_install_folders_at(std::time::Instant::now());
+    }
+
+    fn poll_install_folders_at(&self, now: std::time::Instant) {
+        let due = self.folders.due(now);
+        for store in &due.removed {
+            if let Err(err) = self.scan_as(store, true) {
+                tracing::warn!(%store, %err, "sync after an uninstall failed");
+            }
+        }
+        for (store, folders) in due.new_folders {
+            let Some(provider) = self.providers.get(&store) else {
+                continue;
+            };
+            provider.configure(self.settings().provider_config(&store));
+            let installed = match provider.scan_installed() {
+                Ok(games) => games,
+                Err(err) => {
+                    tracing::debug!(%store, %err, "install folder check: scan failed");
+                    continue;
+                }
+            };
+            let found: Vec<(&std::path::PathBuf, &str)> = folders
+                .iter()
+                .filter_map(|folder| {
+                    installed
+                        .iter()
+                        .filter(|g| g.installed)
+                        .find(|g| {
+                            g.install_dir.as_deref().is_some_and(|dir| {
+                                crate::install_folders::InstallFolders::contains(
+                                    folder,
+                                    std::path::Path::new(dir),
+                                )
+                            })
+                        })
+                        .map(|g| (folder, g.source_game_id.as_str()))
+                })
+                .collect();
+            if found.is_empty() {
+                continue;
+            }
+            if let Err(err) = self.scan_as(&store, true) {
+                tracing::warn!(%store, %err, "sync after an install failed");
+                continue;
+            }
+            for (folder, id) in found {
+                self.folders.finish(folder);
+                // Questkeep may be watching it too (installed from here).
+                self.installs.finish(&store, id);
+                match self.find_store_game(&store, id) {
+                    Ok(Some(game)) => self.events.publish(CoreEvent::InstallFinished { id: game }),
+                    Ok(None) => {}
+                    Err(err) => tracing::warn!(%err, "install folder check: lookup failed"),
+                }
+            }
+        }
+    }
+
     /// The store action that uninstalls an installed game (a store URI or the game's own
     /// uninstaller). The caller runs it; the store asks the user to confirm.
     pub fn uninstall_action(&self, id: Uuid) -> Result<PlayAction> {
@@ -1716,6 +1843,10 @@ impl ScanCount {
     fn enter(&self) -> ScanRunning<'_> {
         *self.running.lock().unwrap_or_else(PoisonError::into_inner) += 1;
         ScanRunning(self)
+    }
+
+    fn is_idle(&self) -> bool {
+        *self.running.lock().unwrap_or_else(PoisonError::into_inner) == 0
     }
 
     /// Blocks until no scan runs; false when `timeout` passed first.
@@ -2038,8 +2169,8 @@ mod tests {
         let kinds: Vec<_> = events
             .iter()
             .map(|e| match e {
-                CoreEvent::ScansQueued { providers } => format!("queued {providers:?}"),
-                CoreEvent::ScanStarted { provider } => format!("started {provider}"),
+                CoreEvent::ScansQueued { providers, .. } => format!("queued {providers:?}"),
+                CoreEvent::ScanStarted { provider, .. } => format!("started {provider}"),
                 CoreEvent::ScanFailed { provider, message } => {
                     assert!(message.contains("not installed"));
                     format!("failed {provider}")
@@ -2139,6 +2270,78 @@ mod tests {
         settings.store_order = vec!["dialog".into()];
         lib.save_settings(&settings).unwrap();
         assert_eq!(ids(&lib), ["dialog", "acct"], "ordered stores first");
+    }
+
+    #[test]
+    fn a_new_install_folder_is_announced_once_the_store_has_a_game_there() {
+        let tmp = tempfile::tempdir().unwrap();
+        let common = tmp.path().join("common");
+        let old_dir = common.join("Old");
+        let new_dir = common.join("New Game");
+        std::fs::create_dir_all(&old_dir).unwrap();
+        let in_dir = |id: &str, name: &str, dir: &Path| {
+            let mut game = ImportedGame::installed(id, name);
+            game.install_dir = Some(dir.to_string_lossy().into_owned());
+            game
+        };
+        let store = Arc::new(DialogStore(Mutex::new(vec![in_dir("1", "Old", &old_dir)])));
+        let mut providers = ProviderRegistry::new();
+        providers.register(store.clone());
+        let (lib, seen) = library(tmp.path(), providers);
+        lib.scan("dialog").unwrap();
+
+        // The store client creates the folder when the download starts.
+        std::fs::create_dir_all(&new_dir).unwrap();
+        let start = std::time::Instant::now();
+        lib.folders.notice(
+            notify::EventKind::Create(notify::event::CreateKind::Folder),
+            std::slice::from_ref(&new_dir),
+            start,
+        );
+        let round = |n: u32| start + crate::install_folders::CHECK_EVERY * n;
+        lib.poll_install_folders_at(round(1));
+        assert!(
+            lib.find_store_game("dialog", "2").unwrap().is_none(),
+            "downloading"
+        );
+
+        store.0.lock().unwrap().push(in_dir("2", "New", &new_dir));
+        lib.poll_install_folders_at(round(2));
+        let game = lib.find_store_game("dialog", "2").unwrap().unwrap();
+        assert!(lib.get_game(game).unwrap().installed);
+        let events = seen.lock().unwrap();
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, CoreEvent::InstallFinished { id } if *id == game))
+        );
+        assert!(
+            events.iter().any(|e| matches!(
+                e,
+                CoreEvent::ScanStarted {
+                    background: true,
+                    ..
+                }
+            )),
+            "a background sync"
+        );
+        drop(events);
+        assert!(lib.folders.due(round(4)).new_folders.is_empty(), "done");
+    }
+
+    #[test]
+    fn auto_sync_is_due_after_its_interval() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (lib, _) = library(tmp.path(), ProviderRegistry::new());
+        let now = Utc::now();
+        assert!(lib.auto_sync_due(now), "never synced");
+        lib.database().record_sync(None, now).unwrap();
+        assert!(!lib.auto_sync_due(now + chrono::Duration::minutes(14)));
+        assert!(lib.auto_sync_due(now + chrono::Duration::minutes(15)));
+        let mut settings = lib.settings();
+        settings.auto_sync_minutes = 0;
+        lib.save_settings(&settings).unwrap();
+        assert!(!lib.auto_sync_due(now + chrono::Duration::days(1)), "off");
     }
 
     #[test]

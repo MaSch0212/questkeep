@@ -13,12 +13,12 @@ const SUGGESTED_PREFIXES = ["The", "A", "An", "Der", "Die", "Das", "Le", "La", "
 const tr = translator(settingsGeneral);
 
 /** Check boxes saved as they are; the label is the message with the setting's name. */
-const OPTIONS = [
-  "scanOnStartup",
-  "downloadCovers",
-  "fetchMetadata",
-  "detectExternalLaunches",
-] as const;
+const SYNC_OPTIONS = ["scanOnStartup", "watchInstallFolders"] as const;
+
+/** The automatic sync's choices, in minutes (0: off). */
+const AUTO_SYNC_MINUTES = [0, 15, 60] as const;
+
+const OPTIONS = ["downloadCovers", "fetchMetadata", "detectExternalLaunches"] as const;
 
 const TRAY_OPTIONS = ["closeToTray", "minimizeToTray", "startWithSystem"] as const;
 
@@ -37,7 +37,7 @@ function startupPage(value: string): StartupPage {
 
 function CheckOption(props: {
   model: SettingsModel;
-  option: (typeof OPTIONS)[number] | (typeof TRAY_OPTIONS)[number];
+  option: (typeof SYNC_OPTIONS)[number] | (typeof OPTIONS)[number] | (typeof TRAY_OPTIONS)[number];
   checked: boolean;
 }) {
   return (
@@ -73,6 +73,38 @@ export function GeneralSection(props: { model: SettingsModel }) {
               </For>
             </select>
           </div>
+          <For each={SYNC_OPTIONS}>
+            {(option) => (
+              <CheckOption model={props.model} option={option} checked={current()[option]} />
+            )}
+          </For>
+          <div class="settings-row">
+            <label for="auto-sync">{tr("autoSync")}</label>
+            <select
+              id="auto-sync"
+              class="input settings-row__input"
+              aria-describedby="auto-sync-hint"
+              value={String(current().autoSyncMinutes)}
+              onChange={(e) =>
+                void props.model.update({ autoSyncMinutes: Number(e.currentTarget.value) })
+              }
+            >
+              <For each={AUTO_SYNC_MINUTES}>
+                {(minutes) => (
+                  <option value={String(minutes)}>
+                    {minutes === 0
+                      ? tr("autoSyncOff")
+                      : minutes === 60
+                        ? tr("autoSyncHourly")
+                        : tr("autoSyncMinutes", { minutes })}
+                  </option>
+                )}
+              </For>
+            </select>
+          </div>
+          <p class="field__hint" id="auto-sync-hint">
+            {tr("autoSyncHint")}
+          </p>
           <For each={OPTIONS}>
             {(option) => (
               <CheckOption model={props.model} option={option} checked={current()[option]} />

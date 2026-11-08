@@ -6,4 +6,13 @@ import type { WorkQueue } from "./WorkQueue";
 /**
  * Something that happened in the core.
  */
-export type CoreEvent = { "type": "gamesChanged", ids: Array<string>, } | { "type": "gameRemoved", id: string, } | { "type": "categoriesChanged" } | { "type": "scansQueued", providers: Array<string>, } | { "type": "scanStarted", provider: string, } | { "type": "libraryScanned", provider: string, summary: ScanSummary, } | { "type": "scanFailed", provider: string, message: string, } | { "type": "gameStarted", id: string, } | { "type": "gameStopped", id: string, sessionSeconds: number, } | { "type": "installFinished", id: string, } | { "type": "gameError", id: string, message: string, } | { "type": "backgroundWork", queue: WorkQueue, pending: number, } | { "type": "backupProgress", done: number, total: number, } | { "type": "backupFinished", backup: BackupInfo | null, error: string | null, } | { "type": "quitDuringBackup" };
+export type CoreEvent = { "type": "gamesChanged", ids: Array<string>, } | { "type": "gameRemoved", id: string, } | { "type": "categoriesChanged" } | { "type": "scansQueued", providers: Array<string>, 
+/**
+ * Started by Questkeep itself (the automatic sync), not by the user: the UI shows no
+ * result message for it.
+ */
+background: boolean, } | { "type": "scanStarted", provider: string, 
+/**
+ * See `ScansQueued::background`.
+ */
+background: boolean, } | { "type": "libraryScanned", provider: string, summary: ScanSummary, } | { "type": "scanFailed", provider: string, message: string, } | { "type": "gameStarted", id: string, } | { "type": "gameStopped", id: string, sessionSeconds: number, } | { "type": "installFinished", id: string, } | { "type": "gameError", id: string, message: string, } | { "type": "backgroundWork", queue: WorkQueue, pending: number, } | { "type": "backupProgress", done: number, total: number, } | { "type": "backupFinished", backup: BackupInfo | null, error: string | null, } | { "type": "quitDuringBackup" };

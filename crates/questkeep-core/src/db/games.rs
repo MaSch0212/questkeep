@@ -472,6 +472,18 @@ impl Database {
         self.get_game(id)
     }
 
+    /// `(store, install folder)` of every installed store game row (copies included).
+    pub fn installed_store_dirs(&self) -> Result<Vec<(String, String)>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare_cached(
+            "SELECT source, install_dir FROM games \
+             WHERE installed = 1 AND source_game_id IS NOT NULL \
+             AND install_dir IS NOT NULL AND trim(install_dir) <> ''",
+        )?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
     /// Installed game rows (store copies, not entries) with an install folder whose entry allows
     /// launch detection, for noticing games started outside Questkeep.
     pub fn launch_detection_dirs(&self) -> Result<Vec<DetectionDir>> {

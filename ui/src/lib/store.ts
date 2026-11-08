@@ -302,7 +302,7 @@ function createAppStore() {
   const syncTracker = createSyncTracker({
     onChange: setSyncState,
     onFinished: (state) => {
-      pushToast("info", syncResultText(state));
+      if (!state.background) pushToast("info", syncResultText(state));
       void checkDuplicates();
       // The core records the end of a "sync all" right after its last store.
       setTimeout(() => void loadSyncTimes(), 500);

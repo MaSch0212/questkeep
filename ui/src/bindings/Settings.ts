@@ -11,6 +11,16 @@ export type Settings = {
  */
 scanOnStartup: boolean, 
 /**
+ * Sync all stores in the background every this many minutes (0: never). Skipped while a
+ * game runs.
+ */
+autoSyncMinutes: number, 
+/**
+ * Watch the folders installed games are in, to notice installs and uninstalls done in the
+ * store clients.
+ */
+watchInstallFolders: boolean, 
+/**
  * Download missing covers from store CDNs.
  */
 downloadCovers: boolean, 

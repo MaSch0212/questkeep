@@ -19,6 +19,8 @@ vi.mock("@tauri-apps/plugin-opener", () => ({
 
 const SETTINGS: Settings = {
   scanOnStartup: true,
+  autoSyncMinutes: 15,
+  watchInstallFolders: true,
   downloadCovers: true,
   fetchMetadata: true,
   steamGridDbApiKey: null,

@@ -23,6 +23,12 @@ use crate::model::{DEFAULT_PREFIXES, MetadataPriority};
 pub struct Settings {
     /// Scan all store providers when the app starts.
     pub scan_on_startup: bool,
+    /// Sync all stores in the background every this many minutes (0: never). Skipped while a
+    /// game runs.
+    pub auto_sync_minutes: u32,
+    /// Watch the folders installed games are in, to notice installs and uninstalls done in the
+    /// store clients.
+    pub watch_install_folders: bool,
     /// Download missing covers from store CDNs.
     pub download_covers: bool,
     /// Download descriptions, genres, release dates and backgrounds from stores.
@@ -144,6 +150,8 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             scan_on_startup: true,
+            auto_sync_minutes: 15,
+            watch_install_folders: true,
             download_covers: true,
             fetch_metadata: true,
             providers: BTreeMap::new(),
@@ -455,6 +463,8 @@ mod tests {
 
         let custom = Settings {
             scan_on_startup: false,
+            auto_sync_minutes: 60,
+            watch_install_folders: false,
             download_covers: false,
             fetch_metadata: false,
             providers: BTreeMap::from([(

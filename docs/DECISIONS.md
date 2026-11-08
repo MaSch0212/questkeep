@@ -642,3 +642,9 @@ Short log of choices made while building. Newest at the bottom of each section.
 - **"Show in <store>"** opens the game's own page in the store's launcher: Steam's library page (`steam://nav/games/details/<appid>`), GOG Galaxy's game view (`goggalaxy://openGameView/<id>`) and, for Xbox, the Microsoft Store page (the Xbox app has no link by package name). Battle.net is left out because `battlenet://game/<code>` starts an installed game; Epic, Ubisoft, EA and Amazon have no known page link.
 - **No in-app store browser:** "Buy from <store>" and the price comparison sites open in the user's own browser. A browser inside Questkeep was tried (tabs on each store's signed-in profile, Steam's client mode for install links) and dropped: password managers don't work in embedded webviews, a store login inside the app looks like phishing, and menus over native webviews needed picture swaps. Price-site suggestions follow the system region (Windows' `GetUserDefaultGeoName`, elsewhere the locale variables).
 - **Install watches** live in memory only: an install started from Questkeep is checked every 10 s (only that store's installed games, a local read) for at most 24 h, then the store is synced and "X is installed" offers Play. After a restart the next regular sync still finds it.
+- **Automatic sync and install folder watch:** every store is synced every 15 min by default (a
+  full sync took ~10 s, mostly Steam and Xbox), never while a game runs, without a result message.
+  Installs done in the store clients are noticed by watching, not recursively, the folders the
+  installed games sit in (`notify`): a new folder is checked every 30 s (not 10 s: Xbox's installed
+  scan takes seconds) for up to 12 h until a game is installed in it; a removed install folder syncs
+  its store. Playnite only syncs at startup (or daily/weekly) and watches installs it started.

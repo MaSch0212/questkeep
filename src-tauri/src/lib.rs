@@ -217,22 +217,40 @@ fn spawn_startup_tasks(state: Arc<AppState>) {
     tauri::async_runtime::spawn_blocking(move || {
         if state.library.settings().scan_on_startup {
             state.library.scan_all();
+        } else {
+            state.library.watch_install_folders();
         }
         state.queue_downloads();
     });
-    // Installs handed to a store client: checked until they finish (cheap while none are).
+    let started = std::time::Instant::now();
     std::thread::spawn(move || {
         loop {
-            std::thread::sleep(INSTALL_POLL);
-            if watcher.library.has_install_watches() {
-                watcher.library.poll_installs();
+            std::thread::sleep(BACKGROUND_POLL);
+            let library = &watcher.library;
+            // Installs handed to a store client: checked until they finish (cheap while none are).
+            if library.has_install_watches() {
+                library.poll_installs();
+            }
+            // The rest reads every store, which can cost a playing game a few frames: it waits.
+            if !watcher.launcher.running().is_empty() {
+                continue;
+            }
+            library.poll_install_folders();
+            let settings = library.settings();
+            // Without a sync at startup, the first automatic one waits a full interval.
+            let waited = settings.scan_on_startup
+                || started.elapsed().as_secs() >= u64::from(settings.auto_sync_minutes) * 60;
+            if waited && library.is_scan_idle() && library.auto_sync_due(chrono::Utc::now()) {
+                tracing::info!("automatic sync");
+                library.scan_all_as(true);
+                watcher.queue_downloads();
             }
         }
     });
 }
 
-/// How often watched installs are checked.
-const INSTALL_POLL: Duration = Duration::from_secs(10);
+/// How often watched installs, new install folders and the automatic sync are checked.
+const BACKGROUND_POLL: Duration = Duration::from_secs(10);
 
 /// A token store that keeps every entry: deleting is logged and skipped (hidden test runs).
 struct NoDeleteTokenStore(KeyringTokenStore);

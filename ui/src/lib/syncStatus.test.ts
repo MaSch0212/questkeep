@@ -13,8 +13,16 @@ import {
   type SyncState,
 } from "./syncStatus";
 
-const queued = (...providers: string[]): SyncEvent => ({ type: "scansQueued", providers });
-const started = (provider: string): SyncEvent => ({ type: "scanStarted", provider });
+const queued = (...providers: string[]): SyncEvent => ({
+  type: "scansQueued",
+  providers,
+  background: false,
+});
+const started = (provider: string, background = false): SyncEvent => ({
+  type: "scanStarted",
+  provider,
+  background,
+});
 const scanned = (provider: string, added = 0, updated = 0): SyncEvent => ({
   type: "libraryScanned",
   provider,
@@ -59,10 +67,18 @@ describe("applySyncEvent", () => {
       entries: [{ provider: "steam", status: "done" }],
       active: false,
       finishedAt: 5,
+      background: false,
     };
     const state = run([started("epic")], ended);
     expect(state.entries.map((e) => e.provider)).toEqual(["epic"]);
     expect(state.finishedAt).toBeNull();
+  });
+
+  it("a run Questkeep started is a background run until the user joins it", () => {
+    const auto = run([started("steam", true), scanned("steam")]);
+    expect(auto.background).toBe(true);
+    expect(run([started("epic")], auto).background).toBe(false);
+    expect(run([started("steam")]).background).toBe(false);
   });
 
   it("queuing a store again within a run makes it wait again", () => {
