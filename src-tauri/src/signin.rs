@@ -15,6 +15,7 @@
 
 use std::path::PathBuf;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::time::Duration;
 
@@ -94,9 +95,47 @@ pub async fn run(
 
     let outcome = rx.recv().await.unwrap_or(Outcome::Closed);
     if matches!(outcome, Outcome::Code(_)) {
+        if window.web_session.is_some() {
+            keep_session_cookies(&webview);
+        }
         let _ = webview.destroy();
     }
     Ok(outcome)
+}
+
+/// How long the session cookies kept by [`keep_session_cookies`] last.
+const SESSION_COOKIE_DAYS: i64 = 30;
+
+/// WebView2 drops cookies without an expiry when its browser process ends, so a store whose
+/// sign-in needs one (Battle.net) is signed out after every restart of Questkeep. They get an
+/// expiry here, so the store's profile keeps them, the way Playnite's browser keeps session
+/// cookies. The store renews or ends them as usual; only the profile of that store holds them.
+/// Never call on the main thread: reading cookies waits for it.
+fn keep_session_cookies(webview: &tauri::WebviewWindow) {
+    use tauri::webview::cookie::Expiration;
+    use tauri::webview::cookie::time::{Duration as CookieDuration, OffsetDateTime};
+    let cookies = match webview.cookies() {
+        Ok(cookies) => cookies,
+        Err(err) => {
+            tracing::warn!(%err, "could not read the store's cookies");
+            return;
+        }
+    };
+    let expires = OffsetDateTime::now_utc() + CookieDuration::days(SESSION_COOKIE_DAYS);
+    let mut kept = 0;
+    for mut cookie in cookies {
+        if !matches!(cookie.expires(), None | Some(Expiration::Session)) {
+            continue;
+        }
+        cookie.set_expires(expires);
+        match webview.set_cookie(cookie) {
+            Ok(()) => kept += 1,
+            Err(err) => tracing::debug!(%err, "could not keep a session cookie"),
+        }
+    }
+    if kept > 0 {
+        tracing::debug!(kept, "kept the store's session cookies");
+    }
 }
 
 /// Store website sessions in their persistent browser profiles, driven by hidden windows.
@@ -132,6 +171,10 @@ impl ShellWebSession {
         let (tx, rx) = mpsc::channel();
         let hidden = self.hidden_window(provider, Some(window), url, Some(tx))?;
         let result = rx.recv_timeout(SESSION_TIMEOUT);
+        if result.is_ok() {
+            // The store may have renewed its session cookies on the way.
+            keep_session_cookies(&hidden);
+        }
         let _ = hidden.destroy();
         result.map_err(|_| format!("{store_name} did not answer in time."))
     }
@@ -145,10 +188,13 @@ impl ShellWebSession {
         url: Url,
         captured: Option<mpsc::Sender<String>>,
     ) -> Result<tauri::WebviewWindow, String> {
-        let label = format!("session-{provider}");
-        if let Some(stale) = self.app.get_webview_window(&label) {
-            let _ = stale.destroy();
-        }
+        // A new label each time: closing the previous window finishes later on the main thread,
+        // and a renewal opens the next one right away.
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        let label = format!(
+            "session-{provider}-{}",
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        );
         let title = window.map_or("Questkeep", |w| w.title);
         let mut builder = WebviewWindowBuilder::new(&self.app, &label, WebviewUrl::External(url))
             .title(title)
