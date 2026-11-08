@@ -12,15 +12,17 @@ const SUGGESTED_PREFIXES = ["The", "A", "An", "Der", "Die", "Das", "Le", "La", "
 
 const tr = translator(settingsGeneral);
 
-/** Check boxes saved as they are; the label is the message with the setting's name. */
-const SYNC_OPTIONS = ["scanOnStartup", "watchInstallFolders"] as const;
-
 /** The automatic sync's choices, in minutes (0: off). */
 const AUTO_SYNC_MINUTES = [0, 15, 60] as const;
 
-const OPTIONS = ["downloadCovers", "fetchMetadata", "detectExternalLaunches"] as const;
-
-const TRAY_OPTIONS = ["closeToTray", "minimizeToTray", "startWithSystem"] as const;
+/** Check boxes saved as they are; the label is the message with the setting's name. */
+type CheckSetting =
+  | "scanOnStartup"
+  | "watchInstallFolders"
+  | "detectExternalLaunches"
+  | "closeToTray"
+  | "minimizeToTray"
+  | "startWithSystem";
 
 /** The language the system would give (shown next to "System language"). */
 const systemLocale = () => resolveLocale(null, navigator.languages ?? [navigator.language]);
@@ -35,11 +37,7 @@ function startupPage(value: string): StartupPage {
   return value === "last" ? { kind: "last" } : { kind: "start" };
 }
 
-function CheckOption(props: {
-  model: SettingsModel;
-  option: (typeof SYNC_OPTIONS)[number] | (typeof OPTIONS)[number] | (typeof TRAY_OPTIONS)[number];
-  checked: boolean;
-}) {
+function CheckOption(props: { model: SettingsModel; option: CheckSetting; checked: boolean }) {
   return (
     <label class="check">
       <input
@@ -73,43 +71,54 @@ export function GeneralSection(props: { model: SettingsModel }) {
               </For>
             </select>
           </div>
-          <For each={SYNC_OPTIONS}>
-            {(option) => (
-              <CheckOption model={props.model} option={option} checked={current()[option]} />
-            )}
-          </For>
-          <div class="settings-row">
-            <label for="auto-sync">{tr("autoSync")}</label>
-            <select
-              id="auto-sync"
-              class="input settings-row__input"
-              aria-describedby="auto-sync-hint"
-              value={String(current().autoSyncMinutes)}
-              onChange={(e) =>
-                void props.model.update({ autoSyncMinutes: Number(e.currentTarget.value) })
-              }
-            >
-              <For each={AUTO_SYNC_MINUTES}>
-                {(minutes) => (
-                  <option value={String(minutes)}>
-                    {minutes === 0
-                      ? tr("autoSyncOff")
-                      : minutes === 60
-                        ? tr("autoSyncHourly")
-                        : tr("autoSyncMinutes", { minutes })}
-                  </option>
-                )}
-              </For>
-            </select>
-          </div>
-          <p class="field__hint" id="auto-sync-hint">
-            {tr("autoSyncHint")}
-          </p>
-          <For each={OPTIONS}>
-            {(option) => (
-              <CheckOption model={props.model} option={option} checked={current()[option]} />
-            )}
-          </For>
+          <fieldset class="fieldset settings-group">
+            <legend class="fieldset__legend">{tr("syncGroup")}</legend>
+            <CheckOption
+              model={props.model}
+              option="scanOnStartup"
+              checked={current().scanOnStartup}
+            />
+            <div class="settings-row">
+              <label for="auto-sync">{tr("autoSync")}</label>
+              <select
+                id="auto-sync"
+                class="input settings-row__input"
+                aria-describedby="auto-sync-hint"
+                value={String(current().autoSyncMinutes)}
+                onChange={(e) =>
+                  void props.model.update({ autoSyncMinutes: Number(e.currentTarget.value) })
+                }
+              >
+                <For each={AUTO_SYNC_MINUTES}>
+                  {(minutes) => (
+                    <option value={String(minutes)}>
+                      {minutes === 0
+                        ? tr("autoSyncOff")
+                        : minutes === 60
+                          ? tr("autoSyncHourly")
+                          : tr("autoSyncMinutes", { minutes })}
+                    </option>
+                  )}
+                </For>
+              </select>
+            </div>
+            <p class="field__hint" id="auto-sync-hint">
+              {tr("autoSyncHint")}
+            </p>
+            <CheckOption
+              model={props.model}
+              option="watchInstallFolders"
+              checked={current().watchInstallFolders}
+            />
+          </fieldset>
+          <fieldset class="fieldset settings-group">
+            <legend class="fieldset__legend">{tr("playtimeGroup")}</legend>
+            <CheckOption
+              model={props.model}
+              option="detectExternalLaunches"
+              checked={current().detectExternalLaunches}
+            />
+          </fieldset>
           <fieldset class="fieldset settings-group">
             <legend class="fieldset__legend">{tr("startPage")}</legend>
             <label class="check">
@@ -181,23 +190,32 @@ export function GeneralSection(props: { model: SettingsModel }) {
               {tr("prefixesHint")}
             </p>
           </fieldset>
-          <For each={TRAY_OPTIONS}>
-            {(option) => (
-              <CheckOption model={props.model} option={option} checked={current()[option]} />
-            )}
-          </For>
-          <label
-            class="check check--nested"
-            classList={{ "check--disabled": !current().startWithSystem }}
-          >
-            <input
-              type="checkbox"
-              checked={current().startMinimized}
-              disabled={!current().startWithSystem}
-              onChange={(e) => void props.model.toggle("startMinimized", e.currentTarget.checked)}
+          <fieldset class="fieldset settings-group">
+            <legend class="fieldset__legend">{tr("windowGroup")}</legend>
+            <CheckOption
+              model={props.model}
+              option="startWithSystem"
+              checked={current().startWithSystem}
             />
-            <span>{tr("startMinimized")}</span>
-          </label>
+            <label
+              class="check check--nested"
+              classList={{ "check--disabled": !current().startWithSystem }}
+            >
+              <input
+                type="checkbox"
+                checked={current().startMinimized}
+                disabled={!current().startWithSystem}
+                onChange={(e) => void props.model.toggle("startMinimized", e.currentTarget.checked)}
+              />
+              <span>{tr("startMinimized")}</span>
+            </label>
+            <CheckOption model={props.model} option="closeToTray" checked={current().closeToTray} />
+            <CheckOption
+              model={props.model}
+              option="minimizeToTray"
+              checked={current().minimizeToTray}
+            />
+          </fieldset>
         </>
       )}
     </Show>

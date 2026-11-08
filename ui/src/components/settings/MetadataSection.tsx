@@ -1,15 +1,25 @@
 import { Show } from "solid-js";
 import { translator } from "../../i18n";
+import { settingsGeneral } from "../../i18n/settingsGeneral";
 import { settingsKeys } from "../../i18n/settingsKeys";
 import { IgdbFields, IgdbSteps } from "./KeyFields";
 import { SourcePriority } from "./SourcePriority";
 import type { SettingsModel } from "./useSettings";
 
 const tr = translator(settingsKeys);
+const general = translator(settingsGeneral);
 
 export function MetadataSection(props: { model: SettingsModel }) {
   return (
     <Show when={props.model.settings()} fallback={<p class="muted">{tr("loading")}</p>}>
+      <label class="check">
+        <input
+          type="checkbox"
+          checked={props.model.settings()?.fetchMetadata ?? false}
+          onChange={(e) => void props.model.toggle("fetchMetadata", e.currentTarget.checked)}
+        />
+        <span>{general("fetchMetadata")}</span>
+      </label>
       <form
         class="form"
         onSubmit={(event) => {

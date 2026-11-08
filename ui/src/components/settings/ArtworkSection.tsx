@@ -2,11 +2,13 @@ import Eye from "lucide-solid/icons/eye";
 import EyeOff from "lucide-solid/icons/eye-off";
 import { createSignal, Show } from "solid-js";
 import { translator } from "../../i18n";
+import { settingsGeneral } from "../../i18n/settingsGeneral";
 import { settingsKeys } from "../../i18n/settingsKeys";
 import { openLink } from "./openLink";
 import type { SettingsModel } from "./useSettings";
 
 const tr = translator(settingsKeys);
+const general = translator(settingsGeneral);
 
 const GRIDDB_KEY_URL = "https://www.steamgriddb.com/profile/preferences/api";
 
@@ -15,6 +17,14 @@ export function ArtworkSection(props: { model: SettingsModel }) {
 
   return (
     <Show when={props.model.settings()} fallback={<p class="muted">{tr("loading")}</p>}>
+      <label class="check">
+        <input
+          type="checkbox"
+          checked={props.model.settings()?.downloadCovers ?? false}
+          onChange={(e) => void props.model.toggle("downloadCovers", e.currentTarget.checked)}
+        />
+        <span>{general("downloadCovers")}</span>
+      </label>
       <form
         class="form"
         onSubmit={(event) => {

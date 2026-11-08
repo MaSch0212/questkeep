@@ -1,7 +1,8 @@
-import { For, onMount, type Component } from "solid-js";
+import { createSignal, For, onCleanup, onMount, type Component } from "solid-js";
 import { Dynamic } from "solid-js/web";
 import { translator } from "../../i18n";
 import { settingsPage } from "../../i18n/settingsPage";
+import { activeSection } from "../../lib/scrollSpy";
 import { store } from "../../lib/store";
 import { AboutSection } from "./AboutSection";
 import { AccountsSection } from "./AccountsSection";
@@ -60,17 +61,49 @@ const SECTIONS: SectionDef[] = [
 const sectionDomId = (id: string) => `settings-${id}`;
 const visibleSections = () => SECTIONS.filter((s) => s.visible?.() ?? true);
 
-function jumpTo(id: string) {
-  document.getElementById(sectionDomId(id))?.scrollIntoView?.({ behavior: "smooth" });
-}
-
 export function SettingsPage() {
   const model = createSettingsModel();
+  let scroller: HTMLDivElement | undefined;
+  /** The section in the middle of the view, marked in the menu. */
+  const [current, setCurrent] = createSignal<string | null>(visibleSections()[0]?.id ?? null);
+  /** A menu jump scrolls smoothly past other sections: the menu keeps its pick until it stops. */
+  let jumping: ReturnType<typeof setTimeout> | undefined;
+
+  function follow() {
+    if (!scroller || jumping !== undefined) return;
+    const view = scroller.getBoundingClientRect();
+    const boxes = visibleSections().flatMap((section) => {
+      const element = document.getElementById(sectionDomId(section.id));
+      return element
+        ? [{ id: section.id, top: element.getBoundingClientRect().top - view.top }]
+        : [];
+    });
+    const atEnd = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 2;
+    const id = activeSection(boxes, scroller.clientHeight, atEnd);
+    if (id !== null) setCurrent(id);
+  }
+
+  function endJump() {
+    clearTimeout(jumping);
+    jumping = undefined;
+  }
+
+  function jumpTo(id: string) {
+    setCurrent(id);
+    clearTimeout(jumping);
+    // `scrollend` ends it; the timer covers a jump that doesn't scroll at all.
+    jumping = setTimeout(endJump, 1000);
+    document.getElementById(sectionDomId(id))?.scrollIntoView?.({ behavior: "smooth" });
+  }
 
   onMount(() => {
     const section = store.takeSettingsSection();
-    if (section) document.getElementById(sectionDomId(section))?.scrollIntoView?.();
+    if (section) {
+      document.getElementById(sectionDomId(section))?.scrollIntoView?.();
+      setCurrent(section);
+    }
   });
+  onCleanup(() => clearTimeout(jumping));
 
   return (
     <section class="settings" aria-label={tr("settings")}>
@@ -83,7 +116,13 @@ export function SettingsPage() {
             <For each={visibleSections()}>
               {(section) => (
                 <li>
-                  <button type="button" class="nav-item" onClick={() => jumpTo(section.id)}>
+                  <button
+                    type="button"
+                    class="nav-item"
+                    classList={{ "nav-item--active": current() === section.id }}
+                    aria-current={current() === section.id ? "location" : undefined}
+                    onClick={() => jumpTo(section.id)}
+                  >
                     {tr(section.title)}
                   </button>
                 </li>
@@ -91,7 +130,12 @@ export function SettingsPage() {
             </For>
           </ul>
         </nav>
-        <div class="settings__scroll">
+        <div
+          class="settings__scroll"
+          ref={(el) => (scroller = el)}
+          onScroll={follow}
+          on:scrollend={endJump}
+        >
           <div class="settings__sections">
             <For each={visibleSections()}>
               {(section) => (
