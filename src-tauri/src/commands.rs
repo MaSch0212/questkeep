@@ -676,6 +676,23 @@ pub async fn start_page(state: State<'_, Arc<AppState>>) -> CmdResult<StartPage>
     blocking(state, |s| s.library.start_page()).await
 }
 
+/// Everything the statistics page shows but the playtime chart.
+#[tauri::command]
+pub async fn statistics(
+    state: State<'_, Arc<AppState>>,
+) -> CmdResult<questkeep_core::statistics::Statistics> {
+    blocking(state, |s| s.library.statistics()).await
+}
+
+#[tauri::command]
+pub async fn playtime_chart(
+    state: State<'_, Arc<AppState>>,
+    range: questkeep_core::statistics::ChartRange,
+    split: questkeep_core::statistics::ChartSplit,
+) -> CmdResult<questkeep_core::statistics::PlaytimeChart> {
+    blocking(state, move |s| s.library.playtime_chart(range, split)).await
+}
+
 #[tauri::command]
 pub async fn last_page(state: State<'_, Arc<AppState>>) -> CmdResult<Option<String>> {
     blocking(state, |s| s.library.last_page()).await

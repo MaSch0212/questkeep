@@ -8,11 +8,13 @@ mod combine;
 mod games;
 mod metadata;
 pub mod migrations;
+mod playtime;
 pub use migrations::LATEST_VERSION;
 mod profiles;
 mod sessions;
 mod setup;
 mod start;
+mod statistics;
 mod views;
 
 use std::path::Path;
@@ -25,9 +27,11 @@ use crate::error::{CoreError, Result};
 pub use accounts::KnownAccount;
 pub use combine::{Combined, duplicate_key};
 pub use games::{DetectionDir, GameMissingMetadata, NewGameRecord};
+pub use playtime::{StatSession, StoreDay};
 pub use profiles::ProfileRow;
 pub use sessions::OpenSession;
-pub use start::{playtime_by_day, playtime_by_week};
+pub use start::{SessionSpan, playtime_by_day, playtime_by_week};
+pub use statistics::{StatCopy, StatEntry};
 
 /// The library database. One connection guarded by a mutex: SQLite serializes writes anyway and
 /// every query here takes well under a millisecond for realistic library sizes.

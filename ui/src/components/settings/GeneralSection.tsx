@@ -131,6 +131,16 @@ export function GeneralSection(props: { model: SettingsModel }) {
               />
               <span>{tr("showStartPage")}</span>
             </label>
+            <label class="check">
+              <input
+                type="checkbox"
+                checked={current().showStatistics}
+                onChange={(e) =>
+                  void props.model.update({ showStatistics: e.currentTarget.checked })
+                }
+              />
+              <span>{tr("showStatistics")}</span>
+            </label>
             <div class="settings-row">
               <label for="startup-page">{tr("whenOpens")}</label>
               <select

@@ -105,6 +105,7 @@ const SETTINGS: Settings = {
   startMinimized: true,
   detectExternalLaunches: true,
   showStartPage: true,
+  showStatistics: true,
   // Most tests are about the library; the start page has its own tests.
   startupPage: { kind: "view", id: "all" },
   providers: {},

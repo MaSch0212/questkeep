@@ -456,6 +456,8 @@ pub fn run() {
             commands::arrange_views,
             commands::sync_times,
             commands::start_page,
+            commands::statistics,
+            commands::playtime_chart,
             commands::last_page,
             commands::set_last_page,
             commands::setup_state,

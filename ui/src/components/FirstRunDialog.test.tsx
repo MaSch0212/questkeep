@@ -32,6 +32,7 @@ const SETTINGS: Settings = {
   startMinimized: true,
   detectExternalLaunches: true,
   showStartPage: true,
+  showStatistics: true,
   startupPage: { kind: "start" },
   sortPrefixes: { enabled: true, words: ["The", "A", "An"] },
   backups: { enabled: true, folder: null, frequency: "weekly", keep: 5 },

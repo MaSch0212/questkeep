@@ -22,6 +22,7 @@ pub mod price_sites;
 pub mod providers;
 pub mod seed;
 pub mod settings;
+pub mod statistics;
 pub mod tray;
 pub mod window_placement;
 

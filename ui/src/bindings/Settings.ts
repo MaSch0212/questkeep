@@ -74,6 +74,10 @@ detectExternalLaunches: boolean,
  */
 showStartPage: boolean, 
 /**
+ * Show the statistics page (below Home).
+ */
+showStatistics: boolean, 
+/**
  * The page Questkeep opens on.
  */
 startupPage: StartupPage, 

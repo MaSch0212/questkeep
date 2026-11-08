@@ -1164,6 +1164,18 @@ impl Library {
         let games = merge_owned(installed, owned.unwrap_or_default());
         let now = Utc::now();
         let mut summary = self.db.upsert_imported(provider.id(), &games, now)?;
+        let reported: Vec<(String, u64)> = games
+            .iter()
+            .filter_map(|g| Some((g.source_game_id.clone(), g.playtime_seconds?)))
+            .collect();
+        if let Err(err) = self.db.record_store_playtime(
+            provider.id(),
+            &reported,
+            now,
+            chrono::Local::now().date_naive(),
+        ) {
+            tracing::warn!(provider = provider_id, %err, "could not record the playtime history");
+        }
         self.import_categories(provider.as_ref(), config, &mut summary);
         if let Err(err) = self.db.record_sync(Some(provider_id), now) {
             tracing::warn!(provider = provider_id, %err, "could not record the sync time");
@@ -1548,6 +1560,31 @@ impl Library {
                 }
             }
         }
+    }
+
+    /// Everything the statistics page shows but the playtime chart (reads this PC's hardware).
+    pub fn statistics(&self) -> Result<crate::statistics::Statistics> {
+        crate::statistics::statistics(
+            &self.db,
+            crate::seed::FAKE_SOURCE,
+            questkeep_system::system_info(),
+            Utc::now(),
+        )
+    }
+
+    /// The statistics page's playtime chart.
+    pub fn playtime_chart(
+        &self,
+        range: crate::statistics::ChartRange,
+        split: crate::statistics::ChartSplit,
+    ) -> Result<crate::statistics::PlaytimeChart> {
+        crate::statistics::playtime_chart(
+            &self.db,
+            crate::seed::FAKE_SOURCE,
+            range,
+            split,
+            Utc::now(),
+        )
     }
 
     /// Watches the folders the installed store games are in (or stops, when the setting is

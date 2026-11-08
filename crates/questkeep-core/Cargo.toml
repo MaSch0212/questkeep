@@ -9,6 +9,7 @@ repository.workspace = true
 [dependencies]
 questkeep-imaging = { path = "../questkeep-imaging" }
 questkeep-store-api = { path = "../questkeep-store-api" }
+questkeep-system = { path = "../questkeep-system" }
 chrono = { version = "0.4.45", features = ["serde"] }
 dirs = "7.0.0"
 # Watches the folders installed games are in (installs done in the store clients).

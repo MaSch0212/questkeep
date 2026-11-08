@@ -648,3 +648,10 @@ Short log of choices made while building. Newest at the bottom of each section.
   installed games sit in (`notify`): a new folder is checked every 30 s (not 10 s: Xbox's installed
   scan takes seconds) for up to 12 h until a game is installed in it; a removed install folder syncs
   its store. Playnite only syncs at startup (or daily/weekly) and watches installs it started.
+- **Statistics playtime history:** stores only report totals, so each sync stores every game's
+  reported playtime (`store_playtime`) and books the growth since the last report on the sync's
+  local day (`playtime_days`), minus what Questkeep recorded itself in between (kept as
+  `unmatched` for up to two days, because stores report late). The first report is only a
+  baseline. Hour-of-day figures come from Questkeep's own sessions only. Hardware is read in its
+  own crate (`questkeep-system`: SetupAPI for GPUs and drivers, DisplayConfig for displays and HDR,
+  storage IOCTLs for NVMe/SSD/HDD); charts are hand-drawn with theme colors, no chart library.

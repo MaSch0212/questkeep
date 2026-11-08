@@ -3345,6 +3345,7 @@ dependencies = [
  "notify",
  "questkeep-imaging",
  "questkeep-store-api",
+ "questkeep-system",
  "rusqlite",
  "serde",
  "serde_json",
@@ -3550,6 +3551,18 @@ dependencies = [
  "questkeep-store-ubisoft",
  "questkeep-store-xbox",
  "serde_json",
+]
+
+[[package]]
+name = "questkeep-system"
+version = "0.4.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sysinfo",
+ "tracing",
+ "ts-rs",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

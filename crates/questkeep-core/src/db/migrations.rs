@@ -391,6 +391,27 @@ pub(crate) const MIGRATIONS: &[&str] = &[
     r#"
     ALTER TABLE views ADD COLUMN group_list INTEGER NOT NULL DEFAULT 0;
     "#,
+    // 16: playtime history for the statistics page. `store_playtime` is each store game's
+    // playtime as the store last reported it; growth between syncs that Questkeep did not record
+    // itself (`unmatched`: recorded seconds the store has not reported yet) goes to
+    // `playtime_days`, on the local day of the sync.
+    r#"
+    CREATE TABLE store_playtime (
+        game_id      TEXT PRIMARY KEY NOT NULL REFERENCES games (id) ON DELETE CASCADE,
+        seconds      INTEGER NOT NULL,
+        unmatched    INTEGER NOT NULL DEFAULT 0,
+        unmatched_at TEXT,
+        checked_at   TEXT NOT NULL
+    );
+    CREATE TABLE playtime_days (
+        game_id TEXT NOT NULL REFERENCES games (id) ON DELETE CASCADE,
+        day     TEXT NOT NULL,
+        seconds INTEGER NOT NULL,
+        PRIMARY KEY (game_id, day)
+    );
+    CREATE INDEX playtime_days_day ON playtime_days (day);
+    CREATE INDEX play_sessions_started ON play_sessions (started_at);
+    "#,
 ];
 
 /// Latest schema version this build knows.

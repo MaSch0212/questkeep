@@ -8,6 +8,10 @@ import type { BulkChange } from "../bindings/BulkChange";
 import type { CombinePlan } from "../bindings/CombinePlan";
 import type { AppInfo } from "../bindings/AppInfo";
 import type { Category } from "../bindings/Category";
+import type { ChartRange } from "../bindings/ChartRange";
+import type { ChartSplit } from "../bindings/ChartSplit";
+import type { PlaytimeChart } from "../bindings/PlaytimeChart";
+import type { Statistics } from "../bindings/Statistics";
 import type { CompletionSettings } from "../bindings/CompletionSettings";
 import type { Game } from "../bindings/Game";
 import type { GameActivity } from "../bindings/GameActivity";
@@ -58,6 +62,9 @@ export const deleteViewSection = (id: string) => invoke<void>("delete_view_secti
 export const arrangeViews = (order: SectionOrder[]) => invoke<void>("arrange_views", { order });
 export const syncTimes = () => invoke<SyncTimes>("sync_times");
 export const startPage = () => invoke<StartPage>("start_page");
+export const statistics = () => invoke<Statistics>("statistics");
+export const playtimeChart = (range: ChartRange, split: ChartSplit) =>
+  invoke<PlaytimeChart>("playtime_chart", { range, split });
 /** The start page (`"home"`) or view id that was open when Questkeep last closed. */
 export const lastPage = () => invoke<string | null>("last_page");
 export const setLastPage = (page: string) => invoke<void>("set_last_page", { page });

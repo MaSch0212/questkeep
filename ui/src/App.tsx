@@ -26,6 +26,7 @@ import { GameGrid } from "./components/GameGrid";
 import { GameList } from "./components/GameList";
 import { HomePage } from "./components/HomePage";
 import { SettingsPage } from "./components/settings/SettingsPage";
+import { StatisticsPage } from "./components/StatisticsPage";
 import { Sidebar } from "./components/Sidebar";
 import { TitleBar } from "./components/TitleBar";
 import { Toasts } from "./components/Toasts";
@@ -178,7 +179,14 @@ export function App() {
           when={store.page() === "library"}
           fallback={
             <div class="app__content">
-              <Show when={store.page() === "home"} fallback={<SettingsPage />}>
+              <Show
+                when={store.page() === "home"}
+                fallback={
+                  <Show when={store.page() === "statistics"} fallback={<SettingsPage />}>
+                    <StatisticsPage />
+                  </Show>
+                }
+              >
                 <HomePage />
               </Show>
             </div>

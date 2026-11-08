@@ -1,5 +1,6 @@
 import Compass from "lucide-solid/icons/compass";
 import Copy from "lucide-solid/icons/copy";
+import ChartColumn from "lucide-solid/icons/chart-column";
 import House from "lucide-solid/icons/house";
 import Pencil from "lucide-solid/icons/pencil";
 import PencilLine from "lucide-solid/icons/pencil-line";
@@ -112,20 +113,36 @@ export function Sidebar() {
         }
       >
         {/* The start page sits above every view; it is not a view and cannot be edited. */}
-        <Show when={store.showStartPage()}>
+        <Show when={store.showStartPage() || store.showStatisticsPage()}>
           <ul class="sidebar__list sidebar__home">
-            <li>
-              <button
-                type="button"
-                class="nav-item nav-item--icon view-item"
-                classList={{ "nav-item--active": store.page() === "home" }}
-                aria-current={store.page() === "home" ? "page" : undefined}
-                onClick={() => store.showHome()}
-              >
-                <House class="icon" aria-hidden="true" />
-                <span class="nav-item__text">{tr("home")}</span>
-              </button>
-            </li>
+            <Show when={store.showStartPage()}>
+              <li>
+                <button
+                  type="button"
+                  class="nav-item nav-item--icon view-item"
+                  classList={{ "nav-item--active": store.page() === "home" }}
+                  aria-current={store.page() === "home" ? "page" : undefined}
+                  onClick={() => store.showHome()}
+                >
+                  <House class="icon" aria-hidden="true" />
+                  <span class="nav-item__text">{tr("home")}</span>
+                </button>
+              </li>
+            </Show>
+            <Show when={store.showStatisticsPage()}>
+              <li>
+                <button
+                  type="button"
+                  class="nav-item nav-item--icon view-item"
+                  classList={{ "nav-item--active": store.page() === "statistics" }}
+                  aria-current={store.page() === "statistics" ? "page" : undefined}
+                  onClick={() => store.showStatistics()}
+                >
+                  <ChartColumn class="icon" aria-hidden="true" />
+                  <span class="nav-item__text">{tr("statistics")}</span>
+                </button>
+              </li>
+            </Show>
           </ul>
         </Show>
         <For each={store.sections()}>

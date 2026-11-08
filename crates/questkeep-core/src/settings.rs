@@ -60,6 +60,8 @@ pub struct Settings {
     pub detect_external_launches: bool,
     /// Show the start page (the Home entry above the views).
     pub show_start_page: bool,
+    /// Show the statistics page (below Home).
+    pub show_statistics: bool,
     /// The page Questkeep opens on.
     pub startup_page: StartupPage,
     /// Which metadata source wins per field.
@@ -164,6 +166,7 @@ impl Default for Settings {
             start_minimized: true,
             detect_external_launches: true,
             show_start_page: true,
+            show_statistics: true,
             startup_page: StartupPage::Start,
             metadata_priority: MetadataPriority::default(),
             sort_prefixes: SortPrefixes::default(),
@@ -480,6 +483,7 @@ mod tests {
             start_minimized: false,
             detect_external_launches: false,
             show_start_page: false,
+            show_statistics: false,
             startup_page: StartupPage::View { id: "fav".into() },
             metadata_priority: crate::model::MetadataPriority {
                 order: vec!["steam".into()],

@@ -68,7 +68,7 @@ export interface NewViewInput {
   sectionId: string;
 }
 
-export type Page = "home" | "library" | "settings";
+export type Page = "home" | "statistics" | "library" | "settings";
 
 export interface Toast {
   id: number;
@@ -153,6 +153,7 @@ function createAppStore() {
   const [coverVersions, setCoverVersions] = createStore<Record<string, number>>({});
   const [page, setPage] = createSignal<Page>("library");
   const [showStartPage, setShowStartPage] = createSignal(true);
+  const [showStatisticsPage, setShowStatisticsPage] = createSignal(true);
   /** Price comparison sites offered in the + menu. */
   const [priceSites, setPriceSites] = createSignal<PriceSite[]>([]);
   const [startData, setStartData] = createSignal<StartPage | null>(null);
@@ -526,12 +527,24 @@ function createAppStore() {
     void loadStart();
   }
 
-  /** Applies saved settings the app shell depends on (the start page switch). */
+  function showStatistics() {
+    if (!showStatisticsPage()) return;
+    batch(() => {
+      setPage("statistics");
+      setDetailsOpen(false);
+    });
+  }
+
+  /** Applies saved settings the app shell depends on (the start and statistics page switches). */
   function applySettings(settings: Settings) {
     setLanguage(settings.language);
     setShowStartPage(settings.showStartPage);
+    setShowStatisticsPage(settings.showStatistics);
     setPriceSites(settings.priceSites);
-    if (!settings.showStartPage && page() === "home") {
+    if (
+      (!settings.showStartPage && page() === "home") ||
+      (!settings.showStatistics && page() === "statistics")
+    ) {
       const first = allViews(sections())[0];
       if (first) selectView(first.id);
       else setPage("library");
@@ -550,7 +563,7 @@ function createAppStore() {
   // Remember the open start page or view for "The page I had open last" (never settings).
   createEffect(
     on([started, page, activeViewId], ([ready, current, viewId]) => {
-      if (!ready || current === "settings") return;
+      if (!ready || current === "settings" || current === "statistics") return;
       const value = current === "home" ? HOME_PAGE : viewId;
       // Explore always starts fresh, so it is never reopened at startup.
       if (value === null || value === EXPLORE_ID) return;
@@ -1058,6 +1071,7 @@ function createAppStore() {
         if (settings) {
           setLanguage(settings.language);
           setShowStartPage(settings.showStartPage);
+          setShowStatisticsPage(settings.showStatistics);
           setPriceSites(settings.priceSites);
         }
         openStartupPage(settings?.startupPage ?? { kind: "start" }, lastPage ?? null);
@@ -1117,6 +1131,7 @@ function createAppStore() {
       setDetailsOpen(false);
       setPage("library");
       setShowStartPage(true);
+      setShowStatisticsPage(true);
       setStartData(null);
       setStarted(false);
       libraryScroll.grid = 0;
@@ -1255,6 +1270,8 @@ function createAppStore() {
     endSetup,
     dismissIgdbHint,
     showHome,
+    showStatisticsPage,
+    showStatistics,
     showStartPage,
     startData,
     applySettings,
