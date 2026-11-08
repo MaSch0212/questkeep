@@ -19,13 +19,15 @@ const sameName = (a: string, b: string) =>
   a.localeCompare(b, undefined, { sensitivity: "base" }) === 0;
 
 /**
- * Orders, renames, merges and deletes categories; new ones are created on a game's page. Rows
+ * Adds, orders, renames, merges and deletes categories (new ones can also be created on a game's
+ * page). Rows
  * move by dragging their handle or with Alt+Up/Down. Each row shows the store categories that
  * sync into it.
  */
 export function CategoriesSection() {
   const [dragged, setDragged] = createSignal<string | null>(null);
   const [drop, setDrop] = createSignal<number | null>(null);
+  const [adding, setAdding] = createSignal("");
   const byId = createMemo(() => new Map(store.categories().map((c) => [c.id, c])));
   // Rows keyed by id, so a row (and its focus) survives the list reloading.
   const ids = createMemo(() => store.categories().map((c) => c.id));
@@ -64,6 +66,17 @@ export function CategoriesSection() {
     window.removeEventListener("pointermove", onPointerMove);
     window.removeEventListener("pointerup", onPointerUp);
   });
+
+  async function add(event: SubmitEvent) {
+    event.preventDefault();
+    const name = adding().trim();
+    if (name === "") return;
+    if (store.categories().some((c) => sameName(c.name, name))) {
+      store.pushToast("error", tr("categoryExists", { name }));
+      return;
+    }
+    if (await store.createCategory(name)) setAdding("");
+  }
 
   function onRowKeyDown(event: KeyboardEvent, id: string) {
     if (!event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
@@ -110,6 +123,18 @@ export function CategoriesSection() {
           </Show>
         </ul>
       </Show>
+      <form class="field__row status-add" onSubmit={(event) => void add(event)}>
+        <input
+          class="input"
+          placeholder={tr("newCategoryPlaceholder")}
+          aria-label={tr("newCategoryAria")}
+          value={adding()}
+          onInput={(event) => setAdding(event.currentTarget.value)}
+        />
+        <button type="submit" class="btn" disabled={adding().trim() === ""}>
+          {tr("addCategory")}
+        </button>
+      </form>
     </div>
   );
 }

@@ -216,6 +216,20 @@ describe("CategoriesSection", () => {
     expect(rename).toHaveFocus();
   });
 
+  it("adds a category, but not a second one of the same name", async () => {
+    vi.mocked(api.createCategory).mockResolvedValue(category("c3", "Roguelike", 0));
+    render(() => <CategoriesSection />);
+    const input = screen.getByRole("textbox", { name: "New category name" });
+    await fireEvent.input(input, { target: { value: " rpg " } });
+    await fireEvent.click(screen.getByRole("button", { name: "Add category" }));
+    expect(api.createCategory).not.toHaveBeenCalled();
+    expect(store.toasts().at(-1)?.message).toBe("There already is a category named “rpg”.");
+    await fireEvent.input(input, { target: { value: " Roguelike " } });
+    await fireEvent.click(screen.getByRole("button", { name: "Add category" }));
+    expect(api.createCategory).toHaveBeenCalledWith("Roguelike");
+    await vi.waitFor(() => expect(input).toHaveValue(""));
+  });
+
   it("merges into another category after confirming", async () => {
     vi.mocked(api.mergeCategories).mockResolvedValue(rpg);
     render(() => <CategoriesSection />);

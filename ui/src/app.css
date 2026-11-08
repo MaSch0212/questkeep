@@ -3349,6 +3349,9 @@ ul {
 .category-list {
   display: flex;
   flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 .category-list__row {
   display: flex;
@@ -4252,16 +4255,6 @@ ul {
 }
 .source-priority__order .source-order {
   max-width: none;
-}
-.status-list__name {
-  flex: 1;
-  min-width: 0;
-}
-.status-list__count {
-  min-width: var(--qk-status-count-width);
-  color: var(--qk-color-text-faint);
-  font-size: var(--qk-font-size-sm);
-  text-align: right;
 }
 .status-remove {
   display: flex;

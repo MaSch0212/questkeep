@@ -4,8 +4,12 @@ const en = {
   cancel: "Cancel",
   // Categories
   categoriesIntro:
-    "Categories group games in views (Group by → Category) and filter them, in this order: drag a row by its handle or press Alt+Up/Down to move it. Steam collections, GOG Galaxy tags and Lutris categories sync into the category of the same name; merge categories to sync several store categories into one. New categories are added on a game's page.",
+    "Categories group games in views (Group by → Category) and filter them, in this order: drag a row by its handle or press Alt+Up/Down to move it. Steam collections, GOG Galaxy tags and Lutris categories sync into the category of the same name; merge categories to sync several store categories into one. Add new ones below or on a game's page.",
   noCategories: "No categories yet.",
+  categoryExists: "There already is a category named “{name}”.",
+  newCategoryPlaceholder: "New category, e.g. Couch co-op",
+  newCategoryAria: "New category name",
+  addCategory: "Add category",
   dragTitle: "Drag to move (or Alt+Up/Down)",
   categoryName: "Category name",
   syncedWith: "Synced with {store}: “{name}”",
@@ -30,13 +34,11 @@ const en = {
   // Completion statuses
   statusExists: "There already is a status named “{name}”.",
   completionIntro:
-    "Track how far you got with each game. Sort and group views by status, or filter by it. Move a status with its arrows or Alt+Up/Down; the order is also the sort order.",
+    "Track how far you got with each game. Sort and group views by status, or filter by it. Drag a status by its handle or press Alt+Up/Down to move it; the order is also the sort order.",
   statusList: "Completion statuses",
   statusNameOf: "Name of {name}",
-  moveUp: "Move {name} up",
-  moveUpTitle: "Move up (Alt+Up)",
-  moveDown: "Move {name} down",
-  moveDownTitle: "Move down (Alt+Down)",
+  moveStatus: "Move {name}",
+  renameStatus: "Rename {name}",
   removeStatus: "Remove {name}",
   removeTitle: "Remove",
   removePrompt: (p: { count: number; name: string }) =>
@@ -60,8 +62,12 @@ export const settingsLibrary: Translations<typeof en> = {
   de: {
     cancel: "Abbrechen",
     categoriesIntro:
-      "Kategorien gruppieren Spiele in Ansichten (Gruppieren nach → Kategorie) und dienen als Filter, in dieser Reihenfolge: Zieh eine Zeile am Griff oder drücke Alt+↑/↓, um sie zu verschieben. Steam-Sammlungen, GOG-Galaxy-Tags und Lutris-Kategorien werden in die gleichnamige Kategorie synchronisiert; führe Kategorien zusammen, um mehrere Store-Kategorien in einer zu synchronisieren. Neue Kategorien legst du auf der Seite eines Spiels an.",
+      "Kategorien gruppieren Spiele in Ansichten (Gruppieren nach → Kategorie) und dienen als Filter, in dieser Reihenfolge: Zieh eine Zeile am Griff oder drücke Alt+↑/↓, um sie zu verschieben. Steam-Sammlungen, GOG-Galaxy-Tags und Lutris-Kategorien werden in die gleichnamige Kategorie synchronisiert; führe Kategorien zusammen, um mehrere Store-Kategorien in einer zu synchronisieren. Neue Kategorien legst du unten oder auf der Seite eines Spiels an.",
     noCategories: "Noch keine Kategorien.",
+    categoryExists: "Es gibt schon eine Kategorie namens „{name}“.",
+    newCategoryPlaceholder: "Neue Kategorie, z. B. Couch-Koop",
+    newCategoryAria: "Name der neuen Kategorie",
+    addCategory: "Kategorie hinzufügen",
     dragTitle: "Zum Verschieben ziehen (oder Alt+↑/↓)",
     categoryName: "Kategoriename",
     syncedWith: "Synchronisiert mit {store}: „{name}“",
@@ -86,13 +92,11 @@ export const settingsLibrary: Translations<typeof en> = {
     mergeButton: "Zusammenführen",
     statusExists: "Es gibt bereits einen Status namens „{name}“.",
     completionIntro:
-      "Behalte im Blick, wie weit du bei jedem Spiel bist. Sortiere und gruppiere Ansichten nach Status oder filtere danach. Verschiebe einen Status mit den Pfeilen oder Alt+↑/↓; die Reihenfolge ist auch die Sortierreihenfolge.",
+      "Behalte im Blick, wie weit du bei jedem Spiel bist. Sortiere und gruppiere Ansichten nach Status oder filtere danach. Zieh einen Status am Griff oder drücke Alt+↑/↓, um ihn zu verschieben; die Reihenfolge ist auch die Sortierreihenfolge.",
     statusList: "Abschlussstatus",
     statusNameOf: "Name von {name}",
-    moveUp: "{name} nach oben",
-    moveUpTitle: "Nach oben (Alt+↑)",
-    moveDown: "{name} nach unten",
-    moveDownTitle: "Nach unten (Alt+↓)",
+    moveStatus: "{name} verschieben",
+    renameStatus: "{name} umbenennen",
     removeStatus: "{name} entfernen",
     removeTitle: "Entfernen",
     removePrompt: (p: { count: number; name: string }) =>
@@ -112,8 +116,12 @@ export const settingsLibrary: Translations<typeof en> = {
   fr: {
     cancel: "Annuler",
     categoriesIntro:
-      "Les catégories regroupent les jeux dans les vues (Regrouper par → Catégorie) et servent de filtre, dans cet ordre : faites glisser une ligne par sa poignée ou appuyez sur Alt+↑/↓ pour la déplacer. Les collections Steam, les tags GOG Galaxy et les catégories Lutris se synchronisent dans la catégorie du même nom ; combinez des catégories pour synchroniser plusieurs catégories de boutique en une seule. Les nouvelles catégories s'ajoutent sur la page d'un jeu.",
+      "Les catégories regroupent les jeux dans les vues (Regrouper par → Catégorie) et servent de filtre, dans cet ordre : faites glisser une ligne par sa poignée ou appuyez sur Alt+↑/↓ pour la déplacer. Les collections Steam, les tags GOG Galaxy et les catégories Lutris se synchronisent dans la catégorie du même nom ; combinez des catégories pour synchroniser plusieurs catégories de boutique en une seule. Ajoutez-en de nouvelles ci-dessous ou sur la page d'un jeu.",
     noCategories: "Aucune catégorie pour l'instant.",
+    categoryExists: "Une catégorie nommée « {name} » existe déjà.",
+    newCategoryPlaceholder: "Nouvelle catégorie, p. ex. Coop canapé",
+    newCategoryAria: "Nom de la nouvelle catégorie",
+    addCategory: "Ajouter la catégorie",
     dragTitle: "Glisser pour déplacer (ou Alt+↑/↓)",
     categoryName: "Nom de la catégorie",
     syncedWith: "Synchronisée avec {store} : « {name} »",
@@ -138,13 +146,11 @@ export const settingsLibrary: Translations<typeof en> = {
     mergeButton: "Combiner",
     statusExists: "Il existe déjà un statut nommé « {name} ».",
     completionIntro:
-      "Suivez votre avancement dans chaque jeu. Triez et regroupez les vues par statut, ou filtrez-les. Déplacez un statut avec ses flèches ou Alt+↑/↓ ; l'ordre est aussi l'ordre de tri.",
+      "Suivez votre avancement dans chaque jeu. Triez et regroupez les vues par statut, ou filtrez-les. Faites glisser un statut par sa poignée ou appuyez sur Alt+↑/↓ pour le déplacer ; l'ordre est aussi l'ordre de tri.",
     statusList: "Statuts de progression",
     statusNameOf: "Nom de {name}",
-    moveUp: "Monter {name}",
-    moveUpTitle: "Monter (Alt+↑)",
-    moveDown: "Descendre {name}",
-    moveDownTitle: "Descendre (Alt+↓)",
+    moveStatus: "Déplacer {name}",
+    renameStatus: "Renommer {name}",
     removeStatus: "Supprimer {name}",
     removeTitle: "Supprimer",
     removePrompt: (p: { count: number; name: string }) =>
@@ -164,8 +170,12 @@ export const settingsLibrary: Translations<typeof en> = {
   it: {
     cancel: "Annulla",
     categoriesIntro:
-      "Le categorie raggruppano i giochi nelle viste (Raggruppa per → Categoria) e li filtrano, in questo ordine: trascina una riga dalla maniglia o premi Alt+↑/↓ per spostarla. Le raccolte di Steam, i tag di GOG Galaxy e le categorie di Lutris si sincronizzano nella categoria con lo stesso nome; unisci le categorie per sincronizzare più categorie degli store in una sola. Le nuove categorie si aggiungono dalla pagina di un gioco.",
+      "Le categorie raggruppano i giochi nelle viste (Raggruppa per → Categoria) e li filtrano, in questo ordine: trascina una riga dalla maniglia o premi Alt+↑/↓ per spostarla. Le raccolte di Steam, i tag di GOG Galaxy e le categorie di Lutris si sincronizzano nella categoria con lo stesso nome; unisci le categorie per sincronizzare più categorie degli store in una sola. Aggiungine di nuove qui sotto o dalla pagina di un gioco.",
     noCategories: "Ancora nessuna categoria.",
+    categoryExists: "Esiste già una categoria chiamata “{name}”.",
+    newCategoryPlaceholder: "Nuova categoria, ad es. Coop sul divano",
+    newCategoryAria: "Nome della nuova categoria",
+    addCategory: "Aggiungi categoria",
     dragTitle: "Trascina per spostare (o Alt+↑/↓)",
     categoryName: "Nome della categoria",
     syncedWith: "Sincronizzata con {store}: “{name}”",
@@ -190,13 +200,11 @@ export const settingsLibrary: Translations<typeof en> = {
     mergeButton: "Unisci",
     statusExists: "Esiste già uno stato chiamato “{name}”.",
     completionIntro:
-      "Tieni traccia di quanto sei avanti in ogni gioco. Ordina e raggruppa le viste per stato, oppure filtra per stato. Sposta uno stato con le frecce o con Alt+↑/↓; l'ordine è anche l'ordine di ordinamento.",
+      "Tieni traccia di quanto sei avanti in ogni gioco. Ordina e raggruppa le viste per stato, oppure filtra per stato. Trascina uno stato dalla maniglia o premi Alt+↑/↓ per spostarlo; l'ordine è anche l'ordine di ordinamento.",
     statusList: "Stati di completamento",
     statusNameOf: "Nome di {name}",
-    moveUp: "Sposta {name} su",
-    moveUpTitle: "Sposta su (Alt+↑)",
-    moveDown: "Sposta {name} giù",
-    moveDownTitle: "Sposta giù (Alt+↓)",
+    moveStatus: "Sposta {name}",
+    renameStatus: "Rinomina {name}",
     removeStatus: "Rimuovi {name}",
     removeTitle: "Rimuovi",
     removePrompt: (p: { count: number; name: string }) =>
@@ -216,8 +224,12 @@ export const settingsLibrary: Translations<typeof en> = {
   es: {
     cancel: "Cancelar",
     categoriesIntro:
-      "Las categorías agrupan los juegos en las vistas (Agrupar por → Categoría) y los filtran, en este orden: arrastra una fila por su asa o pulsa Alt+↑/↓ para moverla. Las colecciones de Steam, las etiquetas de GOG Galaxy y las categorías de Lutris se sincronizan con la categoría del mismo nombre; combina categorías para sincronizar varias categorías de tiendas en una. Las categorías nuevas se añaden en la página de un juego.",
+      "Las categorías agrupan los juegos en las vistas (Agrupar por → Categoría) y los filtran, en este orden: arrastra una fila por su asa o pulsa Alt+↑/↓ para moverla. Las colecciones de Steam, las etiquetas de GOG Galaxy y las categorías de Lutris se sincronizan con la categoría del mismo nombre; combina categorías para sincronizar varias categorías de tiendas en una. Añade categorías nuevas abajo o en la página de un juego.",
     noCategories: "Todavía no hay categorías.",
+    categoryExists: "Ya existe una categoría llamada «{name}».",
+    newCategoryPlaceholder: "Categoría nueva, p. ej. Cooperativo local",
+    newCategoryAria: "Nombre de la categoría nueva",
+    addCategory: "Añadir categoría",
     dragTitle: "Arrastra para mover (o Alt+↑/↓)",
     categoryName: "Nombre de la categoría",
     syncedWith: "Sincronizada con {store}: «{name}»",
@@ -242,13 +254,11 @@ export const settingsLibrary: Translations<typeof en> = {
     mergeButton: "Combinar",
     statusExists: "Ya existe un estado llamado «{name}».",
     completionIntro:
-      "Lleva el control de cuánto has avanzado en cada juego. Ordena y agrupa las vistas por estado, o filtra por él. Mueve un estado con sus flechas o con Alt+↑/↓; el orden también es el orden de clasificación.",
+      "Lleva el control de cuánto has avanzado en cada juego. Ordena y agrupa las vistas por estado, o filtra por él. Arrastra un estado por su asa o pulsa Alt+↑/↓ para moverlo; el orden también es el orden de clasificación.",
     statusList: "Estados de progreso",
     statusNameOf: "Nombre de {name}",
-    moveUp: "Subir {name}",
-    moveUpTitle: "Subir (Alt+↑)",
-    moveDown: "Bajar {name}",
-    moveDownTitle: "Bajar (Alt+↓)",
+    moveStatus: "Mover {name}",
+    renameStatus: "Renombrar {name}",
     removeStatus: "Quitar {name}",
     removeTitle: "Quitar",
     removePrompt: (p: { count: number; name: string }) =>
@@ -268,8 +278,12 @@ export const settingsLibrary: Translations<typeof en> = {
   pt: {
     cancel: "Cancelar",
     categoriesIntro:
-      "As categorias agrupam jogos nas visualizações (Agrupar por → Categoria) e os filtram, nesta ordem: arraste uma linha pela alça ou pressione Alt+↑/↓ para movê-la. Coleções da Steam, tags do GOG Galaxy e categorias do Lutris são sincronizadas com a categoria de mesmo nome; combine categorias para sincronizar várias categorias de lojas em uma só. Categorias novas são adicionadas na página de um jogo.",
+      "As categorias agrupam jogos nas visualizações (Agrupar por → Categoria) e os filtram, nesta ordem: arraste uma linha pela alça ou pressione Alt+↑/↓ para movê-la. Coleções da Steam, tags do GOG Galaxy e categorias do Lutris são sincronizadas com a categoria de mesmo nome; combine categorias para sincronizar várias categorias de lojas em uma só. Adicione categorias novas abaixo ou na página de um jogo.",
     noCategories: "Ainda não há categorias.",
+    categoryExists: "Já existe uma categoria chamada “{name}”.",
+    newCategoryPlaceholder: "Categoria nova, ex.: Cooperativo local",
+    newCategoryAria: "Nome da categoria nova",
+    addCategory: "Adicionar categoria",
     dragTitle: "Arraste para mover (ou Alt+↑/↓)",
     categoryName: "Nome da categoria",
     syncedWith: "Sincronizada com {store}: “{name}”",
@@ -293,13 +307,11 @@ export const settingsLibrary: Translations<typeof en> = {
     mergeButton: "Combinar",
     statusExists: "Já existe um status chamado “{name}”.",
     completionIntro:
-      "Acompanhe até onde você chegou em cada jogo. Ordene e agrupe visualizações por status, ou filtre por ele. Mova um status com as setas ou Alt+↑/↓; a ordem também é a ordem de classificação.",
+      "Acompanhe até onde você chegou em cada jogo. Ordene e agrupe visualizações por status, ou filtre por ele. Arraste um status pela alça ou pressione Alt+↑/↓ para movê-lo; a ordem também é a ordem de classificação.",
     statusList: "Status de conclusão",
     statusNameOf: "Nome de {name}",
-    moveUp: "Mover {name} para cima",
-    moveUpTitle: "Mover para cima (Alt+↑)",
-    moveDown: "Mover {name} para baixo",
-    moveDownTitle: "Mover para baixo (Alt+↓)",
+    moveStatus: "Mover {name}",
+    renameStatus: "Renomear {name}",
     removeStatus: "Remover {name}",
     removeTitle: "Remover",
     removePrompt: (p: { count: number; name: string }) =>

@@ -1,11 +1,12 @@
-import ChevronDown from "lucide-solid/icons/chevron-down";
-import ChevronUp from "lucide-solid/icons/chevron-up";
+import GripVertical from "lucide-solid/icons/grip-vertical";
+import Pencil from "lucide-solid/icons/pencil";
 import Trash from "lucide-solid/icons/trash";
-import { createSignal, For, onMount, Show } from "solid-js";
+import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import type { CompletionSettings } from "../../bindings/CompletionSettings";
 import type { CompletionStatus } from "../../bindings/CompletionStatus";
 import { translator } from "../../i18n";
 import { settingsLibrary } from "../../i18n/settingsLibrary";
+import { dropIndexAt, moveBefore, nudge } from "../../lib/categoryOrder";
 import { store } from "../../lib/store";
 
 const tr = translator(settingsLibrary);
@@ -29,7 +30,8 @@ function withStatuses(list: CompletionStatus[]): CompletionSettings {
 const options = (except?: string) => statuses().filter((s) => s.id !== except);
 
 /**
- * The user's completion statuses: add, rename, reorder (arrow buttons or Alt+Up/Down) and remove
+ * The user's completion statuses: add, rename, reorder (drag a row by its handle, or Alt+Up/Down)
+ * and remove
  * (games with a removed status get another one), plus the status of new games and the one set
  * when a game is started for the first time. Every change is saved at once.
  */
@@ -37,6 +39,9 @@ export function CompletionSection() {
   const [adding, setAdding] = createSignal("");
   const [removing, setRemoving] = createSignal<CompletionStatus | null>(null);
   const [replacement, setReplacement] = createSignal(NONE);
+  const [dragged, setDragged] = createSignal<string | null>(null);
+  const [drop, setDrop] = createSignal<number | null>(null);
+  let list: HTMLOListElement | undefined;
   // Fresh game counts.
   onMount(() => void store.loadCompletion());
 
@@ -51,17 +56,53 @@ export function CompletionSection() {
     void save(withStatuses(statuses().with(index, { ...status, name: trimmed })));
   }
 
-  function move(id: string, by: number) {
-    const list = [...statuses()];
-    const from = list.findIndex((s) => s.id === id);
-    const to = from + by;
-    const status = list[from];
-    if (!status || to < 0 || to >= list.length) return;
-    list.splice(from, 1);
-    list.splice(to, 0, status);
-    void save(withStatuses(list)).then(() =>
-      document.querySelector<HTMLElement>(`[data-status="${id}"]`)?.focus(),
-    );
+  const ids = () => statuses().map((s) => s.id);
+
+  /** Saves the statuses in the order of `next`; `refocus` puts focus back on the moved row. */
+  function reorder(next: string[], moved: string, refocus: boolean) {
+    if (next.join() === ids().join()) return;
+    const byId = new Map(statuses().map((s) => [s.id, s]));
+    void save(withStatuses(next.flatMap((id) => byId.get(id) ?? []))).then(() => {
+      if (refocus) list?.querySelector<HTMLElement>(`[data-status="${moved}"]`)?.focus();
+    });
+  }
+
+  function startDrag(event: PointerEvent, id: string) {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    setDragged(id);
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp, { once: true });
+  }
+
+  function onPointerMove(event: PointerEvent) {
+    if (!list || !dragged()) return;
+    const middles = [...list.querySelectorAll<HTMLElement>("[data-status]")].map((row) => {
+      const rect = row.getBoundingClientRect();
+      return rect.top + rect.height / 2;
+    });
+    setDrop(dropIndexAt(middles, event.clientY));
+  }
+
+  function onPointerUp() {
+    window.removeEventListener("pointermove", onPointerMove);
+    const id = dragged();
+    const index = drop();
+    setDragged(null);
+    setDrop(null);
+    if (id && index !== null) reorder(moveBefore(ids(), id, index), id, false);
+  }
+
+  onCleanup(() => {
+    window.removeEventListener("pointermove", onPointerMove);
+    window.removeEventListener("pointerup", onPointerUp);
+  });
+
+  function onRowKeyDown(event: KeyboardEvent, id: string) {
+    if (!event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
+    if (event.target instanceof HTMLInputElement) return;
+    event.preventDefault();
+    reorder(nudge(ids(), id, event.key === "ArrowUp" ? -1 : 1), id, true);
   }
 
   async function add(event: SubmitEvent) {
@@ -92,63 +133,32 @@ export function CompletionSection() {
   return (
     <div class="form">
       <p class="muted">{tr("completionIntro")}</p>
-      <ol class="source-order status-list" aria-label={tr("statusList")}>
+      <ol
+        class="category-list"
+        classList={{ "category-list--dragging": dragged() !== null }}
+        aria-label={tr("statusList")}
+        ref={(el) => (list = el)}
+      >
         <For each={statuses()}>
           {(status, index) => (
-            <li
-              class="source-order__row"
-              data-status={status.id}
-              tabIndex={-1}
-              onKeyDown={(event) => {
-                if (!event.altKey) return;
-                if (event.key === "ArrowUp") move(status.id, -1);
-                else if (event.key === "ArrowDown") move(status.id, 1);
-                else return;
-                event.preventDefault();
-              }}
-            >
-              <input
-                class="input status-list__name"
-                value={status.name}
-                aria-label={tr("statusNameOf", { name: status.name })}
-                onChange={(event) => {
-                  rename(status, event.currentTarget.value);
-                  event.currentTarget.value = status.name;
-                }}
+            <>
+              <Show when={drop() === index() && dragged() !== null}>
+                <li class="category-list__drop" aria-hidden="true" />
+              </Show>
+              <StatusRow
+                status={status}
+                dragged={dragged() === status.id}
+                onDragStart={(event) => startDrag(event, status.id)}
+                onKeyDown={(event) => onRowKeyDown(event, status.id)}
+                onRename={(name) => rename(status, name)}
+                onRemove={() => askRemove(status)}
               />
-              <span class="status-list__count">{tr("games", { count: status.gameCount })}</span>
-              <button
-                type="button"
-                class="icon-btn icon-btn--small"
-                aria-label={tr("moveUp", { name: status.name })}
-                title={tr("moveUpTitle")}
-                disabled={index() === 0}
-                onClick={() => move(status.id, -1)}
-              >
-                <ChevronUp class="icon" aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                class="icon-btn icon-btn--small"
-                aria-label={tr("moveDown", { name: status.name })}
-                title={tr("moveDownTitle")}
-                disabled={index() === statuses().length - 1}
-                onClick={() => move(status.id, 1)}
-              >
-                <ChevronDown class="icon" aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                class="icon-btn icon-btn--small"
-                aria-label={tr("removeStatus", { name: status.name })}
-                title={tr("removeTitle")}
-                onClick={() => askRemove(status)}
-              >
-                <Trash class="icon" aria-hidden="true" />
-              </button>
-            </li>
+            </>
           )}
         </For>
+        <Show when={drop() === statuses().length && dragged() !== null}>
+          <li class="category-list__drop" aria-hidden="true" />
+        </Show>
       </ol>
       <Show when={removing()}>
         {(status) => (
@@ -234,5 +244,88 @@ export function CompletionSection() {
         <p class="field__hint">{tr("firstStartHint")}</p>
       </div>
     </div>
+  );
+}
+
+/** One status: drag handle, name (an input while renaming), game count, rename and remove. */
+function StatusRow(props: {
+  status: CompletionStatus;
+  dragged: boolean;
+  onDragStart: (event: PointerEvent) => void;
+  onKeyDown: (event: KeyboardEvent) => void;
+  onRename: (name: string) => void;
+  onRemove: () => void;
+}) {
+  const [editing, setEditing] = createSignal(false);
+  let renameButton: HTMLButtonElement | undefined;
+
+  /** Ends renaming; `null` cancels. */
+  function finish(value: string | null) {
+    setEditing(false);
+    if (value !== null) props.onRename(value);
+    queueMicrotask(() => renameButton?.focus());
+  }
+
+  return (
+    <li
+      class="category-list__row"
+      classList={{ "category-list__row--dragged": props.dragged }}
+      data-status={props.status.id}
+      tabIndex={-1}
+      onKeyDown={(event) => props.onKeyDown(event)}
+    >
+      <span
+        class="category-list__handle"
+        title={tr("dragTitle")}
+        aria-hidden="true"
+        onPointerDown={(event) => props.onDragStart(event)}
+      >
+        <GripVertical class="icon" />
+      </span>
+      <Show
+        when={editing()}
+        fallback={<span class="category-list__name">{props.status.name}</span>}
+      >
+        <input
+          ref={(el) => queueMicrotask(() => el.select())}
+          class="input category-list__input"
+          aria-label={tr("statusNameOf", { name: props.status.name })}
+          value={props.status.name}
+          onBlur={(event) => {
+            if (editing()) finish(event.currentTarget.value);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              finish(event.currentTarget.value);
+            } else if (event.key === "Escape") {
+              event.preventDefault();
+              event.stopPropagation();
+              finish(null);
+            }
+          }}
+        />
+      </Show>
+      <span class="category-list__count">{tr("games", { count: props.status.gameCount })}</span>
+      <button
+        ref={(el) => (renameButton = el)}
+        type="button"
+        class="icon-btn icon-btn--small"
+        aria-label={tr("renameStatus", { name: props.status.name })}
+        title={tr("renameTitle")}
+        onClick={() => setEditing(true)}
+      >
+        <Pencil class="icon" aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        class="icon-btn icon-btn--small category-list__delete"
+        aria-label={tr("removeStatus", { name: props.status.name })}
+        title={tr("removeTitle")}
+        onClick={() => props.onRemove()}
+      >
+        <Trash class="icon" aria-hidden="true" />
+      </button>
+    </li>
   );
 }
