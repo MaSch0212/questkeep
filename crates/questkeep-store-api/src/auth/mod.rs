@@ -100,6 +100,16 @@ pub trait WebSession: Send + Sync {
     /// The error text is shown to users.
     /// `window` is the store's login window, whose [`LoginWindow::web_session`] is set.
     fn refresh(&self, provider: &str, window: &LoginWindow) -> Result<Option<String>, String>;
+    /// Loads `url` (the session page's `renew_url`) the same way and returns the capture it
+    /// ended in. `Ok(None)`: nothing can be renewed.
+    fn renew(
+        &self,
+        _provider: &str,
+        _window: &LoginWindow,
+        _url: &str,
+    ) -> Result<Option<String>, String> {
+        Ok(None)
+    }
     /// Deletes the saved browser session (cookies and storage).
     fn clear(&self, provider: &str) -> Result<(), String>;
 }

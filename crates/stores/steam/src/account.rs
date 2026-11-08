@@ -44,6 +44,7 @@ pub const LOGIN_WINDOW: LoginWindow = LoginWindow {
         store_name: "The Steam store",
         url: SESSION_URL,
         script: include_str!("session.js"),
+        renew_url: None,
     }),
     capture: |url| capture_whole(url, CAPTURE_PREFIX),
 };
@@ -215,7 +216,7 @@ impl SteamAccount {
     }
 
     fn forget(&self, state: &mut State) {
-        if let Err(err) = self.tokens.delete(STEAM_SOURCE) {
+        if let Err(err) = self.tokens.forget_session(STEAM_SOURCE) {
             tracing::warn!(%err, "could not delete the Steam account");
         }
         state.loaded = true;

@@ -41,6 +41,11 @@ pub struct WebSessionPage {
     /// Runs on every page of the store's windows. `var reportSignedOut = REPORT_SIGNED_OUT;`
     /// becomes `true` in the hidden window, which must also learn about a signed-out session.
     pub script: &'static str,
+    /// A page that signs the remembered login in again when the session page reports a
+    /// signed-out session (a store whose session cookie ends with the browser, while a longer
+    /// "remember me" cookie stays). It ends in a capture of the login window, or the script
+    /// reports a signed-out session on it.
+    pub renew_url: Option<&'static str>,
 }
 
 impl WebSessionPage {
@@ -157,6 +162,7 @@ mod tests {
             store_name: "Store",
             url: "https://a.test/",
             script: "var reportSignedOut = REPORT_SIGNED_OUT;",
+            renew_url: None,
         };
         assert_eq!(page.script(true), "var reportSignedOut = true;");
         assert_eq!(page.script(false), "var reportSignedOut = false;");

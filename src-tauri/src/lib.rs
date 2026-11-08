@@ -157,10 +157,20 @@ fn build_state(app: &tauri::AppHandle) -> Result<(AppState, Option<WorkerGuard>)
         }
     });
 
-    // A hidden test instance shares the keyring with the developer's app but has its own
-    // webview profile, where store sessions look signed out: it must never delete their sign-ins.
+    // Every copy shares the keyring, but a copy with its own data folder (portable, or the
+    // development build) has its own browser profiles, where a website sign-in may look signed
+    // out while the installed app still has it: such a copy never drops a shared sign-in on its
+    // own. A hidden test instance deletes nothing at all.
     let keyring: Arc<dyn TokenStore> = if window::keep_hidden() {
-        Arc::new(NoDeleteTokenStore(KeyringTokenStore::new()))
+        Arc::new(SharedTokenStore {
+            deletes: false,
+            label: "hidden test run",
+        })
+    } else if paths.is_portable() {
+        Arc::new(SharedTokenStore {
+            deletes: true,
+            label: "copy with its own data folder",
+        })
     } else {
         Arc::new(KeyringTokenStore::new())
     };
@@ -253,20 +263,37 @@ fn spawn_startup_tasks(state: Arc<AppState>) {
 /// How often watched installs, new install folders and the automatic sync are checked.
 const BACKGROUND_POLL: Duration = Duration::from_secs(10);
 
-/// A token store that keeps every entry: deleting is logged and skipped (hidden test runs).
-struct NoDeleteTokenStore(KeyringTokenStore);
+/// The keyring for a copy that shares it with the installed app: website sign-ins that look
+/// signed out in this copy's browser profile are kept (logged and skipped); with `deletes` off
+/// (hidden test runs) nothing is ever deleted.
+struct SharedTokenStore {
+    deletes: bool,
+    label: &'static str,
+}
 
-impl TokenStore for NoDeleteTokenStore {
+impl TokenStore for SharedTokenStore {
     fn load(&self, provider: &str) -> Result<Option<String>, AuthError> {
-        self.0.load(provider)
+        KeyringTokenStore::new().load(provider)
     }
 
     fn save(&self, provider: &str, secret: &str) -> Result<(), AuthError> {
-        self.0.save(provider, secret)
+        KeyringTokenStore::new().save(provider, secret)
     }
 
     fn delete(&self, provider: &str) -> Result<(), AuthError> {
-        tracing::warn!(provider, "hidden test run: keyring entry kept");
+        if self.deletes {
+            return KeyringTokenStore::new().delete(provider);
+        }
+        tracing::warn!(provider, "{}: keyring entry kept", self.label);
+        Ok(())
+    }
+
+    fn forget_session(&self, provider: &str) -> Result<(), AuthError> {
+        tracing::info!(
+            provider,
+            "{}: shared sign-in kept, this copy's session is signed out",
+            self.label
+        );
         Ok(())
     }
 }

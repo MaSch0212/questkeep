@@ -2,6 +2,12 @@
   var reportSignedOut = REPORT_SIGNED_OUT;
   var target = "https://questkeep.invalid/ea-session";
   if (location.hostname === "signin.ea.com") {
+    // The hidden window renews the session through the website login: with a remembered login
+    // it never stops here, so a login form that stays means the session is really signed out.
+    if (reportSignedOut) {
+      setTimeout(function () { location.href = target + "?signedout=1"; }, 5000);
+      return;
+    }
     var tries = 0;
     var tick = setInterval(function () {
       var box = document.getElementById("rememberMe");

@@ -71,6 +71,7 @@ pub const ACCOUNT_SPEC: WebAccountSpec = WebAccountSpec {
             store_name: "Battle.net",
             url: SESSION_URL,
             script: include_str!("session.js"),
+            renew_url: None,
         }),
         capture: |url| capture_whole(url, CAPTURE_PREFIX),
     },

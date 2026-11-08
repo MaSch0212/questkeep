@@ -16,6 +16,13 @@ pub trait TokenStore: Send + Sync {
     fn save(&self, provider: &str, secret: &str) -> Result<(), AuthError>;
     /// Deleting something that does not exist is not an error.
     fn delete(&self, provider: &str) -> Result<(), AuthError>;
+    /// Drops a sign-in because this copy's browser session for the store looks signed out (stores
+    /// signed in through their website). Every copy of Questkeep shares the keyring but has its
+    /// own browser profiles, so a copy with a data folder of its own keeps the entry: the
+    /// installed app may still have the session. Deletes it by default.
+    fn forget_session(&self, provider: &str) -> Result<(), AuthError> {
+        self.delete(provider)
+    }
 }
 
 /// The tokens of one signed-in account.

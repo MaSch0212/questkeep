@@ -8,6 +8,12 @@
 //! a signed-in session with a short-lived access token as JSON; the page's script reports it
 //! through [`CAPTURE_PREFIX`] (`?token=...`, or `?signedout=1`). Lutris reads EA libraries the
 //! same way. The token is only kept in memory.
+//!
+//! That page needs EA's `sid` cookie, which lives only as long as the browser: after Questkeep
+//! restarts, only the `remid` cookie of "Remember me" is left. A signed-out answer is therefore
+//! renewed first: the hidden window opens the website login, which signs in from `remid` without
+//! asking and ends on `login_check`; then the token page is read again. A login form that stays
+//! for a few seconds means the account is really signed out.
 
 use serde_json::{Value, json};
 
@@ -38,7 +44,8 @@ pub const ACCOUNT_SPEC: WebAccountSpec = WebAccountSpec {
     login_url: LOGIN_URL,
     capture_prefix: CAPTURE_PREFIX,
     // `session.js` runs on EA pages. On the login page it ticks "Remember me" once, so the
-    // session outlives the window. On the token page (`connect/auth` for `nucleus:rest`, which
+    // session outlives the window (in the hidden window, a login form that stays reports a
+    // signed-out session instead). On the token page (`connect/auth` for `nucleus:rest`, which
     // answers with JSON) it reports the access token, or in the hidden window a signed-out
     // session. The website login itself ends on `login_check`; the session is then read anew.
     window: LoginWindow {
@@ -49,6 +56,9 @@ pub const ACCOUNT_SPEC: WebAccountSpec = WebAccountSpec {
             store_name: "EA",
             url: SESSION_URL,
             script: include_str!("session.js"),
+            // The token page needs EA's session cookie, which ends with the browser; the
+            // website login signs in again from the "remember me" cookie without asking.
+            renew_url: Some(LOGIN_URL),
         }),
         capture: |url| {
             (is_capture(url, CAPTURE_PREFIX) || is_capture(url, LOGIN_DONE_PREFIX))
@@ -347,6 +357,10 @@ mod tests {
         );
         let page = window.web_session.unwrap();
         assert!(page.script(true).contains("var reportSignedOut = true;"));
+        // The renewal is the website login, whose end the window captures.
+        let renew = page.renew_url.unwrap();
+        assert_eq!(renew, LOGIN_URL);
+        assert!(renew.contains("redirect_uri=https%3A%2F%2Fwww.ea.com%2Flogin_check"));
         assert!(page.script.contains(CAPTURE_PREFIX));
     }
 }

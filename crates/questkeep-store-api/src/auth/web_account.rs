@@ -184,7 +184,7 @@ impl WebAccount {
     }
 
     fn forget(&self, state: &mut State) {
-        if let Err(err) = self.tokens.delete(self.spec.provider) {
+        if let Err(err) = self.tokens.forget_session(self.spec.provider) {
             tracing::warn!(provider = self.spec.provider, %err, "could not delete the account");
         }
         state.loaded = true;
@@ -260,7 +260,8 @@ impl WebAccount {
         }
     }
 
-    /// One capture through the web session.
+    /// One capture through the web session. A signed-out session is renewed once through the
+    /// store's renewal page, if it has one, and then read again.
     fn refresh(&self) -> Result<Option<WebCapture>, ProviderError> {
         let Some(web) = &self.web else {
             return Err(ProviderError::NotConfigured(format!(
@@ -268,13 +269,46 @@ impl WebAccount {
                 self.spec.name
             )));
         };
-        match web
-            .refresh(self.spec.provider, &self.spec.window)
-            .map_err(ProviderError::Network)?
-        {
-            Some(url) => parse_web_capture(self.spec.capture_prefix, &url)
-                .map_err(|e| ProviderError::Parse(e.to_string())),
-            None => Ok(None),
+        let read = || -> Result<Option<WebCapture>, ProviderError> {
+            match web
+                .refresh(self.spec.provider, &self.spec.window)
+                .map_err(ProviderError::Network)?
+            {
+                Some(url) => parse_web_capture(self.spec.capture_prefix, &url)
+                    .map_err(|e| ProviderError::Parse(e.to_string())),
+                None => Ok(None),
+            }
+        };
+        let first = read()?;
+        if first.is_some() {
+            return Ok(first);
+        }
+        let Some(renew_url) = self.spec.window.web_session.and_then(|p| p.renew_url) else {
+            return Ok(None);
+        };
+        if !self.renewed(web.renew(self.spec.provider, &self.spec.window, renew_url)) {
+            return Ok(None);
+        }
+        tracing::info!(provider = self.spec.provider, "renewed the store session");
+        read()
+    }
+
+    /// Whether the renewal page signed in again: it ended in a login-window capture other than
+    /// a signed-out report. A failure counts as not renewed (the session stays signed out).
+    fn renewed(&self, outcome: Result<Option<String>, String>) -> bool {
+        match outcome {
+            Ok(Some(url)) if url.starts_with(self.spec.capture_prefix) => {
+                matches!(
+                    parse_web_capture(self.spec.capture_prefix, &url),
+                    Ok(Some(_))
+                )
+            }
+            Ok(Some(_)) => true,
+            Ok(None) => false,
+            Err(err) => {
+                tracing::info!(provider = self.spec.provider, %err, "could not renew the store session");
+                false
+            }
         }
     }
 }
@@ -365,13 +399,29 @@ mod tests {
                 store_name: "Test Store",
                 url: "https://store.test/",
                 script: "",
+                renew_url: None,
             }),
             capture: |url| super::super::capture_whole(url, PREFIX),
         },
     };
 
+    /// A store whose session page needs a renewal after the browser ended.
+    const RENEWING: WebAccountSpec = WebAccountSpec {
+        window: LoginWindow {
+            web_session: Some(super::super::WebSessionPage {
+                store_name: "Test Store",
+                url: "https://store.test/",
+                script: "",
+                renew_url: Some("https://store.test/login"),
+            }),
+            ..SPEC.window
+        },
+        ..SPEC
+    };
+
     struct FakeWeb {
         next: Mutex<Vec<Result<Option<String>, String>>>,
+        renewals: Mutex<Vec<Result<Option<String>, String>>>,
         refreshes: AtomicUsize,
         clears: AtomicUsize,
     }
@@ -380,6 +430,7 @@ mod tests {
         fn new(answers: Vec<Result<Option<String>, String>>) -> Arc<Self> {
             Arc::new(Self {
                 next: Mutex::new(answers),
+                renewals: Mutex::new(Vec::new()),
                 refreshes: AtomicUsize::new(0),
                 clears: AtomicUsize::new(0),
             })
@@ -392,6 +443,10 @@ mod tests {
             self.refreshes.fetch_add(1, Ordering::SeqCst);
             self.next.lock().unwrap().remove(0)
         }
+        fn renew(&self, _: &str, _: &LoginWindow, url: &str) -> Result<Option<String>, String> {
+            assert_eq!(url, "https://store.test/login");
+            self.renewals.lock().unwrap().remove(0)
+        }
         fn clear(&self, _provider: &str) -> Result<(), String> {
             self.clears.fetch_add(1, Ordering::SeqCst);
             Ok(())
@@ -399,11 +454,18 @@ mod tests {
     }
 
     fn account(web: Arc<FakeWeb>) -> (WebAccount, Arc<AtomicI64>, Arc<MemoryTokenStore>) {
+        account_for(SPEC, web)
+    }
+
+    fn account_for(
+        spec: WebAccountSpec,
+        web: Arc<FakeWeb>,
+    ) -> (WebAccount, Arc<AtomicI64>, Arc<MemoryTokenStore>) {
         let now = Arc::new(AtomicI64::new(1_000));
         let clock_now = now.clone();
         let store = Arc::new(MemoryTokenStore::new());
         let account = WebAccount::with(
-            SPEC,
+            spec,
             store.clone(),
             Some(web),
             Arc::new(move || clock_now.load(Ordering::SeqCst)),
@@ -503,6 +565,71 @@ mod tests {
             Err(ProviderError::NotConfigured(_))
         ));
         assert!(!account.is_signed_in());
+        assert!(store.load("test").unwrap().is_none());
+    }
+
+    #[test]
+    fn a_remembered_login_renews_a_signed_out_session() {
+        let web = FakeWeb::new(vec![
+            Ok(Some(format!("{PREFIX}?signedout=1"))),
+            Ok(Some(format!("{PREFIX}?token=fresh"))),
+            Ok(Some(format!("{PREFIX}?signedout=1"))),
+        ]);
+        *web.renewals.lock().unwrap() = vec![
+            // The login page signed in from the remembered login and ended on its done page.
+            Ok(Some("https://store.test/done?code=1".into())),
+            // No remembered login: the login page asked for the password.
+            Ok(Some(format!("{PREFIX}?signedout=1"))),
+        ];
+        let (account, now, _) = account_for(RENEWING, web.clone());
+        account
+            .sign_in_with_code(&format!("{PREFIX}?name=Ann"))
+            .unwrap();
+        now.store(5_000, Ordering::SeqCst);
+        assert_eq!(account.capture(60).unwrap().get("token"), Some("fresh"));
+        assert_eq!(web.refreshes.load(Ordering::SeqCst), 2);
+        now.store(9_000, Ordering::SeqCst);
+        assert!(matches!(
+            account.capture(60),
+            Err(ProviderError::NotConfigured(_))
+        ));
+        assert!(!account.is_signed_in());
+        assert_eq!(web.refreshes.load(Ordering::SeqCst), 3);
+    }
+
+    /// A copy with its own data folder: keeps shared sign-ins its own session lost.
+    struct SharedStore(MemoryTokenStore);
+
+    impl TokenStore for SharedStore {
+        fn load(&self, provider: &str) -> Result<Option<String>, AuthError> {
+            self.0.load(provider)
+        }
+        fn save(&self, provider: &str, secret: &str) -> Result<(), AuthError> {
+            self.0.save(provider, secret)
+        }
+        fn delete(&self, provider: &str) -> Result<(), AuthError> {
+            self.0.delete(provider)
+        }
+        fn forget_session(&self, _provider: &str) -> Result<(), AuthError> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn a_signed_out_session_keeps_a_shared_sign_in_but_sign_out_removes_it() {
+        let web = FakeWeb::new(vec![Ok(Some(format!("{PREFIX}?signedout=1")))]);
+        let store = Arc::new(SharedStore(MemoryTokenStore::new()));
+        let account = WebAccount::with(SPEC, store.clone(), Some(web), Arc::new(|| 1_000));
+        account
+            .sign_in_with_code(&format!("{PREFIX}?name=Ann"))
+            .unwrap();
+        // Old enough to read the session again.
+        let account =
+            WebAccount::with(SPEC, store.clone(), account.web.clone(), Arc::new(|| 9_000));
+        assert!(account.capture(60).is_err());
+        assert!(!account.is_signed_in());
+        assert!(store.load("test").unwrap().is_some());
+        account.sign_out().unwrap();
         assert!(store.load("test").unwrap().is_none());
     }
 

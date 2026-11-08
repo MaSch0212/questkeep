@@ -121,6 +121,21 @@ impl ShellWebSession {
         self.profiles.join(provider)
     }
 
+    /// Loads `url` in a hidden window on the store's profile and waits for the capture its
+    /// pages end in.
+    fn load(&self, provider: &str, window: &LoginWindow, url: &str) -> Result<String, String> {
+        let store_name = window.web_session.map_or(window.title, |p| p.store_name);
+        let _busy = self.busy.lock().unwrap_or_else(|e| e.into_inner());
+        let url: Url = url
+            .parse()
+            .map_err(|_| "The store address is invalid.".to_string())?;
+        let (tx, rx) = mpsc::channel();
+        let hidden = self.hidden_window(provider, Some(window), url, Some(tx))?;
+        let result = rx.recv_timeout(SESSION_TIMEOUT);
+        let _ = hidden.destroy();
+        result.map_err(|_| format!("{store_name} did not answer in time."))
+    }
+
     /// A hidden, unfocused window off the taskbar on the store's profile. It never shows: the
     /// user may be playing a fullscreen game while the library syncs.
     fn hidden_window(
@@ -175,19 +190,16 @@ impl WebSession for ShellWebSession {
         let Some(page) = window.web_session else {
             return Err("This store has no web session.".into());
         };
-        let _busy = self.busy.lock().unwrap_or_else(|e| e.into_inner());
-        let url: Url = page
-            .url
-            .parse()
-            .map_err(|_| "The store address is invalid.".to_string())?;
-        let (tx, rx) = mpsc::channel();
-        let hidden = self.hidden_window(provider, Some(window), url, Some(tx))?;
-        let result = rx.recv_timeout(SESSION_TIMEOUT);
-        let _ = hidden.destroy();
-        match result {
-            Ok(captured) => Ok(Some(captured)),
-            Err(_) => Err(format!("{} did not answer in time.", page.store_name)),
-        }
+        self.load(provider, window, page.url).map(Some)
+    }
+
+    fn renew(
+        &self,
+        provider: &str,
+        window: &LoginWindow,
+        url: &str,
+    ) -> Result<Option<String>, String> {
+        self.load(provider, window, url).map(Some)
     }
 
     fn clear(&self, provider: &str) -> Result<(), String> {
