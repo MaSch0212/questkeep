@@ -332,19 +332,26 @@ mod tests {
     }
 
     fn fixture_packages() -> Vec<AppxPackage> {
-        // Leaked temp dir path: fn pointers cannot capture, so tests use a fixed layout below.
-        let root = std::env::temp_dir().join("questkeep-xbox-provider-test");
-        let content = root.join("Content");
-        let _ = fs::create_dir_all(content.join("Assets"));
-        let _ = fs::write(
-            content.join("MicrosoftGame.config"),
-            r#"<Game><ShellVisuals DefaultDisplayName="Racer" Square150x150Logo="Assets\Logo.png"/></Game>"#,
-        );
-        let _ = fs::write(content.join("Assets").join("Logo.scale-100.png"), "x");
-        let _ = fs::write(content.join("Assets").join("Logo.scale-200.png"), "x");
+        // Leaked temp dir: fn pointers cannot capture, so the layout is written once per test
+        // process. Writing it on every call raced: tests run in parallel, and a test could read
+        // the config while another one had just truncated it to rewrite it.
+        static CONTENT: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+        let content = CONTENT.get_or_init(|| {
+            let root = std::env::temp_dir()
+                .join(format!("questkeep-xbox-provider-test-{}", std::process::id()));
+            let content = root.join("Content");
+            let _ = fs::create_dir_all(content.join("Assets"));
+            let _ = fs::write(
+                content.join("MicrosoftGame.config"),
+                r#"<Game><ShellVisuals DefaultDisplayName="Racer" Square150x150Logo="Assets\Logo.png"/></Game>"#,
+            );
+            let _ = fs::write(content.join("Assets").join("Logo.scale-100.png"), "x");
+            let _ = fs::write(content.join("Assets").join("Logo.scale-200.png"), "x");
+            content
+        });
         vec![AppxPackage {
             full_name: "Contoso.Racer_1.0.0.0_x64__8wekyb3d8bbwe".into(),
-            root: content,
+            root: content.clone(),
             app_ids: vec!["Game".into()],
         }]
     }
