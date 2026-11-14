@@ -308,6 +308,11 @@ theme is registered, replaced or removed. The last applied theme is cached in `l
 put back before the first render (`main.tsx`), so a start never flashes the default look.
 `ui/src/themes/themes.test.ts` reads the CSS of every built-in theme in both schemes and checks
 WCAG contrast.
+User themes come from the theme editor (`ui/src/components/ThemeEditor.tsx`, state in
+`lib/themeEditor.ts`): a base theme plus variable overrides and free CSS, stored by the core as
+`<data>/themes/<id>.json` (`user_themes.rs`) and turned into a registered theme by
+`lib/userThemes.ts`. The editor shows its draft through `previewAppearance`, which never touches
+the saved settings. See `docs/THEMES.md` for the theme and plugin formats.
 ## Performance
 
 The grid renders only the rows in view (plus 3 rows of overscan), so about 30 to 45 tiles exist in

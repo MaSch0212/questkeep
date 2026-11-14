@@ -96,6 +96,7 @@ crates/questkeep-core/src/     all app logic; sees stores only through the store
   images/                      cover/background cache (mod.rs) + cover and metadata fetchers (fetcher.rs)
   events.rs                    EventBus + CoreEvent
   platform/                    executable icons, URI opening, processes, argument handling (cfg-gated)
+  user_themes.rs               themes from the theme editor (<data>/themes/*.json), plugin export
   settings.rs, paths.rs, seed.rs, error.rs
 src-tauri/src/                 thin shell: commands.rs (one wrapper per command), lib.rs (setup)
   signin.rs                    store login windows and the hidden store-session window, both
@@ -112,6 +113,9 @@ ui/src/
                                the API types are examples/plugins/questkeep-plugin.d.ts
   lib/themes.ts                theme registry (registerTheme), theme parameters as --qk-param-*
                                properties, applyAppearance (data-scheme/data-theme on <html>)
+  lib/userThemes.ts            user themes: generated CSS, the catalogue of theme variables;
+                               userThemeStore.ts (saved ones, registered), themeEditor.ts
+                               (the editor's draft, live preview, save/delete/export)
   lib/*.ts                     pure helpers (gridNav, grouping: groups + virtual rows + slot
                                navigation, copies: a game's store copies, format, names, query,
                                views: drafts/filters/arranging, commandBar) + tests
