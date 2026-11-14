@@ -265,6 +265,12 @@
   --qk-titlebar-tool-height: 30px;
   --qk-titlebar-dot-size: 6px;
   --qk-command-width: 420px;
+  /* Narrower than this, the title bar shows a button that opens the command bar as a popup. */
+  --qk-command-min-width: 200px;
+  /* Auto category dialog: filters and the preview sit side by side while both fit. */
+  --qk-auto-filter-min-width: 420px;
+  --qk-auto-filter-preview-min-width: 240px;
+  --qk-command-popup-top: calc(var(--qk-titlebar-height) + var(--qk-space-1));
   --qk-command-height: 30px;
   --qk-command-panel-width: 500px;
   --qk-command-row-height: 38px;

@@ -1,4 +1,7 @@
+import ArrowLeft from "lucide-solid/icons/arrow-left";
+import ArrowRight from "lucide-solid/icons/arrow-right";
 import ChevronDown from "lucide-solid/icons/chevron-down";
+import Search from "lucide-solid/icons/search";
 import Combine from "lucide-solid/icons/combine";
 import Copy from "lucide-solid/icons/copy";
 import LayoutGrid from "lucide-solid/icons/layout-grid";
@@ -17,7 +20,9 @@ import { createSignal, onCleanup, onMount, Show, type JSX } from "solid-js";
 import * as api from "../lib/api";
 import { addGameMenuItems, type AddGameMenuItem } from "../lib/addGameOptions";
 import { translator } from "../i18n";
+import { shellCommandBar } from "../i18n/shellCommandBar";
 import { shellTitleBar } from "../i18n/shellTitleBar";
+import { readCssPx } from "../lib/layoutMode";
 import { shopping } from "../i18n/shopping";
 import { errorMessage } from "../lib/errors";
 import { store } from "../lib/store";
@@ -32,6 +37,7 @@ import { openLink } from "./settings/openLink";
 import { syncAll, SyncPanel, syncStore } from "./SyncPanel";
 
 const tr = translator(shellTitleBar);
+const trCommand = translator(shellCommandBar);
 const trShop = translator(shopping);
 
 /** "Buy from …" for each store with a website, then "Compare on …" for each price site, as
@@ -115,6 +121,22 @@ const syncButtonLabel = () => {
 
 type Open = "app" | "add" | "launch" | "apps" | "sync" | null;
 
+// The mouse's back and forward buttons, and Alt+Left/Right, move through the history.
+function onMouseUp(event: MouseEvent) {
+  if (event.button !== 3 && event.button !== 4) return;
+  event.preventDefault();
+  void (event.button === 3 ? store.goBack() : store.goForward());
+}
+function onMouseDown(event: MouseEvent) {
+  if (event.button === 3 || event.button === 4) event.preventDefault();
+}
+function onKeyDown(event: KeyboardEvent) {
+  if (!event.altKey || event.ctrlKey || event.shiftKey || event.metaKey) return;
+  if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+  event.preventDefault();
+  void (event.key === "ArrowLeft" ? store.goBack() : store.goForward());
+}
+
 /**
  * Replaces the native window frame (`decorations: false`). Left: the Questkeep menu (every app
  * action in one place) and the Add game, Open launcher and Sync buttons; centre: the command
@@ -128,6 +150,19 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
   const [open, setOpen] = createSignal<Open>(null);
   const [anchor, setAnchor] = createSignal<PopoverAnchor | null>(null);
   const buttons: Partial<Record<Exclude<Open, null>, HTMLButtonElement>> = {};
+  // A narrow window has no room for the command bar: a button opens it as a popup instead.
+  const [compact, setCompact] = createSignal(false);
+  const [floating, setFloating] = createSignal(false);
+  let bar: CommandBarHandle | undefined;
+  let center: HTMLDivElement | undefined;
+  let searchButton: HTMLButtonElement | undefined;
+
+  props.commandRef?.({
+    focus: () => {
+      if (compact()) setFloating(true);
+      else bar?.focus();
+    },
+  });
 
   const syncMaximized = () =>
     void Promise.resolve(api.isWindowMaximized())
@@ -136,6 +171,29 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
 
   onMount(() => {
     syncMaximized();
+
+    if (center) {
+      const element = center;
+      const min = readCssPx(element, "--qk-command-min-width", 200);
+      const observer = new ResizeObserver(() => {
+        // Zero: not laid out (yet), e.g. in tests.
+        const width = element.clientWidth;
+        const narrow = width > 0 && width < min;
+        setCompact(narrow);
+        if (!narrow) setFloating(false);
+      });
+      observer.observe(element);
+      onCleanup(() => observer.disconnect());
+    }
+
+    window.addEventListener("mouseup", onMouseUp);
+    window.addEventListener("mousedown", onMouseDown);
+    window.addEventListener("keydown", onKeyDown);
+    onCleanup(() => {
+      window.removeEventListener("mouseup", onMouseUp);
+      window.removeEventListener("mousedown", onMouseDown);
+      window.removeEventListener("keydown", onKeyDown);
+    });
 
     const unlisteners = [
       api.onWindowResized(syncMaximized),
@@ -275,6 +333,27 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
           <span class="titlebar__wordmark">Questkeep</span>
           <ChevronDown class="icon titlebar__brand-arrow" aria-hidden="true" />
         </button>
+        <button
+          type="button"
+          class="titlebar__tool"
+          aria-label={tr("back")}
+          title={tr("backHint")}
+          disabled={!store.canGoBack()}
+          onClick={() => void store.goBack()}
+        >
+          <ArrowLeft class="icon" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          class="titlebar__tool"
+          aria-label={tr("forward")}
+          title={tr("forwardHint")}
+          disabled={!store.canGoForward()}
+          onClick={() => void store.goForward()}
+        >
+          <ArrowRight class="icon" aria-hidden="true" />
+        </button>
+        <span class="titlebar__separator titlebar__separator--start" aria-hidden="true" />
         {toolButton("add", tr("addGame"), () => (
           <Plus class="icon" aria-hidden="true" />
         ))}
@@ -300,8 +379,36 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
           </Show>
         </span>
       </div>
-      <div class="titlebar__center" data-tauri-drag-region>
-        <CommandBar ref={props.commandRef} />
+      <div class="titlebar__center" data-tauri-drag-region ref={(el) => (center = el)}>
+        <Show when={compact()} fallback={<CommandBar ref={(handle) => (bar = handle)} />}>
+          <button
+            ref={(el) => (searchButton = el)}
+            type="button"
+            class="titlebar__tool"
+            classList={{ "titlebar__tool--open": floating() }}
+            aria-label={trCommand("findGame")}
+            title={`${trCommand("findGame")} (Ctrl+K)`}
+            aria-expanded={floating()}
+            onPointerDown={(event) => {
+              // The open popup would close on this press and the click reopen it.
+              if (floating()) event.stopPropagation();
+            }}
+            onClick={() => setFloating((value) => !value)}
+          >
+            <Search class="icon" aria-hidden="true" />
+          </button>
+          <Show when={floating()}>
+            <div class="titlebar__command-popup">
+              <CommandBar
+                autoFocus
+                onDismiss={() => {
+                  setFloating(false);
+                  searchButton?.focus();
+                }}
+              />
+            </div>
+          </Show>
+        </Show>
       </div>
       <div class="titlebar__end" data-tauri-drag-region>
         <Show when={store.update()}>

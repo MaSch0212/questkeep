@@ -226,6 +226,34 @@ describe("Command bar", () => {
     expect(screen.queryByRole("option")).toBeNull();
   });
 
+  it("goes back and forward between pages with the buttons and the mouse", async () => {
+    vi.mocked(api.getSettings).mockResolvedValue({
+      language: null,
+      showStartPage: true,
+      showStatistics: true,
+      startupPage: { kind: "start" },
+      priceSites: [],
+    } as unknown as Settings);
+    vi.mocked(api.lastPage).mockResolvedValue(null);
+    vi.mocked(api.takeResumeState).mockResolvedValue(null);
+    await store.init();
+    render(() => <TitleBar onAdd={vi.fn<() => void>()} />);
+    const back = screen.getByRole("button", { name: "Back" });
+    const forward = screen.getByRole("button", { name: "Forward" });
+    await vi.waitFor(() => expect(store.page()).toBe("home"));
+    expect(back).toBeDisabled();
+    store.showStatistics();
+    store.showSettings();
+    expect(back).toBeEnabled();
+    await fireEvent.click(back);
+    await vi.waitFor(() => expect(store.page()).toBe("statistics"));
+    expect(forward).toBeEnabled();
+    await fireEvent.mouseUp(window, { button: 3 });
+    await vi.waitFor(() => expect(store.page()).toBe("home"));
+    await fireEvent.keyDown(window, { key: "ArrowRight", altKey: true });
+    await vi.waitFor(() => expect(store.page()).toBe("statistics"));
+  });
+
   it("starts apps from the apps launcher and shows all of them in Explore", async () => {
     const blender = makeGame({ id: "b", name: "Blender", kind: "app" });
     vi.mocked(api.listGames).mockResolvedValue([blender]);

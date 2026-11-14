@@ -23,6 +23,10 @@ const en = {
   restore: "Restore",
   maximize: "Maximize",
   close: "Close",
+  back: "Back",
+  backHint: "Back (Alt+Left, mouse back button)",
+  forward: "Forward",
+  forwardHint: "Forward (Alt+Right, mouse forward button)",
 };
 
 /** The title bar and its menus (TitleBar). */
@@ -52,6 +56,10 @@ export const shellTitleBar: Translations<typeof en> = {
     restore: "Wiederherstellen",
     maximize: "Maximieren",
     close: "Schließen",
+    back: "Zurück",
+    backHint: "Zurück (Alt+Links, Maustaste „Zurück“)",
+    forward: "Vor",
+    forwardHint: "Vor (Alt+Rechts, Maustaste „Vor“)",
   },
   fr: {
     opened: "{provider} a été ouvert. Le nouveau jeu apparaîtra ici une fois configuré là-bas.",
@@ -76,6 +84,10 @@ export const shellTitleBar: Translations<typeof en> = {
     restore: "Restaurer",
     maximize: "Agrandir",
     close: "Fermer",
+    back: "Précédent",
+    backHint: "Précédent (Alt+Gauche, bouton Précédent de la souris)",
+    forward: "Suivant",
+    forwardHint: "Suivant (Alt+Droite, bouton Suivant de la souris)",
   },
   it: {
     opened: "{provider} è stato aperto. Il nuovo gioco compare qui non appena è configurato lì.",
@@ -100,6 +112,10 @@ export const shellTitleBar: Translations<typeof en> = {
     restore: "Ripristina",
     maximize: "Ingrandisci",
     close: "Chiudi",
+    back: "Indietro",
+    backHint: "Indietro (Alt+Sinistra, tasto Indietro del mouse)",
+    forward: "Avanti",
+    forwardHint: "Avanti (Alt+Destra, tasto Avanti del mouse)",
   },
   es: {
     opened: "Se abrió {provider}. El juego nuevo aparecerá aquí cuando esté configurado allí.",
@@ -124,6 +140,10 @@ export const shellTitleBar: Translations<typeof en> = {
     restore: "Restaurar",
     maximize: "Maximizar",
     close: "Cerrar",
+    back: "Atrás",
+    backHint: "Atrás (Alt+Izquierda, botón Atrás del ratón)",
+    forward: "Adelante",
+    forwardHint: "Adelante (Alt+Derecha, botón Adelante del ratón)",
   },
   pt: {
     opened: "{provider} foi aberto. O novo jogo aparece aqui assim que for configurado lá.",
@@ -148,5 +168,9 @@ export const shellTitleBar: Translations<typeof en> = {
     restore: "Restaurar",
     maximize: "Maximizar",
     close: "Fechar",
+    back: "Voltar",
+    backHint: "Voltar (Alt+Esquerda, botão Voltar do mouse)",
+    forward: "Avançar",
+    forwardHint: "Avançar (Alt+Direita, botão Avançar do mouse)",
   },
 };

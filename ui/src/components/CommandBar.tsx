@@ -1,7 +1,7 @@
 import Download from "lucide-solid/icons/download";
 import Play from "lucide-solid/icons/play";
 import Search from "lucide-solid/icons/search";
-import { createSignal, For, onCleanup, Show } from "solid-js";
+import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import type { Game } from "../bindings/Game";
 import { translator } from "../i18n";
 import { shellCommandBar } from "../i18n/shellCommandBar";
@@ -30,7 +30,13 @@ export interface CommandBarHandle {
  * "Find a game…" in the title bar (Ctrl+K). Finds any game, whichever view is open: arrows
  * select, Enter opens the game's page, Ctrl+Enter (or the button) plays or installs it.
  */
-export function CommandBar(props: { ref?: (handle: CommandBarHandle) => void }) {
+export function CommandBar(props: {
+  ref?: (handle: CommandBarHandle) => void;
+  /** Focus the input when shown (the popup of a narrow title bar). */
+  autoFocus?: boolean;
+  /** The bar was closed (Escape, a pick or a click elsewhere). */
+  onDismiss?: () => void;
+}) {
   const [open, setOpen] = createSignal(false);
   const [text, setText] = createSignal("");
   const [results, setResults] = createSignal<Game[]>([]);
@@ -45,6 +51,10 @@ export function CommandBar(props: { ref?: (handle: CommandBarHandle) => void }) 
       input?.focus();
       show();
     },
+  });
+
+  onMount(() => {
+    if (props.autoFocus) input?.focus();
   });
 
   async function load(value: string) {
@@ -85,12 +95,14 @@ export function CommandBar(props: { ref?: (handle: CommandBarHandle) => void }) 
     setText("");
     setResults([]);
     input?.blur();
+    props.onDismiss?.();
   }
 
   function onPointerDown(event: PointerEvent) {
     if (open() && event.target instanceof Node && !root?.contains(event.target)) {
       setOpen(false);
       setText("");
+      props.onDismiss?.();
     }
   }
   document.addEventListener("pointerdown", onPointerDown);

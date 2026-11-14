@@ -2336,6 +2336,26 @@ ul {
 .titlebar__brand {
   display: flex;
   align-items: center;
+/* The command bar of a narrow window, opened from its button. */
+.titlebar__command-popup {
+  position: fixed;
+  top: var(--qk-command-popup-top);
+  left: 50%;
+  z-index: var(--qk-z-popover);
+  width: min(var(--qk-command-width), calc(100vw - var(--qk-space-4)));
+  transform: translateX(-50%);
+  padding: var(--qk-space-1);
+  background: var(--qk-color-surface-raised);
+  border: 1px solid var(--qk-color-border);
+  border-radius: var(--qk-radius-md);
+  box-shadow: var(--qk-shadow-dialog);
+}
+.titlebar__tool:disabled,
+.titlebar__tool:disabled:hover {
+  opacity: 0.4;
+  cursor: default;
+  background: transparent;
+}
   gap: var(--qk-space-2);
   height: var(--qk-titlebar-tool-height);
   margin-right: var(--qk-space-2);
