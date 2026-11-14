@@ -95,6 +95,11 @@ impl DataPaths {
         self.root.join("plugin-data")
     }
 
+    /// Themes made in the theme editor, one JSON file each (see [`crate::user_themes`]).
+    pub fn themes_dir(&self) -> PathBuf {
+        self.root.join("themes")
+    }
+
     /// Where the main window was last placed.
     pub fn window_file(&self) -> PathBuf {
         self.root.join("window.json")

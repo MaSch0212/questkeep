@@ -26,6 +26,7 @@ pub mod seed;
 pub mod settings;
 pub mod statistics;
 pub mod tray;
+pub mod user_themes;
 pub mod window_placement;
 
 pub use error::{CoreError, Result};

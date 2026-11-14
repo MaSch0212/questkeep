@@ -530,6 +530,10 @@ pub fn run() {
             commands::list_launchers,
             commands::open_launcher,
             commands::exit_app,
+            commands::list_user_themes,
+            commands::save_user_theme,
+            commands::delete_user_theme,
+            commands::export_user_theme,
         ]))
         .build(tauri::generate_context!());
 

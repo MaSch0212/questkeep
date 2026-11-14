@@ -41,6 +41,8 @@ import type { PriceSiteSuggestions } from "../bindings/PriceSiteSuggestions";
 import type { SyncTimes } from "../bindings/SyncTimes";
 import type { ViewSection } from "../bindings/ViewSection";
 import type { ViewUiState } from "../bindings/ViewUiState";
+import type { ExportedTheme } from "../bindings/ExportedTheme";
+import type { UserTheme } from "../bindings/UserTheme";
 import type { ValueCount } from "../bindings/ValueCount";
 import type { ViewUpdate } from "../bindings/ViewUpdate";
 
@@ -314,3 +316,12 @@ export const orderLaunchProfiles = (id: string, order: string[]) =>
   invoke<LaunchProfiles>("order_launch_profiles", { id, order });
 export const setDefaultLaunchProfile = (id: string, profileId: string | null) =>
   invoke<LaunchProfiles>("set_default_launch_profile", { id, profileId });
+
+/** The themes made in the theme editor, by name. */
+export const listUserThemes = () => invoke<UserTheme[]>("list_user_themes");
+/** Saves a user theme (new, or replacing the one with its id). */
+export const saveUserTheme = (theme: UserTheme) => invoke<void>("save_user_theme", { theme });
+export const deleteUserTheme = (id: string) => invoke<void>("delete_user_theme", { id });
+/** Writes a saved user theme as a plugin folder into `targetDir`; resolves to that folder. */
+export const exportUserTheme = (id: string, targetDir: string, exported: ExportedTheme) =>
+  invoke<string>("export_user_theme", { id, targetDir, exported });

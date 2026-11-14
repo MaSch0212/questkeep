@@ -1208,3 +1208,50 @@ pub async fn save_plugin_settings(
     })
     .await
 }
+
+/// The themes made in the theme editor.
+#[tauri::command]
+pub async fn list_user_themes(
+    state: State<'_, Arc<AppState>>,
+) -> CmdResult<Vec<questkeep_core::user_themes::UserTheme>> {
+    blocking(state, |s| {
+        questkeep_core::user_themes::UserThemes::new(s.library.paths()).list()
+    })
+    .await
+}
+
+/// Saves a theme from the theme editor (new, or replacing the one with its id).
+#[tauri::command]
+pub async fn save_user_theme(
+    state: State<'_, Arc<AppState>>,
+    theme: questkeep_core::user_themes::UserTheme,
+) -> CmdResult<()> {
+    blocking(state, move |s| {
+        questkeep_core::user_themes::UserThemes::new(s.library.paths()).save(&theme)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn delete_user_theme(state: State<'_, Arc<AppState>>, id: String) -> CmdResult<()> {
+    blocking(state, move |s| {
+        questkeep_core::user_themes::UserThemes::new(s.library.paths()).delete(&id)
+    })
+    .await
+}
+
+/// Writes a user theme as a plugin folder into `target_dir`; returns the folder.
+#[tauri::command]
+pub async fn export_user_theme(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    target_dir: String,
+    exported: questkeep_core::user_themes::ExportedTheme,
+) -> CmdResult<String> {
+    blocking(state, move |s| {
+        questkeep_core::user_themes::UserThemes::new(s.library.paths())
+            .export_plugin(&id, &PathBuf::from(target_dir), &exported)
+            .map(|folder| folder.to_string_lossy().into_owned())
+    })
+    .await
+}
