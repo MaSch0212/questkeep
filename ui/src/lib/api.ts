@@ -224,8 +224,19 @@ export const checkUpdate = () => invoke<UpdateInfo | null>("check_update");
 export const availableUpdate = () => invoke<UpdateInfo | null>("available_update");
 /** Whether the tray asked to show the update dialog before the window listened. */
 export const takeUpdateRequest = () => invoke<boolean>("take_update_request");
-/** Downloads, installs and restarts the app; a downloaded copy opens the release page. */
-export const installUpdate = () => invoke<void>("install_update");
+/** Download progress of an installing update (`update-progress` event). */
+export interface UpdateProgress {
+  downloaded: number;
+  total: number | null;
+  /** The download is done and the installer runs. */
+  installing: boolean;
+}
+/** Downloads, installs and restarts the app; a downloaded copy opens the release page. `resume`
+ * (opaque JSON) comes back from `takeResumeState` on the start after the update. */
+export const installUpdate = (resume: string | null = null) =>
+  invoke<void>("install_update", { resume });
+/** What the window showed before an update restarted the app, once. */
+export const takeResumeState = () => invoke<string | null>("take_resume_state");
 
 // Window controls for the custom title bar. Close and minimize still go through the shell's
 // close/minimize-to-tray handling.

@@ -593,10 +593,16 @@ pub fn take_update_request(updates: State<'_, Updates>) -> bool {
     updates.take_show_request()
 }
 
-/// Downloads and installs the newest release, then restarts the app.
+/// What the window showed before an update restarted the app (JSON from the UI), once.
 #[tauri::command]
-pub async fn install_update(app: tauri::AppHandle) -> CmdResult<()> {
-    crate::updates::install(&app).await
+pub fn take_resume_state(state: State<'_, Arc<AppState>>) -> Option<String> {
+    questkeep_core::resume::take(&state.library.paths().resume_file())
+}
+
+/// Downloads and installs the newest release, then restarts the app with the window as it was.
+#[tauri::command]
+pub async fn install_update(app: tauri::AppHandle, resume: Option<String>) -> CmdResult<()> {
+    crate::updates::install(&app, resume).await
 }
 
 #[tauri::command]

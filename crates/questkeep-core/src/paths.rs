@@ -90,6 +90,11 @@ impl DataPaths {
         self.root.join("window.json")
     }
 
+    /// What the window showed before an update restart (see [`crate::resume`]).
+    pub fn resume_file(&self) -> PathBuf {
+        self.root.join("resume.json")
+    }
+
     /// Turns a path stored relative to the data root into an absolute path.
     pub fn absolute(&self, relative: &str) -> PathBuf {
         self.root.join(relative)

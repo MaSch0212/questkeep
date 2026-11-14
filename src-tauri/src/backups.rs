@@ -102,7 +102,7 @@ pub async fn finish_quit(app: AppHandle, wait: bool) {
     match quit {
         PendingQuit::Exit => crate::tray::exit(&app),
         PendingQuit::Update => {
-            if let Err(err) = crate::updates::install(&app).await {
+            if let Err(err) = crate::updates::install(&app, None).await {
                 tracing::error!(%err, "update after the backup failed");
             }
         }

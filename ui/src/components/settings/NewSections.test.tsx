@@ -403,22 +403,20 @@ describe("UpdatesSection", () => {
     expect(await screen.findByText("You're up to date.")).toBeInTheDocument();
   });
 
-  it("offers an available update with notes and installs after confirming", async () => {
+  it("opens the update dialog for a found update and then offers it on the button", async () => {
     vi.mocked(api.checkUpdate).mockResolvedValue({
       version: "1.2.0",
-      notes: "Line one\nLine two",
+      notes: "Line one",
       date: null,
       manual: false,
     });
-    vi.mocked(api.installUpdate).mockResolvedValue(undefined);
     render(() => <UpdatesSection />);
     await fireEvent.click(screen.getByRole("button", { name: "Check for updates" }));
-    expect(await screen.findByText("Version 1.2.0 is available")).toBeInTheDocument();
-    expect(screen.getByText(/Line one/)).toBeInTheDocument();
-    await fireEvent.click(screen.getByRole("button", { name: /Install and restart/ }));
-    expect(api.installUpdate).not.toHaveBeenCalled();
-    await fireEvent.click(screen.getByRole("button", { name: "Install and restart now" }));
-    await waitFor(() => expect(api.installUpdate).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(store.updateOpen()).toBe(true));
+    expect(store.update()?.version).toBe("1.2.0");
+    store.setUpdateOpen(false);
+    await fireEvent.click(await screen.findByRole("button", { name: "Update to 1.2.0" }));
+    expect(store.updateOpen()).toBe(true);
   });
 
   it("shows check failures", async () => {

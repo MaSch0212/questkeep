@@ -82,6 +82,27 @@ describe("updates", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
+  it("renders markdown notes and shows the download progress while installing", async () => {
+    vi.mocked(api.availableUpdate).mockResolvedValue({
+      ...update,
+      notes: "### Minor changes\n\n- Faster grid",
+    });
+    vi.mocked(api.installUpdate).mockReturnValueOnce(new Promise(() => undefined));
+    await store.init();
+    renderShell();
+    await fireEvent.click(screen.getByRole("button", { name: "Update to 0.3.0" }));
+    expect(screen.getByRole("heading", { name: "Minor changes" })).toBeTruthy();
+    expect(screen.getByRole("listitem")).toHaveTextContent("Faster grid");
+    await fireEvent.click(screen.getByRole("button", { name: "Install and restart" }));
+    expect(api.installUpdate).toHaveBeenCalledWith(expect.stringContaining('"page"'));
+    handlers.get("update-progress")?.({
+      payload: { downloaded: 512, total: 1024, installing: false },
+    });
+    const bar = await screen.findByRole("progressbar");
+    expect(bar).toHaveAttribute("aria-valuenow", "50");
+    expect(screen.getByRole("button", { name: "Later" })).toBeDisabled();
+  });
+
   it("sends a downloaded copy to the release page", async () => {
     vi.mocked(api.availableUpdate).mockResolvedValue({ ...update, manual: true });
     vi.mocked(api.installUpdate).mockResolvedValueOnce(undefined);

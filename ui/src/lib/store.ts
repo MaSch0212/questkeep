@@ -58,6 +58,18 @@ import { takeLegacyViewMode, type ViewMode } from "./viewMode";
 import { HOME_PAGE, startupTarget } from "./startPage";
 import { rangeSelection, toggleSelected } from "./selection";
 import { DEFAULT_VIEW_UI, collapsedKeys, createDebouncedSaver, toggleCollapsed } from "./viewUi";
+import {
+  EMPTY_HISTORY,
+  type NavHistory,
+  type NavLocation,
+  canGoBack,
+  canGoForward,
+  parseLocation,
+  replaceCurrent,
+  sameStep,
+  step,
+  visit,
+} from "./history";
 
 const tr = translator(shellCommon);
 
@@ -146,6 +158,8 @@ function createAppStore() {
   /** A newer app version (checked after start); the title bar offers it. */
   const [update, setUpdate] = createSignal<api.UpdateInfo | null>(null);
   const [updateOpen, setUpdateOpen] = createSignal(false);
+  /** Download progress while the update installs. */
+  const [updateProgress, setUpdateProgress] = createSignal<api.UpdateProgress | null>(null);
   /** Whether the first-run setup or the "no IGDB key" hint shows; null until loaded. */
   const [setup, setSetup] = createSignal<SetupState | null>(null);
   /** The settings section to scroll to when the settings page opens next. */
@@ -487,6 +501,7 @@ function createAppStore() {
    */
   function openGamePage(game: Game) {
     const target = viewForGame(sections(), drafts(), activeViewId(), game);
+    forceStep = true;
     batch(() => {
       setPage("library");
       setKeyword(null);
@@ -558,6 +573,83 @@ function createAppStore() {
     if (target.kind === "home") showHome();
     else if (target.id !== null && target.id !== activeViewId()) selectView(target.id);
     setStarted(true);
+  }
+
+  /** Where the window is now (for back/forward and the start after an update). */
+  function currentLocation(): NavLocation {
+    const current = page();
+    const viewId = activeViewId();
+    const inLibrary = current === "library";
+    return {
+      page: current,
+      viewId,
+      gameId: inLibrary && detailsOpen() ? selectedId() : null,
+      ...(inLibrary && viewId === EXPLORE_ID ? { explore: viewState().query } : {}),
+    };
+  }
+
+  /** Shows a location: its page, its view (Explore rebuilt with its filters) and its game. */
+  async function goTo(location: NavLocation): Promise<void> {
+    if (location.page === "home") return showHome();
+    if (location.page === "statistics") return showStatistics();
+    if (location.page === "settings") {
+      setPage("settings");
+      return;
+    }
+    const exists =
+      location.viewId === EXPLORE_ID ||
+      allViews(sections()).some((view) => view.id === location.viewId);
+    const viewId = exists ? location.viewId : (allViews(sections())[0]?.id ?? null);
+    const game =
+      location.gameId === null
+        ? null
+        : (games().find((g) => g.id === location.gameId) ??
+          (await optional(() => api.getGame(location.gameId ?? ""))));
+    batch(() => {
+      if (viewId === EXPLORE_ID) {
+        if (activeViewId() !== EXPLORE_ID || page() !== "library") openExplore(location.explore);
+        else setPage("library");
+      } else if (viewId !== null) selectView(viewId);
+      else setPage("library");
+      if (game) {
+        setSelectedId(game.id);
+        setDetailsOpen(true);
+        if (!games().some((g) => g.id === game.id)) setPinnedGame(game);
+      } else setDetailsOpen(false);
+    });
+    scheduleRefresh(0);
+  }
+
+  // Back/forward: page and view changes become steps; another game or filter in the same view
+  // only updates the current step. Opening a game's page from elsewhere is a step of its own.
+  const [history, setHistory] = createSignal<NavHistory>(EMPTY_HISTORY);
+  let travelling = false;
+  let forceStep = false;
+  createEffect(
+    on(
+      [started, page, activeViewId, detailsOpen, selectedId, () => viewState().query],
+      ([ready]) => {
+        if (!ready) return;
+        const location = currentLocation();
+        const now = history();
+        const previous = now.entries[now.index];
+        const newStep = !travelling && previous && (forceStep || !sameStep(previous, location));
+        forceStep = false;
+        setHistory(newStep ? visit(now, location) : replaceCurrent(now, location));
+      },
+    ),
+  );
+
+  async function travel(delta: -1 | 1) {
+    const moved = step(history(), delta);
+    if (!moved) return;
+    setHistory(moved.history);
+    travelling = true;
+    try {
+      await goTo(moved.location);
+    } finally {
+      travelling = false;
+    }
   }
 
   // Remember the open start page or view for "The page I had open last" (never settings).
@@ -1054,6 +1146,7 @@ function createAppStore() {
       listen("app-notice", () => void showNotices()).then(keep),
       listen<api.UpdateInfo>("update-available", (e) => setUpdate(e.payload)).then(keep),
       listen("show-update", () => void showUpdateRequest()).then(keep),
+      listen<api.UpdateProgress>("update-progress", (e) => setUpdateProgress(e.payload)).then(keep),
     ]);
     const loads = Promise.allSettled([
       loadProviders(),
@@ -1066,15 +1159,21 @@ function createAppStore() {
         loadViews(),
         optional(api.getSettings),
         optional(api.lastPage),
+        optional(api.takeResumeState),
         loadViewUi().catch(() => undefined),
-      ]).then(([, settings, lastPage]) => {
+      ]).then(async ([, settings, lastPage, resume]) => {
         if (settings) {
           setLanguage(settings.language);
           setShowStartPage(settings.showStartPage);
           setShowStatisticsPage(settings.showStatistics);
           setPriceSites(settings.priceSites);
         }
-        openStartupPage(settings?.startupPage ?? { kind: "start" }, lastPage ?? null);
+        // After an update the window opens where it was; otherwise on the startup page.
+        const resumed = parseLocation(resume);
+        if (resumed) {
+          await goTo(resumed);
+          setStarted(true);
+        } else openStartupPage(settings?.startupPage ?? { kind: "start" }, lastPage ?? null);
         return refresh();
       }),
       loadSyncTimes(),
@@ -1115,6 +1214,7 @@ function createAppStore() {
       setAccountWarnings([]);
       setBackupProgress(null);
       setQuitDuringBackup(false);
+      setUpdateProgress(null);
       setActiveViewId(null);
       setDrafts({});
       setKeyword(null);
@@ -1134,6 +1234,7 @@ function createAppStore() {
       setShowStatisticsPage(true);
       setStartData(null);
       setStarted(false);
+      setHistory(EMPTY_HISTORY);
       libraryScroll.grid = 0;
       libraryScroll.list = 0;
       libraryScroll.details = 0;
@@ -1176,6 +1277,14 @@ function createAppStore() {
     setUpdate,
     updateOpen,
     setUpdateOpen,
+    updateProgress,
+    setUpdateProgress,
+    /** Downloads and installs the update; the start after it reopens this page. */
+    installUpdate: () => api.installUpdate(JSON.stringify(currentLocation())),
+    canGoBack: () => canGoBack(history()),
+    canGoForward: () => canGoForward(history()),
+    goBack: () => travel(-1),
+    goForward: () => travel(1),
     checkDuplicates,
     viewMode,
     setViewMode,

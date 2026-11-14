@@ -25,15 +25,7 @@ const en = {
   checking: "Checking…",
   check: "Check for updates",
   upToDate: "You're up to date.",
-  available: "Version {version} is available",
-  installing: "Installing…",
-  install: "Install and restart",
-  confirmInstall: "Questkeep will download the update and restart. Continue?",
-  manualUpdateHint:
-    "This copy was downloaded rather than installed, so it can't update itself. Download the new version from the release page.",
-  openReleasePage: "Open download page",
-  installNow: "Install and restart now",
-  cancel: "Cancel",
+  updateTo: "Update to {version}",
 };
 
 /** Settings page frame, About, Developer and Updates (SettingsPage and small sections). */
@@ -64,15 +56,7 @@ export const settingsPage: Translations<typeof en> = {
     checking: "Wird geprüft…",
     check: "Nach Updates suchen",
     upToDate: "Du bist auf dem neuesten Stand.",
-    available: "Version {version} ist verfügbar",
-    installing: "Wird installiert…",
-    install: "Installieren und neu starten",
-    confirmInstall: "Questkeep lädt das Update herunter und startet neu. Fortfahren?",
-    manualUpdateHint:
-      "Diese Kopie wurde heruntergeladen statt installiert und kann sich daher nicht selbst aktualisieren. Lade die neue Version von der Release-Seite herunter.",
-    openReleasePage: "Download-Seite öffnen",
-    installNow: "Jetzt installieren und neu starten",
-    cancel: "Abbrechen",
+    updateTo: "Auf {version} aktualisieren",
   },
   fr: {
     settings: "Paramètres",
@@ -99,15 +83,7 @@ export const settingsPage: Translations<typeof en> = {
     checking: "Vérification…",
     check: "Rechercher des mises à jour",
     upToDate: "Vous êtes à jour.",
-    available: "La version {version} est disponible",
-    installing: "Installation…",
-    install: "Installer et redémarrer",
-    confirmInstall: "Questkeep va télécharger la mise à jour et redémarrer. Continuer ?",
-    manualUpdateHint:
-      "Cette copie a été téléchargée et non installée : elle ne peut pas se mettre à jour seule. Téléchargez la nouvelle version depuis la page de la version.",
-    openReleasePage: "Ouvrir la page de téléchargement",
-    installNow: "Installer et redémarrer maintenant",
-    cancel: "Annuler",
+    updateTo: "Mettre à jour vers {version}",
   },
   it: {
     settings: "Impostazioni",
@@ -134,15 +110,7 @@ export const settingsPage: Translations<typeof en> = {
     checking: "Controllo…",
     check: "Cerca aggiornamenti",
     upToDate: "Sei aggiornato.",
-    available: "La versione {version} è disponibile",
-    installing: "Installazione…",
-    install: "Installa e riavvia",
-    confirmInstall: "Questkeep scaricherà l'aggiornamento e si riavvierà. Continuare?",
-    manualUpdateHint:
-      "Questa copia è stata scaricata, non installata, quindi non può aggiornarsi da sola. Scarica la nuova versione dalla pagina della release.",
-    openReleasePage: "Apri la pagina di download",
-    installNow: "Installa e riavvia ora",
-    cancel: "Annulla",
+    updateTo: "Aggiorna a {version}",
   },
   es: {
     settings: "Configuración",
@@ -169,15 +137,7 @@ export const settingsPage: Translations<typeof en> = {
     checking: "Comprobando…",
     check: "Buscar actualizaciones",
     upToDate: "Estás al día.",
-    available: "La versión {version} está disponible",
-    installing: "Instalando…",
-    install: "Instalar y reiniciar",
-    confirmInstall: "Questkeep descargará la actualización y se reiniciará. ¿Continuar?",
-    manualUpdateHint:
-      "Esta copia se descargó en lugar de instalarse, así que no puede actualizarse sola. Descarga la nueva versión desde la página de la versión.",
-    openReleasePage: "Abrir la página de descarga",
-    installNow: "Instalar y reiniciar ahora",
-    cancel: "Cancelar",
+    updateTo: "Actualizar a {version}",
   },
   pt: {
     settings: "Configurações",
@@ -204,14 +164,6 @@ export const settingsPage: Translations<typeof en> = {
     checking: "Verificando…",
     check: "Verificar atualizações",
     upToDate: "Você está atualizado.",
-    available: "A versão {version} está disponível",
-    installing: "Instalando…",
-    install: "Instalar e reiniciar",
-    confirmInstall: "O Questkeep vai baixar a atualização e reiniciar. Continuar?",
-    manualUpdateHint:
-      "Esta cópia foi baixada em vez de instalada, por isso não pode se atualizar sozinha. Baixe a nova versão na página da versão.",
-    openReleasePage: "Abrir a página de download",
-    installNow: "Instalar e reiniciar agora",
-    cancel: "Cancelar",
+    updateTo: "Atualizar para {version}",
   },
 };

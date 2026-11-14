@@ -1,5 +1,13 @@
 import X from "lucide-solid/icons/x";
-import { createSignal, createUniqueId, onCleanup, onMount, type ParentProps } from "solid-js";
+import {
+  createSignal,
+  createUniqueId,
+  type JSX,
+  onCleanup,
+  onMount,
+  type ParentProps,
+  Show,
+} from "solid-js";
 import { translator } from "../i18n";
 import { shellCommon } from "../i18n/shellCommon";
 
@@ -12,6 +20,8 @@ interface ModalProps {
   title: string;
   /** For lists with long rows (e.g. game names side by side). */
   wide?: boolean;
+  /** Stays below the scrolling body (e.g. the dialog buttons). */
+  footer?: JSX.Element;
   onClose: () => void;
 }
 
@@ -86,6 +96,9 @@ export function Modal(props: ParentProps<ModalProps>) {
           </button>
         </header>
         <div class="modal__body">{props.children}</div>
+        <Show when={props.footer}>
+          <footer class="modal__footer">{props.footer}</footer>
+        </Show>
       </div>
     </div>
   );

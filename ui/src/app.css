@@ -237,6 +237,11 @@ ul {
 
 /* Buttons and inputs */
 .btn {
+  /* Icon and label side by side with a gap, also when the markup has no space between them. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--qk-space-2);
   font-family: var(--qk-font-family);
   white-space: nowrap;
   min-height: var(--qk-control-height);
@@ -2042,8 +2047,17 @@ ul {
   width: var(--qk-dialog-wide-width);
 }
 .modal__body {
+  flex: 1 1 auto;
+  min-height: 0;
   padding: var(--qk-space-4);
   overflow-y: auto;
+}
+.modal__footer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-3);
+  padding: var(--qk-space-3) var(--qk-space-4);
+  border-top: 1px solid var(--qk-color-border);
 }
 .settings {
   display: flex;
@@ -3801,8 +3815,53 @@ ul {
   color: var(--qk-color-text-muted);
   font-size: var(--qk-font-size-sm);
 }
-.update-notes {
-  white-space: pre-line;
+/* Rendered markdown (release notes) */
+.markdown {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-2);
+  line-height: 1.5;
+}
+.markdown > * {
+  margin: 0;
+}
+.markdown h1,
+.markdown h2,
+.markdown h3,
+.markdown h4 {
+  font-size: var(--qk-font-size-md);
+  font-weight: var(--qk-font-weight-bold);
+  margin-top: var(--qk-space-2);
+}
+.markdown h1:first-child,
+.markdown h2:first-child,
+.markdown h3:first-child,
+.markdown h4:first-child {
+  margin-top: 0;
+}
+.markdown ul,
+.markdown ol {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-1);
+  padding-left: var(--qk-space-5);
+}
+.markdown code {
+  font-family: var(--qk-font-mono);
+  font-size: var(--qk-font-size-sm);
+  padding: 0 var(--qk-space-1);
+  border-radius: var(--qk-radius-sm);
+  background: var(--qk-color-surface-active);
+}
+.markdown a {
+  color: var(--qk-color-accent);
+}
+.update-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-1);
+  font-size: var(--qk-font-size-sm);
+  color: var(--qk-color-text-muted);
 }
 
 /* Filter panel: quick filters, the filter tree and its pickers */

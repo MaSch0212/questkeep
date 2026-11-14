@@ -1,5 +1,4 @@
 import Download from "lucide-solid/icons/download";
-import ExternalLink from "lucide-solid/icons/external-link";
 import RefreshCw from "lucide-solid/icons/refresh-cw";
 import { createSignal, Show } from "solid-js";
 import * as api from "../../lib/api";
@@ -10,152 +9,64 @@ import { store } from "../../lib/store";
 
 const tr = translator(settingsPage);
 
-type State =
-  | { kind: "idle" }
-  | { kind: "checking" }
-  | { kind: "current" }
-  | { kind: "available"; update: api.UpdateInfo; confirming: boolean }
-  | { kind: "installing"; update: api.UpdateInfo }
-  | { kind: "error"; message: string };
+type State = "idle" | "checking" | "current";
 
+/** Checks for a newer version; a found one (also by the check after start) opens the update
+ * dialog, and the button then offers it directly. */
 export function UpdatesSection() {
-  // The check after start may have found one already.
-  const known = store.update();
-  const [state, setState] = createSignal<State>(
-    known ? { kind: "available", update: known, confirming: false } : { kind: "idle" },
-  );
+  const [state, setState] = createSignal<State>("idle");
+  const [error, setError] = createSignal<string | null>(null);
 
   async function check() {
-    setState({ kind: "checking" });
+    setState("checking");
+    setError(null);
     try {
       const update = await api.checkUpdate();
       store.setUpdate(update);
-      setState(update ? { kind: "available", update, confirming: false } : { kind: "current" });
-    } catch (error) {
-      setState({ kind: "error", message: errorMessage(error) });
+      setState(update ? "idle" : "current");
+      if (update) store.setUpdateOpen(true);
+    } catch (failure) {
+      setState("idle");
+      setError(errorMessage(failure));
     }
   }
-
-  async function openReleasePage() {
-    try {
-      await api.installUpdate();
-    } catch (error) {
-      setState({ kind: "error", message: errorMessage(error) });
-    }
-  }
-
-  async function install(update: api.UpdateInfo) {
-    setState({ kind: "installing", update });
-    try {
-      await api.installUpdate();
-    } catch (error) {
-      setState({ kind: "error", message: errorMessage(error) });
-    }
-  }
-
-  const available = () => {
-    const s = state();
-    return s.kind === "available" ? s : null;
-  };
-  const installing = () => {
-    const s = state();
-    return s.kind === "installing" ? s : null;
-  };
-  const shown = () => available()?.update ?? installing()?.update ?? null;
 
   return (
     <div class="form">
       <div class="scan-row">
-        <button
-          type="button"
-          class="btn"
-          disabled={state().kind === "checking" || state().kind === "installing"}
-          onClick={() => void check()}
+        <Show
+          when={store.update()}
+          fallback={
+            <button
+              type="button"
+              class="btn"
+              disabled={state() === "checking"}
+              onClick={() => void check()}
+            >
+              <RefreshCw class="icon" aria-hidden="true" />
+              {state() === "checking" ? tr("checking") : tr("check")}
+            </button>
+          }
         >
-          <RefreshCw class="icon" aria-hidden="true" />{" "}
-          {state().kind === "checking" ? tr("checking") : tr("check")}
-        </button>
-        <Show when={state().kind === "current"}>
+          {(update) => (
+            <button
+              type="button"
+              class="btn btn--primary"
+              onClick={() => store.setUpdateOpen(true)}
+            >
+              <Download class="icon" aria-hidden="true" />
+              {tr("updateTo", { version: update().version })}
+            </button>
+          )}
+        </Show>
+        <Show when={state() === "current"}>
           <span role="status">{tr("upToDate")}</span>
         </Show>
       </div>
-      <Show when={state()} keyed>
-        {(s) => (
-          <Show when={s.kind === "error" ? s.message : null}>
-            {(message) => (
-              <p class="error-text" role="alert">
-                {message()}
-              </p>
-            )}
-          </Show>
-        )}
-      </Show>
-      <Show when={shown()}>
-        {(update) => (
-          <div class="form">
-            <p role="status">{tr("available", { version: update().version })}</p>
-            <Show when={update().notes}>{(notes) => <p class="update-notes">{notes()}</p>}</Show>
-            <Show when={update().manual}>
-              <p>{tr("manualUpdateHint")}</p>
-              <div>
-                <button
-                  type="button"
-                  class="btn btn--primary"
-                  onClick={() => void openReleasePage()}
-                >
-                  <ExternalLink class="icon" aria-hidden="true" /> {tr("openReleasePage")}
-                </button>
-              </div>
-            </Show>
-            <Show
-              when={!update().manual && installing() === null}
-              fallback={
-                <Show when={!update().manual}>
-                  <button type="button" class="btn btn--primary" disabled>
-                    {tr("installing")}
-                  </button>
-                </Show>
-              }
-            >
-              <Show
-                when={available()?.confirming}
-                fallback={
-                  <div>
-                    <button
-                      type="button"
-                      class="btn btn--primary"
-                      onClick={() =>
-                        setState({ kind: "available", update: update(), confirming: true })
-                      }
-                    >
-                      <Download class="icon" aria-hidden="true" /> {tr("install")}
-                    </button>
-                  </div>
-                }
-              >
-                <p>{tr("confirmInstall")}</p>
-                <div class="details__row">
-                  <button
-                    type="button"
-                    class="btn btn--primary"
-                    onClick={() => void install(update())}
-                  >
-                    {tr("installNow")}
-                  </button>
-                  <button
-                    type="button"
-                    class="btn"
-                    onClick={() =>
-                      setState({ kind: "available", update: update(), confirming: false })
-                    }
-                  >
-                    {tr("cancel")}
-                  </button>
-                </div>
-              </Show>
-            </Show>
-          </div>
-        )}
+      <Show when={error()}>
+        <p class="error-text" role="alert">
+          {error()}
+        </p>
       </Show>
     </div>
   );

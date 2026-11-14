@@ -14,10 +14,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@floating-ui/dom": "^1.0.0",
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-dialog": "^2.0.0",
     "@tauri-apps/plugin-opener": "^2.0.0",
+    "dompurify": "^3.0.0",
     "lucide-solid": "^1.0.0",
+    "marked": "^18.0.0",
     "solid-js": "^1.0.0"
   },
   "devDependencies": {

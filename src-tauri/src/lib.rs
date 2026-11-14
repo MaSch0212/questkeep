@@ -389,7 +389,9 @@ pub fn run() {
             }
             let settings = state.library.settings();
             let args = tray_logic::parse_launch_args(std::env::args());
-            if tray_logic::start_in_tray(&settings, args, lifecycle.tray_available()) {
+            // After an update the window comes back as it was, never into the tray.
+            let resuming = questkeep_core::resume::pending(&state.library.paths().resume_file());
+            if !resuming && tray_logic::start_in_tray(&settings, args, lifecycle.tray_available()) {
                 tracing::info!("started minimized: staying in the tray");
                 lifecycle.set_hidden_to_tray(true);
             } else {
@@ -468,6 +470,7 @@ pub fn run() {
             commands::available_update,
             commands::take_update_request,
             commands::install_update,
+            commands::take_resume_state,
             commands::account_status,
             commands::sign_in,
             commands::sign_in_with_code,
