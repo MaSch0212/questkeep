@@ -294,6 +294,20 @@ id with an in-memory app-only token (`client_credentials`); a signed-in account 
 Payload types are generated into `ui/src/bindings/` by `ts-rs` during `cargo test`. The check
 script fails if the generated files differ from what's committed.
 
+## Appearance and themes
+
+`Settings.appearance` holds the scheme (system, light, dark), the theme id and the saved theme
+parameters (by theme id, then key). `ui/src/lib/themes.ts` turns that into what the page carries:
+`data-scheme` and `data-theme` on `<html>`, one `<style id="qk-theme">` with the active theme's
+CSS (after the app's stylesheets), and the parameters as `--qk-param-<key>` custom properties
+(selects and toggles also as `data-param-<key>` attributes). `ui/src/theme.css` is the default
+theme's palette for both schemes; every other theme overrides `--qk-*` variables in rules on
+`:root[data-theme="<id>"]`. Built-in themes live in `ui/src/themes/` (`<id>.css` + `index.ts`);
+plugins and the theme editor add theirs with `registerTheme`, and the page follows when the chosen
+theme is registered, replaced or removed. The last applied theme is cached in `localStorage` and
+put back before the first render (`main.tsx`), so a start never flashes the default look.
+`ui/src/themes/themes.test.ts` reads the CSS of every built-in theme in both schemes and checks
+WCAG contrast.
 ## Performance
 
 The grid renders only the rows in view (plus 3 rows of overscan), so about 30 to 45 tiles exist in
