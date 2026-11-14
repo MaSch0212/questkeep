@@ -283,6 +283,8 @@ export { activeThemeId };
 
 /** The settings last applied; null until `applyAppearance` ran (a cached theme may show). */
 let current: Appearance | null = null;
+/** Shown instead of `current` while set (see `previewAppearance`). */
+let preview: ((applied: Appearance) => Appearance) | null = null;
 /** The properties and attributes this module put on `<html>`, to take them off again. */
 let appliedVars: string[] = [];
 let appliedAttrs: string[] = [];
@@ -316,9 +318,12 @@ export function applyResolved(applied: AppliedTheme): void {
 }
 
 function reapply(): void {
-  if (!current) return;
-  const applied = resolveAppearance(current, systemDark());
+  const shown = preview ? preview(current ?? DEFAULT_APPEARANCE) : current;
+  if (!shown) return;
+  const applied = resolveAppearance(shown, systemDark());
   applyResolved(applied);
+  // A preview is not what the next start should show.
+  if (preview) return;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(applied));
   } catch {
@@ -347,6 +352,23 @@ export function applyAppearance(appearance: Appearance | null | undefined): void
   current = { ...DEFAULT_APPEARANCE, ...appearance };
   listen();
   reapply();
+}
+
+/**
+ * Shows an appearance without making it the applied one (the theme editor's live preview). The
+ * function gets the applied settings and returns what to show instead; it runs again whenever
+ * the page is re-applied, so settings saved meanwhile (a parameter, say) still come through.
+ * `null` ends the preview and shows the applied settings again.
+ */
+export function previewAppearance(make: ((applied: Appearance) => Appearance) | null): void {
+  preview = make;
+  listen();
+  reapply();
+}
+
+/** The settings last given to `applyAppearance` (what shows when no preview is on). */
+export function appliedAppearance(): Appearance | null {
+  return current;
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

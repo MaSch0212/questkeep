@@ -4,15 +4,12 @@ import { LOCALES, setLanguage } from "../i18n";
 import { composite, contrastRatio, toHex, type Rgba } from "../lib/color";
 import { resolveColor, rootVars } from "../lib/cssVars";
 import { paramProperties, themeText, type Scheme, type ThemeDef } from "../lib/themes";
+import baseCss from "../theme.css?raw";
 import { BUILTIN_THEMES } from ".";
 
-// Vitest hands out empty strings for CSS imports (also `?raw`), so the tests read the files.
-const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
-const baseCss = read("../theme.css");
-const THEMES: ThemeDef[] = BUILTIN_THEMES.map((theme) => ({
-  ...theme,
-  css: read(`./${theme.id}.css`),
-}));
+const read = (path: string) =>
+  readFileSync(new URL(path, import.meta.url), "utf8").replace(/\r\n/g, "\n");
+const THEMES: ThemeDef[] = BUILTIN_THEMES;
 
 const SCHEMES: Scheme[] = ["dark", "light"];
 
@@ -35,6 +32,12 @@ describe("built-in themes", () => {
     expect(BUILTIN_THEMES[0]?.id).toBe("questkeep");
     expect(BUILTIN_THEMES.length).toBeGreaterThanOrEqual(7);
     expect(new Set(BUILTIN_THEMES.map((t) => t.id)).size).toBe(BUILTIN_THEMES.length);
+  });
+
+  it.each(THEMES)("$id is wired to its own CSS file", (theme) => {
+    expect(theme.css.trim()).not.toBe("");
+    expect(theme.css.replace(/\r\n/g, "\n")).toBe(read(`./${theme.id}.css`));
+    expect(baseCss.replace(/\r\n/g, "\n")).toBe(read("../theme.css"));
   });
 
   it.each(THEMES)("$id starts with the accent and keeps extras few", (theme) => {

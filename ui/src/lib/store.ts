@@ -6,6 +6,7 @@ import type { AccountWarning } from "../bindings/AccountWarning";
 import { setLanguage, translator } from "../i18n";
 import { shellCommon } from "../i18n/shellCommon";
 import { applyAppearance } from "./themes";
+import { loadUserThemes } from "./userThemeStore";
 import type { AppInfo } from "../bindings/AppInfo";
 import type { Category } from "../bindings/Category";
 import type { CompletionSettings } from "../bindings/CompletionSettings";
@@ -1201,6 +1202,8 @@ function createAppStore() {
         if (settings) {
           setLanguage(settings.language);
           applyAppearance(settings.appearance);
+          // The user's own themes; one of them may be the chosen theme.
+          void loadUserThemes().catch(() => undefined);
           setShowStartPage(settings.showStartPage);
           setShowStatisticsPage(settings.showStatistics);
           setPriceSites(settings.priceSites);

@@ -22,6 +22,8 @@ export default defineConfig({
     globals: false,
     setupFiles: ["./src/test-setup.ts"],
     include: ["src/**/*.test.{ts,tsx}"],
+    // Stylesheets are left out of tests, except those imported as text (`?raw`: theme CSS).
+    css: { include: [/\.css\?raw$/] },
   },
   resolve: {
     conditions: ["development", "browser"],
