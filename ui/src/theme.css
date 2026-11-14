@@ -261,6 +261,12 @@
   --qk-z-sticky: 2;
   --qk-z-modal: 10;
   --qk-z-popover: 20;
+  --qk-z-tooltip: 30;
+  /* Tooltips: space to their element and to the window edge, and how wide they get. */
+  --qk-tooltip-gap: 6px;
+  --qk-tooltip-edge: 8px;
+  --qk-tooltip-max-width: 320px;
+  --qk-shadow-tooltip: 0 4px 16px #00000088;
   --qk-titlebar-tool-width: 34px;
   --qk-titlebar-tool-height: 30px;
   --qk-titlebar-dot-size: 6px;

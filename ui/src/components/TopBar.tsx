@@ -137,7 +137,7 @@ export function TopBar(props: { keywordRef?: (handle: KeywordFilterHandle) => vo
         class="tool-btn"
         classList={{ "tool-btn--open": open() === "filters", "tool-btn--wide": filters() > 0 }}
         aria-label={filters() > 0 ? tr("filtersActive", { count: filters() }) : tr("filters")}
-        title={tr("filters")}
+        data-tooltip={tr("filters")}
         aria-haspopup="dialog"
         aria-expanded={open() === "filters"}
         onClick={() => toggle("filters", "start")}
@@ -155,7 +155,7 @@ export function TopBar(props: { keywordRef?: (handle: KeywordFilterHandle) => vo
         class="tool-btn"
         classList={{ "tool-btn--open": open() === "sort" }}
         aria-label={sortButtonLabel()}
-        title={sortButtonLabel()}
+        data-tooltip={sortButtonLabel()}
         aria-haspopup="menu"
         aria-expanded={open() === "sort"}
         onClick={() => toggle("sort", "start")}
@@ -176,7 +176,7 @@ export function TopBar(props: { keywordRef?: (handle: KeywordFilterHandle) => vo
           "tool-btn--on": store.groupBy() !== "none",
         }}
         aria-label={groupButtonLabel()}
-        title={groupButtonLabel()}
+        data-tooltip={groupButtonLabel()}
         aria-haspopup="menu"
         aria-expanded={open() === "group"}
         onClick={() => toggle("group", "start")}
@@ -190,7 +190,7 @@ export function TopBar(props: { keywordRef?: (handle: KeywordFilterHandle) => vo
           class="tool-btn"
           classList={{ "tool-btn--open": open() === "jump" }}
           aria-label={tr("jumpToGroup")}
-          title={tr("jumpTitle")}
+          data-tooltip={tr("jumpTitle")}
           aria-haspopup="dialog"
           aria-expanded={open() === "jump"}
           onClick={() => toggle("jump", "start")}
@@ -218,7 +218,7 @@ export function TopBar(props: { keywordRef?: (handle: KeywordFilterHandle) => vo
             type="button"
             class="view-actions__btn"
             aria-label={tr("resetTo", { name: viewName() })}
-            title={tr("resetTitle")}
+            data-tooltip={tr("resetTitle")}
             onClick={() => store.resetView()}
           >
             <Undo2 class="icon" aria-hidden="true" />
@@ -229,7 +229,7 @@ export function TopBar(props: { keywordRef?: (handle: KeywordFilterHandle) => vo
             class="view-actions__btn"
             classList={{ "view-actions__btn--open": open() === "save" }}
             aria-label={tr("saveView")}
-            title={tr("saveView")}
+            data-tooltip={tr("saveView")}
             aria-haspopup="menu"
             aria-expanded={open() === "save"}
             onClick={() => toggle("save", "start")}
@@ -256,7 +256,7 @@ export function TopBar(props: { keywordRef?: (handle: KeywordFilterHandle) => vo
               classList={{ "icon-btn--active": store.viewMode() === layout.id }}
               aria-label={tr(layout.key)}
               aria-pressed={store.viewMode() === layout.id}
-              title={tr(layout.key)}
+              data-tooltip={tr(layout.key)}
               onClick={() => store.setViewMode(layout.id)}
             >
               <layout.icon class="icon" aria-hidden="true" />

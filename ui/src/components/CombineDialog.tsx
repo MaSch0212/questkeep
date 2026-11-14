@@ -174,7 +174,7 @@ export function CombineDialog(props: { ids: string[]; onClose: () => void }) {
                                           checked={isChosen(row, game.id, value())}
                                           onChange={() => choose(row, game.id, value())}
                                         />
-                                        <span class="combine__value" title={value() ?? ""}>
+                                        <span class="combine__value" data-tooltip={value() ?? ""}>
                                           {value()}
                                         </span>
                                       </label>

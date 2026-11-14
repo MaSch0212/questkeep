@@ -97,7 +97,7 @@ function Field(props: {
             class="icon-btn icon-btn--bordered"
             aria-label={tr(shown() ? "hideField" : "showField", { label: props.field.label })}
             aria-pressed={shown()}
-            title={tr(shown() ? "hideField" : "showField", { label: props.field.label })}
+            data-tooltip={tr(shown() ? "hideField" : "showField", { label: props.field.label })}
             onClick={() => setShown((v) => !v)}
           >
             <Show when={shown()} fallback={<Eye class="icon" aria-hidden="true" />}>

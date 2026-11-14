@@ -69,10 +69,15 @@ export function GameRow(props: GameRowProps) {
       <div class="list-row__thumb">
         <GameIcon game={props.game} />
       </div>
-      <div class="list-row__name" title={props.game.name}>
+      <div class="list-row__name" data-tooltip={props.game.name}>
         <span class="list-row__text">{props.game.name}</span>
         <Show when={props.game.favorite}>
-          <span class="list-row__star" title={tr("favorite")}>
+          <span
+            class="list-row__star"
+            role="img"
+            aria-label={tr("favorite")}
+            data-tooltip={tr("favorite")}
+          >
             <Star class="icon icon--filled" aria-hidden="true" />
           </span>
         </Show>
@@ -90,7 +95,7 @@ export function GameRow(props: GameRowProps) {
                 <div
                   class="list-row__cell"
                   classList={{ "list-row__cell--numeric": column().def.numeric === true }}
-                  title={text()}
+                  data-tooltip={text()}
                 >
                   {text()}
                 </div>
@@ -98,7 +103,7 @@ export function GameRow(props: GameRowProps) {
             })()}
           >
             <Match when={column().def.id === "source"}>
-              <div class="list-row__cell list-row__source" title={storeNames(props.game)}>
+              <div class="list-row__cell list-row__source" data-tooltip={storeNames(props.game)}>
                 <SourceIcons game={props.game} />
                 <Show
                   when={stores().length === 1}

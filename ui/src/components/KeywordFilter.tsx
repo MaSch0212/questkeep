@@ -76,7 +76,7 @@ export function KeywordFilter(props: { ref?: (handle: KeywordFilterHandle) => vo
         type="button"
         class="keyword__icon"
         aria-label={tr("iconLabel")}
-        title={tr("iconTitle")}
+        data-tooltip={tr("iconTitle")}
         aria-expanded={expanded() || active()}
         // Keeps focus in the field, so clicking the icon of an open, empty field closes it.
         onPointerDown={(event) => event.preventDefault()}
@@ -111,7 +111,7 @@ export function KeywordFilter(props: { ref?: (handle: KeywordFilterHandle) => vo
         type="button"
         class="keyword__clear"
         aria-label={tr("clearLabel")}
-        title={tr("clearTitle")}
+        data-tooltip={tr("clearTitle")}
         tabIndex={expanded() || active() ? 0 : -1}
         onClick={clear}
       >

@@ -244,7 +244,7 @@ export function MultiSelectPanel(props: {
                         aria-pressed={
                           coverage() === "all" ? true : coverage() === "some" ? "mixed" : false
                         }
-                        title={
+                        data-tooltip={
                           coverage() === "all"
                             ? tr("takeOffAll", { name: category.name })
                             : tr("addToAll", { name: category.name })

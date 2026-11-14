@@ -121,7 +121,7 @@ function BarRow(props: {
   title?: string;
 }) {
   return (
-    <li class="stats-bar" title={props.title}>
+    <li class="stats-bar" data-tooltip={props.title}>
       <span class="stats-bar__label">{props.label}</span>
       <span class="stats-bar__track" aria-hidden="true">
         <span
@@ -224,7 +224,7 @@ function PlaytimeCard(props: { history: string | null }) {
                     return (
                       <li
                         class="stats-chart__bucket"
-                        title={total() > 0 ? text() : undefined}
+                        data-tooltip={total() > 0 ? text() : undefined}
                         aria-label={text()}
                       >
                         <span class="stats-chart__stack" aria-hidden="true">
@@ -286,7 +286,7 @@ function ActivityCards(props: { stats: Statistics }) {
                   {(day) => (
                     <span
                       class={`stats-heat stats-heat--${heatLevel(day.seconds, max())}`}
-                      title={tr("bucket", {
+                      data-tooltip={tr("bucket", {
                         label: chartTitle(day.day, "month"),
                         time: day.seconds > 0 ? formatPlaytime(day.seconds) : "–",
                       })}
@@ -323,7 +323,7 @@ function ActivityCards(props: { stats: Statistics }) {
                     {(seconds, hour) => (
                       <span
                         class={`stats-heat stats-heat--${heatLevel(seconds, hourMax())}`}
-                        title={`${weekdayName(day(), "long")} ${hour()}:00 · ${formatPlaytime(seconds)}`}
+                        data-tooltip={`${weekdayName(day(), "long")} ${hour()}:00 · ${formatPlaytime(seconds)}`}
                       />
                     )}
                   </For>
@@ -461,7 +461,7 @@ function LibraryCard(props: { stats: Statistics }) {
       <ol class="stats-columns">
         <For each={props.stats.decades}>
           {(decade) => (
-            <li title={`${decade.decade}–${decade.decade + 9}: ${decade.count}`}>
+            <li data-tooltip={`${decade.decade}–${decade.decade + 9}: ${decade.count}`}>
               <span class="stats-columns__value">{decade.count}</span>
               <span
                 class="stats-columns__bar"

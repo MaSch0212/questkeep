@@ -72,7 +72,7 @@ export function GameTile(props: GameTileProps) {
     >
       <div class="tile__body">
         <div class="tile__strip">
-          <div class="tile__source" title={storeNames(props.game)} aria-hidden="true">
+          <div class="tile__source" data-tooltip={storeNames(props.game)} aria-hidden="true">
             <span class="tile__primary">
               <SourceIcon source={primary()} />
               <Show when={stores().length > 1}>
@@ -88,25 +88,40 @@ export function GameTile(props: GameTileProps) {
           </div>
           <div class="tile__states">
             <Show when={props.game.favorite}>
-              <span class="tile__state tile__state--star" title={tr("favorite")}>
+              <span
+                class="tile__state tile__state--star"
+                role="img"
+                aria-label={tr("favorite")}
+                data-tooltip={tr("favorite")}
+              >
                 <Star class="icon icon--filled" aria-hidden="true" />
               </span>
             </Show>
             <Show when={props.game.hidden}>
-              <span class="tile__state" title={tr("hidden")}>
+              <span
+                class="tile__state"
+                role="img"
+                aria-label={tr("hidden")}
+                data-tooltip={tr("hidden")}
+              >
                 <EyeOff class="icon" aria-hidden="true" />
               </span>
             </Show>
             <Show when={running()}>
               <span
                 class="tile__state tile__state--ring tile__state--running"
-                title={tr("running")}
+                data-tooltip={tr("running")}
               >
                 <Play class="icon icon--filled" aria-hidden="true" />
               </span>
             </Show>
             <Show when={!props.game.installed}>
-              <span class="tile__state tile__state--ring" title={tr("notInstalled")}>
+              <span
+                class="tile__state tile__state--ring"
+                role="img"
+                aria-label={tr("notInstalled")}
+                data-tooltip={tr("notInstalled")}
+              >
                 <CloudDownload class="icon" aria-hidden="true" />
               </span>
             </Show>
@@ -117,7 +132,7 @@ export function GameTile(props: GameTileProps) {
           <Show when={props.date}>
             <span class="tile__date">{props.date}</span>
           </Show>
-          <div class="tile__title" title={props.game.name}>
+          <div class="tile__title" data-tooltip={props.game.name}>
             <span>{props.game.name}</span>
           </div>
           {/* A running game has nothing to start; the strip shows its state. */}

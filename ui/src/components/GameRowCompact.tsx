@@ -47,19 +47,24 @@ export function GameRowCompact(props: GameRowCompactProps) {
       <div class="list-row__thumb">
         <GameIcon game={props.game} />
       </div>
-      <span class="compact-row__name" title={props.game.name}>
+      <span class="compact-row__name" data-tooltip={props.game.name}>
         {props.game.name}
       </span>
       <Show when={running()}>
-        <span class="compact-row__running" title={tr("running")} aria-hidden="true" />
+        <span class="compact-row__running" data-tooltip={tr("running")} aria-hidden="true" />
       </Show>
       <Show when={props.game.favorite}>
-        <span class="list-row__star" title={tr("favorite")}>
+        <span
+          class="list-row__star"
+          role="img"
+          aria-label={tr("favorite")}
+          data-tooltip={tr("favorite")}
+        >
           <Star class="icon icon--filled" aria-hidden="true" />
         </span>
       </Show>
       {/* At the end, so several stores never push the name aside. */}
-      <span class="compact-row__source" title={storeNames(props.game)}>
+      <span class="compact-row__source" data-tooltip={storeNames(props.game)}>
         <SourceIcons game={props.game} />
       </span>
     </div>

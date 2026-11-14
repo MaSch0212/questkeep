@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@solidjs/testing-library";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../lib/api";
 import { store } from "../lib/store";
-import { makeGame } from "../test-utils";
+import { byTooltip, makeGame } from "../test-utils";
 import { GameRow } from "./GameRow";
 import { GameTile } from "./GameTile";
 
@@ -64,7 +64,7 @@ describe("quick action on a tile", () => {
     store.handleCoreEvent({ type: "gameStarted", id: "g1" });
     renderTile();
     expect(screen.queryByRole("button")).toBeNull();
-    expect(screen.getByTitle("Running")).toBeInTheDocument();
+    expect(byTooltip("Running")).toBeInTheDocument();
   });
 
   it("is only in the tab order on the selected tile", () => {

@@ -378,7 +378,7 @@ export function EditLaunchSection(props: {
                 <span
                   class="profile__drag"
                   draggable="true"
-                  title={tr("dragToReorder")}
+                  data-tooltip={tr("dragToReorder")}
                   aria-hidden="true"
                   onDragStart={(event) => {
                     setDragged(index());

@@ -45,7 +45,9 @@ export function QuickAction(props: QuickActionProps) {
                 ? tr("playGame", { name: props.game.name })
                 : tr("installGame", { name: props.game.name })
           }
-          title={kind() === "play" ? tr("playTitle") : kind() === "install" ? tr("install") : ""}
+          data-tooltip={
+            kind() === "play" ? tr("playTitle") : kind() === "install" ? tr("install") : ""
+          }
           onClick={(event) => {
             event.stopPropagation();
             if (kind() === "install") void installWithToast(props.game.id);

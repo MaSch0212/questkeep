@@ -197,7 +197,7 @@ export function TableHeader(props: { columns: ShownColumn[]; ref?: (el: HTMLDivE
                   <button
                     type="button"
                     class="list__th-btn"
-                    title={tr("sortBy", { column: inSentence(column().def.label) })}
+                    data-tooltip={tr("sortBy", { column: inSentence(column().def.label) })}
                     onClick={() => sortBy(field())}
                   >
                     <span class="list__th-label">{column().def.label}</span>

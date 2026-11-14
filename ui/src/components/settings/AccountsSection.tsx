@@ -274,7 +274,7 @@ export function AccountsSection(props: { model: SettingsModel }) {
                         type="button"
                         class="account__handle"
                         aria-label={tr("moveStore", { name: entry.name })}
-                        title={tr("dragTitle")}
+                        data-tooltip={tr("dragTitle")}
                         onPointerDown={(event) => startDrag(event, entry.id)}
                       >
                         <GripVertical class="icon" aria-hidden="true" />
@@ -287,7 +287,9 @@ export function AccountsSection(props: { model: SettingsModel }) {
                           type="button"
                           class="icon-btn icon-btn--small account__toggle"
                           aria-label={tr("storeSettings", { name: entry.name })}
-                          title={row(entry.id).open ? tr("hideSettings") : tr("showSettings")}
+                          data-tooltip={
+                            row(entry.id).open ? tr("hideSettings") : tr("showSettings")
+                          }
                           aria-expanded={row(entry.id).open}
                           aria-controls={`store-${entry.id}-details`}
                           onClick={() => patch(entry.id, { open: !row(entry.id).open })}
@@ -330,7 +332,7 @@ export function AccountsSection(props: { model: SettingsModel }) {
                           type="button"
                           class="icon-btn"
                           aria-label={tr(syncing() ? "syncing" : "sync", { name: entry.name })}
-                          title={tr(syncing() ? "syncing" : "sync", { name: entry.name })}
+                          data-tooltip={tr(syncing() ? "syncing" : "sync", { name: entry.name })}
                           disabled={syncing()}
                           onClick={() => void syncStore(entry.id)}
                         >

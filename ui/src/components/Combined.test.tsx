@@ -7,7 +7,7 @@ import { groupGames } from "../lib/grouping";
 import { defaultQuery } from "../lib/query";
 import { store } from "../lib/store";
 import { matchesFilters } from "../lib/views";
-import { makeGame } from "../test-utils";
+import { allByTooltip, makeGame } from "../test-utils";
 import { DetailsPanel } from "./DetailsPanel";
 import { DuplicatesDialog } from "./DuplicatesDialog";
 import { GameRow } from "./GameRow";
@@ -115,7 +115,7 @@ describe("store icons", () => {
     const groups = document.querySelectorAll(".source-icons");
     expect(groups).toHaveLength(3);
     for (const icons of groups) expect(icons.children).toHaveLength(2);
-    expect(screen.getAllByTitle("Steam, Epic")).toHaveLength(3);
+    expect(allByTooltip("Steam, Epic")).toHaveLength(3);
     // The compact row puts the icons after the name.
     const compact = document.querySelector(".compact-row");
     const children = [...(compact?.children ?? [])].map((el) => el.className);

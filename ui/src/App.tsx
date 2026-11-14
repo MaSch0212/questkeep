@@ -30,6 +30,7 @@ import { StatisticsPage } from "./components/StatisticsPage";
 import { Sidebar } from "./components/Sidebar";
 import { TitleBar } from "./components/TitleBar";
 import { Toasts } from "./components/Toasts";
+import { TooltipLayer } from "./components/Tooltip";
 import { FilterPills } from "./components/FilterPills";
 import { TopBar } from "./components/TopBar";
 import { QuitDuringBackupDialog } from "./components/QuitDuringBackupDialog";
@@ -307,6 +308,7 @@ export function App() {
         <FirstRunDialog />
       </Show>
       <Toasts />
+      <TooltipLayer />
     </div>
   );
 }

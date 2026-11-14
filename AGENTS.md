@@ -119,7 +119,8 @@ ui/src/
 - **Command contract:** change Rust types, run `cargo test` to regenerate `ui/src/bindings`, commit
   both. Commands stay thin; logic goes into core with tests.
 - **UI:** no literal colors/sizes outside `theme.css`; labeled buttons; keyboard paths for every
-  action. Pure logic goes into `lib/` with vitest tests.
+  action. Pure logic goes into `lib/` with vitest tests. Tooltips: `data-tooltip="…"` on the
+  element (shown by `TooltipLayer`), never the native `title` attribute.
 - **Dependencies:** pnpm installs only versions at least 2 days old (`minimumReleaseAge`); Cargo
   has `min-publish-age = "2 days"`. Prefer major-only ranges in `package.json`.
 - **Releases:** changesets in `.changeset/` + the manual Release workflow; see `docs/RELEASING.md`.

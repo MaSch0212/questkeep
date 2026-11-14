@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@solidjs/testing-library";
 import { describe, expect, it, vi } from "vitest";
-import { makeGame } from "../test-utils";
+import { byTooltip, makeGame } from "../test-utils";
 import { GameTile } from "./GameTile";
 
 vi.mock("../lib/api");
@@ -52,7 +52,7 @@ describe("GameTile", () => {
   it("shows the favorite badge and launches on double click", async () => {
     const onLaunch = vi.fn<(id: string) => void>();
     renderTile({ favorite: true }, onLaunch);
-    expect(screen.getByTitle("Favorite")).toBeInTheDocument();
+    expect(byTooltip("Favorite")).toBeInTheDocument();
     await fireEvent.dblClick(screen.getByRole("gridcell", { name: "Hades" }));
     expect(onLaunch).toHaveBeenCalledWith("g1");
   });
@@ -62,7 +62,7 @@ describe("GameTile", () => {
     renderTile({ installed: false }, onLaunch);
     const tile = screen.getByRole("gridcell", { name: "Hades (not installed)" });
     expect(tile).toHaveClass("tile--missing");
-    expect(screen.getByTitle("Not installed").querySelector("svg")).not.toBeNull();
+    expect(byTooltip("Not installed").querySelector("svg")).not.toBeNull();
     await fireEvent.dblClick(tile);
     expect(onLaunch).toHaveBeenCalledWith("g1");
   });
@@ -77,7 +77,7 @@ describe("GameTile", () => {
         date="Yesterday"
       />
     ));
-    expect(screen.getByTitle("Hidden")).toBeInTheDocument();
+    expect(byTooltip("Hidden")).toBeInTheDocument();
     expect(container.querySelector(".tile__date")).toHaveTextContent("Yesterday");
   });
 

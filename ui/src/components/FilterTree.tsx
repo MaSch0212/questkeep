@@ -154,7 +154,7 @@ function RemoveButton(props: { label: string; onClick: () => void }) {
       type="button"
       class="icon-btn icon-btn--small"
       aria-label={props.label}
-      title={props.label}
+      data-tooltip={props.label}
       onClick={() => props.onClick()}
     >
       <X class="icon" aria-hidden="true" />
@@ -438,7 +438,7 @@ function GroupFrame(props: {
           type="button"
           class="icon-btn icon-btn--small"
           aria-label={tr("groupActions")}
-          title={tr("groupActions")}
+          data-tooltip={tr("groupActions")}
           aria-haspopup="menu"
           aria-expanded={menu() !== null}
           onClick={() => setMenu(menu() ? null : anchorOf(more))}

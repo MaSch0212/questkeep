@@ -58,7 +58,7 @@ export function ArtworkSection(props: { model: SettingsModel }) {
               class="icon-btn icon-btn--bordered"
               aria-label={showKey() ? tr("hideGriddbKey") : tr("showGriddbKey")}
               aria-pressed={showKey()}
-              title={showKey() ? tr("hideKey") : tr("showKey")}
+              data-tooltip={showKey() ? tr("hideKey") : tr("showKey")}
               onClick={() => setShowKey((v) => !v)}
             >
               <Show when={showKey()} fallback={<Eye class="icon" aria-hidden="true" />}>

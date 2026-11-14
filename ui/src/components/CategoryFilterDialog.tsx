@@ -79,7 +79,7 @@ export function CategoryFilterDialog(props: { category: Category; onClose: () =>
         type="button"
         class="btn btn--primary"
         disabled={saving() || empty()}
-        title={empty() ? tr("autoPickFilter") : undefined}
+        data-tooltip={empty() ? tr("autoPickFilter") : undefined}
         onClick={() => void save(query())}
       >
         {tr("autoSave")}
@@ -123,7 +123,7 @@ export function CategoryFilterDialog(props: { category: Category; onClose: () =>
                     <GameIcon game={game} />
                     <span class="auto-filter__name">{game.name}</span>
                     <Show when={has(game)}>
-                      <span class="auto-filter__has" title={tr("autoHasIt")}>
+                      <span class="auto-filter__has" data-tooltip={tr("autoHasIt")}>
                         <Check class="icon" aria-hidden="true" />
                         <span class="visually-hidden">{tr("autoHasIt")}</span>
                       </span>

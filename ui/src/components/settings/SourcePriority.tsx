@@ -85,7 +85,7 @@ function OrderList(props: {
               type="button"
               class="icon-btn icon-btn--small"
               aria-label={tr("moveUp", { name: props.name(id) })}
-              title={tr("moveUpTitle")}
+              data-tooltip={tr("moveUpTitle")}
               disabled={index() === 0}
               onClick={() => move(id, -1)}
             >
@@ -95,7 +95,7 @@ function OrderList(props: {
               type="button"
               class="icon-btn icon-btn--small"
               aria-label={tr("moveDown", { name: props.name(id) })}
-              title={tr("moveDownTitle")}
+              data-tooltip={tr("moveDownTitle")}
               disabled={index() === props.order.length - 1}
               onClick={() => move(id, 1)}
             >

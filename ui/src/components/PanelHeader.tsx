@@ -28,7 +28,7 @@ export function PanelHeader(props: { pin: PanelPin; onClose: () => void; overlay
             type="button"
             class="icon-btn"
             aria-label={pin() === "docked" ? tr("unpinPanel") : tr("dockPanel")}
-            title={pin() === "docked" ? tr("unpinTitle") : tr("dockTitle")}
+            data-tooltip={pin() === "docked" ? tr("unpinTitle") : tr("dockTitle")}
             onClick={() => {
               const unpin = pin() === "docked";
               store.setPanelFloating(unpin);
@@ -47,7 +47,7 @@ export function PanelHeader(props: { pin: PanelPin; onClose: () => void; overlay
           type="button"
           class="icon-btn details__close"
           aria-label={tr("closeDetails")}
-          title={tr("closeTitle")}
+          data-tooltip={tr("closeTitle")}
           onClick={() => props.onClose()}
         >
           <X class="icon" aria-hidden="true" />

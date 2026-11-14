@@ -302,7 +302,7 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
       class="titlebar__tool"
       classList={{ "titlebar__tool--open": open() === which }}
       aria-label={label}
-      title={label}
+      data-tooltip={label}
       aria-haspopup={which === "sync" || which === "apps" ? "dialog" : "menu"}
       aria-expanded={open() === which}
       onClick={() => toggle(which)}
@@ -324,7 +324,7 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
           class="titlebar__brand"
           classList={{ "titlebar__brand--open": open() === "app" }}
           aria-label={tr("questkeepMenu")}
-          title={tr("questkeepMenu")}
+          data-tooltip={tr("questkeepMenu")}
           aria-haspopup="menu"
           aria-expanded={open() === "app"}
           onClick={() => toggle("app")}
@@ -337,7 +337,7 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
           type="button"
           class="titlebar__tool"
           aria-label={tr("back")}
-          title={tr("backHint")}
+          data-tooltip={tr("backHint")}
           disabled={!store.canGoBack()}
           onClick={() => void store.goBack()}
         >
@@ -347,7 +347,7 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
           type="button"
           class="titlebar__tool"
           aria-label={tr("forward")}
-          title={tr("forwardHint")}
+          data-tooltip={tr("forwardHint")}
           disabled={!store.canGoForward()}
           onClick={() => void store.goForward()}
         >
@@ -387,7 +387,7 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
             class="titlebar__tool"
             classList={{ "titlebar__tool--open": floating() }}
             aria-label={trCommand("findGame")}
-            title={`${trCommand("findGame")} (Ctrl+K)`}
+            data-tooltip={`${trCommand("findGame")} (Ctrl+K)`}
             aria-expanded={floating()}
             onPointerDown={(event) => {
               // The open popup would close on this press and the click reopen it.
@@ -417,7 +417,7 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
               type="button"
               class="titlebar__update"
               aria-label={tr("updateTo", { version: update().version })}
-              title={tr("updateAvailable", { version: update().version })}
+              data-tooltip={tr("updateAvailable", { version: update().version })}
               onClick={() => store.setUpdateOpen(true)}
             >
               <Download class="icon" aria-hidden="true" /> {tr("update")}
@@ -429,7 +429,7 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
           class="titlebar__tool"
           classList={{ "titlebar__tool--open": store.page() === "settings" }}
           aria-label={tr("settings")}
-          title={tr("settings")}
+          data-tooltip={tr("settings")}
           aria-current={store.page() === "settings" ? "page" : undefined}
           onClick={() => store.showSettings()}
         >
@@ -442,7 +442,7 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
             class="titlebar__button"
             tabIndex={-1}
             aria-label={tr("minimize")}
-            title={tr("minimize")}
+            data-tooltip={tr("minimize")}
             onClick={() => void api.minimizeWindow()}
           >
             <Minus class="titlebar__icon" aria-hidden="true" />
@@ -452,7 +452,7 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
             class="titlebar__button"
             tabIndex={-1}
             aria-label={maximized() ? tr("restore") : tr("maximize")}
-            title={maximized() ? tr("restore") : tr("maximize")}
+            data-tooltip={maximized() ? tr("restore") : tr("maximize")}
             onClick={() => void api.toggleMaximizeWindow()}
           >
             <Show
@@ -470,7 +470,7 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
             class="titlebar__button titlebar__button--close"
             tabIndex={-1}
             aria-label={tr("close")}
-            title={tr("close")}
+            data-tooltip={tr("close")}
             onClick={() => void api.closeWindow()}
           >
             <X class="titlebar__icon" aria-hidden="true" />

@@ -54,7 +54,7 @@ export function IconPicker(props: {
             classList={{ "icon-picker__icon--on": name === props.selected }}
             aria-selected={name === props.selected}
             aria-label={name.replace(/-\d$/, "").replaceAll("-", " ")}
-            title={name.replace(/-\d$/, "").replaceAll("-", " ")}
+            data-tooltip={name.replace(/-\d$/, "").replaceAll("-", " ")}
             tabIndex={name === props.selected ? 0 : -1}
             onClick={() => {
               props.onClose(true);

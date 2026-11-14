@@ -116,7 +116,11 @@ export function BackupsSection(props: { model: SettingsModel }) {
           </div>
           <div class="settings-row">
             <span id="backup-folder-label">{tr("folder")}</span>
-            <span class="backup-folder" aria-labelledby="backup-folder-label" title={folder()}>
+            <span
+              class="backup-folder"
+              aria-labelledby="backup-folder-label"
+              data-tooltip={folder()}
+            >
               {folder()}
             </span>
             <button type="button" class="btn" onClick={() => void chooseFolder()}>
@@ -160,7 +164,7 @@ export function BackupsSection(props: { model: SettingsModel }) {
               <For each={backups()}>
                 {(backup) => (
                   <li class="backup-list__item">
-                    <span class="backup-list__date" title={formatDateTime(backup.createdAt)}>
+                    <span class="backup-list__date" data-tooltip={formatDateTime(backup.createdAt)}>
                       {formatAgo(backup.createdAt)}
                     </span>
                     <span class="muted">

@@ -192,7 +192,7 @@ export function SidebarEditor(props: { renameId: string | null; onDone: () => vo
   const handle = (label: string, item: () => Dragged) => (
     <span
       class="edit-row__handle"
-      title={tr("dragToMove")}
+      data-tooltip={tr("dragToMove")}
       aria-hidden="true"
       onPointerDown={(event) => startDrag(event, item())}
     >
@@ -240,7 +240,7 @@ export function SidebarEditor(props: { renameId: string | null; onDone: () => vo
                   type="button"
                   class="icon-btn icon-btn--small edit-row__delete"
                   aria-label={tr("deleteSectionLabel", { name: shownName(section) })}
-                  title={tr("deleteSection")}
+                  data-tooltip={tr("deleteSection")}
                   onClick={() => deleteSection(section)}
                 >
                   <Trash class="icon" aria-hidden="true" />
@@ -294,7 +294,7 @@ export function SidebarEditor(props: { renameId: string | null; onDone: () => vo
                         type="button"
                         class="icon-btn icon-btn--small"
                         aria-label={tr("changeIconOf", { name: shownName(view) })}
-                        title={tr("changeIcon")}
+                        data-tooltip={tr("changeIcon")}
                         onClick={(event) => {
                           const rect = event.currentTarget.getBoundingClientRect();
                           setIconFor({ view, anchor: { rect, align: "start" } });
@@ -312,7 +312,7 @@ export function SidebarEditor(props: { renameId: string | null; onDone: () => vo
                         type="button"
                         class="icon-btn icon-btn--small edit-row__delete"
                         aria-label={tr("deleteViewLabel", { name: shownName(view) })}
-                        title={tr("deleteView")}
+                        data-tooltip={tr("deleteView")}
                         onClick={() => void store.deleteView(view.id)}
                       >
                         <Trash class="icon" aria-hidden="true" />

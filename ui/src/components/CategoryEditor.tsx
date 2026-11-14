@@ -46,14 +46,14 @@ export function CategoryEditor(props: { game: Game }) {
       <ul class="categories__list">
         <For each={assigned()}>
           {(category) => (
-            <li class="categories__chip" title={importedTitle(category)}>
+            <li class="categories__chip" data-tooltip={importedTitle(category)}>
               <Tag class="icon" aria-hidden="true" />
               {category.name}
               <button
                 type="button"
                 class="categories__remove"
                 aria-label={tr("removeAria", { name: category.name })}
-                title={tr("remove")}
+                data-tooltip={tr("remove")}
                 onClick={() => toggle(category.id)}
               >
                 <X class="icon" aria-hidden="true" />

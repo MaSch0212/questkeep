@@ -276,7 +276,7 @@ function StatusRow(props: {
     >
       <span
         class="category-list__handle"
-        title={tr("dragTitle")}
+        data-tooltip={tr("dragTitle")}
         aria-hidden="true"
         onPointerDown={(event) => props.onDragStart(event)}
       >
@@ -312,7 +312,7 @@ function StatusRow(props: {
         type="button"
         class="icon-btn icon-btn--small"
         aria-label={tr("renameStatus", { name: props.status.name })}
-        title={tr("renameTitle")}
+        data-tooltip={tr("renameTitle")}
         onClick={() => setEditing(true)}
       >
         <Pencil class="icon" aria-hidden="true" />
@@ -321,7 +321,7 @@ function StatusRow(props: {
         type="button"
         class="icon-btn icon-btn--small category-list__delete"
         aria-label={tr("removeStatus", { name: props.status.name })}
-        title={tr("removeTitle")}
+        data-tooltip={tr("removeTitle")}
         onClick={() => props.onRemove()}
       >
         <Trash class="icon" aria-hidden="true" />

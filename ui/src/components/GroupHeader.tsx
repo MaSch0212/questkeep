@@ -32,7 +32,7 @@ export function GroupHeader(props: {
       tabindex={props.tabbable === false ? -1 : undefined}
       aria-expanded={!props.collapsed}
       aria-label={`${props.group.label}, ${trCommon("gamesCount", { count: count() })}`}
-      title={props.collapsed ? tr("showGroup") : tr("collapseGroup")}
+      data-tooltip={props.collapsed ? tr("showGroup") : tr("collapseGroup")}
       onClick={() => props.onToggle()}
     >
       <ChevronRight

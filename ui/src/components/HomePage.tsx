@@ -198,7 +198,7 @@ function PlaytimePanel() {
               <li
                 class="playtime-chart__day"
                 classList={{ "playtime-chart__day--today": i() === days().length - 1 }}
-                title={day.seconds > 0 ? formatPlaytime(day.seconds) : tr("notPlayed")}
+                data-tooltip={day.seconds > 0 ? formatPlaytime(day.seconds) : tr("notPlayed")}
                 aria-label={
                   day.seconds > 0
                     ? tr("dayPlayed", { label: label(), time: formatPlaytime(day.seconds) })
@@ -246,7 +246,7 @@ function StoresPanel() {
               return (
                 <li
                   class="store-stats__row"
-                  title={tr("shareInstalled", {
+                  data-tooltip={tr("shareInstalled", {
                     percent: Math.round(share() * 100),
                     name: name(),
                   })}

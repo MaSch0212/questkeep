@@ -13,10 +13,10 @@ describe("titleWhenCut", () => {
   it("adds the text as a tooltip only when it doesn't fit", () => {
     const cut = span(200, 80);
     titleWhenCut(cut);
-    expect(cut.title).toBe("Enter the Gungeon");
+    expect(cut.dataset.tooltip).toBe("Enter the Gungeon");
     const fits = span(80, 80);
-    fits.title = "stale";
+    fits.dataset.tooltip = "stale";
     titleWhenCut(fits);
-    expect(fits.hasAttribute("title")).toBe(false);
+    expect(fits.hasAttribute("data-tooltip")).toBe(false);
   });
 });

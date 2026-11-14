@@ -48,7 +48,7 @@ export function FilterChip(props: { field: ListField; value: string; plain?: boo
       type="button"
       class="chip chip--link"
       classList={{ "chip--plain": props.plain }}
-      title={tr("showGamesWith", { value: props.value })}
+      data-tooltip={tr("showGamesWith", { value: props.value })}
       onClick={() => store.openExplore(exploreFor(props.field, props.value))}
     >
       {props.value}
@@ -66,7 +66,7 @@ export function FilterValues(props: { field: ListField; values: string[] }) {
           <button
             type="button"
             class="link-value"
-            title={tr("showGamesWith", { value })}
+            data-tooltip={tr("showGamesWith", { value })}
             onClick={() => store.openExplore(exploreFor(props.field, value))}
           >
             {value}
@@ -211,7 +211,7 @@ export function AchievementsCard(props: { achievements: Achievements | null | un
                   {(item) => (
                     <li
                       class="ach__icon"
-                      title={`${item.name}${item.description ? ` – ${item.description}` : ""}`}
+                      data-tooltip={`${item.name}${item.description ? ` – ${item.description}` : ""}`}
                     >
                       <Show when={item.icon} fallback={<span aria-hidden="true">★</span>}>
                         {(src) => <img src={src()} alt={item.name} loading="lazy" />}
@@ -279,7 +279,7 @@ export function ActivityCard(props: { activity: GameActivity | null | undefined 
                 <li
                   class="act__bar"
                   classList={{ "act__bar--zero": week.seconds === 0 }}
-                  title={tr("weekOf", {
+                  data-tooltip={tr("weekOf", {
                     date: weekLabel(week.start),
                     time: formatPlaytime(week.seconds),
                   })}

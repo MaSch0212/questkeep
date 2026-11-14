@@ -6,7 +6,7 @@ import { defaultQuery } from "./lib/query";
 import { store } from "./lib/store";
 import type { ViewLayout } from "./bindings/ViewLayout";
 import type { Settings } from "./bindings/Settings";
-import { makeGame } from "./test-utils";
+import { byTooltip, makeGame } from "./test-utils";
 
 vi.mock("./lib/api");
 vi.mock("@tauri-apps/api/core", () => ({
@@ -410,7 +410,7 @@ describe("App", () => {
       expect(screen.getByRole("button", { name: "Home" })).toHaveAttribute("aria-current", "page");
       expect(screen.getByRole("gridcell", { name: "Hades" })).toHaveTextContent("Today");
       expect(screen.getByText("No games yet")).toBeInTheDocument();
-      expect(screen.getByTitle("75 % of your Steam games are installed")).toBeInTheDocument();
+      expect(byTooltip("75 % of your Steam games are installed")).toBeInTheDocument();
       expect(screen.getByText("2.5 h · avg 1.3 h/day")).toBeInTheDocument();
       // No library toolbar on the start page.
       expect(

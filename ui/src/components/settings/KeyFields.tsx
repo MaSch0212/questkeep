@@ -109,7 +109,7 @@ export function IgdbFields(props: { model: SettingsModel }) {
               class="icon-btn icon-btn--bordered"
               aria-label={showSecret() ? tr("hideIgdbSecret") : tr("showIgdbSecret")}
               aria-pressed={showSecret()}
-              title={showSecret() ? tr("hideSecret") : tr("showSecret")}
+              data-tooltip={showSecret() ? tr("hideSecret") : tr("showSecret")}
               onClick={() => setShowSecret((v) => !v)}
             >
               <Show when={showSecret()} fallback={<Eye class="icon" aria-hidden="true" />}>
@@ -177,7 +177,7 @@ export function GridDbField(props: { model: SettingsModel }) {
             class="icon-btn icon-btn--bordered"
             aria-label={showKey() ? tr("hideGriddbKey") : tr("showGriddbKey")}
             aria-pressed={showKey()}
-            title={showKey() ? tr("hideKey") : tr("showKey")}
+            data-tooltip={showKey() ? tr("hideKey") : tr("showKey")}
             onClick={() => setShowKey((v) => !v)}
           >
             <Show when={showKey()} fallback={<Eye class="icon" aria-hidden="true" />}>

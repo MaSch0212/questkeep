@@ -545,7 +545,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
                     type="button"
                     class="btn btn--primary play-split__more"
                     aria-label={tr("chooseHowToPlay")}
-                    title={tr("playWithOther")}
+                    data-tooltip={tr("playWithOther")}
                     aria-haspopup="menu"
                     aria-expanded={storeMenu() !== null}
                     onClick={() => toggleAnchored(storeMenu, setStoreMenu, storeMenuButton, "end")}
@@ -599,7 +599,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
                   classList={{ "toggle-btn--on": props.game.favorite }}
                   aria-pressed={props.game.favorite}
                   aria-label={tr("favorite")}
-                  title={props.game.favorite ? tr("removeFavorite") : tr("addFavorite")}
+                  data-tooltip={props.game.favorite ? tr("removeFavorite") : tr("addFavorite")}
                   onClick={() =>
                     void run(() => updateGame(props.game.id, { favorite: !props.game.favorite }))
                   }
@@ -612,7 +612,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
                   classList={{ "toggle-btn--on": props.game.hidden }}
                   aria-pressed={props.game.hidden}
                   aria-label={tr("hidden")}
-                  title={props.game.hidden ? tr("showInLibrary") : tr("hideFromLibrary")}
+                  data-tooltip={props.game.hidden ? tr("showInLibrary") : tr("hideFromLibrary")}
                   onClick={() =>
                     void run(() => updateGame(props.game.id, { hidden: !props.game.hidden }))
                   }
@@ -625,7 +625,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
                   type="button"
                   class="btn"
                   aria-haspopup="dialog"
-                  title={tr("editTitle")}
+                  data-tooltip={tr("editTitle")}
                   onClick={() => setEditing("general")}
                 >
                   <Pencil class="icon" aria-hidden="true" /> {tr("edit")}
@@ -635,7 +635,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
                   type="button"
                   class="toggle-btn"
                   aria-label={tr("moreActions")}
-                  title={tr("moreActions")}
+                  data-tooltip={tr("moreActions")}
                   aria-haspopup="menu"
                   aria-expanded={moreMenu() !== null}
                   onClick={() => toggleAnchored(moreMenu, setMoreMenu, moreButton, "end")}
@@ -773,7 +773,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
                           type="button"
                           class="icon-btn icon-btn--small"
                           aria-label={tr("actionsOf", { name: sourceName(copy.source) })}
-                          title={tr("storeActions")}
+                          data-tooltip={tr("storeActions")}
                           aria-haspopup="menu"
                           aria-expanded={copyMenu()?.copy.id === copy.id}
                           onClick={(event) => {
@@ -794,7 +794,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
               </ul>
               <Show when={props.game.installDir}>
                 {(dir) => (
-                  <p class="details__path" title={dir()}>
+                  <p class="details__path" data-tooltip={dir()}>
                     {dir()}
                   </p>
                 )}

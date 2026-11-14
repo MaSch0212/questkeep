@@ -73,7 +73,7 @@ export function PriceSitesSection(props: { model: SettingsModel }) {
                   type="button"
                   class="icon-btn"
                   aria-label={tr("moveUp", { name: site.name })}
-                  title={tr("moveUp", { name: site.name })}
+                  data-tooltip={tr("moveUp", { name: site.name })}
                   disabled={index() === 0}
                   onClick={() => save(moveSite(sites(), index(), -1))}
                 >
@@ -83,7 +83,7 @@ export function PriceSitesSection(props: { model: SettingsModel }) {
                   type="button"
                   class="icon-btn"
                   aria-label={tr("moveDown", { name: site.name })}
-                  title={tr("moveDown", { name: site.name })}
+                  data-tooltip={tr("moveDown", { name: site.name })}
                   disabled={index() === sites().length - 1}
                   onClick={() => save(moveSite(sites(), index(), 1))}
                 >
@@ -93,7 +93,7 @@ export function PriceSitesSection(props: { model: SettingsModel }) {
                   type="button"
                   class="icon-btn"
                   aria-label={tr("removeSite", { name: site.name })}
-                  title={tr("removeSite", { name: site.name })}
+                  data-tooltip={tr("removeSite", { name: site.name })}
                   onClick={() => save(sites().filter((_, i) => i !== index()))}
                 >
                   <Trash class="icon" aria-hidden="true" />
@@ -146,7 +146,7 @@ export function PriceSitesSection(props: { model: SettingsModel }) {
                 <button
                   type="button"
                   class="btn btn--small btn--with-icon"
-                  title={site.url}
+                  data-tooltip={site.url}
                   onClick={() => save([...sites(), site])}
                 >
                   <Plus class="icon" aria-hidden="true" />

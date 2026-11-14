@@ -128,3 +128,19 @@ export function makeProvider(overrides: Partial<ProviderInfo> & { id: string }):
     ...overrides,
   };
 }
+
+/** Every element whose tooltip (`data-tooltip`) is exactly `text`; throws when there is none. */
+export function allByTooltip(text: string): HTMLElement[] {
+  const found = [...document.querySelectorAll<HTMLElement>("[data-tooltip]")].filter(
+    (element) => element.dataset.tooltip === text,
+  );
+  if (found.length === 0) throw new Error(`No element with the tooltip "${text}"`);
+  return found;
+}
+
+/** The one element whose tooltip is exactly `text`. */
+export function byTooltip(text: string): HTMLElement {
+  const found = allByTooltip(text);
+  if (found.length > 1) throw new Error(`${found.length} elements with the tooltip "${text}"`);
+  return found[0] as HTMLElement;
+}

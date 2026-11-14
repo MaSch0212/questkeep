@@ -81,7 +81,7 @@ export function GroupList() {
               aria-selected={current() === group.key}
               class="nav-item nav-item--icon view-item"
               classList={{ "nav-item--active": current() === group.key }}
-              title={group.label}
+              data-tooltip={group.label}
               onClick={() => pick(group.key)}
             >
               <Show when={group.source}>{(source) => <SourceIcon source={source()} />}</Show>

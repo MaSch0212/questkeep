@@ -2013,6 +2013,35 @@ ul {
   gap: var(--qk-space-2);
 }
 
+/* Tooltip (TooltipLayer): centered below its element, never under the pointer */
+.tooltip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: var(--qk-z-tooltip);
+  max-width: var(--qk-tooltip-max-width);
+  padding: var(--qk-space-1) var(--qk-space-2);
+  background: var(--qk-color-surface-raised);
+  border: 1px solid var(--qk-color-border);
+  border-radius: var(--qk-radius-sm);
+  box-shadow: var(--qk-shadow-tooltip);
+  color: var(--qk-color-text);
+  font-size: var(--qk-font-size-sm);
+  line-height: 1.4;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  animation: tooltip-in var(--qk-duration-fast) var(--qk-easing);
+}
+.tooltip[data-placed="false"] {
+  visibility: hidden;
+}
+@keyframes tooltip-in {
+  from {
+    opacity: 0;
+  }
+}
+
 /* Modal */
 .modal-backdrop {
   position: fixed;

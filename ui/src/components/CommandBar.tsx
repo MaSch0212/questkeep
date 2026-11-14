@@ -222,7 +222,7 @@ export function CommandBar(props: {
                             ? tr("playNamed", { name: game.name })
                             : tr("installNamed", { name: game.name })
                         }
-                        title={action() === "play" ? tr("playHint") : tr("installHint")}
+                        data-tooltip={action() === "play" ? tr("playHint") : tr("installHint")}
                       >
                         <Show
                           when={action() === "play"}

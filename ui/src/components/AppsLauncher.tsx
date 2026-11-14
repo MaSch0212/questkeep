@@ -95,7 +95,7 @@ export function AppsLauncher(props: {
               <button
                 type="button"
                 class="apps__app"
-                title={
+                data-tooltip={
                   app.installed
                     ? tr("start", { name: app.name })
                     : tr("notInstalled", { name: app.name })

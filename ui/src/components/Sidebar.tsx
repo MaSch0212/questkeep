@@ -176,7 +176,7 @@ export function Sidebar() {
                           <ViewIcon name={view.icon} />
                           <span class="nav-item__text">{shownName(view)}</span>
                           <Show when={store.hasDraft(view.id)}>
-                            <span class="view-item__unsaved" title={tr("unsavedChanges")}>
+                            <span class="view-item__unsaved" data-tooltip={tr("unsavedChanges")}>
                               <span class="visually-hidden">{tr("unsavedHidden")}</span>
                             </span>
                           </Show>
@@ -198,7 +198,7 @@ export function Sidebar() {
               class="nav-item nav-item--icon view-item"
               classList={{ "nav-item--active": store.page() === "library" && store.isExplore() }}
               aria-current={store.page() === "library" && store.isExplore() ? "page" : undefined}
-              title={tr("exploreTitle")}
+              data-tooltip={tr("exploreTitle")}
               onClick={() => store.openExplore()}
             >
               <Compass class="icon" aria-hidden="true" />

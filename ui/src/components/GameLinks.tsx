@@ -102,7 +102,7 @@ export function GameLinks(props: { links: GameLink[] }) {
                 role="listitem"
                 class="game-link"
                 href={link.url}
-                title={link.name}
+                data-tooltip={link.name}
                 aria-label={link.name}
                 onClick={(event) => {
                   event.preventDefault();

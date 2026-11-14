@@ -85,7 +85,7 @@ export function SaveViewDialog(props: { onClose: () => void }) {
               type="button"
               class="icon-btn icon-btn--bordered"
               aria-label={tr("chooseIcon")}
-              title={tr("chooseIcon")}
+              data-tooltip={tr("chooseIcon")}
               onClick={() => {
                 const rect = iconButton?.getBoundingClientRect();
                 if (rect) setPicker({ rect, align: "start" });

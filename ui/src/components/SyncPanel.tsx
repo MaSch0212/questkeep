@@ -93,7 +93,7 @@ export function SyncPanel(props: {
                   type="button"
                   class="icon-btn icon-btn--small"
                   aria-label={tr("dismissWarning", { name: warning.name })}
-                  title={tr("dismissTitle")}
+                  data-tooltip={tr("dismissTitle")}
                   onClick={() => void store.dismissAccountWarning(warning.provider)}
                 >
                   <X class="icon" aria-hidden="true" />
@@ -119,7 +119,7 @@ export function SyncPanel(props: {
               >
                 <SourceIcon source={provider.id} />
                 <span class="sync-panel__name">{provider.name}</span>
-                <span class="sync-panel__status" title={text()}>
+                <span class="sync-panel__status" data-tooltip={text()}>
                   {text()}
                 </span>
                 <button
@@ -130,7 +130,7 @@ export function SyncPanel(props: {
                       ? tr("syncingName", { name: provider.name })
                       : tr("syncName", { name: provider.name })
                   }
-                  title={
+                  data-tooltip={
                     busy()
                       ? tr("syncingName", { name: provider.name })
                       : tr("syncName", { name: provider.name })

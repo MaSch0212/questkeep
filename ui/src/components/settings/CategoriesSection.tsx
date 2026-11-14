@@ -178,7 +178,7 @@ function CategoryRow(props: {
     >
       <span
         class="category-list__handle"
-        title={tr("dragTitle")}
+        data-tooltip={tr("dragTitle")}
         aria-hidden="true"
         onPointerDown={(event) => props.onDragStart(event)}
       >
@@ -213,7 +213,10 @@ function CategoryRow(props: {
             return (
               <span
                 class="category-list__source"
-                title={tr("syncedWith", { store: sourceName(source.source), name: source.name })}
+                data-tooltip={tr("syncedWith", {
+                  store: sourceName(source.source),
+                  name: source.name,
+                })}
               >
                 <SourceIcon source={source.source} />
                 <Show when={!own()}>
@@ -225,7 +228,7 @@ function CategoryRow(props: {
                       store: sourceName(source.source),
                       name: source.name,
                     })}
-                    title={tr("separateTitle")}
+                    data-tooltip={tr("separateTitle")}
                     onClick={() =>
                       void store.separateCategorySource(
                         props.category.id,
@@ -243,7 +246,7 @@ function CategoryRow(props: {
         </For>
       </span>
       <Show when={props.category.autoFilter}>
-        <span class="category-list__auto" title={tr("autoBadgeTitle")}>
+        <span class="category-list__auto" data-tooltip={tr("autoBadgeTitle")}>
           <WandSparkles class="icon" aria-hidden="true" />
           {tr("autoBadge")}
         </span>
@@ -254,7 +257,7 @@ function CategoryRow(props: {
         class="icon-btn icon-btn--small"
         classList={{ "icon-btn--on": props.category.autoFilter !== null }}
         aria-label={tr("autoAria", { name: props.category.name })}
-        title={tr("autoButtonTitle")}
+        data-tooltip={tr("autoButtonTitle")}
         aria-haspopup="dialog"
         onClick={() => setFiltering(true)}
       >
@@ -265,7 +268,7 @@ function CategoryRow(props: {
         type="button"
         class="icon-btn icon-btn--small"
         aria-label={tr("mergeAria", { name: props.category.name })}
-        title={tr("mergeTitle")}
+        data-tooltip={tr("mergeTitle")}
         aria-haspopup="menu"
         aria-expanded={mergeMenu() !== null}
         disabled={others().length === 0}
@@ -280,7 +283,7 @@ function CategoryRow(props: {
         type="button"
         class="icon-btn icon-btn--small"
         aria-label={tr("rename", { name: props.category.name })}
-        title={tr("renameTitle")}
+        data-tooltip={tr("renameTitle")}
         onClick={() => setEditing(true)}
       >
         <Pencil class="icon" aria-hidden="true" />
@@ -289,7 +292,7 @@ function CategoryRow(props: {
         type="button"
         class="icon-btn icon-btn--small category-list__delete"
         aria-label={tr("delete", { name: props.category.name })}
-        title={tr("deleteTitle")}
+        data-tooltip={tr("deleteTitle")}
         onClick={() => setConfirm({ kind: "delete" })}
       >
         <Trash class="icon" aria-hidden="true" />
