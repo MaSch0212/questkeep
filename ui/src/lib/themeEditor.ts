@@ -355,4 +355,10 @@ export const themeEditor = {
   remove,
   exportPlugin,
   settingsSaved,
+  /** The parameter values a theme that was never saved starts with (and is previewed with). */
+  startParams: () => session()?.params,
+  /** Registers the draft again (its base theme changed: a plugin was loaded again). */
+  refresh: () => {
+    if (isOpen()) registerUserTheme(draft());
+  },
 };

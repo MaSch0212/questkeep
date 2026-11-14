@@ -263,15 +263,27 @@ const PREVIEW_VARIABLES = [
   "--qk-color-accent",
 ];
 
-function previewOf(css: string, id: string, base: ThemeDef | undefined): ThemeDef["preview"] {
+/**
+ * The picker's swatches (background, surface, text, accent) of a theme's CSS with its parameters
+ * on their defaults. A color that cannot be computed comes from `fallback`, else it is gray.
+ */
+export function previewSwatches(
+  css: string,
+  id: string,
+  params: ThemeParam[],
+  fallback?: ThemeDef["preview"],
+): NonNullable<ThemeDef["preview"]> {
   const swatches = (scheme: Scheme) => {
-    const vars = themeVars(css, id, base?.params ?? [], scheme);
+    const vars = themeVars(css, id, params, scheme);
     return PREVIEW_VARIABLES.map(
-      (name, i) => resolvedHex(name, vars) ?? base?.preview?.[scheme][i] ?? "#808080",
+      (name, i) => resolvedHex(name, vars) ?? fallback?.[scheme][i] ?? "#808080",
     );
   };
   return { light: swatches("light"), dark: swatches("dark") };
 }
+
+const previewOf = (css: string, id: string, base: ThemeDef | undefined) =>
+  previewSwatches(css, id, base?.params ?? [], base?.preview);
 
 /**
  * A user theme as a registrable theme. `base` is the theme it derives from (the caller passes the

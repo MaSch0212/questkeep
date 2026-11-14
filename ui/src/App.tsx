@@ -9,6 +9,7 @@ import { translator } from "./i18n";
 import { shellCommon } from "./i18n/shellCommon";
 import { clampWidth } from "./lib/viewUi";
 import { extensionStates, syncExtensions } from "./lib/extensions/host";
+import { syncPluginThemes } from "./lib/pluginThemes";
 import { findPage, isPluginPage, pluginOfPage } from "./lib/extensions/registry";
 import { AddGameDialog } from "./components/AddGameDialog";
 import { DuplicatesDialog } from "./components/DuplicatesDialog";
@@ -110,6 +111,9 @@ export function App() {
   // Extensions follow the plugin list: loaded, reloaded (a new revision) and unloaded with it.
   createEffect(() => void syncExtensions(store.plugins()));
   onCleanup(() => void syncExtensions([]));
+  // So do the themes plugins bring.
+  createEffect(() => void syncPluginThemes(store.plugins()));
+  onCleanup(() => void syncPluginThemes([]));
   const pluginPage = createMemo(() => findPage(store.page()));
   // An open plugin page whose plugin was unloaded gives way to the library; while the plugin
   // reloads, the page stays and shows the new version once it is there.

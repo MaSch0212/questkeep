@@ -6357,7 +6357,12 @@ ul {
   white-space: nowrap;
 }
 .theme-card__badge {
-  flex: none;
+  /* "Plugin: <name>" can be long: it shrinks with the theme's name instead of pushing it out. */
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   padding: 0 var(--qk-space-2);
   background: var(--qk-color-accent-soft);
   border-radius: var(--qk-radius-pill);

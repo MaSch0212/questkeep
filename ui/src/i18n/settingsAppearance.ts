@@ -8,6 +8,7 @@ const en = {
   dark: "Dark",
   theme: "Theme",
   fromPlugin: "Plugin",
+  fromPluginNamed: "Plugin: {name}",
   fromUser: "Custom",
   by: "by {author}",
   missingTheme:
@@ -32,6 +33,7 @@ export const settingsAppearance: Translations<typeof en> = {
     dark: "Dunkel",
     theme: "Design",
     fromPlugin: "Plugin",
+    fromPluginNamed: "Plugin: {name}",
     fromUser: "Eigenes",
     by: "von {author}",
     missingTheme:
@@ -52,6 +54,7 @@ export const settingsAppearance: Translations<typeof en> = {
     dark: "Sombre",
     theme: "Thème",
     fromPlugin: "Plugin",
+    fromPluginNamed: "Plugin : {name}",
     fromUser: "Personnalisé",
     by: "par {author}",
     missingTheme:
@@ -72,6 +75,7 @@ export const settingsAppearance: Translations<typeof en> = {
     dark: "Scuro",
     theme: "Tema",
     fromPlugin: "Plugin",
+    fromPluginNamed: "Plugin: {name}",
     fromUser: "Personalizzato",
     by: "di {author}",
     missingTheme:
@@ -92,6 +96,7 @@ export const settingsAppearance: Translations<typeof en> = {
     dark: "Oscuro",
     theme: "Tema",
     fromPlugin: "Plugin",
+    fromPluginNamed: "Complemento: {name}",
     fromUser: "Personalizado",
     by: "de {author}",
     missingTheme:
@@ -112,6 +117,7 @@ export const settingsAppearance: Translations<typeof en> = {
     dark: "Escuro",
     theme: "Tema",
     fromPlugin: "Plugin",
+    fromPluginNamed: "Plugin: {name}",
     fromUser: "Personalizado",
     by: "por {author}",
     missingTheme:

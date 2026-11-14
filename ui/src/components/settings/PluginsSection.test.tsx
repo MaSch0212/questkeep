@@ -3,6 +3,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PluginInfo } from "../../bindings/PluginInfo";
 import * as api from "../../lib/api";
+import { resetPluginThemes, setThemeFetcher, syncPluginThemes } from "../../lib/pluginThemes";
 import { store } from "../../lib/store";
 import { makePlugin } from "../../test-utils";
 import { PluginsSection } from "./PluginsSection";
@@ -204,6 +205,40 @@ describe("PluginsSection", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Remove plugin" }));
     await waitFor(() => expect(api.removePlugin).toHaveBeenCalledWith("example-store", true));
     expect(toasts()).toContain("Removed Example Store.");
+  });
+
+  it("says where the themes of plugins are and why one could not be loaded", async () => {
+    setThemeFetcher(() => Promise.reject(new Error("HTTP 404")));
+    const themed = makePlugin({
+      id: "neon",
+      name: "Neon Pack",
+      providers: [],
+      themes: 2,
+      themeDefs: [
+        { id: "neon", name: "Neon", css: "theme.css" },
+        { id: "other", name: "Other", css: "theme.css" },
+      ],
+    });
+    await syncPluginThemes([themed]);
+    await show(themed, makePlugin());
+    expect(
+      row("Neon Pack")
+        .getAllByRole("alert")
+        .map((line) => line.textContent),
+    ).toEqual([
+      "Theme “Neon” could not be loaded: theme.css: HTTP 404",
+      "Theme “Other” could not be loaded: its id “other” must be “neon” or start with “neon-”",
+    ]);
+    expect(row("Example Store").queryByRole("alert")).toBeNull();
+
+    expect(
+      screen.getByText(/Themes that plugins bring are chosen under Appearance./),
+    ).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole("button", { name: "Open Appearance" }));
+    expect(store.page()).toBe("settings");
+    expect(store.takeSettingsSection()).toBe("appearance");
+    setThemeFetcher(null);
+    resetPluginThemes();
   });
 
   it("keeps the plugin's data by default", async () => {

@@ -1,0 +1,103 @@
+/*
+ * Arcade: an example theme plugin for Questkeep.
+ *
+ * Every rule is written against :root[data-theme="example-theme"], the id in plugin.json, so
+ * nothing here applies while another theme is active. Three kinds of rules:
+ *
+ *   1. variables per mode (the palette),
+ *   2. variables for both modes (sizes, shadows) and rules that read the parameters,
+ *   3. ordinary rules for what variables cannot do (the layout).
+ *
+ * The list of variables is ui/src/theme.css in the Questkeep repository; the theme editor shows
+ * them with their current values.
+ */
+
+/* 1. The palette. What is left out keeps the default theme's value for that mode. */
+:root[data-theme="example-theme"][data-scheme="dark"] {
+  --qk-color-bg: #120f24;
+  --qk-color-surface: #1a1633;
+  --qk-color-surface-raised: #231e45;
+  --qk-color-surface-hover: #2d2757;
+  --qk-color-surface-active: #3b3371;
+  --qk-color-border: #342c66;
+  --qk-color-text: #f3f0ff;
+  --qk-color-text-muted: #b5add9;
+  --qk-color-text-faint: #8a81b8;
+  --qk-color-cover-bg: #0c0a19;
+  --qk-color-scrollbar: #3b3371;
+  --qk-color-heat-0: #231e45;
+  --qk-color-drive-free: #2d2757;
+  --qk-color-backdrop: #07060fcc;
+}
+:root[data-theme="example-theme"][data-scheme="light"] {
+  --qk-color-bg: #fbf4e6;
+  --qk-color-surface: #fffaf0;
+  --qk-color-surface-raised: #ffffff;
+  --qk-color-surface-hover: #f1e6cf;
+  --qk-color-surface-active: #e5d6b6;
+  --qk-color-border: #dccfb2;
+  --qk-color-text: #2a1b3d;
+  --qk-color-text-muted: #5b4a70;
+  --qk-color-text-faint: #76668a;
+  --qk-color-cover-bg: #eadfc8;
+  --qk-color-scrollbar: #cdbf9f;
+  --qk-color-heat-0: #efe5d0;
+  --qk-color-drive-free: #ece2cc;
+  --qk-color-backdrop: #2a1b3d73;
+}
+
+/*
+ * 2. Both modes. The accent needs no rule: the base palette reads the parameter named "accent"
+ * (--qk-color-accent: var(--qk-param-accent, ...)) and derives its shades from it.
+ */
+:root[data-theme="example-theme"] {
+  --qk-titlebar-height: 56px;
+  --qk-radius-scale: 0.5;
+  --qk-letter-spacing-caps: 0.1em;
+}
+
+/* The "glow" toggle: data-param-glow is "1" or "0" on <html>. */
+:root[data-theme="example-theme"][data-param-glow="1"] {
+  --qk-shadow-tile-hover:
+    0 0 0 1px var(--qk-color-accent),
+    0 0 28px color-mix(in oklab, var(--qk-color-accent) 55%, transparent);
+  --qk-shadow-popover:
+    0 0 0 1px color-mix(in oklab, var(--qk-color-accent) 40%, transparent), 0 12px 32px #00000088;
+}
+
+/* 3. Rules. Section headings in capitals. */
+:root[data-theme="example-theme"] .topbar__title,
+:root[data-theme="example-theme"] .settings-section__title,
+:root[data-theme="example-theme"] .edit-section__title,
+:root[data-theme="example-theme"] .fieldset__legend {
+  text-transform: uppercase;
+  letter-spacing: var(--qk-letter-spacing-caps);
+}
+
+/* A file of the plugin: relative url() references are resolved against this CSS file. */
+:root[data-theme="example-theme"] .titlebar {
+  background-image: url("assets/scanlines.svg");
+  border-bottom-color: var(--qk-color-accent);
+}
+
+/*
+ * The layout. The app shell is a grid: the title bar across the top, below it the sidebar and
+ * the main area. The "sidebar" option swaps the two columns, with grid placement alone.
+ */
+:root[data-theme="example-theme"][data-param-sidebar="right"] .app {
+  grid-template-columns: minmax(0, 1fr) var(--qk-sidebar-width);
+}
+:root[data-theme="example-theme"][data-param-sidebar="right"] .app__main {
+  grid-column: 1;
+  grid-row: 2;
+}
+:root[data-theme="example-theme"][data-param-sidebar="right"] .sidebar {
+  grid-column: 2;
+  grid-row: 2;
+  border-right: 0;
+  border-left: 1px solid var(--qk-color-border);
+}
+/* The brand in the title bar no longer sits above the sidebar, so it need not be as wide. */
+:root[data-theme="example-theme"][data-param-sidebar="right"] .titlebar__lead {
+  min-width: 0;
+}

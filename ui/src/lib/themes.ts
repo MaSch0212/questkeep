@@ -1,5 +1,6 @@
 /**
- * Themes: the registry (built-in themes, later plugin and user themes), turning a theme's
+ * Themes: the registry (built-in themes; plugin themes are added by pluginThemes.ts, the user's
+ * own by userThemeStore.ts), turning a theme's
  * parameters into CSS custom properties, and applying the appearance settings to `<html>`.
  *
  * What the page gets (see theme.css for the variables themes override):
@@ -57,6 +58,8 @@ export interface ThemeDef {
   params: ThemeParam[];
   /** Where it comes from. */
   origin: "builtin" | "plugin" | "user";
+  /** The plugin a plugin theme comes from. */
+  plugin?: { id: string; name: string };
   /** Preview swatches per scheme for the picker: background, surface, text, accent. */
   preview?: { light: string[]; dark: string[] };
   /**

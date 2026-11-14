@@ -165,6 +165,7 @@ export function makePlugin(overrides: Partial<PluginInfo> = {}): PluginInfo {
     extension: null,
     revision: 1,
     themes: 0,
+    themeDefs: [],
     permissions: { read: [], http: [] },
     ...overrides,
   };

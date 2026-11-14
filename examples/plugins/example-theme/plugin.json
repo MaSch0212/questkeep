@@ -1,0 +1,47 @@
+{
+  "id": "example-theme",
+  "name": "Example Theme",
+  "version": "0.1.0",
+  "description": "Shows what a theme plugin can do: its own light and dark palette, options, a file of its own and a different layout. Use it as a starting point for your own.",
+  "author": "Questkeep",
+  "apiVersion": 1,
+  "themes": [
+    {
+      "id": "example-theme",
+      "name": "Arcade",
+      "description": "Neon on deep violet, or ink on cream. Low corners, a tall title bar and headings in capitals.",
+      "css": "theme.css",
+      "params": [
+        {
+          "key": "accent",
+          "label": "Accent color",
+          "type": "color",
+          "default": { "light": "#a3157c", "dark": "#ff6ad5" }
+        },
+        {
+          "key": "glow",
+          "label": "Glow",
+          "hint": "Game covers and menus get a glowing edge in the accent color.",
+          "type": "toggle",
+          "default": true
+        },
+        {
+          "key": "sidebar",
+          "label": "Sidebar",
+          "hint": "Which side of the window the sidebar is on.",
+          "type": "select",
+          "default": "left",
+          "advanced": true,
+          "options": [
+            { "value": "left", "label": "Left" },
+            { "value": "right", "label": "Right" }
+          ]
+        }
+      ],
+      "preview": {
+        "light": ["#fbf4e6", "#fffaf0", "#2a1b3d", "#a3157c"],
+        "dark": ["#120f24", "#1a1633", "#f3f0ff", "#ff6ad5"]
+      }
+    }
+  ]
+}

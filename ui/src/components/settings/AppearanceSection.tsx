@@ -59,6 +59,12 @@ function basedOn(id: string): string | null {
     : trEditor("basedOn", { name: getTheme(theme.base)?.name ?? theme.base });
 }
 
+/** Where a theme that is not built in comes from: its plugin by name, or the user. */
+function originLabel(theme: ThemeDef): string {
+  if (theme.origin !== "plugin") return tr("fromUser");
+  return theme.plugin ? tr("fromPluginNamed", { name: theme.plugin.name }) : tr("fromPlugin");
+}
+
 /** A small labeled button on a theme card; the label names the theme for screen readers. */
 function CardAction(props: { label: string; name: string; onClick: () => void }) {
   return (
@@ -106,9 +112,7 @@ function ThemeCard(props: {
         <span class="theme-card__head">
           <span class="theme-card__name">{props.theme.name}</span>
           <Show when={props.theme.origin !== "builtin"}>
-            <span class="theme-card__badge">
-              {tr(props.theme.origin === "plugin" ? "fromPlugin" : "fromUser")}
-            </span>
+            <span class="theme-card__badge">{originLabel(props.theme)}</span>
           </Show>
         </span>
         <Show when={props.theme.description}>

@@ -8,6 +8,7 @@ import { settingsPlugins } from "../../i18n/settingsPlugins";
 import * as api from "../../lib/api";
 import { errorMessage } from "../../lib/errors";
 import { extensionStates } from "../../lib/extensions/host";
+import { pluginThemeProblems } from "../../lib/pluginThemes";
 import { hasPermissions, pluginKinds, pluginStatus, sortPlugins } from "../../lib/plugins";
 import { scanSummaryText } from "../../lib/query";
 import { store } from "../../lib/store";
@@ -182,6 +183,16 @@ export function PluginsSection() {
   return (
     <div class="form">
       <p class="muted">{tr("intro")}</p>
+      <p class="muted">
+        {tr("themesHint")}{" "}
+        <button
+          type="button"
+          class="link-btn"
+          onClick={() => store.showSettingsSection("appearance")}
+        >
+          {tr("openAppearance")}
+        </button>
+      </p>
       <div class="plugin-install">
         <button
           type="button"
@@ -259,6 +270,13 @@ export function PluginsSection() {
                       {trExtensions("extensionFailed", { error: extensionError() ?? "" })}
                     </p>
                   </Show>
+                  <For each={pluginThemeProblems()[plugin.id] ?? []}>
+                    {(problem) => (
+                      <p class="plugin__error selectable" role="alert">
+                        {tr("themeFailed", { name: problem.name, error: problem.error })}
+                      </p>
+                    )}
+                  </For>
                   <Show when={error() !== null && error() !== plugin.error}>
                     <p class="plugin__error selectable" role="alert">
                       {error()}

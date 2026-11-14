@@ -212,6 +212,14 @@ describe("AppearanceSection", () => {
     expect(root.getAttribute("data-param-glow")).toBe("1");
   });
 
+  it("names the plugin a theme comes from", async () => {
+    registerTheme({ ...neon, plugin: { id: "neon-pack", name: "Neon Pack" } });
+    renderSection({ scheme: "dark" });
+    const card = await screen.findByRole("radio", { name: "Neon" });
+    const label = card.closest("label") as HTMLElement;
+    expect(within(label).getByText("Plugin: Neon Pack")).toBeInTheDocument();
+  });
+
   it("says so when the chosen theme is missing, and keeps the choice", async () => {
     renderSection({ scheme: "dark", theme: "plugin.neon" });
     expect(await screen.findByText(/The theme “plugin.neon” is not available/)).toBeInTheDocument();

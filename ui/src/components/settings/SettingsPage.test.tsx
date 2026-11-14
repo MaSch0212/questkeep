@@ -108,6 +108,24 @@ describe("SettingsPage", () => {
     expect(screen.queryByRole("heading", { name: "Developer" })).toBeNull();
   });
 
+  it("marks a section asked for from elsewhere, also while the page is open", async () => {
+    store.showSettingsSection("plugins");
+    render(() => <SettingsPage />);
+    const nav = within(screen.getByRole("navigation", { name: "Settings sections" }));
+    expect(nav.getByRole("button", { name: "Plugins" })).toHaveAttribute(
+      "aria-current",
+      "location",
+    );
+    // The link under Plugins that leads to the themes.
+    await fireEvent.click(screen.getByRole("button", { name: "Open Appearance" }));
+    expect(nav.getByRole("button", { name: "Appearance" })).toHaveAttribute(
+      "aria-current",
+      "location",
+    );
+    expect(nav.getByRole("button", { name: "Plugins" })).not.toHaveAttribute("aria-current");
+    expect(store.takeSettingsSection()).toBeNull();
+  });
+
   it("toggles store metadata downloads", async () => {
     render(() => <SettingsPage />);
     await fireEvent.click(await screen.findByRole("checkbox", { name: "Download store metadata" }));
