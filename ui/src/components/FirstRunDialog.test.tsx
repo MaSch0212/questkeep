@@ -39,6 +39,7 @@ const SETTINGS: Settings = {
   language: null,
   priceSites: [],
   storeOrder: [],
+  appearance: { theme: "questkeep", scheme: "system", params: {} },
   metadataPriority: { order: [], fields: {} },
   providers: {},
 };

@@ -341,6 +341,7 @@ function makeSettings(overrides: Partial<Settings> = {}): Settings {
     language: null,
     priceSites: [],
     storeOrder: [],
+    appearance: { theme: "questkeep", scheme: "system", params: {} },
     metadataPriority: { order: [], fields: {} },
     providers: { epic: { token: "keep-me" }, steam: { apiKey: "K" } },
     ...overrides,

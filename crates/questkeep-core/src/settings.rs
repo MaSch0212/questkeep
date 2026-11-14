@@ -77,6 +77,49 @@ pub struct Settings {
     /// Store ids in the user's order (Settings → Stores); every list of stores follows it.
     /// Stores missing from it come after, in id order.
     pub store_order: Vec<String>,
+    /// Light or dark mode, the theme and its parameters.
+    pub appearance: Appearance,
+}
+
+/// How the UI looks: the color scheme, the theme and the values of theme parameters.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", default)]
+#[ts(export)]
+pub struct Appearance {
+    /// The theme's id. Kept as it is when no such theme exists right now (a plugin's theme may
+    /// be unloaded for a while); the UI then shows the default theme.
+    pub theme: String,
+    /// Light, dark, or whatever the system uses.
+    pub scheme: ColorScheme,
+    /// Parameter values by theme id, then parameter key (`questkeep: { accent: "#7c9cff" }`).
+    /// Parameters missing here use the theme's defaults.
+    #[ts(type = "Record<string, Record<string, string | number | boolean>>")]
+    pub params: BTreeMap<String, BTreeMap<String, serde_json::Value>>,
+}
+
+/// The id of the built-in default theme.
+pub const DEFAULT_THEME: &str = "questkeep";
+
+impl Default for Appearance {
+    fn default() -> Self {
+        Self {
+            theme: DEFAULT_THEME.to_string(),
+            scheme: ColorScheme::default(),
+            params: BTreeMap::new(),
+        }
+    }
+}
+
+/// Light or dark mode.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum ColorScheme {
+    /// Follows the system's setting.
+    #[default]
+    System,
+    Light,
+    Dark,
 }
 
 /// Words like "The" that sorting skips at the start of a name ("The Witcher" sorts under W).
@@ -174,6 +217,7 @@ impl Default for Settings {
             language: None,
             price_sites: Vec::new(),
             store_order: Vec::new(),
+            appearance: Appearance::default(),
         }
     }
 }
@@ -505,6 +549,18 @@ mod tests {
                 url: "https://gg.deals/".into(),
             }],
             store_order: vec!["gog".into(), "steam".into()],
+            appearance: Appearance {
+                theme: "plugin.neon".into(),
+                scheme: ColorScheme::Light,
+                params: BTreeMap::from([(
+                    "plugin.neon".to_string(),
+                    BTreeMap::from([
+                        ("accent".to_string(), serde_json::json!("#ff00aa")),
+                        ("glow".to_string(), serde_json::json!(true)),
+                        ("size".to_string(), serde_json::json!(110)),
+                    ]),
+                )]),
+            },
         };
         store.save(&custom).unwrap();
         let raw = std::fs::read_to_string(&path).unwrap();
@@ -549,6 +605,45 @@ mod tests {
         assert!(!s.minimize_to_tray && !s.start_with_system);
         assert!(s.show_start_page);
         assert_eq!(s.startup_page, StartupPage::Start);
+    }
+
+    #[test]
+    fn appearance_defaults_for_older_files_and_keeps_unknown_themes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("settings.json");
+        // A file from before the appearance settings existed.
+        std::fs::write(&path, r#"{"scanOnStartup": false, "language": "de"}"#).unwrap();
+        let (store, _) = store_at(path.clone());
+        let old = store.load();
+        assert_eq!(old.appearance, Appearance::default());
+        assert_eq!(old.appearance.theme, DEFAULT_THEME);
+        assert_eq!(old.appearance.scheme, ColorScheme::System);
+        assert!(old.appearance.params.is_empty());
+
+        // Only part of it, with a theme no one registered: kept as written.
+        std::fs::write(
+            &path,
+            r##"{"appearance":{"theme":"plugin.gone","scheme":"dark","params":{"plugin.gone":{"accent":"#123456","wide":true,"size":1.5}}}}"##,
+        )
+        .unwrap();
+        let loaded = store.load();
+        assert_eq!(loaded.appearance.theme, "plugin.gone");
+        assert_eq!(loaded.appearance.scheme, ColorScheme::Dark);
+        let params = &loaded.appearance.params["plugin.gone"];
+        assert_eq!(params["accent"], "#123456");
+        assert_eq!(params["wide"], true);
+        assert_eq!(params["size"], 1.5);
+        store.save(&loaded).unwrap();
+        assert_eq!(store.load(), loaded);
+
+        let json = serde_json::to_value(Appearance::default()).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({ "theme": "questkeep", "scheme": "system", "params": {} })
+        );
+        let partial: Appearance = serde_json::from_str(r#"{"scheme":"light"}"#).unwrap();
+        assert_eq!(partial.scheme, ColorScheme::Light);
+        assert_eq!(partial.theme, DEFAULT_THEME);
     }
 
     #[test]
