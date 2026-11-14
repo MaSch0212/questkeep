@@ -6,7 +6,9 @@ on:
   pull_request:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  # Every push to main gets its own full run (the status badge shows the last finished one);
+  # pull requests cancel their outdated runs.
+  group: ci-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
   cancel-in-progress: true
 
 permissions:
