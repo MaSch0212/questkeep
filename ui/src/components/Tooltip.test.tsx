@@ -39,6 +39,17 @@ describe("TooltipLayer", () => {
     expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
+  it("stays away while the element's popup is open", async () => {
+    renderButtons();
+    const settings = screen.getByRole("button", { name: "S" });
+    await fireEvent.pointerOver(settings);
+    await vi.advanceTimersByTimeAsync(TOOLTIP_DELAY_MS);
+    expect(screen.getByRole("tooltip")).toBeInTheDocument();
+    settings.setAttribute("aria-expanded", "true");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(screen.queryByRole("tooltip")).toBeNull();
+  });
+
   it("follows text changes and hides on a click", async () => {
     renderButtons();
     const settings = screen.getByRole("button", { name: "S" });

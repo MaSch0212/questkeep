@@ -13,7 +13,9 @@ const TOOLTIP_ID = "qk-tooltip";
 const targetOf = (node: EventTarget | null): HTMLElement | null =>
   node instanceof Element ? node.closest<HTMLElement>("[data-tooltip]") : null;
 
-const textOf = (element: HTMLElement) => element.dataset.tooltip?.trim() ?? "";
+/** The tooltip to show; none while the element's own popup is open (it would cover it). */
+const textOf = (element: HTMLElement) =>
+  element.getAttribute("aria-expanded") === "true" ? "" : (element.dataset.tooltip?.trim() ?? "");
 
 /**
  * The app's tooltips: any element with a `data-tooltip` attribute shows its text in a styled
@@ -86,7 +88,10 @@ export function TooltipLayer() {
       if (text === "") hide();
       else if (text !== current.text) setTip({ target, text });
     });
-    observer.observe(target, { attributes: true, attributeFilter: ["data-tooltip"] });
+    observer.observe(target, {
+      attributes: true,
+      attributeFilter: ["data-tooltip", "aria-expanded"],
+    });
     // Screen readers hear the tooltip as the target's description.
     const describedBy = target.getAttribute("aria-describedby");
     if (describedBy === null) target.setAttribute("aria-describedby", TOOLTIP_ID);
@@ -112,7 +117,15 @@ export function TooltipLayer() {
     // oxlint-disable-next-line unicorn/consistent-function-scoping -- calls `schedule` above
     const onFocusIn = (event: FocusEvent) => {
       const target = targetOf(event.target);
-      if (target && event.target instanceof Element && event.target.matches(":focus-visible")) {
+      const focused = event.target;
+      // Text fields count as focus-visible even when clicked; their tooltip would cover the
+      // suggestions and what is typed.
+      if (
+        target &&
+        focused instanceof Element &&
+        focused.matches(":focus-visible") &&
+        !focused.matches("input, textarea, select, [contenteditable]")
+      ) {
         schedule(target);
       }
     };

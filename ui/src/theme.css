@@ -204,6 +204,7 @@
   --qk-grid-padding: 20px;
   --qk-control-height: 34px;
   --qk-keyword-width: 220px;
+  --qk-keyword-min-width: 140px;
   --qk-price-site-name-width: 200px;
   --qk-tool-size: 32px;
   --qk-badge-min-size: 18px;

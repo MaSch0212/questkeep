@@ -2859,6 +2859,9 @@ ul {
 }
 .keyword--open,
 .keyword--open:hover {
+  /* Gives way down to a minimum before toolbar items move into the More menu. */
+  flex: 0 1 auto;
+  min-width: var(--qk-keyword-min-width);
   width: var(--qk-keyword-width);
   background: var(--qk-color-surface);
   border-color: var(--qk-color-accent);
