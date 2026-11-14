@@ -1,6 +1,6 @@
 import { translator } from "../i18n";
 import { gameChrome } from "../i18n/gameChrome";
-import TriangleAlert from "lucide-solid/icons/triangle-alert";
+import TriangleAlert from "lucide-solid/icons/triangle-exclamation-point";
 import { store } from "../lib/store";
 
 const tr = translator(gameChrome);

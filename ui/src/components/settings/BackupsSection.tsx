@@ -1,4 +1,4 @@
-import ArchiveRestore from "lucide-solid/icons/archive-restore";
+import ArchiveRestore from "lucide-solid/icons/archive-arrow-up";
 import DatabaseBackup from "lucide-solid/icons/database-backup";
 import { createEffect, createSignal, For, on, Show } from "solid-js";
 import type { BackupFrequency } from "../../bindings/BackupFrequency";

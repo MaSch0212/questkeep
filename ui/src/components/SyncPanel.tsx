@@ -1,5 +1,5 @@
 import RefreshCw from "lucide-solid/icons/refresh-cw";
-import TriangleAlert from "lucide-solid/icons/triangle-alert";
+import TriangleAlert from "lucide-solid/icons/triangle-exclamation-point";
 import X from "lucide-solid/icons/x";
 import { For, onMount, Show } from "solid-js";
 import { translator } from "../i18n";

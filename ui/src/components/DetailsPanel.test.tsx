@@ -468,7 +468,7 @@ describe("DetailsPanel", () => {
     ));
     const text = screen.getByText("Released").nextElementSibling?.textContent ?? "";
     expect(text).toContain("2011");
-    expect(text).not.toMatch(/1/);
+    expect(text).not.toMatch(/\b1\b/);
   });
 
   it("clamps long descriptions behind Show more", async () => {
