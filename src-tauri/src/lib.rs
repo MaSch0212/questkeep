@@ -454,6 +454,7 @@ pub fn run() {
             commands::remove_game,
             commands::list_providers,
             commands::list_plugins,
+            commands::preview_plugin,
             commands::install_plugin,
             commands::reload_plugin,
             commands::set_plugin_enabled,

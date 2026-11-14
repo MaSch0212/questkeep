@@ -14,6 +14,6 @@ pub mod manifest;
 pub mod wasm;
 
 pub use error::PluginError;
-pub use manager::{PluginInfo, PluginManager, PluginPermissions};
+pub use manager::{PluginInfo, PluginManager, PluginPermissions, PluginPreview};
 pub use manifest::PluginManifest;
 pub use wasm::CallLimits;

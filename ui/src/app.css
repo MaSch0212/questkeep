@@ -394,6 +394,10 @@ ul {
   border-color: var(--qk-color-danger);
   color: var(--qk-color-accent-contrast);
 }
+.btn--danger-solid:hover:not(:disabled) {
+  background: var(--qk-color-danger-hover);
+  border-color: var(--qk-color-danger-hover);
+}
 .icon-btn {
   display: inline-grid;
   place-items: center;
@@ -6636,4 +6640,24 @@ ul {
 }
 .theme-editor__footer-hint {
   flex-basis: 100%;
+}
+
+/* Settings: what a plugin is, shown before it is installed */
+.plugin-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-2);
+  margin-bottom: var(--qk-space-4);
+}
+.plugin-preview__path {
+  font-family: var(--qk-font-mono);
+  font-size: var(--qk-font-size-sm);
+}
+.plugin-preview__replaces {
+  margin: 0;
+  color: var(--qk-color-warn);
+}
+.plugin-preview__trust {
+  margin: 0;
+  font-size: var(--qk-font-size-sm);
 }

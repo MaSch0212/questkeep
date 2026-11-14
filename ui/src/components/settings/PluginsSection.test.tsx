@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@solidjs/testing-lib
 import { open } from "@tauri-apps/plugin-dialog";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PluginInfo } from "../../bindings/PluginInfo";
+import type { PluginPreview } from "../../bindings/PluginPreview";
 import * as api from "../../lib/api";
 import { resetPluginThemes, setThemeFetcher, syncPluginThemes } from "../../lib/pluginThemes";
 import { store } from "../../lib/store";
@@ -15,6 +16,20 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn<() => void>() }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn<() => void>() }));
+
+const makePreview = (overrides: Partial<PluginPreview> = {}): PluginPreview => ({
+  id: "new",
+  name: "New Store",
+  version: "1.2.0",
+  description: "Games from the New Store.",
+  author: "Someone",
+  stores: 1,
+  hasExtension: false,
+  themes: [],
+  permissions: { read: [], http: [] },
+  installedVersion: null,
+  ...overrides,
+});
 
 const toasts = () => store.toasts().map((t) => t.message);
 
@@ -30,6 +45,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   store.reset();
   vi.mocked(api.scanLibrary).mockResolvedValue({ added: 2, updated: 0, uninstalled: 0 });
+  vi.mocked(api.previewPlugin).mockResolvedValue(makePreview());
 });
 
 describe("PluginsSection", () => {
@@ -100,6 +116,48 @@ describe("PluginsSection", () => {
     expect(api.scanLibrary).toHaveBeenCalledWith("new-a");
     expect(api.scanLibrary).toHaveBeenCalledWith("new-b");
     expect(toasts()).toContain("Installed New Store.");
+  });
+
+  it("shows what the plugin is before it is installed", async () => {
+    await show();
+    vi.mocked(open).mockResolvedValue("C:/Dev/new-plugin");
+    vi.mocked(api.previewPlugin).mockResolvedValue(
+      makePreview({
+        hasExtension: true,
+        themes: ["Arcade", "Neon"],
+        permissions: { read: ["%APPDATA%/NewStore"], http: ["api.new.example"] },
+        installedVersion: "1.0.0",
+      }),
+    );
+    await fireEvent.click(screen.getByRole("button", { name: "Install from folder…" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(api.previewPlugin).toHaveBeenCalledWith("C:/Dev/new-plugin");
+    const shown = within(dialog);
+    expect(shown.getByText("New Store")).toBeInTheDocument();
+    expect(shown.getByText("1.2.0")).toBeInTheDocument();
+    expect(shown.getByText("by Someone")).toBeInTheDocument();
+    expect(shown.getByText("Games from the New Store.")).toBeInTheDocument();
+    for (const kind of ["Store", "Extension", "Theme"]) {
+      expect(shown.getByText(kind)).toBeInTheDocument();
+    }
+    expect(shown.getByText("Arcade, Neon")).toBeInTheDocument();
+    expect(shown.getByText("%APPDATA%/NewStore")).toBeInTheDocument();
+    expect(shown.getByText("api.new.example")).toBeInTheDocument();
+    expect(shown.getByText("Replaces the installed version 1.0.0.")).toBeInTheDocument();
+    expect(shown.getByText("C:/Dev/new-plugin")).toBeInTheDocument();
+    // Installing is not a destructive action: no danger button, and Cancel has the focus.
+    expect(shown.getByRole("button", { name: "Install" })).toHaveClass("btn--primary");
+    expect(shown.getByRole("button", { name: "Cancel" })).toHaveFocus();
+  });
+
+  it("says why a chosen folder is no plugin, without asking to install", async () => {
+    await show();
+    vi.mocked(open).mockResolvedValue("C:/Dev/not-a-plugin");
+    vi.mocked(api.previewPlugin).mockRejectedValue("plugin.json is missing");
+    await fireEvent.click(screen.getByRole("button", { name: "Install from folder…" }));
+    await waitFor(() => expect(toasts()).toContain("plugin.json is missing"));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(api.installPlugin).not.toHaveBeenCalled();
   });
 
   it("filters the file dialog to zip files and installs nothing when cancelled", async () => {

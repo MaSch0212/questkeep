@@ -12,6 +12,8 @@ const en = {
   installMessage:
     "Plugins are third-party code. A store runs sandboxed and can only read the folders and reach the web hosts it declares, but the games it reports are started as programs on this computer. An extension is JavaScript that runs inside the app with the app's own rights. A theme is CSS that restyles the app. Only install plugins you trust.",
   installConfirm: "Install",
+  installReplaces: "Replaces the installed version {version}.",
+  installThemes: "Themes",
   installed: "Installed {name}.",
   reloaded: "Reloaded {name}.",
   enabledToast: "Enabled {name}.",
@@ -80,6 +82,8 @@ export const settingsPlugins: Translations<typeof en> = {
     installMessage:
       "Plugins sind Code von Dritten. Ein Store läuft in einer Sandbox und kann nur die Ordner lesen und die Webhosts erreichen, die er angibt, aber die Spiele, die er meldet, werden als Programme auf diesem Computer gestartet. Eine Erweiterung ist JavaScript, das innerhalb der App mit den Rechten der App läuft. Ein Theme ist CSS, das das Aussehen der App verändert. Installiere nur Plugins, denen du vertraust.",
     installConfirm: "Installieren",
+    installReplaces: "Ersetzt die installierte Version {version}.",
+    installThemes: "Themes",
     installed: "{name} installiert.",
     reloaded: "{name} neu geladen.",
     enabledToast: "{name} aktiviert.",
@@ -144,6 +148,8 @@ export const settingsPlugins: Translations<typeof en> = {
     installMessage:
       "Les plugins sont du code tiers. Une boutique s'exécute dans un bac à sable et ne peut lire que les dossiers et joindre que les hôtes web qu'elle déclare, mais les jeux qu'elle signale sont lancés comme des programmes sur cet ordinateur. Une extension est du JavaScript qui s'exécute dans l'application avec les droits de l'application. Un thème est du CSS qui change l'apparence de l'application. N'installez que des plugins de confiance.",
     installConfirm: "Installer",
+    installReplaces: "Remplace la version installée {version}.",
+    installThemes: "Thèmes",
     installed: "{name} installé.",
     reloaded: "{name} rechargé.",
     enabledToast: "{name} activé.",
@@ -209,6 +215,8 @@ export const settingsPlugins: Translations<typeof en> = {
     installMessage:
       "I plugin sono codice di terze parti. Uno store gira in una sandbox e può leggere solo le cartelle e contattare solo gli host web che dichiara, ma i giochi che segnala vengono avviati come programmi su questo computer. Un'estensione è JavaScript che gira dentro l'app con i diritti dell'app. Un tema è CSS che cambia l'aspetto dell'app. Installa solo plugin di cui ti fidi.",
     installConfirm: "Installa",
+    installReplaces: "Sostituisce la versione installata {version}.",
+    installThemes: "Temi",
     installed: "{name} installato.",
     reloaded: "{name} ricaricato.",
     enabledToast: "{name} attivato.",
@@ -273,6 +281,8 @@ export const settingsPlugins: Translations<typeof en> = {
     installMessage:
       "Los complementos son código de terceros. Una tienda se ejecuta en un entorno aislado y solo puede leer las carpetas y contactar los servidores web que declara, pero los juegos que informa se inician como programas en este equipo. Una extensión es JavaScript que se ejecuta dentro de la aplicación con los permisos de la aplicación. Un tema es CSS que cambia el aspecto de la aplicación. Instala solo complementos en los que confíes.",
     installConfirm: "Instalar",
+    installReplaces: "Reemplaza la versión instalada {version}.",
+    installThemes: "Temas",
     installed: "{name} instalado.",
     reloaded: "{name} recargado.",
     enabledToast: "{name} activado.",
@@ -337,6 +347,8 @@ export const settingsPlugins: Translations<typeof en> = {
     installMessage:
       "Plugins são código de terceiros. Uma loja roda em um ambiente isolado e só pode ler as pastas e acessar os hosts web que declara, mas os jogos que ela informa são iniciados como programas neste computador. Uma extensão é JavaScript que roda dentro do app com os direitos do app. Um tema é CSS que muda a aparência do app. Instale apenas plugins em que você confia.",
     installConfirm: "Instalar",
+    installReplaces: "Substitui a versão instalada {version}.",
+    installThemes: "Temas",
     installed: "{name} instalado.",
     reloaded: "{name} recarregado.",
     enabledToast: "{name} ativado.",

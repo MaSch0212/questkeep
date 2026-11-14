@@ -2,6 +2,7 @@ import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import ChevronRight from "lucide-solid/icons/chevron-right";
 import { createSignal, For, Show } from "solid-js";
 import type { PluginInfo } from "../../bindings/PluginInfo";
+import type { PluginPreview } from "../../bindings/PluginPreview";
 import { translator } from "../../i18n";
 import { extensions } from "../../i18n/extensions";
 import { settingsPlugins } from "../../i18n/settingsPlugins";
@@ -13,6 +14,7 @@ import { hasPermissions, pluginKinds, pluginStatus, sortPlugins } from "../../li
 import { scanSummaryText } from "../../lib/query";
 import { store } from "../../lib/store";
 import { ConfirmDialog } from "../ConfirmDialog";
+import { PluginInstallDialog } from "./PluginInstallDialog";
 
 const tr = translator(settingsPlugins);
 const trExtensions = translator(extensions);
@@ -62,8 +64,8 @@ const plugins = () => sortPlugins(store.plugins());
 
 /** Install, reload, disable and remove plugins. The list follows the `pluginsChanged` event. */
 export function PluginsSection() {
-  /** A chosen plugin waiting for the trust confirmation. */
-  const [pending, setPending] = createSignal<string | null>(null);
+  /** A chosen plugin, read and checked, waiting for the go-ahead. */
+  const [pending, setPending] = createSignal<{ path: string; plugin: PluginPreview } | null>(null);
   const [installing, setInstalling] = createSignal(false);
   const [removing, setRemoving] = createSignal<PluginInfo | null>(null);
   const [deleteData, setDeleteData] = createSignal(false);
@@ -88,7 +90,8 @@ export function PluginsSection() {
   async function choose(kind: "folder" | "file") {
     try {
       const path = await pickPlugin(kind);
-      if (path !== null) setPending(path);
+      // A folder or file that is no plugin is refused here, with the reason.
+      if (path !== null) setPending({ path, plugin: await api.previewPlugin(path) });
     } catch (error) {
       store.pushToast("error", errorMessage(error));
     }
@@ -382,20 +385,14 @@ export function PluginsSection() {
         </div>
       </Show>
       <Show when={pending()}>
-        {(path) => {
+        {(chosen) => {
           // The dialog closes before it confirms, which ends the <Show>: keep the value.
-          const chosen = path();
+          const { path, plugin } = chosen();
           return (
-            <ConfirmDialog
-              title={tr("installTitle")}
-              message={
-                <>
-                  <span class="plugin__path selectable">{path()}</span>
-                  {tr("installMessage")}
-                </>
-              }
-              confirmLabel={tr("installConfirm")}
-              onConfirm={() => void install(chosen)}
+            <PluginInstallDialog
+              path={path}
+              plugin={plugin}
+              onInstall={() => void install(path)}
               onClose={() => setPending(null)}
             />
           );

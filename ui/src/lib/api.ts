@@ -29,6 +29,7 @@ import type { ListField } from "../bindings/ListField";
 import type { MetadataSourceInfo } from "../bindings/MetadataSourceInfo";
 import type { NewManualGame } from "../bindings/NewManualGame";
 import type { PluginInfo } from "../bindings/PluginInfo";
+import type { PluginPreview } from "../bindings/PluginPreview";
 import type { ProviderInfo } from "../bindings/ProviderInfo";
 import type { ScanSummary } from "../bindings/ScanSummary";
 import type { LibraryView } from "../bindings/LibraryView";
@@ -143,6 +144,8 @@ export const bulkChange = (ids: string[], change: BulkChange) =>
   invoke<void>("bulk_change", { ids, change });
 export const listPlugins = () => invoke<PluginInfo[]>("list_plugins");
 /** Installs a plugin folder or .zip (replacing one with the same id), enabled and loaded. */
+/** What the plugin in a folder or zip is, checked but not installed (for the install dialog). */
+export const previewPlugin = (path: string) => invoke<PluginPreview>("preview_plugin", { path });
 export const installPlugin = (path: string) => invoke<PluginInfo>("install_plugin", { path });
 export const reloadPlugin = (id: string) => invoke<PluginInfo>("reload_plugin", { id });
 export const setPluginEnabled = (id: string, enabled: boolean) =>

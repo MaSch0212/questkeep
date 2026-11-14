@@ -178,6 +178,7 @@
  */
 :root {
   --qk-color-accent-hover: color-mix(in oklab, var(--qk-color-accent), var(--qk-color-text) 22%);
+  --qk-color-danger-hover: color-mix(in oklab, var(--qk-color-danger), var(--qk-color-text) 22%);
   --qk-color-accent-divider: color-mix(in oklab, var(--qk-color-accent-contrast) 33%, transparent);
   --qk-color-accent-soft: color-mix(
     in oklab,

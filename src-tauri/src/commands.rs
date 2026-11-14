@@ -144,6 +144,19 @@ pub async fn list_plugins(state: State<'_, Arc<AppState>>) -> CmdResult<Vec<Plug
     blocking(state, |s| Ok(s.plugins.list())).await
 }
 
+/// What the plugin in a folder or zip file is, checked like an install but without installing it
+/// (for the install dialog).
+#[tauri::command]
+pub async fn preview_plugin(
+    state: State<'_, Arc<AppState>>,
+    path: String,
+) -> CmdResult<questkeep_plugins::PluginPreview> {
+    blocking(state, move |s| {
+        Ok(s.plugins.preview(&PathBuf::from(path))?)
+    })
+    .await
+}
+
 /// Installs the plugin in a folder or zip file, enables and loads it; an installed plugin with
 /// the same id is replaced.
 #[tauri::command]

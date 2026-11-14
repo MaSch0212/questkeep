@@ -74,6 +74,26 @@ pub struct PluginPermissions {
     pub http: Vec<String>,
 }
 
+/// A plugin that is about to be installed, for the install dialog.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct PluginPreview {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub description: Option<String>,
+    pub author: Option<String>,
+    /// How many stores the plugin brings.
+    pub stores: u32,
+    pub has_extension: bool,
+    /// The names of the plugin's themes.
+    pub themes: Vec<String>,
+    pub permissions: PluginPermissions,
+    /// The version that is installed now and would be replaced.
+    pub installed_version: Option<String>,
+}
+
 struct Plugin {
     entry: StateEntry,
     /// The installed copy's manifest; `None` when it can't be read.
@@ -203,6 +223,57 @@ impl PluginManager {
     /// Every installed plugin, in install order.
     pub fn list(&self) -> Vec<PluginInfo> {
         self.inner.plugins().iter().map(Plugin::info).collect()
+    }
+
+    /// Reads and checks the plugin in `path` (a folder or a zip) the way an install would,
+    /// without installing it: what the install dialog shows before the user agrees.
+    pub fn preview(&self, path: &Path) -> Result<PluginPreview> {
+        let _change = self.inner.change();
+        let source = std::path::absolute(path).map_err(|e| PluginError::io(path, e))?;
+        // The checked copy is thrown away again when `staged` is dropped.
+        let staged = install::stage(&source, &self.inner.paths.plugins_dir(), None)?;
+        let manifest = staged.manifest();
+        let installed_version = self
+            .inner
+            .plugins()
+            .iter()
+            .find(|p| p.entry.id == manifest.id)
+            .map(|p| {
+                p.manifest
+                    .as_ref()
+                    .map(|m| m.version.clone())
+                    .unwrap_or_default()
+            });
+        Ok(PluginPreview {
+            id: manifest.id.clone(),
+            name: manifest.name.clone(),
+            version: manifest.version.clone(),
+            description: manifest.description.clone(),
+            author: manifest.author.clone(),
+            stores: manifest.providers.len() as u32,
+            has_extension: manifest.extension.is_some(),
+            themes: manifest
+                .themes
+                .iter()
+                .map(|theme| {
+                    theme
+                        .get("name")
+                        .and_then(|name| name.as_str())
+                        .unwrap_or("?")
+                        .to_string()
+                })
+                .collect(),
+            permissions: PluginPermissions {
+                read: manifest
+                    .permissions
+                    .read
+                    .iter()
+                    .map(|r| r.path.clone())
+                    .collect(),
+                http: manifest.permissions.http.clone(),
+            },
+            installed_version,
+        })
     }
 
     /// Installs the plugin in `path` (a folder or a zip), enables and loads it. An installed
@@ -818,7 +889,26 @@ mod tests {
 
         let source = fx.root.join("src/theme-pack");
         write_plugin(&source, "theme-pack", "1.0.0");
+        // Looking at a plugin installs nothing.
+        let preview = manager.preview(&source).unwrap();
+        assert_eq!(preview.id, "theme-pack");
+        assert_eq!(preview.version, "1.0.0");
+        assert_eq!(preview.themes.len(), 1);
+        assert_eq!(preview.stores, 0);
+        assert!(!preview.has_extension && preview.installed_version.is_none());
+        assert!(manager.list().is_empty() && fx.changes() == 0);
+        assert!(!manager.plugin_dir("theme-pack").exists());
+        assert!(manager.preview(&fx.root.join("nope")).is_err());
+
         let info = manager.install(&source).unwrap();
+        assert_eq!(
+            manager
+                .preview(&source)
+                .unwrap()
+                .installed_version
+                .as_deref(),
+            Some("1.0.0")
+        );
         assert_eq!(info.id, "theme-pack");
         assert_eq!(info.name, "Plugin theme-pack");
         assert_eq!(info.version, "1.0.0");
