@@ -3,13 +3,12 @@
 //! its settings. The app registers the stores it ships; the core only ever sees this interface.
 
 pub mod auth;
-pub mod model;
 pub mod platform;
 mod provider;
-pub mod settings;
 pub mod sqlite;
 
 pub use provider::*;
+pub use questkeep_store_model::{model, settings};
 
 /// An HTTP agent for store requests: a timeout and Questkeep's user agent.
 pub fn http_agent() -> ureq::Agent {

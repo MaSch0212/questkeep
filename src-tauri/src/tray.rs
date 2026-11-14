@@ -155,6 +155,7 @@ pub fn create(app: &AppHandle, state: &Arc<AppState>) -> tauri::Result<()> {
             | CoreEvent::ScanStarted { .. }
             | CoreEvent::ScanFailed { .. }
             | CoreEvent::CategoriesChanged
+            | CoreEvent::PluginsChanged
             | CoreEvent::BackgroundWork { .. }
             | CoreEvent::BackupProgress { .. }
             | CoreEvent::BackupFinished { .. }

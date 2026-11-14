@@ -28,6 +28,9 @@ pub enum CoreEvent {
     },
     /// Categories were created, renamed, deleted or imported.
     CategoriesChanged,
+    /// A plugin was installed, loaded, unloaded, reloaded or removed: the lists of plugins and
+    /// stores changed.
+    PluginsChanged,
     /// A full sync is about to scan these providers, one after another.
     ScansQueued {
         providers: Vec<String>,

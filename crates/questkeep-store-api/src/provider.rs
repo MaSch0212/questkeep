@@ -2,10 +2,8 @@
 
 use std::collections::HashMap;
 
-use serde::{Deserialize, Serialize};
-use ts_rs::TS;
-
 use crate::auth::AccountAuth;
+pub use crate::model::AddGameOption;
 use crate::model::{Achievements, GameMetadata, GameNews, ImportedGame, PlayAction};
 use crate::settings::StoreSettings;
 
@@ -40,7 +38,7 @@ pub trait LibraryProvider: Send + Sync {
     /// Human-readable name, e.g. `Steam`.
     fn name(&self) -> &str;
     /// The store's logo: a complete monochrome `<svg>` drawn with `currentColor`.
-    fn icon_svg(&self) -> &'static str;
+    fn icon_svg(&self) -> &str;
     /// Whether [`scan_installed`](Self::scan_installed) is meaningful for this provider.
     fn can_scan(&self) -> bool {
         true
@@ -83,7 +81,7 @@ pub trait LibraryProvider: Send + Sync {
     }
     /// The store's website where games are bought (an https URL), opened in the user's browser
     /// from the + menu. `None` for stores without one.
-    fn shop_url(&self) -> Option<&'static str> {
+    fn shop_url(&self) -> Option<&str> {
         None
     }
     /// Opens the game's own page in the store's launcher (e.g. its Steam library page), usually a
@@ -196,17 +194,6 @@ pub trait LibraryProvider: Send + Sync {
     fn run_add_game_option(&self, _option_id: &str) -> Result<(), ProviderError> {
         Err(ProviderError::Unsupported)
     }
-}
-
-/// An extra way to add games, shown in the menu of the "Add game" button.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export)]
-pub struct AddGameOption {
-    /// Stable within the provider.
-    pub id: String,
-    /// Menu text, e.g. `New Minecraft instance`.
-    pub label: String,
 }
 
 /// A possible source for a game image.

@@ -15,7 +15,8 @@ use crate::providers::ProviderRegistry;
 pub struct MetadataResolver {
     db: Arc<Database>,
     priority: Arc<RwLock<MetadataPriority>>,
-    sources: Arc<Vec<String>>,
+    /// The stores; plugins add and remove some while the app runs.
+    providers: ProviderRegistry,
 }
 
 impl MetadataResolver {
@@ -24,19 +25,19 @@ impl MetadataResolver {
         providers: &ProviderRegistry,
         priority: MetadataPriority,
     ) -> Self {
-        let mut sources: Vec<String> = providers.iter().map(|p| p.id().to_string()).collect();
-        sources.push(IGDB_SOURCE.to_string());
-        sources.push(HLTB_SOURCE.to_string());
         Self {
             db,
             priority: Arc::new(RwLock::new(priority)),
-            sources: Arc::new(sources),
+            providers: providers.clone(),
         }
     }
 
     /// The movable sources: every store, IGDB and HowLongToBeat.
-    pub fn sources(&self) -> &[String] {
-        &self.sources
+    pub fn sources(&self) -> Vec<String> {
+        let mut sources: Vec<String> = self.providers.iter().map(|p| p.id().to_string()).collect();
+        sources.push(IGDB_SOURCE.to_string());
+        sources.push(HLTB_SOURCE.to_string());
+        sources
     }
 
     pub fn priority(&self) -> MetadataPriority {
@@ -63,11 +64,11 @@ impl MetadataResolver {
     pub fn resolve(&self, game_id: Uuid) -> Result<()> {
         let entry = self.db.entry_of(game_id)?;
         self.db
-            .resolve_entry(entry, &self.priority(), &self.sources)
+            .resolve_entry(entry, &self.priority(), &self.sources())
     }
 
     /// Recomputes every entry.
     pub fn resolve_all(&self) -> Result<usize> {
-        self.db.resolve_all(&self.priority(), &self.sources)
+        self.db.resolve_all(&self.priority(), &self.sources())
     }
 }

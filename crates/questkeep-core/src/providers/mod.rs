@@ -5,7 +5,7 @@
 pub mod manual;
 
 use std::collections::BTreeMap;
-use std::sync::Arc;
+use std::sync::{Arc, PoisonError, RwLock};
 
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -41,10 +41,13 @@ pub struct ProviderInfo {
     pub settings: StoreSettings,
 }
 
-/// Providers looked up by id.
+type ProviderMap = BTreeMap<String, Arc<dyn LibraryProvider>>;
+
+/// Providers looked up by id. Clones share one list, so a store plugin loaded or unloaded while
+/// the app runs ([`insert`](Self::insert), [`remove`](Self::remove)) shows up everywhere.
 #[derive(Clone, Default)]
 pub struct ProviderRegistry {
-    providers: BTreeMap<String, Arc<dyn LibraryProvider>>,
+    providers: Arc<RwLock<ProviderMap>>,
 }
 
 impl ProviderRegistry {
@@ -64,22 +67,47 @@ impl ProviderRegistry {
 
     /// Adds or replaces the provider with the same id.
     pub fn register(&mut self, provider: Arc<dyn LibraryProvider>) {
-        self.providers.insert(provider.id().to_string(), provider);
+        self.insert(provider);
+    }
+
+    /// [`register`](Self::register) for a registry that is already shared (store plugins).
+    pub fn insert(&self, provider: Arc<dyn LibraryProvider>) {
+        self.write().insert(provider.id().to_string(), provider);
+    }
+
+    /// Takes the provider out; its games stay in the library as games of a missing store.
+    pub fn remove(&self, id: &str) -> Option<Arc<dyn LibraryProvider>> {
+        self.write().remove(id)
     }
 
     pub fn get(&self, id: &str) -> Option<Arc<dyn LibraryProvider>> {
-        self.providers.get(id).cloned()
+        self.read().get(id).cloned()
     }
 
-    /// All providers, ordered by id.
-    pub fn iter(&self) -> impl Iterator<Item = &Arc<dyn LibraryProvider>> {
-        self.providers.values()
+    /// All providers as they are now, ordered by id.
+    pub fn iter(&self) -> std::vec::IntoIter<Arc<dyn LibraryProvider>> {
+        self.read()
+            .values()
+            .cloned()
+            .collect::<Vec<_>>()
+            .into_iter()
+    }
+
+    fn read(&self) -> std::sync::RwLockReadGuard<'_, ProviderMap> {
+        self.providers
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+    }
+
+    fn write(&self) -> std::sync::RwLockWriteGuard<'_, ProviderMap> {
+        self.providers
+            .write()
+            .unwrap_or_else(PoisonError::into_inner)
     }
 
     /// The secret settings fields of all providers, as (provider id, key).
     pub fn secret_settings(&self) -> Vec<(String, String)> {
-        self.providers
-            .values()
+        self.iter()
             .flat_map(|p| {
                 let id = p.id().to_string();
                 p.settings()
@@ -93,8 +121,7 @@ impl ProviderRegistry {
     /// Every provider's info; `config` gives each provider's settings section (for
     /// [`LibraryProvider::has_owned_source`]).
     pub fn infos(&self, config: impl Fn(&str) -> serde_json::Value) -> Vec<ProviderInfo> {
-        self.providers
-            .values()
+        self.iter()
             .map(|p| {
                 let installed = p.is_installed();
                 ProviderInfo {
@@ -122,7 +149,7 @@ impl ProviderRegistry {
 
 impl std::fmt::Debug for ProviderRegistry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_list().entries(self.providers.keys()).finish()
+        f.debug_list().entries(self.read().keys()).finish()
     }
 }
 

@@ -46,9 +46,9 @@ impl Library {
         let records = self.db.source_records(entry)?;
         let edits = self.db.user_edits(entry)?;
         let priority = self.resolver.priority();
-        let automatic = resolve(&records, None, &priority, self.resolver.sources());
+        let automatic = resolve(&records, None, &priority, &self.resolver.sources());
         // Links in the order the page shows them, each with its source.
-        let order = priority.order_for(None, self.resolver.sources());
+        let order = priority.order_for(None, &self.resolver.sources());
         let rank = |source: &str| {
             order
                 .iter()

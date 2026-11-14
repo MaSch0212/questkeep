@@ -258,3 +258,14 @@ pub struct Achievements {
     /// The unlocked ones, most recent first.
     pub unlocked: Vec<Achievement>,
 }
+
+/// An extra way to add games, shown in the menu of the "Add game" button.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AddGameOption {
+    /// Stable within the provider.
+    pub id: String,
+    /// Menu text, e.g. `New Minecraft instance`.
+    pub label: String,
+}

@@ -3393,6 +3393,7 @@ version = "0.5.0"
 dependencies = [
  "chrono",
  "keyring",
+ "questkeep-store-model",
  "rusqlite",
  "serde",
  "serde_json",
@@ -3480,6 +3481,15 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tracing",
+]
+
+[[package]]
+name = "questkeep-store-model"
+version = "0.5.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "ts-rs",
 ]
 
 [[package]]
