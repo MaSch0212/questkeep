@@ -3,7 +3,7 @@ import type { Game } from "../bindings/Game";
 import type { GameQuery } from "../bindings/GameQuery";
 import type { LibraryView } from "../bindings/LibraryView";
 import type { ViewSection } from "../bindings/ViewSection";
-import { makeGame } from "../test-utils";
+import { makeGame, makePlugin, makeProvider } from "../test-utils";
 import * as api from "./api";
 import { defaultQuery } from "./query";
 import { store } from "./store";
@@ -124,6 +124,16 @@ describe("store", () => {
     store.openGamePage(hidden);
     expect(store.activeViewId()).toBe("all");
     expect(store.selectedGame()?.id).toBe("h");
+  });
+
+  it("reloads plugins, stores and the game list on pluginsChanged", async () => {
+    vi.mocked(api.listPlugins).mockResolvedValue([makePlugin({ id: "p" })]);
+    vi.mocked(api.listProviders).mockResolvedValue([makeProvider({ id: "p" })]);
+    vi.mocked(api.listGames).mockResolvedValue([makeGame({ id: "g" })]);
+    store.handleCoreEvent({ type: "pluginsChanged" });
+    await vi.waitFor(() => expect(store.plugins().map((p) => p.id)).toEqual(["p"]));
+    await vi.waitFor(() => expect(store.providers().map((p) => p.id)).toEqual(["p"]));
+    await vi.waitFor(() => expect(store.games().map((g) => g.id)).toEqual(["g"]));
   });
 
   it("bumps cover versions on gamesChanged", () => {

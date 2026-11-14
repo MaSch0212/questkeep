@@ -14,6 +14,7 @@ import type { GameQuery } from "../bindings/GameQuery";
 import type { GroupBy } from "../bindings/GroupBy";
 import type { LibraryView } from "../bindings/LibraryView";
 import type { ListField } from "../bindings/ListField";
+import type { PluginInfo } from "../bindings/PluginInfo";
 import type { ProviderInfo } from "../bindings/ProviderInfo";
 import type { Settings } from "../bindings/Settings";
 import type { PriceSite } from "../bindings/PriceSite";
@@ -151,6 +152,7 @@ function createAppStore() {
   const [detailsOpen, setDetailsOpen] = createSignal(false);
   const [running, setRunning] = createSignal<ReadonlySet<string>>(new Set());
   const [providers, setProviders] = createSignal<ProviderInfo[]>([]);
+  const [plugins, setPlugins] = createSignal<PluginInfo[]>([]);
   const [appInfo, setAppInfo] = createSignal<AppInfo | null>(null);
   const [seenSources, setSeenSources] = createSignal<ReadonlySet<string>>(new Set());
   const [toasts, setToasts] = createSignal<Toast[]>([]);
@@ -684,6 +686,11 @@ function createAppStore() {
   }
 
   /** Stores and what they can do; signing in or out changes which ones can sync. */
+  async function loadPlugins() {
+    // A missing list (a stubbed api in tests) counts as no plugins.
+    setPlugins((await api.listPlugins()) ?? []);
+  }
+
   async function loadProviders() {
     setProviders(await api.listProviders());
   }
@@ -1042,6 +1049,12 @@ function createAppStore() {
       case "categoriesChanged":
         void loadCategories();
         break;
+      case "pluginsChanged":
+        // Plugin stores come and go: the store list and what games can do follow.
+        void loadPlugins().catch(() => undefined);
+        void loadProviders().catch(() => undefined);
+        scheduleRefresh();
+        break;
       case "backgroundWork":
         setBackgroundWork((work) => ({ ...work, [event.queue]: event.pending }));
         break;
@@ -1150,6 +1163,7 @@ function createAppStore() {
     ]);
     const loads = Promise.allSettled([
       loadProviders(),
+      loadPlugins().catch(() => undefined),
       loadCompletion(),
       api.appInfo().then(setAppInfo),
       api.runningGames().then((ids) => setRunning(new Set(ids))),
@@ -1242,6 +1256,7 @@ function createAppStore() {
       setBackgroundWork(IDLE_WORK);
       setRunning(new Set<string>());
       setProviders([]);
+      setPlugins([]);
       setAppInfo(null);
       setUpdate(null);
       setUpdateOpen(false);
@@ -1267,12 +1282,14 @@ function createAppStore() {
     detailsOpen,
     running,
     providers,
+    plugins,
     appInfo,
     sources,
     toasts,
     duplicatesOpen,
     setDuplicatesOpen,
     loadProviders,
+    loadPlugins,
     update,
     setUpdate,
     updateOpen,

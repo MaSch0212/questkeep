@@ -1,4 +1,5 @@
 import type { Game } from "./bindings/Game";
+import type { PluginInfo } from "./bindings/PluginInfo";
 import type { ProviderInfo } from "./bindings/ProviderInfo";
 import type { StoreSettings } from "./bindings/StoreSettings";
 
@@ -143,4 +144,26 @@ export function byTooltip(text: string): HTMLElement {
   const found = allByTooltip(text);
   if (found.length > 1) throw new Error(`${found.length} elements with the tooltip "${text}"`);
   return found[0] as HTMLElement;
+}
+
+/** A loaded store plugin; override what a test cares about. */
+export function makePlugin(overrides: Partial<PluginInfo> = {}): PluginInfo {
+  return {
+    id: "example-store",
+    name: "Example Store",
+    version: "0.1.0",
+    description: null,
+    author: null,
+    source: "C:/Plugins/example-store",
+    sourceExists: true,
+    enabled: true,
+    watch: false,
+    loaded: true,
+    error: null,
+    providers: ["example-store"],
+    hasExtension: false,
+    themes: 0,
+    permissions: { read: [], http: [] },
+    ...overrides,
+  };
 }

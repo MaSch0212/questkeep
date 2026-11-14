@@ -28,6 +28,7 @@ import type { GameUpdate } from "../bindings/GameUpdate";
 import type { ListField } from "../bindings/ListField";
 import type { MetadataSourceInfo } from "../bindings/MetadataSourceInfo";
 import type { NewManualGame } from "../bindings/NewManualGame";
+import type { PluginInfo } from "../bindings/PluginInfo";
 import type { ProviderInfo } from "../bindings/ProviderInfo";
 import type { ScanSummary } from "../bindings/ScanSummary";
 import type { LibraryView } from "../bindings/LibraryView";
@@ -138,6 +139,16 @@ export const combineWithPlan = (plan: CombinePlan) => invoke<Game>("combine_with
 /** Changes several entries at once (all or nothing). */
 export const bulkChange = (ids: string[], change: BulkChange) =>
   invoke<void>("bulk_change", { ids, change });
+export const listPlugins = () => invoke<PluginInfo[]>("list_plugins");
+/** Installs a plugin folder or .zip (replacing one with the same id), enabled and loaded. */
+export const installPlugin = (path: string) => invoke<PluginInfo>("install_plugin", { path });
+export const reloadPlugin = (id: string) => invoke<PluginInfo>("reload_plugin", { id });
+export const setPluginEnabled = (id: string, enabled: boolean) =>
+  invoke<PluginInfo>("set_plugin_enabled", { id, enabled });
+export const setPluginWatch = (id: string, watch: boolean) =>
+  invoke<PluginInfo>("set_plugin_watch", { id, watch });
+export const removePlugin = (id: string, deleteData: boolean) =>
+  invoke<void>("remove_plugin", { id, deleteData });
 export const listProviders = () => invoke<ProviderInfo[]>("list_providers");
 export const scanLibrary = (providerId: string) =>
   invoke<ScanSummary>("scan_library", { providerId });
