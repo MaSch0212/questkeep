@@ -56,6 +56,10 @@ pub struct PluginInfo {
     pub revision: u64,
     /// How many themes the plugin brings.
     pub themes: u32,
+    /// The `themes` part of the manifest (id, name, css file, parameters, preview) while the
+    /// plugin is enabled; the UI registers the themes from it.
+    #[ts(type = "Array<Record<string, unknown>>")]
+    pub theme_defs: Vec<serde_json::Value>,
     pub permissions: PluginPermissions,
 }
 
@@ -116,6 +120,10 @@ impl Plugin {
                 .and_then(|m| m.extension.clone()),
             revision: self.revision,
             themes: manifest.map_or(0, |m| m.themes.len() as u32),
+            theme_defs: manifest
+                .filter(|_| self.entry.enabled)
+                .map(|m| m.themes.clone())
+                .unwrap_or_default(),
             permissions: manifest
                 .map(|m| PluginPermissions {
                     read: m.permissions.read.iter().map(|r| r.path.clone()).collect(),
@@ -817,6 +825,7 @@ mod tests {
         assert!(info.enabled && info.loaded && info.source_exists && !info.watch);
         assert_eq!(info.error, None);
         assert_eq!(info.themes, 1);
+        assert_eq!(info.theme_defs.len(), 1);
         assert!(!info.has_extension && info.providers.is_empty());
         assert_eq!(Path::new(&info.source), source);
         assert_eq!(fx.changes(), 1);

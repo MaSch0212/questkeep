@@ -41,4 +41,9 @@ revision: number,
 /**
  * How many themes the plugin brings.
  */
-themes: number, permissions: PluginPermissions, };
+themes: number, 
+/**
+ * The `themes` part of the manifest (id, name, css file, parameters, preview) while the
+ * plugin is enabled; the UI registers the themes from it.
+ */
+themeDefs: Array<Record<string, unknown>>, permissions: PluginPermissions, };
