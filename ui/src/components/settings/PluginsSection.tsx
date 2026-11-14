@@ -3,15 +3,18 @@ import ChevronRight from "lucide-solid/icons/chevron-right";
 import { createSignal, For, Show } from "solid-js";
 import type { PluginInfo } from "../../bindings/PluginInfo";
 import { translator } from "../../i18n";
+import { extensions } from "../../i18n/extensions";
 import { settingsPlugins } from "../../i18n/settingsPlugins";
 import * as api from "../../lib/api";
 import { errorMessage } from "../../lib/errors";
+import { extensionStates } from "../../lib/extensions/host";
 import { hasPermissions, pluginKinds, pluginStatus, sortPlugins } from "../../lib/plugins";
 import { scanSummaryText } from "../../lib/query";
 import { store } from "../../lib/store";
 import { ConfirmDialog } from "../ConfirmDialog";
 
 const tr = translator(settingsPlugins);
+const trExtensions = translator(extensions);
 
 const KIND_LABEL = {
   store: "kindStore",
@@ -205,6 +208,11 @@ export function PluginsSection() {
               const working = () => busy().has(plugin.id);
               const expanded = () => open().has(plugin.id);
               const error = () => errors()[plugin.id] ?? null;
+              /** Why the plugin's extension did not start, if it did not. */
+              const extensionError = () => {
+                const state = extensionStates()[plugin.id];
+                return state?.status === "failed" ? (state.error ?? "") : null;
+              };
               return (
                 <div
                   class="account plugin"
@@ -245,6 +253,11 @@ export function PluginsSection() {
                   </Show>
                   <Show when={plugin.error}>
                     {(message) => <p class="plugin__error selectable">{message()}</p>}
+                  </Show>
+                  <Show when={extensionError() !== null}>
+                    <p class="plugin__error selectable" role="alert">
+                      {trExtensions("extensionFailed", { error: extensionError() ?? "" })}
+                    </p>
                   </Show>
                   <Show when={error() !== null && error() !== plugin.error}>
                     <p class="plugin__error selectable" role="alert">

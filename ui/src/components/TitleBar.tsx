@@ -29,6 +29,8 @@ import { store } from "../lib/store";
 import { syncLabel } from "../lib/syncStatus";
 import { AppsLauncher } from "./AppsLauncher";
 import { CommandBar, type CommandBarHandle } from "./CommandBar";
+import { ExtensionTitleBarButtons } from "./ExtensionButtons";
+import { extensionEntries } from "./ExtensionIcon";
 import { Logo } from "./Logo";
 import { Menu, type MenuEntry } from "./Menu";
 import type { PopoverAnchor } from "./Popover";
@@ -242,6 +244,7 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
         onSelect: () => void runAddOption(item),
       })),
       ...shopEntries(),
+      ...extensionEntries("add"),
     ];
   };
 
@@ -278,6 +281,7 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
       icon: () => <Combine class="icon" aria-hidden="true" />,
       onSelect: () => store.setDuplicatesOpen(true),
     },
+    ...extensionEntries("app"),
     { kind: "separator" },
     {
       label: tr("settings"),
@@ -426,6 +430,7 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
             </button>
           )}
         </Show>
+        <ExtensionTitleBarButtons />
         <button
           type="button"
           class="titlebar__tool"

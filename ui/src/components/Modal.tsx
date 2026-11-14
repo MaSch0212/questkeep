@@ -20,6 +20,8 @@ interface ModalProps {
   title: string;
   /** For lists with long rows (e.g. game names side by side). */
   wide?: boolean;
+  /** For a short question or a single value. */
+  narrow?: boolean;
   /** A fixed height, for content that grows and shrinks while the dialog is open. */
   tall?: boolean;
   /** Stays below the scrolling body (e.g. the dialog buttons). */
@@ -77,7 +79,11 @@ export function Modal(props: ParentProps<ModalProps>) {
       <div
         ref={setDialog}
         class="modal"
-        classList={{ "modal--wide": props.wide === true, "modal--tall": props.tall === true }}
+        classList={{
+          "modal--wide": props.wide === true,
+          "modal--narrow": props.narrow === true,
+          "modal--tall": props.tall === true,
+        }}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

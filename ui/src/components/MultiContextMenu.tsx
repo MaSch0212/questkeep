@@ -16,6 +16,7 @@ import { changeAll, installAll, refreshAll, removeAll } from "../lib/bulkActions
 import { categoryCoverage, common } from "../lib/selection";
 import { store } from "../lib/store";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { extensionEntries } from "./ExtensionIcon";
 import { Menu, type MenuEntry } from "./Menu";
 import type { PopoverAnchor } from "./Popover";
 
@@ -118,6 +119,7 @@ export function MultiContextMenu(props: {
       hint: tr("delKey"),
       onSelect: () => void changeAll(props.games, { hidden: hidden() !== true, ...NO_CATEGORIES }),
     },
+    ...extensionEntries("games", { games: props.games }),
     { kind: "separator" },
     {
       label: tr("removeFromLibrary"),

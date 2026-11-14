@@ -1,4 +1,4 @@
-import { createEffect, createSignal, on, onCleanup, onMount, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, on, onCleanup, onMount, Show } from "solid-js";
 import {
   DEFAULT_SPLIT_BREAKPOINT,
   isSplitWidth,
@@ -8,13 +8,17 @@ import {
 import { translator } from "./i18n";
 import { shellCommon } from "./i18n/shellCommon";
 import { clampWidth } from "./lib/viewUi";
+import { extensionStates, syncExtensions } from "./lib/extensions/host";
+import { findPage, isPluginPage, pluginOfPage } from "./lib/extensions/registry";
 import { AddGameDialog } from "./components/AddGameDialog";
 import { DuplicatesDialog } from "./components/DuplicatesDialog";
+import { ExtensionDialogs } from "./components/ExtensionDialogs";
 import { FirstRunDialog } from "./components/FirstRunDialog";
 import { CombineDialog } from "./components/CombineDialog";
 import { GameContextMenu } from "./components/GameContextMenu";
 import { MultiContextMenu } from "./components/MultiContextMenu";
 import { MultiSelectPanel } from "./components/MultiSelectPanel";
+import { PluginPage } from "./components/PluginPage";
 import { IgdbHint } from "./components/IgdbHint";
 import { DetailsPanel } from "./components/DetailsPanel";
 import { UpdateDialog } from "./components/UpdateDialog";
@@ -101,6 +105,18 @@ export function App() {
   const listWidth = () =>
     clampWidth(store.listWidth() ?? sizes().list, sizes().listMin, contentWidth());
 
+  // Extensions follow the plugin list: loaded, reloaded (a new revision) and unloaded with it.
+  createEffect(() => void syncExtensions(store.plugins()));
+  onCleanup(() => void syncExtensions([]));
+  const pluginPage = createMemo(() => findPage(store.page()));
+  // An open plugin page whose plugin was unloaded gives way to the library; while the plugin
+  // reloads, the page stays and shows the new version once it is there.
+  createEffect(() => {
+    const page = store.page();
+    if (!isPluginPage(page) || pluginPage()) return;
+    if (extensionStates()[pluginOfPage(page) ?? ""]?.status !== "loading") store.showLibrary();
+  });
+
   function observeContent(element: HTMLElement) {
     setBreakpoint(readSplitBreakpoint(element));
     setSizes({
@@ -183,7 +199,16 @@ export function App() {
               <Show
                 when={store.page() === "home"}
                 fallback={
-                  <Show when={store.page() === "statistics"} fallback={<SettingsPage />}>
+                  <Show
+                    when={store.page() === "statistics"}
+                    fallback={
+                      <Show when={isPluginPage(store.page())} fallback={<SettingsPage />}>
+                        <Show when={pluginPage()} keyed>
+                          {(entry) => <PluginPage entry={entry} />}
+                        </Show>
+                      </Show>
+                    }
+                  >
                     <StatisticsPage />
                   </Show>
                 }
@@ -307,6 +332,7 @@ export function App() {
       <Show when={store.setup()?.showSetup}>
         <FirstRunDialog />
       </Show>
+      <ExtensionDialogs />
       <Toasts />
       <TooltipLayer />
     </div>

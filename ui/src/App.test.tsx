@@ -3,10 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import * as api from "./lib/api";
 import { defaultQuery } from "./lib/query";
+import { setImporter } from "./lib/extensions/host";
+import type { QuestkeepApi } from "./lib/extensions/types";
 import { store } from "./lib/store";
 import type { ViewLayout } from "./bindings/ViewLayout";
 import type { Settings } from "./bindings/Settings";
-import { byTooltip, makeGame } from "./test-utils";
+import { byTooltip, makeGame, makePlugin } from "./test-utils";
 
 vi.mock("./lib/api");
 vi.mock("@tauri-apps/api/core", () => ({
@@ -435,5 +437,61 @@ describe("App", () => {
       await waitFor(() => expect(store.page()).toBe("library"));
       expect(screen.queryByRole("button", { name: "Home" })).toBeNull();
     });
+  });
+});
+
+describe("extension plugins", () => {
+  afterEach(() => setImporter(null));
+
+  it("runs the extensions of the plugin list, keeps an open page over a reload and leaves it when the plugin goes", async () => {
+    const cleanup = vi.fn<() => void>();
+    vi.mocked(api.pluginFileUrl).mockReturnValue("qk://ext/main.js");
+    vi.mocked(api.getPluginSettings).mockResolvedValue({});
+    vi.mocked(api.listGames).mockResolvedValue([]);
+    setImporter(() =>
+      Promise.resolve({
+        activate(extension: QuestkeepApi) {
+          extension.ui.addPage({
+            id: "facts",
+            title: "Library facts",
+            render(container) {
+              container.append("42 games");
+              return cleanup;
+            },
+          });
+        },
+      }),
+    );
+    const plugin = makePlugin({
+      id: "ext",
+      name: "Ext",
+      providers: [],
+      hasExtension: true,
+      extension: { main: "main.js" },
+    });
+    vi.mocked(api.listPlugins).mockResolvedValue([plugin]);
+    render(() => <App />);
+
+    await fireEvent.click(await screen.findByRole("button", { name: "Library facts" }));
+    expect(screen.getByRole("heading", { level: 1, name: "Library facts" })).toBeInTheDocument();
+    expect(screen.getByText("42 games")).toBeInTheDocument();
+    // A plugin page is never remembered as the page to reopen.
+    for (const [page] of vi.mocked(api.setLastPage).mock.calls) expect(page).toBe("all");
+
+    // The plugin was reloaded: the page is drawn again by the new version and stays open.
+    vi.mocked(api.listPlugins).mockResolvedValue([{ ...plugin, revision: 2 }]);
+    store.handleCoreEvent({ type: "pluginsChanged" });
+    await waitFor(() => expect(cleanup).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText("42 games")).toBeInTheDocument();
+    expect(store.page()).toBe("plugin:ext/facts");
+
+    // The plugin was disabled: its page closes and the library shows.
+    vi.mocked(api.listPlugins).mockResolvedValue([
+      { ...plugin, enabled: false, loaded: false, extension: null },
+    ]);
+    store.handleCoreEvent({ type: "pluginsChanged" });
+    await waitFor(() => expect(store.page()).toBe("library"));
+    expect(cleanup).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("button", { name: "Library facts" })).toBeNull();
   });
 });

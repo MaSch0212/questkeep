@@ -6138,3 +6138,97 @@ ul {
 .plugin__delete-data {
   margin-top: var(--qk-space-2);
 }
+
+/* Extension plugins: icons, title bar buttons, pages, settings */
+.ext-icon {
+  display: inline-grid;
+  place-items: center;
+  width: var(--qk-icon-size);
+  height: var(--qk-icon-size);
+  flex: none;
+}
+.ext-icon > svg {
+  width: 100%;
+  height: 100%;
+}
+.titlebar__tool .ext-icon {
+  width: var(--qk-titlebar-icon-size);
+  height: var(--qk-titlebar-icon-size);
+}
+.titlebar__ext {
+  position: relative;
+  display: flex;
+}
+.titlebar__ext-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  min-width: var(--qk-titlebar-badge-size);
+  height: var(--qk-titlebar-badge-size);
+  padding: 0 var(--qk-space-1);
+  display: grid;
+  place-items: center;
+  background: var(--qk-color-accent);
+  border-radius: var(--qk-radius-pill);
+  color: var(--qk-color-accent-contrast);
+  font-size: var(--qk-titlebar-badge-font-size);
+  font-weight: var(--qk-font-weight-bold);
+  line-height: 1;
+  pointer-events: none;
+}
+.modal--narrow {
+  width: var(--qk-dialog-narrow-width);
+}
+.plugin-page {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-4);
+  padding: var(--qk-space-4) var(--qk-space-5) var(--qk-space-5);
+  overflow-y: auto;
+}
+.plugin-page__title {
+  margin: 0;
+  font-size: var(--qk-font-size-xl);
+}
+.plugin-settings__declared {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-2);
+}
+.plugin-setting__row {
+  padding-left: 0;
+  padding-right: 0;
+}
+.plugin-setting__label {
+  flex: 1;
+  min-width: 0;
+}
+.plugin-setting__reset {
+  flex: none;
+}
+.plugin-setting__color {
+  flex: none;
+  width: var(--qk-color-swatch-width);
+  height: var(--qk-edit-input-height);
+  padding: 0;
+  background: none;
+  border: 1px solid var(--qk-color-border);
+  border-radius: var(--qk-radius-sm);
+  cursor: pointer;
+}
+.plugin-setting__hex {
+  flex: none;
+  width: var(--qk-color-hex-width);
+  font-family: var(--qk-font-mono);
+}
+.plugin-settings__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-2);
+}
+.plugin-settings__title {
+  margin: 0;
+  font-size: var(--qk-font-size-md);
+}

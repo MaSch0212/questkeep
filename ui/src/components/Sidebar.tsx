@@ -4,13 +4,17 @@ import ChartColumn from "lucide-solid/icons/chart-column";
 import House from "lucide-solid/icons/house";
 import Pencil from "lucide-solid/icons/pencil";
 import PencilLine from "lucide-solid/icons/pencil-line";
+import Puzzle from "lucide-solid/icons/puzzle";
 import Shapes from "lucide-solid/icons/shapes";
 import Trash from "lucide-solid/icons/trash";
 import { createSignal, For, Show } from "solid-js";
 import type { LibraryView } from "../bindings/LibraryView";
 import { translator } from "../i18n";
+import { extensions } from "../i18n/extensions";
 import { librarySidebar } from "../i18n/librarySidebar";
+import { pages } from "../lib/extensions/registry";
 import { store } from "../lib/store";
+import { ExtensionIcon } from "./ExtensionIcon";
 import { IconPicker } from "./IconPicker";
 import { Menu, type MenuEntry } from "./Menu";
 import type { PopoverAnchor } from "./Popover";
@@ -19,6 +23,7 @@ import { ViewIcon } from "./ViewIcon";
 import { shownName } from "../lib/views";
 
 const tr = translator(librarySidebar);
+const trExtensions = translator(extensions);
 
 const menuLabel = (view: LibraryView | null | undefined) =>
   view ? tr("menuOptions", { name: shownName(view) }) : tr("views");
@@ -190,6 +195,35 @@ export function Sidebar() {
             </div>
           )}
         </For>
+        {/* Pages added by extension plugins. */}
+        <Show when={pages().length > 0}>
+          <div class="sidebar__group sidebar__plugins">
+            <h2 class="sidebar__heading">{trExtensions("plugins")}</h2>
+            <ul class="sidebar__list">
+              <For each={pages()}>
+                {(entry) => (
+                  <li>
+                    <button
+                      type="button"
+                      class="nav-item nav-item--icon view-item"
+                      classList={{ "nav-item--active": store.page() === entry.key }}
+                      aria-current={store.page() === entry.key ? "page" : undefined}
+                      onClick={() => store.showPluginPage(entry.key)}
+                    >
+                      <Show
+                        when={entry.page.icon}
+                        fallback={<Puzzle class="icon" aria-hidden="true" />}
+                      >
+                        {(svg) => <ExtensionIcon svg={svg()} />}
+                      </Show>
+                      <span class="nav-item__text">{entry.page.title}</span>
+                    </button>
+                  </li>
+                )}
+              </For>
+            </ul>
+          </div>
+        </Show>
         {/* Explore: an unsaved view that always opens fresh; stays at the bottom. */}
         <ul class="sidebar__list sidebar__explore">
           <li>

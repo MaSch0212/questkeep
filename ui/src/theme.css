@@ -354,6 +354,12 @@
   --qk-combine-field-width: 150px;
   --qk-combine-column-min-width: 160px;
   --qk-combine-max-height: 60vh;
+  /* Extension plugins: title bar badge, small dialog, color setting. */
+  --qk-titlebar-badge-size: 14px;
+  --qk-titlebar-badge-font-size: 9px;
+  --qk-dialog-narrow-width: 380px;
+  --qk-color-swatch-width: 40px;
+  --qk-color-hex-width: 90px;
 }
 
 @media (prefers-reduced-motion: reduce) {

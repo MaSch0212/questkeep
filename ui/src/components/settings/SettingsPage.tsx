@@ -13,6 +13,7 @@ import { CompletionSection } from "./CompletionSection";
 import { DeveloperSection } from "./DeveloperSection";
 import { GeneralSection } from "./GeneralSection";
 import { MetadataSection } from "./MetadataSection";
+import { PluginSettings, pluginsWithSettings } from "./PluginSettings";
 import { PluginsSection } from "./PluginsSection";
 import { PriceSitesSection } from "./PriceSitesSection";
 import { UpdatesSection } from "./UpdatesSection";
@@ -22,7 +23,9 @@ const tr = translator(settingsPage);
 
 interface SectionDef {
   id: string;
+  /** A message key, or the text itself (a plugin's name). */
   title:
+    | (() => string)
     | "general"
     | "stores"
     | "categories"
@@ -61,8 +64,28 @@ const SECTIONS: SectionDef[] = [
   { id: "about", title: "about", component: AboutSection },
 ];
 
+/** One section per plugin with settings; kept, so the page does not rebuild them. */
+const pluginSections = new Map<string, SectionDef>();
+function pluginSection(pluginId: string): SectionDef {
+  let section = pluginSections.get(pluginId);
+  if (!section) {
+    section = {
+      id: `plugin-${pluginId}`,
+      title: () => store.plugins().find((p) => p.id === pluginId)?.name ?? pluginId,
+      component: () => <PluginSettings plugin={pluginId} />,
+    };
+    pluginSections.set(pluginId, section);
+  }
+  return section;
+}
+
 const sectionDomId = (id: string) => `settings-${id}`;
-const visibleSections = () => SECTIONS.filter((s) => s.visible?.() ?? true);
+const sectionTitle = (section: SectionDef) =>
+  typeof section.title === "function" ? section.title() : tr(section.title);
+const visibleSections = () => [
+  ...SECTIONS.filter((s) => s.visible?.() ?? true),
+  ...pluginsWithSettings().map(pluginSection),
+];
 
 export function SettingsPage() {
   const model = createSettingsModel();
@@ -126,7 +149,7 @@ export function SettingsPage() {
                     aria-current={current() === section.id ? "location" : undefined}
                     onClick={() => jumpTo(section.id)}
                   >
-                    {tr(section.title)}
+                    {sectionTitle(section)}
                   </button>
                 </li>
               )}
@@ -148,7 +171,7 @@ export function SettingsPage() {
                   aria-labelledby={`${sectionDomId(section.id)}-heading`}
                 >
                   <h2 id={`${sectionDomId(section.id)}-heading`} class="settings-section__title">
-                    {tr(section.title)}
+                    {sectionTitle(section)}
                   </h2>
                   <Dynamic component={section.component} model={model} />
                 </section>

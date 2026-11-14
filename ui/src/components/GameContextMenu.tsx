@@ -32,6 +32,7 @@ import { store } from "../lib/store";
 import { CombinePicker } from "./CombinePicker";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { EditGameDialog } from "./EditGameDialog";
+import { extensionEntries } from "./ExtensionIcon";
 import { Menu, type MenuEntry } from "./Menu";
 import type { PopoverAnchor } from "./Popover";
 import { SourceIcon, sourceName } from "./SourceIcon";
@@ -201,6 +202,7 @@ export function GameContextMenu(props: {
       hint: tr("delKey"),
       onSelect: () => void report(updateGame(game().id, { hidden: !game().hidden })),
     },
+    ...extensionEntries("game", { game: game(), games: [game()] }),
     { kind: "separator" },
     ...(game().installDir === null
       ? []

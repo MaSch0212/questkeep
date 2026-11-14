@@ -79,6 +79,7 @@ import {
 import { ConfirmDialog } from "./ConfirmDialog";
 import { Cover } from "./Cover";
 import { EditGameDialog } from "./EditGameDialog";
+import { extensionEntries } from "./ExtensionIcon";
 import { Menu, type MenuEntry } from "./Menu";
 import type { PopoverAnchor } from "./Popover";
 import { SourceIcon, SourceIcons, sourceName, storeNames } from "./SourceIcon";
@@ -400,6 +401,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
           },
         ]),
     ...launcherPageCopies(props.game, store.providers()).map(showInLauncher),
+    ...extensionEntries("gameMore", { game: props.game, games: [props.game] }),
     { kind: "separator" },
     ...(canUninstall()
       ? [
