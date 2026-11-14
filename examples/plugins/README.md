@@ -1,8 +1,12 @@
 # Questkeep plugins
 
-A plugin is a folder (or a `.zip` of it) with a `plugin.json`. This page covers store plugins:
-stores written in Rust, compiled to WebAssembly and run sandboxed by Questkeep.
-[`example-store`](example-store) is a complete one.
+A plugin is a folder (or a `.zip` of it) with a `plugin.json`. The guide to the package and to
+extensions (JavaScript that adds to the app's interface) is
+[`docs/PLUGINS.md`](../../docs/PLUGINS.md); [`example-extension`](example-extension) is a
+complete extension and [`questkeep-plugin.d.ts`](questkeep-plugin.d.ts) its API.
+
+This page covers store plugins: stores written in Rust, compiled to WebAssembly and run
+sandboxed by Questkeep. [`example-store`](example-store) is a complete one.
 
 ## plugin.json
 

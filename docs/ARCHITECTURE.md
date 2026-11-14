@@ -47,6 +47,28 @@ instance behind a mutex:
 Unloading takes the stores out of the registry and closes them; their games stay in the
 library like games of any missing store.
 
+### Extensions (`ui/src/lib/extensions`)
+
+A plugin's `extension` (`{ main, styles, settings }`) is JavaScript for the app's window; the
+guide for authors is `docs/PLUGINS.md`, the API is `examples/plugins/questkeep-plugin.d.ts`
+(the host is type-checked against that file). The shell serves installed plugin files through
+the `qkplugin` URI scheme (`src-tauri/src/plugin_files.rs`); `PluginInfo` carries the
+`extension` object and a `revision` that grows with every load.
+
+| Module | Responsibility |
+|---|---|
+| `host.ts` | `syncExtensions(plugins)`, run by an effect in `App.tsx` on the plugin list: one instance per enabled, loaded plugin with an extension, keyed by `id@revision`. Loads (settings, style sheets, `import(url?v=revision)`, `activate(api)`) and unloads (`deactivate()`, the cleanup `activate` returned, `disposePlugin`) run one after the other per plugin and always aim at the newest plugin list. A failure ends as `extensionStates()[id] = { status: "failed", error }` with nothing left registered. |
+| `registry.ts` | What extensions added (title bar buttons, menu providers, settings sections, pages, dialogs, the popup menu, event listeners, settings controllers) as signals, each addition tracked per plugin so `disposePlugin(id)` undoes them all. Knows nothing of the store, so the store hands it core events. |
+| `api.ts` | `createApi(plugin, settings)`: the `QuestkeepApi` object on top of the registry, `lib/api.ts` and the store. Checks what plugins pass in and guards every call into plugin code. |
+| `settings.ts`, `declaredSettings.ts` | A plugin's settings (stored values, declared defaults, listeners, saves in order) and the validation of `extension` and its declared settings. |
+| `menus.ts` | Extension menu items as the app's `MenuEntry`s. |
+
+Components: `ExtensionButtons` (title bar), `ExtensionIcon` (SVG markup, `extensionEntries`
+for the menus), `ExtensionMount` (runs a plugin's `render(container)` and its cleanup),
+`ExtensionDialogs` (dialogs and popup menus), `PluginPage` (page `plugin:<plugin>/<page>`),
+`settings/PluginSettings` (one settings section per plugin: declared settings, then its own
+sections).
+
 ```
  ┌────────────── ui/ (SolidJS) ───────────────┐
  │ components ─ stores ─ lib/api.ts (invoke)  │
@@ -241,6 +263,7 @@ when it is queued again (the cover arriving emits `GamesChanged`, the tray reque
 | `install_plugin(path)` | Installs a plugin folder or zip, enables and loads it; the same id again is an update. Returns its `PluginInfo`. |
 | `reload_plugin(id)` / `set_plugin_enabled(id, enabled)` / `set_plugin_watch(id, watch)` | Copy the source again and load it / load or unload / reload on source changes. Each returns the new `PluginInfo`. |
 | `remove_plugin(id, delete_data)` | Unloads the plugin and deletes its copy, optionally also its own data. Its stores' games stay. |
+| `get_plugin_settings(id)` / `save_plugin_settings(id, settings)` | An extension's own settings: a JSON object in `<data>/plugin-data/<id>/settings.json`, read when the extension loads and replaced as a whole on every change. |
 | `scan_library(provider_id)` | Scan installed (and owned) games, upsert, queue covers and metadata. |
 | `launch_game(id)` / `running_games()` | Launch and active sessions. |
 | `install_game(id)` | Opens the provider's install action (e.g. `steam://install/440`). |
