@@ -104,11 +104,11 @@ export function CategoryFilterDialog(props: { category: Category; onClose: () =>
         </div>
         <section class="auto-filter__preview" aria-label={tr("autoPreview")}>
           <h3 class="auto-filter__heading" role="status">
-            <Show when={matches()} fallback={tr("autoLoading")}>
-              {(list) =>
-                empty() ? tr("autoPickFilter") : tr("autoMatches", { count: list().length })
-              }
-            </Show>
+            {empty()
+              ? tr("autoPickFilter")
+              : matches() === null
+                ? tr("autoLoading")
+                : tr("autoMatches", { count: matches()?.length ?? 0 })}
           </h3>
           <Show when={error()}>
             <p class="error-text" role="alert">

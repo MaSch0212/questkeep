@@ -3974,6 +3974,18 @@ ul {
   gap: var(--qk-space-1);
   padding-left: var(--qk-space-5);
 }
+.markdown ul {
+  list-style: disc;
+}
+.markdown ol {
+  list-style: decimal;
+}
+.markdown li {
+  display: list-item;
+}
+.markdown li::marker {
+  color: var(--qk-color-text-muted);
+}
 .markdown code {
   font-family: var(--qk-font-mono);
   font-size: var(--qk-font-size-sm);

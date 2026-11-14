@@ -129,6 +129,23 @@ pub fn show(app: &AppHandle) {
     let _ = app.emit(SHOW_EVENT, ());
 }
 
+/// Release notes of the pretend update: long enough to scroll, with the markdown real notes use.
+const FAKE_NOTES: &str = "A pretend update for testing (`QUESTKEEP_FAKE_UPDATE`).\n\n\
+### Minor changes\n\n\
+- Grouped views can list their groups beside the games: turn on **Show groups as a list** in the Group by menu.\n\
+- New Statistics page below Home: playtime over time, an activity calendar and fun facts.\n\
+- Stores can be put in your own order: drag them by their handle under Settings → Stores and accounts.\n\
+- Stores sync automatically every 15 minutes in the background.\n\
+- Installs started from Questkeep are watched until the store finishes them.\n\
+- Releases now include a portable Windows exe and an rpm package for Fedora.\n\n\
+### Patch changes\n\n\
+- Settings → General is grouped into Syncing, Playtime, Start page, Sorting and Window and tray.\n\
+- Completion statuses in Settings move by dragging their handle.\n\
+- Fixed EA and Battle.net signing out.\n\
+- Games scrolling under a pinned group header fade out.\n\
+- Details from each site are downloaded once per game.\n\
+- See the [release page](https://github.com/MaSch0212/questkeep/releases) for more.\n";
+
 /// Debug builds never see real updates; `QUESTKEEP_FAKE_UPDATE=<version>` pretends one exists, to
 /// try the title bar and tray entries (installing it does nothing).
 fn fake_update() -> Option<UpdateInfo> {
@@ -138,7 +155,7 @@ fn fake_update() -> Option<UpdateInfo> {
     let version = std::env::var("QUESTKEEP_FAKE_UPDATE").ok()?;
     Some(UpdateInfo {
         version,
-        notes: Some("A pretend update for testing (QUESTKEEP_FAKE_UPDATE).".into()),
+        notes: Some(FAKE_NOTES.into()),
         date: None,
         manual: !crate::install_kind::self_updating(),
     })
