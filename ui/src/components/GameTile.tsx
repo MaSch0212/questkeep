@@ -72,7 +72,12 @@ export function GameTile(props: GameTileProps) {
     >
       <div class="tile__body">
         <div class="tile__strip">
-          <div class="tile__source" data-tooltip={storeNames(props.game)} aria-hidden="true">
+          {/* One store is named in the strip already; several show as icons and need the names. */}
+          <div
+            class="tile__source"
+            data-tooltip={stores().length > 1 ? storeNames(props.game) : undefined}
+            aria-hidden="true"
+          >
             <span class="tile__primary">
               <SourceIcon source={primary()} />
               <Show when={stores().length > 1}>
@@ -132,7 +137,7 @@ export function GameTile(props: GameTileProps) {
           <Show when={props.date}>
             <span class="tile__date">{props.date}</span>
           </Show>
-          <div class="tile__title" data-tooltip={props.game.name}>
+          <div class="tile__title">
             <span>{props.game.name}</span>
           </div>
           {/* A running game has nothing to start; the strip shows its state. */}
