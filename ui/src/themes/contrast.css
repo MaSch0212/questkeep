@@ -1,0 +1,95 @@
+/*
+ * High contrast: pure black or white, strong borders, a thick focus ring, no decorative
+ * transparency or shadows.
+ */
+:root[data-theme="contrast"] {
+  --qk-focus-ring-width: var(--qk-param-focus-ring, 3px);
+  --qk-dimmed-opacity: 0.7;
+  --qk-disabled-opacity: 0.6;
+  --qk-font-weight-normal: 500;
+  --qk-font-weight-medium: 600;
+  --qk-font-weight-bold: 700;
+  --qk-accent-soft-mix: 24%;
+  --qk-shadow-tile: var(--qk-shadow-none);
+  --qk-shadow-tile-hover: var(--qk-shadow-none);
+  --qk-shadow-panel: var(--qk-shadow-none);
+  --qk-shadow-dialog: var(--qk-shadow-none);
+  --qk-shadow-badge: var(--qk-shadow-none);
+  --qk-shadow-toast: var(--qk-shadow-none);
+  --qk-shadow-popover: var(--qk-shadow-none);
+  --qk-shadow-tooltip: var(--qk-shadow-none);
+}
+:root[data-theme="contrast"][data-scheme="dark"] {
+  --qk-color-bg: #000000;
+  --qk-color-surface: #000000;
+  --qk-color-surface-raised: #0d0d0d;
+  --qk-color-surface-hover: #242424;
+  --qk-color-surface-active: #3a3a3a;
+  --qk-color-border: #bdbdbd;
+  --qk-color-text: #ffffff;
+  --qk-color-text-muted: #e2e2e2;
+  --qk-color-text-faint: #c2c2c2;
+  --qk-color-danger: #ff9aa3;
+  --qk-color-danger-soft: #4a1017;
+  --qk-color-success: #7ff0b4;
+  --qk-color-success-soft: #0d3a23;
+  --qk-color-running: #7ff0b4;
+  --qk-color-warn: #ffc98a;
+  --qk-color-warn-soft: #3d2a10;
+  --qk-color-warn-border: #ffc98a;
+  --qk-color-warn-hover: #573c17;
+  --qk-color-star: #ffe14a;
+  --qk-color-cursor: #ffffff;
+  --qk-color-cover-bg: #000000;
+  --qk-color-scrollbar: #9a9a9a;
+  --qk-color-heat-0: #1c1c1c;
+  --qk-color-drive-free: #2a2a2a;
+  --qk-color-series-other: #9a9a9a;
+  --qk-color-drive-other: #9a9a9a;
+  --qk-color-tile-outline: #bdbdbd;
+  --qk-color-badge-border: #ffffff;
+  --qk-color-overlay: #000000;
+  --qk-color-quick-bg: #000000;
+  --qk-color-tile-date-bg: #000000;
+  --qk-color-tile-title-fade: #000000;
+  --qk-color-hero-button: #000000;
+  --qk-color-hero-button-hover: #242424;
+  --qk-color-backdrop: #000000e6;
+}
+:root[data-theme="contrast"][data-scheme="light"] {
+  --qk-color-bg: #ffffff;
+  --qk-color-surface: #ffffff;
+  --qk-color-surface-raised: #ffffff;
+  --qk-color-surface-hover: #e4e4e4;
+  --qk-color-surface-active: #cdcdcd;
+  --qk-color-border: #1f1f1f;
+  --qk-color-text: #000000;
+  --qk-color-text-muted: #262626;
+  --qk-color-text-faint: #474747;
+  --qk-color-danger: #a8001c;
+  --qk-color-danger-soft: #ffe1e5;
+  --qk-color-success: #075c31;
+  --qk-color-success-soft: #d9f5e5;
+  --qk-color-running: #075c31;
+  --qk-color-warn: #7a4100;
+  --qk-color-warn-soft: #ffefd9;
+  --qk-color-warn-border: #7a4100;
+  --qk-color-warn-hover: #ffdfb3;
+  --qk-color-star: #7a5200;
+  --qk-color-cursor: #000000;
+  --qk-color-cover-bg: #ffffff;
+  --qk-color-scrollbar: #5c5c5c;
+  --qk-color-heat-0: #ebebeb;
+  --qk-color-drive-free: #e0e0e0;
+  --qk-color-series-other: #5c5c5c;
+  --qk-color-drive-other: #5c5c5c;
+  --qk-color-tile-outline: #1f1f1f;
+  --qk-color-badge-border: #000000;
+  --qk-color-overlay: #ffffff;
+  --qk-color-quick-bg: #ffffff;
+  --qk-color-tile-date-bg: #ffffff;
+  --qk-color-tile-title-fade: #000000;
+  --qk-color-hero-button: #ffffff;
+  --qk-color-hero-button-hover: #e4e4e4;
+  --qk-color-backdrop: #000000b3;
+}

@@ -1,0 +1,33 @@
+/* Orchid: plum surfaces with a pink accent. */
+:root[data-theme="orchid"][data-scheme="dark"] {
+  --qk-color-bg: #15111b;
+  --qk-color-surface: #1b1623;
+  --qk-color-surface-raised: #241d2e;
+  --qk-color-surface-hover: #2f263c;
+  --qk-color-surface-active: #3e334f;
+  --qk-color-border: #322940;
+  --qk-color-text: #ede7f4;
+  --qk-color-text-muted: #ada1bd;
+  --qk-color-text-faint: #7f7393;
+  --qk-color-cover-bg: #0f0c14;
+  --qk-color-scrollbar: #392f49;
+  --qk-color-heat-0: #261f31;
+  --qk-color-drive-free: #2f263c;
+  --qk-color-backdrop: #08060bcc;
+}
+:root[data-theme="orchid"][data-scheme="light"] {
+  --qk-color-bg: #f6f1f8;
+  --qk-color-surface: #fbf8fc;
+  --qk-color-surface-raised: #ffffff;
+  --qk-color-surface-hover: #ebe2f0;
+  --qk-color-surface-active: #ded1e6;
+  --qk-color-border: #dbcee3;
+  --qk-color-text: #231a2b;
+  --qk-color-text-muted: #5b4e66;
+  --qk-color-text-faint: #776a83;
+  --qk-color-cover-bg: #e2d8e8;
+  --qk-color-scrollbar: #c6b8cf;
+  --qk-color-heat-0: #e9e0ee;
+  --qk-color-drive-free: #e7deec;
+  --qk-color-backdrop: #231a2b73;
+}

@@ -1,0 +1,104 @@
+/*
+ * Questkeep (the default theme). Its palette is theme.css itself; this file only wires the
+ * theme's parameters to variables.
+ */
+
+/* Text size (percent) */
+:root[data-theme="questkeep"] {
+  --qk-font-scale: calc(var(--qk-param-text-size, 100) / 100);
+}
+
+/* Corners */
+:root[data-theme="questkeep"][data-param-corners="sharp"] {
+  --qk-radius-scale: 0.25;
+}
+:root[data-theme="questkeep"][data-param-corners="round"] {
+  --qk-radius-scale: 1.6;
+}
+
+/* Density: spacing, and the heights of rows and controls */
+:root[data-theme="questkeep"][data-param-density="compact"] {
+  --qk-space-scale: 0.8;
+  --qk-control-height: 30px;
+  --qk-list-row-height: 30px;
+  --qk-nav-row-height: 28px;
+  --qk-command-row-height: 34px;
+  --qk-grid-gap: 12px;
+  --qk-grid-padding: 16px;
+}
+:root[data-theme="questkeep"][data-param-density="spacious"] {
+  --qk-space-scale: 1.2;
+  --qk-control-height: 38px;
+  --qk-list-row-height: 42px;
+  --qk-nav-row-height: 36px;
+  --qk-command-row-height: 42px;
+  --qk-grid-gap: 20px;
+  --qk-grid-padding: 24px;
+}
+
+/* Font */
+:root[data-theme="questkeep"][data-param-font="serif"] {
+  --qk-font-family: Georgia, Cambria, "Noto Serif", "DejaVu Serif", "Liberation Serif", serif;
+}
+:root[data-theme="questkeep"][data-param-font="mono"] {
+  --qk-font-family:
+    "Cascadia Mono", Consolas, "DejaVu Sans Mono", "Liberation Mono", ui-monospace, monospace;
+}
+:root[data-theme="questkeep"][data-param-font="rounded"] {
+  --qk-font-family:
+    ui-rounded, Nunito, Quicksand, "Varela Round", "Comic Neue", Ubuntu, Cantarell, "Trebuchet MS",
+    system-ui, sans-serif;
+}
+
+/*
+ * Background tint: a little of the tint color in every neutral surface. At 0% (the default)
+ * these are exactly the colors of theme.css.
+ */
+@supports (color: color-mix(in oklab, red 0%, blue)) {
+  :root[data-theme="questkeep"][data-scheme="dark"] {
+    --qk-tint: var(--qk-param-tint, #7c9cff) var(--qk-param-tint-strength, 0%);
+    --qk-color-bg: color-mix(in oklab, var(--qk-tint), #111317);
+    --qk-color-surface: color-mix(in oklab, var(--qk-tint), #171a20);
+    --qk-color-surface-raised: color-mix(in oklab, var(--qk-tint), #1e222a);
+    --qk-color-surface-hover: color-mix(in oklab, var(--qk-tint), #262b35);
+    --qk-color-surface-active: color-mix(in oklab, var(--qk-tint), #343a47);
+    --qk-color-border: color-mix(in oklab, var(--qk-tint), #2a2f3a);
+  }
+  :root[data-theme="questkeep"][data-scheme="light"] {
+    --qk-tint: var(--qk-param-tint, #3d5fd9) var(--qk-param-tint-strength, 0%);
+    --qk-color-bg: color-mix(in oklab, var(--qk-tint), #f3f4f7);
+    --qk-color-surface: color-mix(in oklab, var(--qk-tint), #fafbfc);
+    --qk-color-surface-raised: color-mix(in oklab, var(--qk-tint), #ffffff);
+    --qk-color-surface-hover: color-mix(in oklab, var(--qk-tint), #e9ebf0);
+    --qk-color-surface-active: color-mix(in oklab, var(--qk-tint), #dcdfe7);
+    --qk-color-border: color-mix(in oklab, var(--qk-tint), #d5d9e2);
+  }
+}
+
+/* Reduce transparency and shadows */
+:root[data-theme="questkeep"][data-param-flat="1"] {
+  --qk-shadow-tile: var(--qk-shadow-none);
+  --qk-shadow-tile-hover: var(--qk-shadow-none);
+  --qk-shadow-panel: var(--qk-shadow-none);
+  --qk-shadow-dialog: var(--qk-shadow-none);
+  --qk-shadow-badge: var(--qk-shadow-none);
+  --qk-shadow-toast: var(--qk-shadow-none);
+  --qk-shadow-popover: var(--qk-shadow-none);
+  --qk-shadow-tooltip: var(--qk-shadow-none);
+}
+:root[data-theme="questkeep"][data-scheme="dark"][data-param-flat="1"] {
+  --qk-color-overlay: #000000;
+  --qk-color-quick-bg: #0b0d12;
+  --qk-color-tile-date-bg: #0b0d12;
+  --qk-color-hero-button: #0b0d12;
+  --qk-color-hero-button-hover: #1e222a;
+  --qk-color-backdrop: #05060af2;
+}
+:root[data-theme="questkeep"][data-scheme="light"][data-param-flat="1"] {
+  --qk-color-overlay: #ffffff;
+  --qk-color-quick-bg: #ffffff;
+  --qk-color-tile-date-bg: #ffffff;
+  --qk-color-hero-button: #ffffff;
+  --qk-color-hero-button-hover: #e9ebf0;
+  --qk-color-backdrop: #20242ee6;
+}

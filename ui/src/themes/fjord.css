@@ -1,0 +1,33 @@
+/* Fjord: cool blue-grey surfaces with an icy blue accent. */
+:root[data-theme="fjord"][data-scheme="dark"] {
+  --qk-color-bg: #131a23;
+  --qk-color-surface: #18212c;
+  --qk-color-surface-raised: #1f2a37;
+  --qk-color-surface-hover: #293646;
+  --qk-color-surface-active: #364559;
+  --qk-color-border: #2b394a;
+  --qk-color-text: #e3eaf2;
+  --qk-color-text-muted: #9dadc0;
+  --qk-color-text-faint: #718398;
+  --qk-color-cover-bg: #0e141b;
+  --qk-color-scrollbar: #303f52;
+  --qk-color-heat-0: #212c3a;
+  --qk-color-drive-free: #293646;
+  --qk-color-backdrop: #080c11cc;
+}
+:root[data-theme="fjord"][data-scheme="light"] {
+  --qk-color-bg: #edf1f5;
+  --qk-color-surface: #f6f8fb;
+  --qk-color-surface-raised: #ffffff;
+  --qk-color-surface-hover: #e0e7ef;
+  --qk-color-surface-active: #cfd9e5;
+  --qk-color-border: #ccd6e1;
+  --qk-color-text: #17212c;
+  --qk-color-text-muted: #4a5a6c;
+  --qk-color-text-faint: #68788b;
+  --qk-color-cover-bg: #d6dee8;
+  --qk-color-scrollbar: #b7c3d1;
+  --qk-color-heat-0: #dfe6ee;
+  --qk-color-drive-free: #dde4ec;
+  --qk-color-backdrop: #17212c73;
+}

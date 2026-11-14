@@ -1,0 +1,59 @@
+/*
+ * Console: a couch-friendly layout on graphite with a teal accent. Larger type, taller controls,
+ * rounder corners, a wider sidebar and bigger game cards, all through variables; the pill shape
+ * of buttons and fields is the one thing that needs rules.
+ */
+:root[data-theme="console"] {
+  --qk-font-scale: 1.12;
+  --qk-radius-scale: 1.5;
+  --qk-space-scale: 1.1;
+  --qk-sidebar-width: var(--qk-param-sidebar-width, 264px);
+  --qk-control-height: 40px;
+  --qk-nav-row-height: 38px;
+  --qk-list-row-height: 42px;
+  --qk-command-row-height: 44px;
+  --qk-pill-height: 30px;
+  --qk-tile-min-width: 196px;
+  --qk-grid-gap: 20px;
+  --qk-grid-padding: 24px;
+  --qk-focus-ring-width: 3px;
+}
+:root[data-theme="console"][data-scheme="dark"] {
+  --qk-color-bg: #121213;
+  --qk-color-surface: #19191b;
+  --qk-color-surface-raised: #222225;
+  --qk-color-surface-hover: #2d2d32;
+  --qk-color-surface-active: #3c3c43;
+  --qk-color-border: #303036;
+  --qk-color-text: #f2f2f4;
+  --qk-color-text-muted: #a9a9b3;
+  --qk-color-text-faint: #7a7a85;
+  --qk-color-cover-bg: #0c0c0d;
+  --qk-color-scrollbar: #36363c;
+  --qk-color-heat-0: #252528;
+  --qk-color-drive-free: #2d2d32;
+  --qk-color-backdrop: #060607cc;
+}
+:root[data-theme="console"][data-scheme="light"] {
+  --qk-color-bg: #f1f1f3;
+  --qk-color-surface: #f9f9fa;
+  --qk-color-surface-raised: #ffffff;
+  --qk-color-surface-hover: #e5e5e9;
+  --qk-color-surface-active: #d5d5db;
+  --qk-color-border: #d3d3d9;
+  --qk-color-text: #18181b;
+  --qk-color-text-muted: #54545d;
+  --qk-color-text-faint: #71717a;
+  --qk-color-cover-bg: #dcdce1;
+  --qk-color-scrollbar: #bfbfc7;
+  --qk-color-heat-0: #e4e4e8;
+  --qk-color-drive-free: #e2e2e6;
+  --qk-color-backdrop: #18181b73;
+}
+
+/* Pill-shaped buttons and single-line fields. */
+:root[data-theme="console"][data-param-pills="1"] .btn,
+:root[data-theme="console"][data-param-pills="1"] .input:not(.input--multiline),
+:root[data-theme="console"][data-param-pills="1"] .nav-item {
+  border-radius: var(--qk-radius-pill);
+}

@@ -1,0 +1,33 @@
+/* Forest: deep greens in dark mode, pale moss in light mode. */
+:root[data-theme="forest"][data-scheme="dark"] {
+  --qk-color-bg: #0e1511;
+  --qk-color-surface: #131c17;
+  --qk-color-surface-raised: #19251e;
+  --qk-color-surface-hover: #223128;
+  --qk-color-surface-active: #2e4136;
+  --qk-color-border: #24332a;
+  --qk-color-text: #e4ede7;
+  --qk-color-text-muted: #9db2a5;
+  --qk-color-text-faint: #6f8578;
+  --qk-color-cover-bg: #0a0f0c;
+  --qk-color-scrollbar: #2a3b31;
+  --qk-color-heat-0: #1b271f;
+  --qk-color-drive-free: #223128;
+  --qk-color-backdrop: #050906cc;
+}
+:root[data-theme="forest"][data-scheme="light"] {
+  --qk-color-bg: #eff4ee;
+  --qk-color-surface: #f7faf6;
+  --qk-color-surface-raised: #ffffff;
+  --qk-color-surface-hover: #e1e9e0;
+  --qk-color-surface-active: #d1dcd0;
+  --qk-color-border: #ced9cd;
+  --qk-color-text: #17211a;
+  --qk-color-text-muted: #4b5c50;
+  --qk-color-text-faint: #677a6c;
+  --qk-color-cover-bg: #d8e1d7;
+  --qk-color-scrollbar: #b8c6b8;
+  --qk-color-heat-0: #e0e8df;
+  --qk-color-drive-free: #dee6dd;
+  --qk-color-backdrop: #17211a73;
+}

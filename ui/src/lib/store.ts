@@ -5,6 +5,7 @@ import { createStore } from "solid-js/store";
 import type { AccountWarning } from "../bindings/AccountWarning";
 import { setLanguage, translator } from "../i18n";
 import { shellCommon } from "../i18n/shellCommon";
+import { applyAppearance } from "./themes";
 import type { AppInfo } from "../bindings/AppInfo";
 import type { Category } from "../bindings/Category";
 import type { CompletionSettings } from "../bindings/CompletionSettings";
@@ -566,6 +567,7 @@ function createAppStore() {
   /** Applies saved settings the app shell depends on (the start and statistics page switches). */
   function applySettings(settings: Settings) {
     setLanguage(settings.language);
+    applyAppearance(settings.appearance);
     setShowStartPage(settings.showStartPage);
     setShowStatisticsPage(settings.showStatistics);
     setPriceSites(settings.priceSites);
@@ -1198,6 +1200,7 @@ function createAppStore() {
       ]).then(async ([, settings, lastPage, resume]) => {
         if (settings) {
           setLanguage(settings.language);
+          applyAppearance(settings.appearance);
           setShowStartPage(settings.showStartPage);
           setShowStatisticsPage(settings.showStatistics);
           setPriceSites(settings.priceSites);

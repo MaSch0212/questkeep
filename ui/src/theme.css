@@ -1,11 +1,23 @@
 /*
- * Questkeep theme. Every color, size, spacing, radius, shadow and duration used by the UI is
- * defined here; app.css only references these variables.
+ * Questkeep's base theme. Every color, size, spacing, radius, shadow and duration used by the UI
+ * is defined here; app.css only references these variables.
+ *
+ * The app sets two attributes on <html> (lib/themes.ts): data-scheme="light|dark" and
+ * data-theme="<id>". This file is the palette of the default theme ("questkeep") in both
+ * schemes; other themes (ui/src/themes/, plugins) override variables in rules written against
+ * :root[data-theme="<id>"], injected after this file. Theme parameters arrive as --qk-param-<key>
+ * properties on <html>.
+ *
+ * Layout: 1. the dark palette (also used while data-scheme is missing), 2. the light palette,
+ * 3. values that follow from others (the accent's shades), 4. everything that is the same in
+ * both schemes. Variable names are stable: themes and the native tray popup mirror them.
  */
-:root {
+
+/* 1. Dark (the default) */
+:root,
+:root[data-scheme="dark"] {
   color-scheme: dark;
 
-  /* Colors */
   --qk-color-bg: #111317;
   --qk-color-surface: #171a20;
   --qk-color-surface-raised: #1e222a;
@@ -15,14 +27,12 @@
   --qk-color-text: #e6e8ec;
   --qk-color-text-muted: #9aa1ae;
   --qk-color-text-faint: #6c7381;
-  --qk-color-accent: #7c9cff;
-  --qk-color-accent-hover: #96b0ff;
-  --qk-color-accent-contrast: #0e1220;
-  --qk-color-accent-divider: #0e122055;
-  --qk-color-accent-soft: #232c4a;
-  --qk-color-group-band: #1e2433;
-  --qk-color-group-band-hover: #252d40;
-  --qk-color-edited-border: #7c9cff88;
+  /* The accent is the "accent" parameter of the active theme; its shades are derived below. */
+  --qk-color-accent: var(--qk-param-accent, #7c9cff);
+  /* Text on the accent: lib/themes.ts picks dark or light from the accent's luminance. */
+  --qk-color-accent-contrast: var(--qk-param-accent-contrast, #0e1220);
+  /* How much accent goes into the soft accent background. */
+  --qk-accent-soft-mix: 20%;
   --qk-color-overlay: #000000aa;
   --qk-color-danger: #ff7a85;
   --qk-color-danger-soft: #3a1f26;
@@ -36,6 +46,7 @@
   --qk-color-title-on-cover: #ffffff;
   --qk-color-badge-border: #ffffff1f;
   --qk-color-cursor: #6c7381;
+  --qk-color-scrollbar: #262b35;
   --qk-color-close-hover: #c42b1c;
   --qk-color-close-hover-text: #ffffff;
   /* Unsaved changes to a view */
@@ -57,10 +68,6 @@
   --qk-color-series-6: #9085e9;
   --qk-color-series-other: #5c6370;
   --qk-color-heat-0: #222731;
-  --qk-color-heat-1: #233a63;
-  --qk-color-heat-2: #2f5596;
-  --qk-color-heat-3: #4a76cc;
-  --qk-color-heat-4: #7c9cff;
   --qk-color-drive-games: #3987e5;
   --qk-color-drive-other: #5c6370;
   --qk-color-drive-free: #262b35;
@@ -69,7 +76,6 @@
   --qk-color-tile-date-bg: #0b0d12e0;
   --qk-color-tile-title-fade: #0b0d12f2;
   --qk-color-tile-quick-scrim: #0b0d1233;
-  --qk-color-running-ring: #6fd6a055;
   /* Buttons laid over a game's background image (details panel header) */
   --qk-color-hero-button: #0b0d12cc;
   --qk-color-hero-button-hover: #0b0d12f0;
@@ -78,48 +84,166 @@
   --qk-placeholder-saturation: 38%;
   --qk-placeholder-light-from: 34%;
   --qk-placeholder-light-to: 18%;
-  --qk-placeholder-hue-shift: 40;
-
-  /* Spacing */
-  --qk-space-1: 4px;
-  --qk-space-2: 8px;
-  --qk-space-3: 12px;
-  --qk-space-4: 16px;
-  --qk-space-5: 24px;
-  --qk-space-6: 32px;
-
-  /* Radii */
-  --qk-radius-sm: 4px;
-  --qk-radius-md: 8px;
-  --qk-radius-lg: 12px;
-  --qk-radius-pill: 999px;
-
-  /* Typography */
-  --qk-font-family: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
-  --qk-font-mono: "Cascadia Mono", "Consolas", ui-monospace, monospace;
-  --qk-font-size-xs: 11px;
-  --qk-font-size-sm: 12px;
-  --qk-font-size-md: 14px;
-  --qk-font-size-lg: 16px;
-  --qk-font-size-xl: 20px;
-  --qk-font-size-initials: 40px;
-  --qk-font-weight-normal: 400;
-  --qk-font-weight-medium: 500;
-  --qk-font-weight-bold: 600;
-  --qk-font-size-title: 28px;
-  --qk-line-height-tight: 1.15;
-  --qk-letter-spacing-caps: 0.06em;
-  --qk-line-height: 1.4;
 
   /* Shadows */
   --qk-shadow-tile: 0 2px 8px #00000066;
   --qk-shadow-tile-hover: 0 10px 24px #000000aa;
   --qk-shadow-panel: -12px 0 32px #00000066;
-  --qk-sticky-group-fade: 24px; /* fade under a pinned group header */
   --qk-shadow-dialog: 0 24px 64px #000000aa;
   --qk-shadow-badge: 0 1px 4px #00000099;
   --qk-shadow-toast: 0 8px 24px #00000088;
   --qk-shadow-popover: 0 12px 32px #000000aa;
+  --qk-shadow-tooltip: 0 4px 16px #00000088;
+}
+
+/* 2. Light */
+:root[data-scheme="light"] {
+  color-scheme: light;
+
+  --qk-color-bg: #f3f4f7;
+  --qk-color-surface: #fafbfc;
+  --qk-color-surface-raised: #ffffff;
+  --qk-color-surface-hover: #e9ebf0;
+  --qk-color-surface-active: #dcdfe7;
+  --qk-color-border: #d5d9e2;
+  --qk-color-text: #1b1e26;
+  --qk-color-text-muted: #565d6b;
+  --qk-color-text-faint: #747b8a;
+  --qk-color-accent: var(--qk-param-accent, #3d5fd9);
+  --qk-color-accent-contrast: var(--qk-param-accent-contrast, #ffffff);
+  --qk-accent-soft-mix: 14%;
+  /* Labels over images keep the text color of the page, so their backgrounds turn light. */
+  --qk-color-overlay: #ffffffd9;
+  --qk-color-danger: #c9283a;
+  --qk-color-danger-soft: #fbe3e6;
+  --qk-color-success: #1e7d4f;
+  --qk-color-success-soft: #dff3e8;
+  --qk-color-star: #b87800;
+  --qk-color-running: #1e7d4f;
+  --qk-color-backdrop: #20242e73;
+  --qk-color-quick-bg: #ffffffe6;
+  --qk-color-cover-bg: #dde1e8;
+  --qk-color-title-on-cover: #ffffff;
+  --qk-color-badge-border: #0000001f;
+  --qk-color-cursor: #8a91a0;
+  --qk-color-scrollbar: #c3c8d2;
+  --qk-color-close-hover: #c42b1c;
+  --qk-color-close-hover-text: #ffffff;
+  --qk-color-warn: #a35a00;
+  --qk-color-warn-soft: #fdf0df;
+  --qk-color-warn-border: #e8c99d;
+  --qk-color-warn-hover: #f9e2c2;
+  --qk-color-play: #bfe6d0;
+  --qk-color-play-hover: #a8dcbe;
+  --qk-color-ttb-main: #1f9e90;
+  --qk-color-ttb-extra: #3f6fe0;
+  --qk-color-ttb-complete: #36904a;
+  --qk-color-series-1: #2f7be0;
+  --qk-color-series-2: #d2511f;
+  --qk-color-series-3: #14936a;
+  --qk-color-series-4: #b97a00;
+  --qk-color-series-5: #cf457a;
+  --qk-color-series-6: #7f73e0;
+  --qk-color-series-other: #9aa1ae;
+  --qk-color-heat-0: #e6e9ef;
+  --qk-color-drive-games: #2f7be0;
+  --qk-color-drive-other: #9aa1ae;
+  --qk-color-drive-free: #e3e6ec;
+  --qk-color-tile-outline: #00000014;
+  --qk-color-tile-date-bg: #ffffffe6;
+  /* The title on a cover stays white on a dark fade: covers are images, not page surface. */
+  --qk-color-tile-title-fade: #0b0d12f2;
+  --qk-color-tile-quick-scrim: #0b0d1233;
+  --qk-color-hero-button: #ffffffd9;
+  --qk-color-hero-button-hover: #fffffff5;
+
+  --qk-placeholder-saturation: 36%;
+  --qk-placeholder-light-from: 46%;
+  --qk-placeholder-light-to: 30%;
+
+  --qk-shadow-tile: 0 2px 8px #1b1e2624;
+  --qk-shadow-tile-hover: 0 10px 24px #1b1e2638;
+  --qk-shadow-panel: -12px 0 32px #1b1e261f;
+  --qk-shadow-dialog: 0 24px 64px #1b1e2640;
+  --qk-shadow-badge: 0 1px 4px #1b1e2640;
+  --qk-shadow-toast: 0 8px 24px #1b1e2633;
+  --qk-shadow-popover: 0 12px 32px #1b1e2633;
+  --qk-shadow-tooltip: 0 4px 16px #1b1e2633;
+}
+
+/*
+ * 3. Derived values and 4. everything that is the same in light and dark. The derived colors
+ * follow the accent, text and surfaces of whatever scheme and theme is active, so a theme that
+ * only sets those gets matching shades.
+ */
+:root {
+  --qk-color-accent-hover: color-mix(in oklab, var(--qk-color-accent), var(--qk-color-text) 22%);
+  --qk-color-accent-divider: color-mix(in oklab, var(--qk-color-accent-contrast) 33%, transparent);
+  --qk-color-accent-soft: color-mix(
+    in oklab,
+    var(--qk-color-accent) var(--qk-accent-soft-mix),
+    var(--qk-color-surface)
+  );
+  --qk-color-group-band: color-mix(
+    in oklab,
+    var(--qk-color-accent) 8%,
+    var(--qk-color-surface-raised)
+  );
+  --qk-color-group-band-hover: color-mix(
+    in oklab,
+    var(--qk-color-accent) 14%,
+    var(--qk-color-surface-raised)
+  );
+  --qk-color-edited-border: color-mix(in oklab, var(--qk-color-accent) 53%, transparent);
+  --qk-color-heat-1: color-mix(in oklab, var(--qk-color-accent) 28%, var(--qk-color-heat-0));
+  --qk-color-heat-2: color-mix(in oklab, var(--qk-color-accent) 52%, var(--qk-color-heat-0));
+  --qk-color-heat-3: color-mix(in oklab, var(--qk-color-accent) 76%, var(--qk-color-heat-0));
+  --qk-color-heat-4: var(--qk-color-accent);
+  --qk-color-running-ring: color-mix(in oklab, var(--qk-color-running) 33%, transparent);
+  --qk-filter-accent-soft: color-mix(in oklab, var(--qk-color-accent) 4%, transparent);
+  --qk-filter-accent-border: color-mix(in oklab, var(--qk-color-accent) 27%, transparent);
+
+  --qk-placeholder-hue-shift: 40;
+  /* A shadow that is not there (`none` is not valid inside a list of shadows). */
+  --qk-shadow-none: 0 0 0 0 transparent;
+
+  /* Scales: themes resize spacing, corners and text by setting these. */
+  --qk-space-scale: 1;
+  --qk-radius-scale: 1;
+  --qk-font-scale: 1;
+
+  /* Spacing */
+  --qk-space-1: calc(4px * var(--qk-space-scale));
+  --qk-space-2: calc(8px * var(--qk-space-scale));
+  --qk-space-3: calc(12px * var(--qk-space-scale));
+  --qk-space-4: calc(16px * var(--qk-space-scale));
+  --qk-space-5: calc(24px * var(--qk-space-scale));
+  --qk-space-6: calc(32px * var(--qk-space-scale));
+
+  /* Radii */
+  --qk-radius-sm: calc(4px * var(--qk-radius-scale));
+  --qk-radius-md: calc(8px * var(--qk-radius-scale));
+  --qk-radius-lg: calc(12px * var(--qk-radius-scale));
+  --qk-radius-pill: 999px;
+
+  /* Typography */
+  --qk-font-family: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --qk-font-mono: "Cascadia Mono", "Consolas", ui-monospace, monospace;
+  --qk-font-size-xs: calc(11px * var(--qk-font-scale));
+  --qk-font-size-sm: calc(12px * var(--qk-font-scale));
+  --qk-font-size-md: calc(14px * var(--qk-font-scale));
+  --qk-font-size-lg: calc(16px * var(--qk-font-scale));
+  --qk-font-size-xl: calc(20px * var(--qk-font-scale));
+  --qk-font-size-initials: calc(40px * var(--qk-font-scale));
+  --qk-font-weight-normal: 400;
+  --qk-font-weight-medium: 500;
+  --qk-font-weight-bold: 600;
+  --qk-font-size-title: calc(28px * var(--qk-font-scale));
+  --qk-line-height-tight: 1.15;
+  --qk-letter-spacing-caps: 0.06em;
+  --qk-line-height: 1.4;
+
+  --qk-sticky-group-fade: 24px; /* fade under a pinned group header */
 
   /* Motion */
   --qk-duration-fast: 120ms;
@@ -147,6 +271,15 @@
   --qk-settings-content-width: 720px;
   --qk-settings-select-width: 300px;
   --qk-settings-number-width: 80px;
+  /* Settings → Appearance: theme cards with their preview, and the theme option rows. */
+  --qk-theme-card-min-width: 200px;
+  --qk-theme-preview-height: 64px;
+  --qk-theme-preview-side-width: 28%;
+  --qk-theme-preview-line-height: 5px;
+  --qk-theme-preview-button-height: 10px;
+  --qk-param-label-width: 180px;
+  --qk-param-color-width: 48px;
+  --qk-param-value-width: 52px;
   /* Height of the values in the game page's stat row (fits the status button). */
   --qk-stat-value-height: 26px;
   /* Ring around small badges so they stand off the icon below. */
@@ -157,7 +290,7 @@
   --qk-tile-aspect-ratio: 2 / 3;
   --qk-tile-ratio-height: 1.5; /* height / width of the tile above, used by the grid maths */
   --qk-tile-strip-height: 36px; /* store and state strip above the cover, used by the grid maths */
-  --qk-tile-radius: 10px;
+  --qk-tile-radius: calc(10px * var(--qk-radius-scale));
   --qk-tile-lift: 3px;
   --qk-tile-logo-size: 18px;
   --qk-tile-state-size: 24px;
@@ -267,7 +400,6 @@
   --qk-tooltip-gap: 6px;
   --qk-tooltip-edge: 8px;
   --qk-tooltip-max-width: 320px;
-  --qk-shadow-tooltip: 0 4px 16px #00000088;
   --qk-titlebar-tool-width: 34px;
   --qk-titlebar-tool-height: 30px;
   --qk-titlebar-dot-size: 6px;
@@ -290,8 +422,6 @@
   --qk-menu-min-width: 240px;
   --qk-filters-width: 500px;
   --qk-filters-max-height: calc(100vh - 120px);
-  --qk-filter-accent-soft: #7c9cff0a;
-  --qk-filter-accent-border: #7c9cff44;
   --qk-filter-group-bar: 3px;
   --qk-range-input-width: 84px;
   --qk-picker-width: 300px;
@@ -322,7 +452,7 @@
   --qk-icon-picker-cell: 30px;
   --qk-icon-picker-columns: 7; /* matches the arrow-key maths in IconPicker.tsx */
   --qk-game-icon-size: 22px;
-  --qk-game-icon-radius: 5px;
+  --qk-game-icon-radius: calc(5px * var(--qk-radius-scale));
   --qk-dragged-opacity: 0.4;
   --qk-group-header-height: 52px;
   --qk-group-band-height: 40px;

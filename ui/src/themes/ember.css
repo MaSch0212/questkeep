@@ -1,0 +1,33 @@
+/* Ember: warm charcoal with an orange glow in dark mode, cream paper in light mode. */
+:root[data-theme="ember"][data-scheme="dark"] {
+  --qk-color-bg: #161210;
+  --qk-color-surface: #1d1815;
+  --qk-color-surface-raised: #261f1b;
+  --qk-color-surface-hover: #322823;
+  --qk-color-surface-active: #42352d;
+  --qk-color-border: #362c26;
+  --qk-color-text: #f1e9e2;
+  --qk-color-text-muted: #b5a699;
+  --qk-color-text-faint: #87796d;
+  --qk-color-cover-bg: #100d0b;
+  --qk-color-scrollbar: #3d322b;
+  --qk-color-heat-0: #29211c;
+  --qk-color-drive-free: #322823;
+  --qk-color-backdrop: #0a0706cc;
+}
+:root[data-theme="ember"][data-scheme="light"] {
+  --qk-color-bg: #f7f1e8;
+  --qk-color-surface: #fcf8f1;
+  --qk-color-surface-raised: #fffdf9;
+  --qk-color-surface-hover: #eee4d5;
+  --qk-color-surface-active: #e2d4c0;
+  --qk-color-border: #dfd2bf;
+  --qk-color-text: #2a211a;
+  --qk-color-text-muted: #635548;
+  --qk-color-text-faint: #7f7163;
+  --qk-color-cover-bg: #e6dccb;
+  --qk-color-scrollbar: #cbbca6;
+  --qk-color-heat-0: #ebe2d3;
+  --qk-color-drive-free: #e9dfcf;
+  --qk-color-backdrop: #2a211a73;
+}

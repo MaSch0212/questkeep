@@ -1,0 +1,38 @@
+/* Midnight: true black for OLED screens in dark mode, paper white in light mode; a gold accent. */
+:root[data-theme="midnight"][data-scheme="dark"] {
+  --qk-color-bg: #000000;
+  --qk-color-surface: #060709;
+  --qk-color-surface-raised: #101216;
+  --qk-color-surface-hover: #1a1d23;
+  --qk-color-surface-active: #272b33;
+  --qk-color-border: #1e2127;
+  --qk-color-text: #eceef2;
+  --qk-color-text-muted: #9fa5b1;
+  --qk-color-text-faint: #717783;
+  --qk-color-cover-bg: #0a0b0d;
+  --qk-color-scrollbar: #23262d;
+  --qk-color-heat-0: #15171c;
+  --qk-color-drive-free: #1a1d23;
+  --qk-color-backdrop: #000000d9;
+  --qk-accent-soft-mix: 18%;
+}
+:root[data-theme="midnight"][data-scheme="light"] {
+  --qk-color-bg: #ffffff;
+  --qk-color-surface: #fafafa;
+  --qk-color-surface-raised: #ffffff;
+  --qk-color-surface-hover: #efeff1;
+  --qk-color-surface-active: #e2e3e7;
+  --qk-color-border: #e1e2e6;
+  --qk-color-text: #111214;
+  --qk-color-text-muted: #55585f;
+  --qk-color-text-faint: #777a82;
+  --qk-color-cover-bg: #e9eaed;
+  --qk-color-scrollbar: #c9cbd1;
+  --qk-color-heat-0: #ededf0;
+  --qk-color-drive-free: #e9eaed;
+}
+
+/* Separator lines off: borders take the color of what they sit on. */
+:root[data-theme="midnight"][data-param-separators="0"] {
+  --qk-color-border: transparent;
+}
