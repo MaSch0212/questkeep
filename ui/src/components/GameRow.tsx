@@ -69,8 +69,10 @@ export function GameRow(props: GameRowProps) {
       <div class="list-row__thumb">
         <GameIcon game={props.game} />
       </div>
-      <div class="list-row__name" data-tooltip={props.game.name}>
-        <span class="list-row__text">{props.game.name}</span>
+      <div class="list-row__name">
+        <span class="list-row__text" data-tooltip={props.game.name}>
+          {props.game.name}
+        </span>
         <Show when={props.game.favorite}>
           <span
             class="list-row__star"

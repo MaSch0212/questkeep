@@ -580,7 +580,7 @@ ul {
   align-items: center;
   gap: var(--qk-space-2);
   min-width: 0;
-  flex: 1;
+  flex: 0 1 auto;
   color: var(--qk-color-text);
 }
 .tile__source .source-icon,
@@ -1027,6 +1027,9 @@ ul {
   white-space: nowrap;
 }
 .list-row__cell {
+  /* As wide as the content (up to the column), so its tooltip sits under the text. */
+  justify-self: start;
+  max-width: 100%;
   color: var(--qk-color-text-muted);
   font-size: var(--qk-font-size-sm);
 }
@@ -1034,6 +1037,7 @@ ul {
   color: var(--qk-color-star);
 }
 .list-row__cell--numeric {
+  justify-self: end;
   text-align: right;
 }
 .list-row__star {
@@ -1101,8 +1105,10 @@ ul {
   color: var(--qk-color-text-muted);
 }
 .compact-row__name {
-  flex: 1;
+  /* As wide as the name, so its tooltip sits under it; the rest stays at the end. */
+  flex: 0 1 auto;
   min-width: 0;
+  margin-right: auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1376,6 +1382,8 @@ ul {
   margin-bottom: calc(var(--qk-space-1) * -1);
 }
 .details__path {
+  width: fit-content;
+  max-width: 100%;
   overflow-wrap: anywhere;
   font-family: var(--qk-font-mono);
   font-size: var(--qk-font-size-sm);
@@ -2155,8 +2163,9 @@ ul {
   width: var(--qk-settings-number-width);
 }
 .backup-folder {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
+  margin-right: auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
