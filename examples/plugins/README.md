@@ -1,12 +1,16 @@
 # Questkeep plugins
 
-A plugin is a folder (or a `.zip` of it) with a `plugin.json`. The guide to the package and to
-extensions (JavaScript that adds to the app's interface) is
-[`docs/PLUGINS.md`](../../docs/PLUGINS.md); [`example-extension`](example-extension) is a
-complete extension and [`questkeep-plugin.d.ts`](questkeep-plugin.d.ts) its API.
+A plugin is a folder (or a `.zip` of it) with a `plugin.json`. The guide to the package is
+[`docs/PLUGINS.md`](../../docs/PLUGINS.md). The examples here, one per kind of plugin:
 
-This page covers store plugins: stores written in Rust, compiled to WebAssembly and run
-sandboxed by Questkeep. [`example-store`](example-store) is a complete one.
+| Example | What it is | Guide |
+|---|---|---|
+| [`example-store`](example-store) | A store: Rust compiled to WebAssembly, run sandboxed, reading its games from `games.json` | this page |
+| [`example-extension`](example-extension) | An extension: plain JavaScript that adds a title bar button, menu entries, a page, a dialog and settings ([`questkeep-plugin.d.ts`](questkeep-plugin.d.ts) is its API) | [`docs/PLUGINS.md`](../../docs/PLUGINS.md#extensions) |
+| [`example-theme`](example-theme) | A theme: CSS with a light and a dark palette, options and a layout change | [`docs/THEMES.md`](../../docs/THEMES.md) |
+
+The rest of this page covers store plugins: stores written in Rust, compiled to WebAssembly and
+run sandboxed by Questkeep.
 
 ## plugin.json
 

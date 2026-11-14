@@ -313,6 +313,13 @@ User themes come from the theme editor (`ui/src/components/ThemeEditor.tsx`, sta
 `<data>/themes/<id>.json` (`user_themes.rs`) and turned into a registered theme by
 `lib/userThemes.ts`. The editor shows its draft through `previewAppearance`, which never touches
 the saved settings. See `docs/THEMES.md` for the theme and plugin formats.
+Plugin themes: `PluginInfo.themeDefs` carries the `themes` entries of an enabled plugin's manifest.
+`lib/pluginThemes.ts` follows `store.plugins()` (an effect in `App.tsx`, next to the extension
+host's): per plugin and revision it checks each entry (id owned by the plugin, parameters, preview),
+fetches the CSS file through the `qkplugin` scheme, rewrites relative `url()` references to the
+plugin's files and registers the theme with `origin: "plugin"`; themes of plugins that are gone or
+disabled are unregistered, and user themes are registered again so they pick up a changed base.
+Entries that fail are listed per plugin (`pluginThemeProblems`) and shown in Settings > Plugins.
 ## Performance
 
 The grid renders only the rows in view (plus 3 rows of overscan), so about 30 to 45 tiles exist in

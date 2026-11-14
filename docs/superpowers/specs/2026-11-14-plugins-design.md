@@ -99,8 +99,8 @@ A folder (or a `.zip` of it) with `plugin.json`:
   unloading disposes it all; `deactivate()` is called when present.
 - `api`: `plugin` (id, version, `url(path)`), `ui.addTitleBarButton`, `ui.addMenuItems(location)`
   (`app`, `add`, `game`, `games`, `gameMore`), `ui.addSettingsSection`, `ui.addPage` (a sidebar
-  page), `ui.showDialog`, `ui.toast`, `settings.get/set/onChange` (stored under
-  `settings.plugins.<id>`), `games.list/get/selected`, `events.on`, `invoke(command, args)`.
+  page), `ui.showDialog`, `ui.toast`, `settings.get/set/onChange` (as built: stored in
+  `<data>/plugin-data/<id>/settings.json`, not in the app's settings), `games.list/get/selected`, `events.on`, `invoke(command, args)`.
   Own UI is plain DOM: `render(container)` returning a dispose function; the app's CSS classes
   and `--qk-*` variables are the styling contract.
 - Declared settings (`extension.settings`: toggle, text, number, select, color) are drawn by the
@@ -117,8 +117,13 @@ A folder (or a `.zip` of it) with `plugin.json`:
   The default theme exposes the accent color, corner roundness, density and font size.
 - Built-in themes ship in the UI in the same format as plugin themes.
 - **Theme editor**: pick a base theme, change any variable with live preview (color pickers,
-  grouped, searchable), per scheme; save as a user theme (a generated plugin in the data
-  folder), export as a plugin folder.
+  grouped, searchable), per scheme; save as a user theme, export as a plugin folder. As built:
+  a user theme is stored as `<data>/themes/<id>.json` (base theme id, overrides, free CSS) and
+  its CSS is generated in the UI; it becomes a plugin only when exported, in the same format a
+  hand-written theme plugin has.
+- Plugin themes (as built): the UI reads the `themes` entries from `PluginInfo.themeDefs`,
+  fetches each CSS file through `qkplugin` and registers it per plugin revision; relative
+  `url()` references point at the plugin's files, `@import` of relative files is not supported.
 - Example: `examples/plugins/example-theme` (also contains a layout change).
 
 ## Constraints

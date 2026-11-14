@@ -116,6 +116,10 @@ ui/src/
   lib/userThemes.ts            user themes: generated CSS, the catalogue of theme variables;
                                userThemeStore.ts (saved ones, registered), themeEditor.ts
                                (the editor's draft, live preview, save/delete/export)
+  lib/pluginThemes.ts          themes of plugins: checks the manifest's `themes` entries, fetches
+                               their CSS (relative url() rewritten to plugin files), registers
+                               them per plugin revision; themeContrast.ts (the contrast check
+                               the theme tests share)
   lib/*.ts                     pure helpers (gridNav, grouping: groups + virtual rows + slot
                                navigation, copies: a game's store copies, format, names, query,
                                views: drafts/filters/arranging, commandBar) + tests

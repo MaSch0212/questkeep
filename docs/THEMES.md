@@ -149,10 +149,62 @@ theme's rules, the overrides and the custom CSS. It no longer depends on the bas
 installed. `preview` holds four colors per mode for the theme picker: background, surface, text,
 accent. Parameter labels are exported in the language the app was in.
 
-## Writing a theme plugin by hand
+## Theme plugins
 
-1. Make a folder named after the plugin id with a `plugin.json` like the one above. The theme's
-   `id` is what `data-theme` will be; `css` is a file in the folder.
+A plugin (see [`docs/PLUGINS.md`](PLUGINS.md)) lists its themes in `themes`. While the plugin is
+enabled, each one shows in Settings → Appearance with the badge "Plugin: <plugin name>", and its
+parameters show below the picker like those of a built-in theme. Disabling or removing the plugin
+takes its themes away; if one of them was chosen, the default theme shows until it is back (the
+choice and the parameter values are kept).
+
+| Field | Meaning |
+|---|---|
+| `id` | What `data-theme` will be: 2 to 64 lowercase letters, digits and dashes. It must be the plugin's id, or start with it and a dash (`my-themes-dusk`), and must not be the id of a built-in theme or start with `user-`. |
+| `name` | Shown in the picker, as written. |
+| `description` | Optional; a line under the name. |
+| `css` | The theme's CSS file, relative to the plugin folder; at most 1 MiB. |
+| `params` | Optional; [parameters](#parameters) with literal labels (they are not translated). A malformed parameter is left out, the theme still loads. |
+| `preview` | Optional; `{ "light": [bg, surface, text, accent], "dark": […] }` as hex colors for the picker's swatches. Without it the app computes them from the CSS with the parameters on their defaults. |
+
+The plugin's `author` is shown on the theme's card. One plugin may bring several themes, and
+stores or an extension beside them.
+
+**Files of the plugin.** Relative `url(…)` references in the CSS (`url("fonts/arcade.woff2")`,
+`url(../img/bg.png)`) are resolved against the CSS file's folder and loaded from the plugin, so a
+theme can ship fonts and images. References with a scheme (`data:`, `https:`), absolute paths
+(`/…`) and fragments (`#…`) are left as they are. `@import` of a relative file is **not**
+supported: put everything into the one CSS file. `@font-face` and `@keyframes` work (the CSS of a
+plugin theme is not nested like the editor's custom CSS).
+
+**When something is wrong.** A theme whose entry is invalid, whose id is taken or whose file
+cannot be read is skipped; the plugin's row in Settings → Plugins says which theme and why. The
+plugin's other themes still load.
+
+**Trust.** Theme CSS cannot run code and has no access to files or the network beyond loading
+its own fonts and images, but it can restyle everything, including hiding parts of the app.
+
+### Two ways to make one
+
+**The quick path: the theme editor.** Build the theme in the app ("Create theme…"), then
+"Export as plugin…". The exported folder is a complete plugin; install it on another PC or share
+it as a `.zip`. To keep changing it, edit the user theme and export again (into an empty folder).
+
+**The full path: a hand-written plugin**, for layout changes, fonts, several themes in one
+plugin, or anything else beyond variables:
+
+1. Make a folder with a `plugin.json` like the one above (or copy
+   [`examples/plugins/example-theme`](../examples/plugins/example-theme)).
+2. Settings → Plugins → "Install from folder…", then turn on **Reload on change** in the plugin's
+   row and choose the theme in Settings → Appearance.
+3. Edit the CSS (or `plugin.json`) and save. Questkeep copies the folder again and replaces the
+   theme in place: the page updates within a moment, the chosen theme and its parameter values
+   stay. User themes that are based on the plugin's theme follow too.
+4. The theme editor is a good companion even then: "Customize…" on your theme shows every
+   variable with the value your theme gives it, and what a derived color comes out as.
+
+The CSS itself:
+
+1. The theme's `id` is what `data-theme` will be; `css` is a file in the folder.
 2. In the CSS, write every rule against `:root[data-theme="<id>"]`, with
    `[data-scheme="light"]` or `[data-scheme="dark"]` for values that differ per mode. Set at least
    `--qk-color-bg`, `-surface`, `-surface-raised`, `-surface-hover`, `-surface-active`, `-border`,
@@ -163,8 +215,28 @@ accent. Parameter labels are exported in the language the app was in.
 4. Keep text readable: at least 4.5:1 for text on the surfaces and for the text on the accent
    (the built-in themes are held to that by `ui/src/themes/themes.test.ts`).
 5. Prefer variables over rules: `ui/src/theme.css` lists all of them with comments, and the theme
-   editor shows them grouped with their current values. A quick way to start is to build the theme
-   in the editor and export it.
+   editor shows them grouped with their current values.
+6. Rules can go beyond variables, up to a different layout. The app shell is a grid (`.app`: the
+   title bar across the top, `.sidebar` and `.app__main` below it); the example theme moves the
+   sidebar to the right with grid placement alone, switched by a `select` parameter:
+
+   ```css
+   :root[data-theme="example-theme"][data-param-sidebar="right"] .app {
+     grid-template-columns: minmax(0, 1fr) var(--qk-sidebar-width);
+   }
+   :root[data-theme="example-theme"][data-param-sidebar="right"] .app__main {
+     grid-column: 1;
+     grid-row: 2;
+   }
+   :root[data-theme="example-theme"][data-param-sidebar="right"] .sidebar {
+     grid-column: 2;
+     grid-row: 2;
+   }
+   ```
+
+   The app's class names are not a stable interface the way the variables are: a rule may need
+   adjusting after an update. Sizes that scripts read (row heights, grid metrics, the panel
+   widths) must stay plain lengths in their variables.
 
 Built-in themes are made the same way, in `ui/src/themes/` (`<id>.css` plus the definition in
 `index.ts`).

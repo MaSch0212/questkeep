@@ -5,11 +5,12 @@ A plugin is a folder (or a `.zip` of it) with a `plugin.json`. It can bring:
 - **stores**: game providers written in Rust, compiled to WebAssembly, run sandboxed;
 - an **extension**: JavaScript that adds to the app's interface (title bar buttons, menu
   entries, settings, pages, dialogs);
-- themes (planned).
+- **themes**: CSS that restyles the app, with options the user can set.
 
 Examples live in [`examples/plugins`](../examples/plugins):
-[`example-store`](../examples/plugins/example-store) and
-[`example-extension`](../examples/plugins/example-extension).
+[`example-store`](../examples/plugins/example-store),
+[`example-extension`](../examples/plugins/example-extension) and
+[`example-theme`](../examples/plugins/example-theme).
 
 ## The plugin package
 
@@ -41,9 +42,10 @@ Examples live in [`examples/plugins`](../examples/plugins):
 | `extension.main` | The ES module Questkeep imports, relative to the plugin folder. |
 | `extension.styles` | Style sheets loaded with the extension (optional). |
 | `extension.settings` | Settings the app draws for the plugin (optional); see [settings](#settings). |
+| `themes` | Themes the plugin brings (optional); see [themes](#themes). |
 
 Paths are relative, use forward slashes and stay inside the plugin folder. A plugin needs none
-of `providers` and `extension` in particular: any combination works.
+of `providers`, `extension` and `themes` in particular: any combination works.
 
 ### Install, reload, remove
 
@@ -68,6 +70,43 @@ request, the plugin's own data. Nothing needs an app restart.
 
 See [`examples/plugins/README.md`](../examples/plugins/README.md): the `Provider` trait, the
 sandbox (folders and web hosts a store declares), building for `wasm32-wasip2`.
+
+## Themes
+
+A plugin can bring any number of themes. Each is an entry in `themes` and a CSS file:
+
+```json
+{
+  "id": "my-themes",
+  "name": "My Themes",
+  "version": "0.1.0",
+  "apiVersion": 1,
+  "themes": [
+    {
+      "id": "my-themes-dusk",
+      "name": "Dusk",
+      "description": "Optional.",
+      "css": "dusk.css",
+      "params": [
+        { "key": "accent", "label": "Accent color", "type": "color",
+          "default": { "light": "#0f6f96", "dark": "#6cc5e8" } }
+      ]
+    }
+  ]
+}
+```
+
+The theme's `id` must be the plugin's id or start with it and a dash. While the plugin is enabled
+its themes are listed in Settings > Appearance, marked "Plugin: <plugin name>"; their options
+(`params`) show below the picker. With **Reload on change** on, saving the CSS file updates the
+app at once, also while the theme is the chosen one. A theme that cannot be loaded (a missing
+file, an id that is taken) is reported in the plugin's row in Settings > Plugins.
+
+Themes are plain CSS and cannot run code, but they can restyle and rearrange everything, so a
+theme can also hide or disguise parts of the app. The whole format (variables, parameters,
+files a theme ships, limits) is in [`docs/THEMES.md`](THEMES.md);
+[`example-theme`](../examples/plugins/example-theme) is a complete theme with options and a
+layout change. The quickest way to a theme plugin is the theme editor's "Export as plugin…".
 
 ## Extensions
 

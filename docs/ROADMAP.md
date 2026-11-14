@@ -57,10 +57,16 @@ Also: GOG playtime from GOG Galaxy's local database; IGDB fills missing genres (
 
 ## Later
 
-- Plugins beyond stores and extensions (both exist, see `docs/PLUGINS.md`): a theme loader on
-  top of `theme.css` variables; later a plugin gallery, signature checks, account sign-in and
-  registry access for plugin stores, guest output (stdout/stderr) in the log. For extensions:
-  more places to add to (game page sections, filters, columns), translations per plugin.
+- Plugins (stores, extensions and themes exist, see `docs/PLUGINS.md` and `docs/THEMES.md`),
+  still open:
+  - a plugin gallery (browse and install from within the app) and signature checks;
+  - account sign-in and credentials for plugin stores, registry access for WASM stores, guest
+    output (stdout/stderr) in the log;
+  - extensions: more places to add to (game page sections, filters, columns), translations per
+    plugin;
+  - themes: theming the native tray popup and the window's background color at startup (both
+    are drawn outside the page), `@import` of relative files in theme CSS, translated theme
+    texts for plugin themes.
 - Fullscreen / controller mode (the grid keyboard navigation is the groundwork).
 - Multiple play actions per game, emulator profiles, pre/post scripts.
 - Roman numeral support in sorting names (Playnite's converter handles many edge cases).
