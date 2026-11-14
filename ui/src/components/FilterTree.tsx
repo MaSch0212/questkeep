@@ -141,14 +141,16 @@ function AddFilter(props: {
             anchor={at()}
             label={tr("addFilter")}
             placeholder={tr("filterBy")}
+            // A field can be both a list and a text filter ("Publisher", "Publisher (text)"),
+            // so the id is the kind and the field.
             items={FIELDS.map((info) => ({
-              id: info.field,
+              id: `${info.kind}:${info.field}`,
               label: info.label,
               section: SECTION_LABELS[info.section],
-              hint: props.used.has(info.field) ? tr("activeHint") : undefined,
+              hint: props.used.has(`${info.kind}:${info.field}`) ? tr("activeHint") : undefined,
             }))}
             onPick={(id) => {
-              const info = FIELDS.find((f) => f.field === id);
+              const info = FIELDS.find((f) => `${f.kind}:${f.field}` === id);
               if (info) props.onAdd(newFilter(info));
             }}
             onClose={(returnFocus) => {
@@ -473,7 +475,7 @@ const asGroup = (n: FilterNode) => (n.kind === "group" ? n : undefined);
 function usedFields(group: FilterGroup, into = new Set<string>()): Set<string> {
   for (const node of group.items) {
     if (node.kind === "group") usedFields(node, into);
-    else into.add(node.field);
+    else into.add(`${node.kind}:${node.field}`);
   }
   return into;
 }

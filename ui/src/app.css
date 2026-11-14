@@ -3110,6 +3110,10 @@ ul {
 .segmented__option:hover {
   background: var(--qk-color-surface-hover);
 }
+/* Inside the option: the control clips its options, so an outer ring would be cut off. */
+.segmented__option:focus-visible {
+  outline-offset: calc(-1 * var(--qk-focus-ring-width));
+}
 .segmented__option--on,
 .segmented__option--on:hover {
   background: var(--qk-color-accent-soft);
@@ -4092,6 +4096,10 @@ ul {
   gap: var(--qk-space-3);
   min-height: 0;
   overflow-y: auto;
+  /* Room for focus rings at the edges, which the scrolling would clip. */
+  --qk-filters-focus-room: calc(var(--qk-focus-ring-width) + var(--qk-focus-ring-offset));
+  padding: var(--qk-filters-focus-room);
+  margin: calc(-1 * var(--qk-filters-focus-room));
 }
 .filter-tree {
   display: flex;
