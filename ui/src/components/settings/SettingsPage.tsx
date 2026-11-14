@@ -1,4 +1,4 @@
-import { createSignal, For, onCleanup, onMount, type Component } from "solid-js";
+import { createEffect, createSignal, For, onCleanup, onMount, type Component } from "solid-js";
 import { Dynamic } from "solid-js/web";
 import { translator } from "../../i18n";
 import { settingsPage } from "../../i18n/settingsPage";
@@ -93,7 +93,7 @@ const visibleSections = () => [
 export function SettingsPage() {
   const model = createSettingsModel();
   let scroller: HTMLDivElement | undefined;
-  /** The section in the middle of the view, marked in the menu. */
+  /** The section at the top of the view, marked in the menu. */
   const [current, setCurrent] = createSignal<string | null>(visibleSections()[0]?.id ?? null);
   /** A menu jump scrolls smoothly past other sections: the menu keeps its pick until it stops. */
   let jumping: ReturnType<typeof setTimeout> | undefined;
@@ -107,8 +107,10 @@ export function SettingsPage() {
         ? [{ id: section.id, top: element.getBoundingClientRect().top - view.top }]
         : [];
     });
-    const atEnd = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 2;
-    const id = activeSection(boxes, scroller.clientHeight, atEnd);
+    const id = activeSection(boxes, {
+      height: scroller.clientHeight,
+      remaining: scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop,
+    });
     if (id !== null) setCurrent(id);
   }
 
@@ -125,12 +127,26 @@ export function SettingsPage() {
     document.getElementById(sectionDomId(id))?.scrollIntoView?.({ behavior: "smooth" });
   }
 
-  onMount(() => {
+  // A section asked for from elsewhere: shown at once when the page opens with it, scrolled to
+  // when the page is already open (a link inside the settings).
+  let opened = false;
+  createEffect(() => {
     const section = store.takeSettingsSection();
-    if (section) {
+    const first = !opened;
+    opened = true;
+    if (!section) return;
+    if (first) {
       document.getElementById(sectionDomId(section))?.scrollIntoView?.();
       setCurrent(section);
-    }
+    } else jumpTo(section);
+  });
+  // Sections change their height without a scroll (settings and themes arrive after the page).
+  onMount(() => {
+    const content = scroller?.firstElementChild;
+    if (!content || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => follow());
+    observer.observe(content);
+    onCleanup(() => observer.disconnect());
   });
   onCleanup(() => clearTimeout(jumping));
 
