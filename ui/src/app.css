@@ -4259,6 +4259,60 @@ ul {
   color: var(--qk-color-text-faint);
   font-size: var(--qk-font-size-sm);
 }
+/* Moving filters: the grip, where the dragged one would land, and the dragged one itself. */
+.filter-handle {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: var(--qk-filter-handle-width);
+  height: var(--qk-pill-height);
+  margin-left: calc(-1 * var(--qk-space-1));
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: var(--qk-radius-sm);
+  color: var(--qk-color-text-faint);
+  cursor: grab;
+}
+.filter-handle:hover,
+.filter-handle[aria-expanded="true"] {
+  background: var(--qk-color-surface-hover);
+  color: var(--qk-color-text);
+}
+.filter-item {
+  position: relative;
+}
+.filter-item--before::before,
+.filter-item--after::after,
+.filter-tree__adds--drop::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: var(--qk-filter-drop-line);
+  background: var(--qk-color-accent);
+  border-radius: var(--qk-radius-pill);
+  pointer-events: none;
+}
+.filter-item--before::before {
+  top: calc(-1 * var(--qk-space-1) - var(--qk-filter-drop-line) / 2);
+}
+.filter-item--after::after {
+  bottom: calc(-1 * var(--qk-space-1) - var(--qk-filter-drop-line) / 2);
+}
+.filter-tree__adds {
+  position: relative;
+}
+.filter-tree__adds--drop::before {
+  top: calc(-1 * var(--qk-space-1) - var(--qk-filter-drop-line) / 2);
+}
+.filter-item--into > .filter-group {
+  outline: var(--qk-filter-drop-line) solid var(--qk-color-accent);
+  outline-offset: 1px;
+}
+.filter-item--dragging {
+  opacity: var(--qk-dimmed-opacity);
+}
 /* "Not" on a filter row or group, and "Aa" (match case) on a text filter. */
 .filter-not,
 .filter-case {

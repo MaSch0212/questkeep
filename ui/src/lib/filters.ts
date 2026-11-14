@@ -414,6 +414,98 @@ export function ungroupAt(group: FilterGroup, path: Path): FilterGroup {
   ]);
 }
 
+// ---- moving (drag and drop, and the move menu) ----
+
+/** Where a dragged node goes relative to the one under the pointer. */
+export type DropPlace = "before" | "after" | "into";
+
+export const samePath = (a: Path, b: Path) =>
+  a.length === b.length && a.every((step, i) => step === b[i]);
+
+const startsWithPath = (path: Path, prefix: Path) =>
+  path.length >= prefix.length && prefix.every((step, i) => step === path[i]);
+
+/** Whether `from` may go to `place` of `target`: never into itself or one of its own groups. */
+export function canMove(tree: FilterGroup, from: Path, target: Path, place: DropPlace): boolean {
+  if (from.length === 0 || startsWithPath(target, from)) return false;
+  if (place !== "into") return target.length > 0;
+  const group = nodeAt(tree, target);
+  return group !== undefined && "items" in group;
+}
+
+/** Moves the node at `from` before, after or to the end of (`into`) the node at `target`. */
+export function moveNode(
+  tree: FilterGroup,
+  from: Path,
+  target: Path,
+  place: DropPlace,
+): FilterGroup {
+  const node = nodeAt(tree, from);
+  if (!node || !("kind" in node) || !canMove(tree, from, target, place)) return tree;
+  // The destination group and index, before the node is taken out.
+  let parent: number[];
+  let index: number;
+  if (place === "into") {
+    const group = nodeAt(tree, target) as FilterGroup;
+    parent = [...target];
+    index = group.items.length;
+  } else {
+    parent = target.slice(0, -1);
+    index = (target.at(-1) ?? 0) + (place === "after" ? 1 : 0);
+  }
+  const fromParent = from.slice(0, -1);
+  const fromIndex = from.at(-1) ?? 0;
+  // Taking the node out shifts what came after it in its group.
+  const depth = fromParent.length;
+  if (parent.length > depth && startsWithPath(parent, fromParent)) {
+    const step = parent[depth] ?? 0;
+    if (step > fromIndex) parent[depth] = step - 1;
+  }
+  if (samePath(parent, fromParent) && index > fromIndex) index -= 1;
+  const removed = removeAt(tree, from);
+  return withItems(removed, parent, (items) => [
+    ...items.slice(0, index),
+    node,
+    ...items.slice(index),
+  ]);
+}
+
+/** The keyboard moves of a node: up, down, out of its group, into the group above it. */
+export function moveChoices(
+  tree: FilterGroup,
+  path: Path,
+): { up: boolean; down: boolean; out: boolean; intoAbove: boolean } {
+  const index = path.at(-1) ?? 0;
+  const parent = nodeAt(tree, path.slice(0, -1));
+  const siblings = parent && "items" in parent ? parent.items : [];
+  return {
+    up: index > 0,
+    down: index < siblings.length - 1,
+    out: path.length > 1,
+    intoAbove: index > 0 && siblings[index - 1]?.kind === "group",
+  };
+}
+
+/** Applies a keyboard move (see [`moveChoices`]). */
+export function moveBy(
+  tree: FilterGroup,
+  path: Path,
+  how: "up" | "down" | "out" | "intoAbove",
+): FilterGroup {
+  const index = path.at(-1) ?? 0;
+  const sibling = (offset: number) => [...path.slice(0, -1), index + offset];
+  switch (how) {
+    case "up":
+      return moveNode(tree, path, sibling(-1), "before");
+    case "down":
+      return moveNode(tree, path, sibling(1), "after");
+    case "out":
+      return moveNode(tree, path, path.slice(0, -1), "after");
+    case "intoAbove":
+      return moveNode(tree, path, sibling(-1), "into");
+  }
+}
+
 /** Puts a copy of the node right after it. */
 export function duplicateAt(group: FilterGroup, path: Path): FilterGroup {
   const node = nodeAt(group, path);

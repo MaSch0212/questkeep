@@ -12,6 +12,9 @@ import {
   fromInput,
   isActive,
   matchesTree,
+  moveBy,
+  moveChoices,
+  moveNode,
   NO_VALUE,
   pruneTree,
   rangeInfo,
@@ -193,6 +196,8 @@ const byName = (
   ...extra,
 });
 const allOf = (...items: FilterNode[]): FilterGroup => ({ mode: "all", items });
+const text = (field: TextFilter["field"], op: TextFilter["op"], value = ""): FilterGroup =>
+  allOf({ kind: "text", field, op, value });
 
 describe("text filters and negation", () => {
   const trine = makeGame({ name: "Trine 4", notes: null });
@@ -230,8 +235,6 @@ describe("text filters and negation", () => {
   });
 
   it("matches several texts, value names and the empty checks", () => {
-    const text = (field: TextFilter["field"], op: TextFilter["op"], value = ""): FilterGroup =>
-      allOf({ kind: "text", field, op, value });
     const game = makeGame({
       name: "Alpha",
       notes: "  ",
@@ -276,5 +279,55 @@ describe("text filters and negation", () => {
       (_, key) => key,
     );
     expect(groupPill?.negated).toBe(true);
+  });
+});
+
+const sub = (...items: FilterNode[]): FilterNode => ({ kind: "group", mode: "any", items });
+/** A tree as nested arrays of its tag values, to compare moves at a glance. */
+const shape = (at: FilterGroup): unknown =>
+  at.items.map((node) =>
+    node.kind === "group" ? shape(node) : node.kind === "list" ? node.values[0] : "?",
+  );
+
+describe("moving filters", () => {
+  const a = tags("a");
+  const b = tags("b");
+  const c = tags("c");
+
+  it("reorders within a group", () => {
+    const flat = allOf(a, b, c);
+    expect(shape(moveNode(flat, [0], [2], "after"))).toEqual(["b", "c", "a"]);
+    expect(shape(moveNode(flat, [2], [0], "before"))).toEqual(["c", "a", "b"]);
+    expect(shape(moveNode(flat, [0], [1], "before"))).toEqual(["a", "b", "c"]);
+  });
+
+  it("moves into, out of and between groups", () => {
+    const mixed = allOf(a, sub(b), c);
+    expect(shape(moveNode(mixed, [0], [1], "into"))).toEqual([["b", "a"], "c"]);
+    expect(shape(moveNode(mixed, [2], [1, 0], "before"))).toEqual(["a", ["c", "b"]]);
+    expect(shape(moveNode(mixed, [1, 0], [0], "before"))).toEqual(["b", "a", [], "c"]);
+    // Into a group that comes after the moved node.
+    const nested = allOf(a, sub(b, sub(c)));
+    expect(shape(moveNode(nested, [0], [1, 1], "into"))).toEqual([["b", ["c", "a"]]]);
+  });
+
+  it("never moves a group into itself", () => {
+    const deep = allOf(sub(a, sub(b)));
+    expect(moveNode(deep, [0], [0, 1], "into")).toBe(deep);
+    expect(moveNode(deep, [0], [0], "into")).toBe(deep);
+  });
+
+  it("offers the keyboard moves that make sense", () => {
+    const start = allOf(sub(a), b, c);
+    expect(moveChoices(start, [1])).toEqual({ up: true, down: true, out: false, intoAbove: true });
+    expect(moveChoices(start, [0, 0])).toEqual({
+      up: false,
+      down: false,
+      out: true,
+      intoAbove: false,
+    });
+    expect(shape(moveBy(start, [1], "intoAbove"))).toEqual([["a", "b"], "c"]);
+    expect(shape(moveBy(start, [0, 0], "out"))).toEqual([[], "a", "b", "c"]);
+    expect(shape(moveBy(start, [2], "up"))).toEqual([["a"], "c", "b"]);
   });
 });

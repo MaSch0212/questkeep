@@ -1,7 +1,9 @@
 import Ellipsis from "lucide-solid/icons/ellipsis";
+import GripVertical from "lucide-solid/icons/grip-vertical";
 import Plus from "lucide-solid/icons/plus";
 import X from "lucide-solid/icons/x";
 import {
+  createContext,
   createSignal,
   createUniqueId,
   For,
@@ -10,7 +12,9 @@ import {
   onMount,
   Show,
   Switch,
+  useContext,
   type JSX,
+  type ParentProps,
 } from "solid-js";
 import type { FilterGroup } from "../bindings/FilterGroup";
 import type { FilterNode } from "../bindings/FilterNode";
@@ -26,6 +30,12 @@ import { libraryFilters } from "../i18n/libraryFilters";
 import { libraryFilterTree } from "../i18n/libraryFilterTree";
 import {
   appendTo,
+  canMove,
+  type DropPlace,
+  moveBy,
+  moveChoices,
+  moveNode,
+  samePath,
   duplicateAt,
   emptyGroup,
   FIELDS,
@@ -224,6 +234,7 @@ function TextRow(props: { filter: TextFilter; path: Path; change: (c: Change) =>
   return (
     <div class="filter-row" role="group" aria-label={tr("rowLabel", { label: info().label })}>
       <div class="filter-row__head">
+        <MoveHandle path={props.path} label={tr("moveFilter", { label: info().label })} />
         <span class="filter-row__label">{info().label}</span>
         {rowNegate(props)}
         <RemoveButton
@@ -301,6 +312,7 @@ function ListRow(props: { filter: ListFilter; path: Path; change: (c: Change) =>
   return (
     <div class="filter-row" role="group" aria-label={tr("rowLabel", { label: info().label })}>
       <div class="filter-row__head">
+        <MoveHandle path={props.path} label={tr("moveFilter", { label: info().label })} />
         <span class="filter-row__label">{info().label}</span>
         <Segmented
           label={tr("howCombine", { plural: info().plural })}
@@ -420,6 +432,7 @@ function RangeRow(props: { filter: RangeFilter; path: Path; change: (c: Change) 
   return (
     <div class="filter-row" role="group" aria-label={tr("rowLabel", { label: info().label })}>
       <div class="filter-row__head">
+        <MoveHandle path={props.path} label={tr("moveFilter", { label: info().label })} />
         <span class="filter-row__label">{info().label}</span>
         {rowNegate(props)}
         <RemoveButton
@@ -473,6 +486,7 @@ function GroupItems(props: {
   change: (c: Change) => void;
   small?: boolean;
 }) {
+  const drag = useDrag();
   return (
     <>
       {/* By index, so a change keeps the rows (and focus, open pickers) in place. */}
@@ -487,37 +501,49 @@ function GroupItems(props: {
                 {joinerWord(props.group.mode === "all" ? "and" : "or")}
               </span>
             </Show>
-            <Switch>
-              <Match when={asList(node())}>
-                {(list) => (
-                  <ListRow filter={list()} path={[...props.path, index]} change={props.change} />
-                )}
-              </Match>
-              <Match when={asRange(node())}>
-                {(range) => (
-                  <RangeRow filter={range()} path={[...props.path, index]} change={props.change} />
-                )}
-              </Match>
-              <Match when={asText(node())}>
-                {(text) => (
-                  <TextRow filter={text()} path={[...props.path, index]} change={props.change} />
-                )}
-              </Match>
-              <Match when={asGroup(node())}>
-                {(group) => (
-                  <GroupFrame
-                    group={group()}
-                    path={[...props.path, index]}
-                    root={props.root}
-                    change={props.change}
-                  />
-                )}
-              </Match>
-            </Switch>
+            <DropItem path={[...props.path, index]} group={node().kind === "group"}>
+              <Switch>
+                <Match when={asList(node())}>
+                  {(list) => (
+                    <ListRow filter={list()} path={[...props.path, index]} change={props.change} />
+                  )}
+                </Match>
+                <Match when={asRange(node())}>
+                  {(range) => (
+                    <RangeRow
+                      filter={range()}
+                      path={[...props.path, index]}
+                      change={props.change}
+                    />
+                  )}
+                </Match>
+                <Match when={asText(node())}>
+                  {(text) => (
+                    <TextRow filter={text()} path={[...props.path, index]} change={props.change} />
+                  )}
+                </Match>
+                <Match when={asGroup(node())}>
+                  {(group) => (
+                    <GroupFrame
+                      group={group()}
+                      path={[...props.path, index]}
+                      root={props.root}
+                      change={props.change}
+                    />
+                  )}
+                </Match>
+              </Switch>
+            </DropItem>
           </>
         )}
       </Index>
-      <div class="filter-tree__adds">
+      {/* Dropping here puts the dragged filter at the end of this group. */}
+      <div
+        class="filter-tree__adds"
+        classList={{ "filter-tree__adds--drop": dragIsOver(drag, props.path, "into") }}
+        onDragOver={(event) => dragOver(drag, event, props.path, "into")}
+        onDrop={(event) => dropHere(drag, event)}
+      >
         <AddFilter
           small={props.small}
           used={usedFields(props.root)}
@@ -545,6 +571,7 @@ function GroupFrame(props: {
   return (
     <div class="filter-group" role="group" aria-label={tr("filterGroup")}>
       <div class="filter-group__head">
+        <MoveHandle path={props.path} label={tr("moveGroup")} />
         <Segmented
           label={tr("groupMatches")}
           value={props.group.mode}
@@ -615,8 +642,48 @@ function GroupFrame(props: {
 /** The added filters of a view: "Games must match all/any of these", rows and nested groups. */
 export function FilterTree(props: { tree: FilterGroup; onChange: (tree: FilterGroup) => void }) {
   const change = (c: Change) => props.onChange(c(props.tree));
+  const [from, setFrom] = createSignal<Path | null>(null);
+  const [over, setOver] = createSignal<Drop | null>(null);
+  const drag: DragApi = {
+    tree: () => props.tree,
+    from,
+    over,
+    start: (path) => {
+      setFrom(path);
+      setOver(null);
+    },
+    hover: setOver,
+    drop: () => {
+      const source = from();
+      const target = over();
+      setFrom(null);
+      setOver(null);
+      if (source && target) change((tree) => moveNode(tree, source, target.path, target.place));
+    },
+    end: () => {
+      setFrom(null);
+      setOver(null);
+    },
+    move: (path, how) => change((tree) => moveBy(tree, path, how)),
+  };
   return (
-    <div class="filter-tree">
+    <DragContext.Provider value={drag}>
+      <FilterTreeBody tree={props.tree} change={change} />
+    </DragContext.Provider>
+  );
+}
+
+function FilterTreeBody(props: { tree: FilterGroup; change: (c: Change) => void }) {
+  const drag = useDrag();
+  const change = props.change;
+  return (
+    <div
+      class="filter-tree"
+      // Anywhere not over a row, group or add area: no drop.
+      onDragOver={() => {
+        if (drag.from()) drag.hover(null);
+      }}
+    >
       <div class="filter-tree__match">
         {tr("gamesMustMatch")}
         <Segmented
@@ -629,5 +696,174 @@ export function FilterTree(props: { tree: FilterGroup; onChange: (tree: FilterGr
       </div>
       <GroupItems group={props.tree} path={[]} root={props.tree} change={change} />
     </div>
+  );
+}
+
+// ---- drag and drop ----
+
+interface Drop {
+  path: Path;
+  place: DropPlace;
+}
+
+interface DragApi {
+  tree: () => FilterGroup;
+  /** The dragged node. */
+  from: () => Path | null;
+  /** Where it would land. */
+  over: () => Drop | null;
+  start: (path: Path) => void;
+  hover: (drop: Drop | null) => void;
+  drop: () => void;
+  end: () => void;
+  /** A move from the handle's menu. */
+  move: (path: Path, how: MoveHow) => void;
+}
+
+const DragContext = createContext<DragApi>();
+
+function useDrag(): DragApi {
+  const drag = useContext(DragContext);
+  if (!drag) throw new Error("filter rows need a FilterTree");
+  return drag;
+}
+
+/** Whether the pending drop is `place` of `path` (for its marker). */
+function dragIsOver(drag: DragApi, path: Path, place: DropPlace): boolean {
+  const at = drag.over();
+  return drag.from() !== null && at !== null && at.place === place && samePath(at.path, path);
+}
+
+/** Accepts a drag over an element as `place` of `path`, when that move is allowed. */
+function dragOver(drag: DragApi, event: DragEvent, path: Path, place: DropPlace) {
+  const source = drag.from();
+  if (!source) return;
+  event.stopPropagation();
+  if (!canMove(drag.tree(), source, path, place)) {
+    drag.hover(null);
+    return;
+  }
+  event.preventDefault();
+  if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+  const at = drag.over();
+  if (!at || at.place !== place || !samePath(at.path, path)) drag.hover({ path, place });
+}
+
+function dropHere(drag: DragApi, event: DragEvent) {
+  if (!drag.from()) return;
+  event.preventDefault();
+  event.stopPropagation();
+  drag.drop();
+}
+
+/** Pixels at a group's bottom edge that drop after it instead of into it. */
+const GROUP_AFTER_EDGE = 10;
+
+/** A row or group as a drop target: before or after it, or (a group) into it. */
+function DropItem(props: ParentProps<{ path: Path; group: boolean }>) {
+  const drag = useDrag();
+  let el: HTMLDivElement | undefined;
+  const placeAt = (event: DragEvent): DropPlace => {
+    const rect = el?.getBoundingClientRect();
+    if (!rect) return "after";
+    if (props.group) {
+      const head = el?.querySelector(".filter-group__head")?.getBoundingClientRect();
+      if (head && event.clientY < head.bottom) return "before";
+      return event.clientY > rect.bottom - GROUP_AFTER_EDGE ? "after" : "into";
+    }
+    return event.clientY < rect.top + rect.height / 2 ? "before" : "after";
+  };
+  const dragging = () => {
+    const source = drag.from();
+    return source !== null && samePath(source, props.path);
+  };
+  return (
+    <div
+      ref={(node) => (el = node)}
+      class="filter-item"
+      classList={{
+        "filter-item--before": dragIsOver(drag, props.path, "before"),
+        "filter-item--after": dragIsOver(drag, props.path, "after"),
+        "filter-item--into": props.group && dragIsOver(drag, props.path, "into"),
+        "filter-item--dragging": dragging(),
+      }}
+      onDragOver={(event) => dragOver(drag, event, props.path, placeAt(event))}
+      onDrop={(event) => dropHere(drag, event)}
+    >
+      {props.children}
+    </div>
+  );
+}
+
+type MoveHow = "up" | "down" | "out" | "intoAbove";
+
+/** The grip of a row or group: drag it to move, or click it for a menu of moves. */
+function MoveHandle(props: { path: Path; label: string }) {
+  const drag = useDrag();
+  const [menu, setMenu] = createSignal<PopoverAnchor | null>(null);
+  let button: HTMLButtonElement | undefined;
+  const entries = () => {
+    const can = moveChoices(drag.tree(), props.path);
+    const entry = (how: MoveHow, label: string) => ({
+      label,
+      disabled: !can[how],
+      onSelect: () => drag.move(props.path, how),
+    });
+    return [
+      entry("up", tr("moveUp")),
+      entry("down", tr("moveDown")),
+      entry("out", tr("moveOut")),
+      entry("intoAbove", tr("moveIntoAbove")),
+    ];
+  };
+  return (
+    <>
+      <button
+        ref={(node) => (button = node)}
+        type="button"
+        class="filter-handle"
+        draggable="true"
+        aria-label={props.label}
+        data-tooltip={tr("dragHint")}
+        aria-haspopup="menu"
+        aria-expanded={menu() !== null}
+        onDragStart={(event) => {
+          event.stopPropagation();
+          const item = button?.closest<HTMLElement>(".filter-item");
+          if (event.dataTransfer) {
+            event.dataTransfer.effectAllowed = "move";
+            event.dataTransfer.setData("text/plain", props.label);
+            // The whole row follows the pointer, not just the grip.
+            const rect = item?.getBoundingClientRect();
+            if (item && rect) {
+              event.dataTransfer.setDragImage(
+                item,
+                event.clientX - rect.left,
+                event.clientY - rect.top,
+              );
+            }
+          }
+          drag.start(props.path);
+        }}
+        onDragEnd={() => drag.end()}
+        onClick={() => setMenu(menu() ? null : anchorOf(button))}
+      >
+        <GripVertical class="icon" aria-hidden="true" />
+      </button>
+      <Show when={menu()}>
+        {(at) => (
+          <Menu
+            anchor={at()}
+            label={props.label}
+            inside={() => [button]}
+            onClose={(returnFocus) => {
+              setMenu(null);
+              if (returnFocus) button?.focus();
+            }}
+            entries={entries()}
+          />
+        )}
+      </Show>
+    </>
   );
 }
