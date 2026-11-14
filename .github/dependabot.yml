@@ -29,6 +29,10 @@ updates:
       default-days: 2
     commit-message:
       prefix: build(deps)
+    ignore:
+      # Must match the `windows` crate's version (both share `windows-core`); bumped by hand
+      # together with `windows`.
+      - dependency-name: windows-numerics
     groups:
       cargo-minor-patch:
         update-types: [minor, patch]
