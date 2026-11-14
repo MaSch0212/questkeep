@@ -5,4 +5,8 @@ import type { MatchMode } from "./MatchMode";
 /**
  * Filters combined with "and" (all) or "or" (any). Groups nest.
  */
-export type FilterGroup = { mode: MatchMode, items: Array<FilterNode>, };
+export type FilterGroup = { mode: MatchMode, items: Array<FilterNode>, 
+/**
+ * Games that do not match the group instead.
+ */
+negate?: boolean, };

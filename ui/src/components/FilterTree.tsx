@@ -1,13 +1,25 @@
 import Ellipsis from "lucide-solid/icons/ellipsis";
 import Plus from "lucide-solid/icons/plus";
 import X from "lucide-solid/icons/x";
-import { createSignal, For, Index, Match, onMount, Show, Switch, type JSX } from "solid-js";
+import {
+  createSignal,
+  createUniqueId,
+  For,
+  Index,
+  Match,
+  onMount,
+  Show,
+  Switch,
+  type JSX,
+} from "solid-js";
 import type { FilterGroup } from "../bindings/FilterGroup";
 import type { FilterNode } from "../bindings/FilterNode";
 import type { ListFilter } from "../bindings/ListFilter";
 import type { ListMode } from "../bindings/ListMode";
 import type { MatchMode } from "../bindings/MatchMode";
 import type { RangeFilter } from "../bindings/RangeFilter";
+import type { TextFilter } from "../bindings/TextFilter";
+import type { TextOp } from "../bindings/TextOp";
 import { translator } from "../i18n";
 import { libraryCommon } from "../i18n/libraryCommon";
 import { libraryFilters } from "../i18n/libraryFilters";
@@ -22,11 +34,16 @@ import {
   listInfo,
   newFilter,
   NO_VALUE,
+  opLabel,
   presetsOf,
   rangeInfo,
   removeAt,
   SECTION_LABELS,
   setMode,
+  TEXT_OPS,
+  textInfo,
+  textPattern,
+  toggleNegate,
   toInput,
   ungroupAt,
   updateAt,
@@ -162,6 +179,101 @@ function RemoveButton(props: { label: string; onClick: () => void }) {
   );
 }
 
+/** "Not": the row or group then has the games it would leave out. */
+function NegateToggle(props: { on: boolean; hint: string; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      class="filter-not"
+      classList={{ "filter-not--on": props.on }}
+      aria-pressed={props.on}
+      data-tooltip={props.hint}
+      onClick={() => props.onToggle()}
+    >
+      {tr("negate")}
+    </button>
+  );
+}
+
+function rowNegate(props: {
+  filter: { negate?: boolean };
+  path: Path;
+  change: (c: Change) => void;
+}) {
+  return (
+    <NegateToggle
+      on={props.filter.negate === true}
+      hint={tr("negateHint")}
+      onToggle={() => props.change((tree) => toggleNegate(tree, props.path))}
+    />
+  );
+}
+
+function TextRow(props: { filter: TextFilter; path: Path; change: (c: Change) => void }) {
+  const info = () => textInfo(props.filter.field);
+  const update = (patch: Partial<TextFilter>) =>
+    props.change((tree) =>
+      updateAt(tree, props.path, (node) => ({ ...node, ...patch }) as FilterNode),
+    );
+  const invalid = () =>
+    props.filter.op === "matches" &&
+    props.filter.value !== "" &&
+    textPattern(props.filter) === null;
+  const hintId = createUniqueId();
+  return (
+    <div class="filter-row" role="group" aria-label={tr("rowLabel", { label: info().label })}>
+      <div class="filter-row__head">
+        <span class="filter-row__label">{info().label}</span>
+        {rowNegate(props)}
+        <RemoveButton
+          label={tr("removeFilter", { label: info().label })}
+          onClick={() => props.change((tree) => removeAt(tree, props.path))}
+        />
+      </div>
+      <div class="filter-row__text">
+        <select
+          class="filter-row__op"
+          aria-label={tr("textOp", { label: info().label })}
+          value={props.filter.op}
+          onChange={(event) => update({ op: event.currentTarget.value as TextOp })}
+        >
+          <For each={TEXT_OPS}>{(op) => <option value={op}>{opLabel(op)}</option>}</For>
+        </select>
+        <input
+          type="text"
+          class="filter-row__input"
+          classList={{ "filter-row__input--invalid": invalid() }}
+          aria-label={tr("textValue", { label: info().label })}
+          aria-invalid={invalid()}
+          aria-describedby={invalid() ? hintId : undefined}
+          placeholder={
+            props.filter.op === "matches" ? tr("patternPlaceholder") : tr("textPlaceholder")
+          }
+          spellcheck={false}
+          value={props.filter.value}
+          onInput={(event) => update({ value: event.currentTarget.value })}
+        />
+        <button
+          type="button"
+          class="filter-case"
+          classList={{ "filter-case--on": props.filter.caseSensitive === true }}
+          aria-pressed={props.filter.caseSensitive === true}
+          aria-label={tr("matchCase")}
+          data-tooltip={tr("matchCase")}
+          onClick={() => update({ caseSensitive: props.filter.caseSensitive !== true })}
+        >
+          Aa
+        </button>
+      </div>
+      <Show when={invalid()}>
+        <p id={hintId} class="filter-row__hint" role="alert">
+          {tr("invalidPattern")}
+        </p>
+      </Show>
+    </div>
+  );
+}
+
 function ListRow(props: { filter: ListFilter; path: Path; change: (c: Change) => void }) {
   const info = () => listInfo(props.filter.field);
   const [anchor, setAnchor] = createSignal<PopoverAnchor | null>(null);
@@ -193,6 +305,7 @@ function ListRow(props: { filter: ListFilter; path: Path; change: (c: Change) =>
           options={listModes()}
           onChange={(mode) => update({ mode })}
         />
+        {rowNegate(props)}
         <RemoveButton
           label={tr("removeFilter", { label: info().label })}
           onClick={() => props.change((tree) => removeAt(tree, props.path))}
@@ -302,9 +415,10 @@ function RangeRow(props: { filter: RangeFilter; path: Path; change: (c: Change) 
     </span>
   );
   return (
-    <div class="filter-row" role="group" aria-label={`${info().label} filter`}>
+    <div class="filter-row" role="group" aria-label={tr("rowLabel", { label: info().label })}>
       <div class="filter-row__head">
         <span class="filter-row__label">{info().label}</span>
+        {rowNegate(props)}
         <RemoveButton
           label={tr("removeFilter", { label: info().label })}
           onClick={() => props.change((tree) => removeAt(tree, props.path))}
@@ -336,6 +450,7 @@ function RangeRow(props: { filter: RangeFilter; path: Path; change: (c: Change) 
 
 const asList = (n: FilterNode) => (n.kind === "list" ? n : undefined);
 const asRange = (n: FilterNode) => (n.kind === "range" ? n : undefined);
+const asText = (n: FilterNode) => (n.kind === "text" ? n : undefined);
 const asGroup = (n: FilterNode) => (n.kind === "group" ? n : undefined);
 
 /** The used fields of a tree (for "active" in the field list). */
@@ -378,6 +493,11 @@ function GroupItems(props: {
               <Match when={asRange(node())}>
                 {(range) => (
                   <RangeRow filter={range()} path={[...props.path, index]} change={props.change} />
+                )}
+              </Match>
+              <Match when={asText(node())}>
+                {(text) => (
+                  <TextRow filter={text()} path={[...props.path, index]} change={props.change} />
                 )}
               </Match>
               <Match when={asGroup(node())}>
@@ -433,6 +553,11 @@ function GroupFrame(props: {
         />
         <span class="filter-group__caption">{tr("ofThisGroup")}</span>
         <span class="filter-group__spacer" />
+        <NegateToggle
+          on={props.group.negate === true}
+          hint={tr("negateGroupHint")}
+          onToggle={() => props.change((tree) => toggleNegate(tree, props.path))}
+        />
         <button
           ref={(el) => (more = el)}
           type="button"

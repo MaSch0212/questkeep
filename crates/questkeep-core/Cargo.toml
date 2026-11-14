@@ -14,7 +14,10 @@ chrono = { version = "0.4.45", features = ["serde"] }
 dirs = "7.0.0"
 # Watches the folders installed games are in (installs done in the store clients).
 notify = "8.2.1"
-rusqlite = { version = "0.40.2", features = ["bundled", "chrono", "serde_json"] }
+# Text filters: regular expressions, matched in a custom SQL function; the version is the one
+# already locked.
+regex = "1.13.1"
+rusqlite = { version = "0.40.2", features = ["bundled", "chrono", "functions", "serde_json"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 sysinfo = "0.39.6"

@@ -8,12 +8,13 @@ use uuid::Uuid;
 
 use super::Database;
 use super::metadata::Details;
+use super::text_match;
 use crate::error::{CoreError, Result};
 use crate::model::{
     FilterGroup, FilterNode, Game, GameCopy, GameKind, GameQuery, GameUpdate, HiddenFilter,
     ImportedGame, KindFilter, ListField, ListFilter, ListMode, MatchMode, MetadataField,
     NO_CATEGORY, NO_VALUE, PlayAction, PlayedFilter, RangeField, RangeFilter, ScanSummary,
-    SortField, TriState, sorting_name,
+    SortField, TextField, TextFilter, TriState, sorting_name,
 };
 
 pub(super) const COLUMNS: &str = "id, name, sorting_name, source, source_game_id, installed, install_dir, \
@@ -160,8 +161,9 @@ fn group_sql(group: &FilterGroup, args: &mut Vec<Box<dyn ToSql>>) -> Option<Stri
         .iter()
         .filter_map(|item| match item {
             FilterNode::Group(inner) => group_sql(inner, args),
-            FilterNode::List(list) => list_sql(list, args),
-            FilterNode::Range(range) => range_sql(range, args),
+            FilterNode::List(list) => negated(list_sql(list, args), list.negate),
+            FilterNode::Range(range) => negated(range_sql(range, args), range.negate),
+            FilterNode::Text(text) => negated(text_sql(text, args), text.negate),
         })
         .collect();
     if parts.is_empty() {
@@ -171,7 +173,43 @@ fn group_sql(group: &FilterGroup, args: &mut Vec<Box<dyn ToSql>>) -> Option<Stri
         MatchMode::All => " AND ",
         MatchMode::Any => " OR ",
     };
-    Some(format!("({})", parts.join(joiner)))
+    negated(Some(format!("({})", parts.join(joiner))), group.negate)
+}
+
+/// The opposite of a filter: every game it leaves out, those without a value (NULL) included.
+fn negated(sql: Option<String>, negate: bool) -> Option<String> {
+    let sql = sql?;
+    Some(if negate {
+        format!("NOT COALESCE({sql}, 0)")
+    } else {
+        sql
+    })
+}
+
+/// The column behind a text field.
+fn text_column(field: TextField) -> &'static str {
+    match field {
+        TextField::Name => "name",
+        TextField::SortingName => "sorting_name",
+        TextField::Description => "description",
+        TextField::Notes => "notes",
+        TextField::InstallDir => "install_dir",
+    }
+}
+
+/// SQL for a text filter, `None` without text.
+fn text_sql(filter: &TextFilter, args: &mut Vec<Box<dyn ToSql>>) -> Option<String> {
+    if filter.value.is_empty() {
+        return None;
+    }
+    let column = text_column(filter.field);
+    let needle = push_arg(args, filter.value.clone());
+    let op = push_arg(args, text_match::op_code(filter.op));
+    let case = push_arg(args, filter.case_sensitive);
+    Some(format!(
+        "{}({column}, {needle}, {op}, {case})",
+        text_match::FUNCTION
+    ))
 }
 
 fn push_arg(args: &mut Vec<Box<dyn ToSql>>, value: impl ToSql + 'static) -> String {

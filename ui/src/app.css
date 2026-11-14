@@ -4259,6 +4259,66 @@ ul {
   color: var(--qk-color-text-faint);
   font-size: var(--qk-font-size-sm);
 }
+/* "Not" on a filter row or group, and "Aa" (match case) on a text filter. */
+.filter-not,
+.filter-case {
+  flex: none;
+  height: var(--qk-pill-height);
+  padding: 0 var(--qk-space-2);
+  background: transparent;
+  border: 1px solid var(--qk-color-border);
+  border-radius: var(--qk-radius-sm);
+  color: var(--qk-color-text-muted);
+  font-size: var(--qk-font-size-sm);
+  cursor: pointer;
+}
+.filter-not:hover,
+.filter-case:hover {
+  background: var(--qk-color-surface-hover);
+  color: var(--qk-color-text);
+}
+.filter-not--on,
+.filter-not--on:hover {
+  background: var(--qk-color-danger-soft);
+  border-color: var(--qk-color-danger);
+  color: var(--qk-color-danger);
+}
+.filter-case--on,
+.filter-case--on:hover {
+  background: var(--qk-color-accent-soft);
+  border-color: var(--qk-color-accent);
+  color: var(--qk-color-accent);
+}
+.filter-row__text {
+  display: flex;
+  align-items: center;
+  gap: var(--qk-space-1);
+}
+.filter-row__op,
+.filter-row__input {
+  height: var(--qk-pill-height);
+  padding: 0 var(--qk-space-2);
+  background: var(--qk-color-bg);
+  border: 1px solid var(--qk-color-border);
+  border-radius: var(--qk-radius-sm);
+  color: var(--qk-color-text);
+  font: inherit;
+  font-size: var(--qk-font-size-sm);
+}
+.filter-row__op {
+  flex: none;
+}
+.filter-row__input {
+  flex: 1;
+  min-width: 0;
+}
+.filter-row__input--invalid {
+  border-color: var(--qk-color-danger);
+}
+.filter-row__hint {
+  color: var(--qk-color-danger);
+  font-size: var(--qk-font-size-sm);
+}
 .picker {
   width: var(--qk-picker-width);
   padding: 0;

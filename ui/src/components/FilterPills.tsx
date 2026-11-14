@@ -75,9 +75,17 @@ function quickPills(query: GameQuery): QuickPill[] {
   return pills;
 }
 
-function PillText(props: { parts: PillPart[]; joiner: string; grouped: boolean }) {
+function PillText(props: {
+  parts: PillPart[];
+  joiner: string;
+  grouped: boolean;
+  negated?: boolean;
+}) {
   return (
     <span class="pill__text">
+      <Show when={props.negated}>
+        <i class="pill__joiner">{trFilters("notWord")} </i>
+      </Show>
       <Show when={props.grouped}>( </Show>
       <For each={props.parts}>
         {(part, index) => (
@@ -145,7 +153,12 @@ export function FilterPills() {
         <For each={tree()}>
           {(pill) => (
             <span class="pill" role="listitem">
-              <PillText parts={pill.parts} joiner={pill.joiner} grouped={pill.grouped} />
+              <PillText
+                parts={pill.parts}
+                joiner={pill.joiner}
+                grouped={pill.grouped}
+                negated={pill.negated}
+              />
               <button
                 type="button"
                 class="pill__remove"

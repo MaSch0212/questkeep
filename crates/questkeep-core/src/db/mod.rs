@@ -15,6 +15,7 @@ mod sessions;
 mod setup;
 mod start;
 mod statistics;
+pub mod text_match;
 mod views;
 
 use std::path::Path;
@@ -63,6 +64,7 @@ impl Database {
     fn init(mut conn: Connection) -> Result<Self> {
         conn.pragma_update(None, "foreign_keys", "ON")?;
         conn.busy_timeout(std::time::Duration::from_secs(5))?;
+        text_match::register(&conn)?;
         migrations::migrate(&mut conn)?;
         Ok(Self {
             conn: Mutex::new(conn),

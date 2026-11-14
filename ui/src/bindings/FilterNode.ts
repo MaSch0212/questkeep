@@ -2,8 +2,9 @@
 import type { FilterGroup } from "./FilterGroup";
 import type { ListFilter } from "./ListFilter";
 import type { RangeFilter } from "./RangeFilter";
+import type { TextFilter } from "./TextFilter";
 
 /**
  * One entry of a [`FilterGroup`].
  */
-export type FilterNode = { "kind": "group" } & FilterGroup | { "kind": "list" } & ListFilter | { "kind": "range" } & RangeFilter;
+export type FilterNode = { "kind": "group" } & FilterGroup | { "kind": "list" } & ListFilter | { "kind": "range" } & RangeFilter | { "kind": "text" } & TextFilter;

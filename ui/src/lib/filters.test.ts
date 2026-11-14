@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { FilterGroup } from "../bindings/FilterGroup";
 import type { FilterNode } from "../bindings/FilterNode";
+import type { TextFilter } from "../bindings/TextFilter";
 import { makeGame } from "../test-utils";
 import {
   activeTreeCount,
@@ -16,6 +17,8 @@ import {
   removeAt,
   sameTree,
   setMode,
+  textPattern,
+  toggleNegate,
   toInput,
   treePills,
   ungroupAt,
@@ -149,12 +152,19 @@ describe("treePills", () => {
         index: 0,
         joiner: "or",
         grouped: true,
+        negated: false,
         parts: [
           { label: "Tags", value: "Co-op" },
           { label: "Genre", value: "Roguelike" },
         ],
       },
-      { index: 1, joiner: "and", grouped: false, parts: [{ label: "Playtime", value: "2 h +" }] },
+      {
+        index: 1,
+        joiner: "and",
+        grouped: false,
+        negated: false,
+        parts: [{ label: "Playtime", value: "2 h +" }],
+      },
     ]);
   });
 });
@@ -167,5 +177,72 @@ describe("pickedNames", () => {
       shown: "Steam, GOG",
       more: 2,
     });
+  });
+});
+
+const byName = (
+  op: TextFilter["op"],
+  value: string,
+  extra: Partial<TextFilter> = {},
+): FilterNode => ({
+  kind: "text",
+  field: "name",
+  op,
+  value,
+  ...extra,
+});
+const allOf = (...items: FilterNode[]): FilterGroup => ({ mode: "all", items });
+
+describe("text filters and negation", () => {
+  const trine = makeGame({ name: "Trine 4", notes: null });
+  const brutal = makeGame({ name: "Brütal Legend" });
+
+  it("compares without case unless asked, with every operation", () => {
+    expect(matchesTree(allOf(byName("startsWith", "TRINE")), trine)).toBe(true);
+    expect(matchesTree(allOf(byName("startsWith", "TRINE", { caseSensitive: true })), trine)).toBe(
+      false,
+    );
+    expect(matchesTree(allOf(byName("contains", "BRÜT")), brutal)).toBe(true);
+    expect(matchesTree(allOf(byName("endsWith", " 4")), trine)).toBe(true);
+    expect(matchesTree(allOf(byName("equals", "trine")), trine)).toBe(false);
+    expect(matchesTree(allOf(byName("matches", String.raw`^trine \d$`)), trine)).toBe(true);
+    // An invalid pattern matches nothing.
+    expect(matchesTree(allOf(byName("matches", "trine (")), trine)).toBe(false);
+    expect(textPattern({ kind: "text", field: "name", op: "matches", value: "(" } as never)).toBe(
+      null,
+    );
+  });
+
+  it("negates filters and groups, games without a value included", () => {
+    const notes: FilterNode = { kind: "text", field: "notes", op: "contains", value: "x" };
+    expect(matchesTree(allOf(notes), trine)).toBe(false);
+    expect(matchesTree(allOf({ ...notes, negate: true }), trine)).toBe(true);
+    const notEither: FilterNode = {
+      kind: "group",
+      mode: "any",
+      items: [byName("startsWith", "trine"), tags("Co-op")],
+      negate: true,
+    };
+    expect(matchesTree(allOf(notEither), trine)).toBe(false);
+    expect(matchesTree(allOf(notEither), brutal)).toBe(true);
+    expect(matchesTree(allOf({ ...playtime(1, null), negate: true }), brutal)).toBe(true);
+  });
+
+  it("keeps negation when pruning, comparing and describing", () => {
+    const one: FilterNode = { kind: "group", mode: "all", items: [tags("Co-op")], negate: true };
+    expect(pruneTree(allOf(one)).items).toEqual([{ ...tags("Co-op"), negate: true }]);
+    expect(sameTree(allOf(tags("a")), allOf({ ...tags("a"), negate: true }))).toBe(false);
+    expect(sameTree(allOf(byName("contains", "a")), allOf(byName("contains", "a")))).toBe(true);
+    expect(sameTree(allOf(byName("contains", "a")), allOf(byName("endsWith", "a")))).toBe(false);
+    const toggled = toggleNegate(allOf(tags("a")), [0]);
+    expect(toggled.items[0]?.negate).toBe(true);
+    expect(toggleNegate(toggled, [0]).items[0]?.negate).toBe(false);
+    const [pill] = treePills(allOf({ ...byName("contains", "trine"), negate: true }), () => "");
+    expect(pill?.parts[0]).toEqual({ label: "Name", value: "not contains “trine”" });
+    const [groupPill] = treePills(
+      allOf({ ...one, items: [tags("a"), tags("b")] }),
+      (_, key) => key,
+    );
+    expect(groupPill?.negated).toBe(true);
   });
 });

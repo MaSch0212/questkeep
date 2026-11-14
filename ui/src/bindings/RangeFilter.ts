@@ -5,4 +5,8 @@ import type { RangeField } from "./RangeField";
  * Games whose value lies in `[min, max]`; a missing bound is open. Games without a value never
  * match, except that a playtime or play count of 0 is a value.
  */
-export type RangeFilter = { field: RangeField, min: number | null, max: number | null, };
+export type RangeFilter = { field: RangeField, min: number | null, max: number | null, 
+/**
+ * Games that do not match instead (games without a value included).
+ */
+negate?: boolean, };

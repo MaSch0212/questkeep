@@ -5,6 +5,9 @@ import type { ListField } from "../bindings/ListField";
 import type { ListFilter } from "../bindings/ListFilter";
 import type { RangeField } from "../bindings/RangeField";
 import type { RangeFilter } from "../bindings/RangeFilter";
+import type { TextField } from "../bindings/TextField";
+import type { TextFilter } from "../bindings/TextFilter";
+import type { TextOp } from "../bindings/TextOp";
 import { translator } from "../i18n";
 import { libraryFilters } from "../i18n/libraryFilters";
 import { storesOf } from "./copies";
@@ -55,10 +58,17 @@ export type FieldInfo =
       section: FieldSection;
       unit: RangeUnit;
       presets: RangePreset[];
+    }
+  | {
+      kind: "text";
+      field: TextField;
+      label: string;
+      section: FieldSection;
     };
 
 export type ListInfo = Extract<FieldInfo, { kind: "list" }>;
 export type RangeInfo = Extract<FieldInfo, { kind: "range" }>;
+export type TextInfo = Extract<FieldInfo, { kind: "text" }>;
 
 const HOUR = 3600;
 const GB = 1024 ** 3;
@@ -125,6 +135,37 @@ const range = (
   },
 });
 
+type TextKey = "textName" | "textSortingName" | "textDescription" | "textNotes" | "textInstallDir";
+
+const textField = (field: TextField, key: TextKey, section: FieldSection): FieldInfo => ({
+  kind: "text",
+  field,
+  section,
+  get label() {
+    return tr(key);
+  },
+});
+
+/** The comparisons of a text filter, in menu order. */
+export const TEXT_OPS: readonly TextOp[] = [
+  "contains",
+  "startsWith",
+  "endsWith",
+  "equals",
+  "matches",
+];
+
+const OP_KEYS = {
+  contains: "opContains",
+  startsWith: "opStartsWith",
+  endsWith: "opEndsWith",
+  equals: "opEquals",
+  matches: "opMatches",
+} as const satisfies Record<TextOp, string>;
+
+/** "contains", "starts with", ... in the current language. */
+export const opLabel = (op: TextOp) => tr(OP_KEYS[op]);
+
 /** A preset with a fixed label (numbers and units need no translation). */
 const fixed = (label: string, min: number | null, max: number | null): RangePreset => ({
   label,
@@ -145,6 +186,9 @@ export const daysAgo = (days: number, now = Date.now()) => Math.floor(now / 1000
 
 /** Every field the filter panel can add, in picker order. */
 export const FIELDS: FieldInfo[] = [
+  textField("name", "textName", "about"),
+  textField("sortingName", "textSortingName", "about"),
+  textField("description", "textDescription", "about"),
   list("genre", "genre", "about"),
   list("tag", "tag", "about"),
   list("feature", "feature", "about"),
@@ -186,6 +230,8 @@ export const FIELDS: FieldInfo[] = [
     fixed("< 1 GB", null, GB),
     fixed("50 GB +", 50 * GB, null),
   ]),
+  textField("notes", "textNotes", "you"),
+  textField("installDir", "textInstallDir", "you"),
 ];
 
 /** The date presets are relative to now, so they are made when shown. */
@@ -206,15 +252,46 @@ export function rangeInfo(field: RangeField): RangeInfo {
   return FIELDS.find((f): f is RangeInfo => f.kind === "range" && f.field === field) as RangeInfo;
 }
 
+export function textInfo(field: TextField): TextInfo {
+  return FIELDS.find((f): f is TextInfo => f.kind === "text" && f.field === field) as TextInfo;
+}
+
 export function infoOf(node: Exclude<FilterNode, { kind: "group" }>): FieldInfo {
-  return node.kind === "list" ? listInfo(node.field) : rangeInfo(node.field);
+  switch (node.kind) {
+    case "list":
+      return listInfo(node.field);
+    case "range":
+      return rangeInfo(node.field);
+    case "text":
+      return textInfo(node.field);
+  }
 }
 
 /** A new, empty filter for a field. */
 export function newFilter(info: FieldInfo): FilterNode {
-  return info.kind === "list"
-    ? { kind: "list", field: info.field, mode: "any", values: [] }
-    : { kind: "range", field: info.field, min: null, max: null };
+  switch (info.kind) {
+    case "list":
+      return { kind: "list", field: info.field, mode: "any", values: [] };
+    case "range":
+      return { kind: "range", field: info.field, min: null, max: null };
+    case "text":
+      return { kind: "text", field: info.field, op: "contains", value: "" };
+  }
+}
+
+/** A text filter's pattern as a JavaScript regular expression; `null` when it does not compile. */
+export function textPattern(filter: TextFilter): RegExp | null {
+  try {
+    return new RegExp(filter.value, filter.caseSensitive === true ? "u" : "iu");
+  } catch {
+    return null;
+  }
+}
+
+/** Flips a filter or group: it then has the games it left out. */
+export function toggleNegate(group: FilterGroup, path: Path): FilterGroup {
+  if (path.length === 0) return { ...group, negate: group.negate !== true };
+  return updateAt(group, path, (node) => ({ ...node, negate: node.negate !== true }));
 }
 
 export const emptyGroup = (): FilterGroup => ({ mode: "all", items: [] });
@@ -312,6 +389,7 @@ export function duplicateAt(group: FilterGroup, path: Path): FilterGroup {
 export function isActive(node: FilterNode | FilterGroup): boolean {
   if (!("kind" in node) || node.kind === "group") return node.items.some(isActive);
   if (node.kind === "list") return node.values.length > 0;
+  if (node.kind === "text") return node.value !== "";
   return node.min !== null || node.max !== null;
 }
 
@@ -333,32 +411,46 @@ export function pruneTree(group: FilterGroup): FilterGroup {
     }
     const inner = pruneTree(node);
     const [only] = inner.items;
-    if (inner.items.length === 1 && only) items.push(only);
-    else if (inner.items.length > 1) items.push({ kind: "group", ...inner });
+    // A negated group of one is its member, negated once more.
+    if (inner.items.length === 1 && only) {
+      items.push(inner.negate === true ? { ...only, negate: only.negate !== true } : only);
+    } else if (inner.items.length > 1) items.push({ kind: "group", ...inner });
   }
-  return { mode: group.mode, items };
+  return group.negate === true
+    ? { mode: group.mode, items, negate: true }
+    : { mode: group.mode, items };
 }
+
+const negated = (node: { negate?: boolean }) => node.negate === true;
 
 function sameNode(a: FilterNode, b: FilterNode): boolean {
   if (a.kind === "group" || b.kind === "group") {
     return a.kind === b.kind && sameTree(a as FilterGroup, b as FilterGroup);
   }
-  if (a.kind === "range" || b.kind === "range") {
-    if (a.kind !== "range" || b.kind !== "range") return false;
-    return a.field === b.field && a.min === b.min && a.max === b.max;
+  if (a.kind !== b.kind || a.field !== b.field || negated(a) !== negated(b)) return false;
+  if (a.kind === "range" && b.kind === "range") return a.min === b.min && a.max === b.max;
+  if (a.kind === "text" && b.kind === "text") {
+    return (
+      a.op === b.op &&
+      a.value === b.value &&
+      (a.caseSensitive === true) === (b.caseSensitive === true)
+    );
   }
-  return (
-    a.field === b.field &&
-    a.mode === b.mode &&
-    a.values.length === b.values.length &&
-    a.values.every((v, i) => v === b.values[i])
-  );
+  if (a.kind === "list" && b.kind === "list") {
+    return (
+      a.mode === b.mode &&
+      a.values.length === b.values.length &&
+      a.values.every((v, i) => v === b.values[i])
+    );
+  }
+  return false;
 }
 
 /** Whether two trees are the same, rows not yet filled in included (they are edits too). */
 export function sameTree(a: FilterGroup, b: FilterGroup): boolean {
   return (
     a.mode === b.mode &&
+    negated(a) === negated(b) &&
     a.items.length === b.items.length &&
     a.items.every((node, i) => {
       const other = b.items[i];
@@ -455,19 +547,59 @@ function matchesRange(filter: RangeFilter, game: Game): boolean {
   return true;
 }
 
+function textValue(game: Game, field: TextField): string | null {
+  switch (field) {
+    case "name":
+      return game.name;
+    case "sortingName":
+      return game.sortingName;
+    case "description":
+      return game.description;
+    case "notes":
+      return game.notes;
+    case "installDir":
+      return game.installDir;
+  }
+}
+
+/** A text filter (mirrors the core's `qk_text`; JavaScript and Rust regexes differ a little). */
+export function matchesText(filter: TextFilter, game: Game): boolean {
+  const value = textValue(game, filter.field);
+  if (value === null) return false;
+  if (filter.op === "matches") return textPattern(filter)?.test(value) ?? false;
+  const fold = (s: string) => (filter.caseSensitive === true ? s : s.toLowerCase());
+  const [have, want] = [fold(value), fold(filter.value)];
+  switch (filter.op) {
+    case "contains":
+      return have.includes(want);
+    case "startsWith":
+      return have.startsWith(want);
+    case "endsWith":
+      return have.endsWith(want);
+    case "equals":
+      return have === want;
+  }
+}
+
+function matchesNode(node: FilterNode, game: Game): boolean {
+  switch (node.kind) {
+    case "group":
+      return matchesTree(node, game);
+    case "list":
+      return matchesList(node, game) !== negated(node);
+    case "range":
+      return matchesRange(node, game) !== negated(node);
+    case "text":
+      return matchesText(node, game) !== negated(node);
+  }
+}
+
 /** Whether a game passes the filter tree; empty rows and groups are left out like in the core. */
 export function matchesTree(group: FilterGroup, game: Game): boolean {
-  const results = group.items
-    .filter(isActive)
-    .map((node) =>
-      node.kind === "group"
-        ? matchesTree(node, game)
-        : node.kind === "list"
-          ? matchesList(node, game)
-          : matchesRange(node, game),
-    );
+  const results = group.items.filter(isActive).map((node) => matchesNode(node, game));
   if (results.length === 0) return true;
-  return group.mode === "all" ? results.every(Boolean) : results.some(Boolean);
+  const hit = group.mode === "all" ? results.every(Boolean) : results.some(Boolean);
+  return hit !== negated(group);
 }
 
 // ---- showing ranges ----
@@ -530,8 +662,23 @@ export interface PillPart {
   value: string;
 }
 
-/** `index` is the node's place in the root group (for removing it). */
-export type Pill = { index: number; parts: PillPart[]; joiner: "and" | "or"; grouped: boolean };
+/**
+ * `index` is the node's place in the root group (for removing it); `negated` marks a group that
+ * has the games its members leave out.
+ */
+export type Pill = {
+  index: number;
+  parts: PillPart[];
+  joiner: "and" | "or";
+  grouped: boolean;
+  negated: boolean;
+};
+
+/** "contains “trine”", with "(match case)" when it compares case. */
+export function describeText(filter: TextFilter): string {
+  const text = tr("textValue", { op: opLabel(filter.op), value: filter.value });
+  return filter.caseSensitive === true ? `${text} (${tr("matchCaseShort")})` : text;
+}
 
 /** A filter's pill text; `name` turns a list value key into its name. */
 export function describeNode(
@@ -539,8 +686,14 @@ export function describeNode(
   name: (field: ListField, key: string) => string,
 ): PillPart {
   const info = infoOf(node);
+  const not = (value: string) => `${tr("notWord")} ${value}`;
   if (node.kind === "range") {
-    return { label: info.label, value: describeRange(info as RangeInfo, node.min, node.max) };
+    const value = describeRange(info as RangeInfo, node.min, node.max);
+    return { label: info.label, value: negated(node) ? not(value) : value };
+  }
+  if (node.kind === "text") {
+    const value = describeText(node);
+    return { label: info.label, value: negated(node) ? not(value) : value };
   }
   const listed = info as ListInfo;
   const names = node.values.map((key) =>
@@ -548,9 +701,16 @@ export function describeNode(
   );
   const joiner = node.mode === "all" ? tr("and") : ", ";
   const joined = names.join(joiner);
+  // "None of" and a negation cancel out.
+  const none = node.mode === "none";
+  const flipped = none !== negated(node);
   return {
     label: listed.label,
-    value: node.mode === "none" ? tr("not", { names: joined }) : joined,
+    value: flipped
+      ? none
+        ? tr("not", { names: joined })
+        : not(node.mode === "all" ? joined : `(${joined})`)
+      : joined,
   };
 }
 
@@ -566,7 +726,13 @@ export function treePills(
   for (const [index, node] of group.items.entries()) {
     if (!isActive(node)) continue;
     if (node.kind !== "group") {
-      pills.push({ index, parts: [describeNode(node, name)], joiner: "and", grouped: false });
+      pills.push({
+        index,
+        parts: [describeNode(node, name)],
+        joiner: "and",
+        grouped: false,
+        negated: false,
+      });
       continue;
     }
     const parts = node.items
@@ -576,7 +742,13 @@ export function treePills(
           ? { label: "", value: tr("nestedFilters", { count: activeTreeCount(inner) }) }
           : describeNode(inner, name),
       );
-    pills.push({ index, parts, joiner: node.mode === "all" ? "and" : "or", grouped: true });
+    pills.push({
+      index,
+      parts,
+      joiner: node.mode === "all" ? "and" : "or",
+      grouped: true,
+      negated: negated(node),
+    });
   }
   return pills;
 }

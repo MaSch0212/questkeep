@@ -1,6 +1,7 @@
 import { createSignal, For, Show } from "solid-js";
 import { translator } from "../i18n";
 import { libraryCommon } from "../i18n/libraryCommon";
+import { libraryFilters } from "../i18n/libraryFilters";
 import { librarySaveView } from "../i18n/librarySaveView";
 import { joinerWord, treePills } from "../lib/filters";
 import { store } from "../lib/store";
@@ -14,6 +15,7 @@ import { ViewIcon } from "./ViewIcon";
 
 const tr = translator(librarySaveView);
 const trCommon = translator(libraryCommon);
+const trFilters = translator(libraryFilters);
 
 const layoutName = (mode: string): string =>
   mode === "grid" ? tr("layoutGrid") : mode === "list" ? tr("layoutList") : tr("layoutDetails");
@@ -40,7 +42,10 @@ function filterSummary(): string {
   if (q.hidden === "hidden") parts.push(tr("onlyHidden"));
   for (const pill of treePills(q.filter, store.valueName)) {
     const text = pill.parts.map((p) => (p.value ? `${p.label}: ${p.value}` : p.label));
-    parts.push(pill.grouped ? `(${text.join(` ${joinerWord(pill.joiner)} `)})` : text.join(", "));
+    const joined = pill.grouped
+      ? `(${text.join(` ${joinerWord(pill.joiner)} `)})`
+      : text.join(", ");
+    parts.push(pill.negated ? `${trFilters("notWord")} ${joined}` : joined);
   }
   return activeFilterCount(q) === 0 ? tr("none") : parts.join(" · ");
 }

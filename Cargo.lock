@@ -3346,6 +3346,7 @@ dependencies = [
  "questkeep-imaging",
  "questkeep-store-api",
  "questkeep-system",
+ "regex",
  "rusqlite",
  "serde",
  "serde_json",

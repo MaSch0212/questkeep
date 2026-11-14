@@ -759,10 +759,15 @@ mod tests {
                 field: ListField::Tag,
                 mode,
                 values: values.iter().map(|v| v.to_string()).collect(),
+                negate: false,
             })
         };
         let with = |mode, items| GameQuery {
-            filter: FilterGroup { mode, items },
+            filter: FilterGroup {
+                mode,
+                items,
+                negate: false,
+            },
             ..GameQuery::default()
         };
         assert_eq!(
@@ -795,6 +800,7 @@ mod tests {
                 field: RangeField::CriticScore,
                 min,
                 max,
+                negate: false,
             })
         };
         assert_eq!(
@@ -809,6 +815,7 @@ mod tests {
                 FilterNode::Group(FilterGroup {
                     mode: MatchMode::All,
                     items: vec![tags(ListMode::Any, &["coop"]), score(Some(80.0), None)],
+                    negate: false,
                 }),
             ],
         );
@@ -819,6 +826,7 @@ mod tests {
                 field: RangeField::ReleaseYear,
                 min: Some(2014.0),
                 max: Some(2020.0),
+                negate: false,
             })],
         );
         assert_eq!(names(&year), ["A", "B"]);
@@ -837,9 +845,99 @@ mod tests {
                 field: ListField::CompletionStatus,
                 mode: ListMode::Any,
                 values: vec!["beaten".into()],
+                negate: false,
             })],
         );
         assert_eq!(names(&status), ["C"]);
+
+        // Negation: the exact opposite, games without a value included.
+        let not_score = with(
+            MatchMode::All,
+            vec![FilterNode::Range(RangeFilter {
+                field: RangeField::CriticScore,
+                min: Some(75.0),
+                max: None,
+                negate: true,
+            })],
+        );
+        assert_eq!(names(&not_score), ["B", "C"]);
+        let not_group = with(
+            MatchMode::All,
+            vec![FilterNode::Group(FilterGroup {
+                mode: MatchMode::Any,
+                items: vec![tags(ListMode::Any, &["puzzle"]), score(Some(85.0), None)],
+                negate: true,
+            })],
+        );
+        assert_eq!(names(&not_group), ["B", "D"]);
+    }
+
+    #[test]
+    fn filters_by_text() {
+        use crate::model::{FilterGroup, FilterNode, MatchMode, TextField, TextFilter, TextOp};
+        let db = Database::open_in_memory().unwrap();
+        for name in ["Trine 2", "Trine 4", "Brütal Legend", "Ape Out"] {
+            db.insert_game(
+                &NewGameRecord {
+                    name: name.into(),
+                    source: "manual".into(),
+                    ..NewGameRecord::default()
+                },
+                Utc::now(),
+            )
+            .unwrap();
+        }
+        let names = |field, op, value: &str, case_sensitive, negate| -> Vec<String> {
+            let query = GameQuery {
+                filter: FilterGroup {
+                    mode: MatchMode::All,
+                    items: vec![FilterNode::Text(TextFilter {
+                        field,
+                        op,
+                        value: value.into(),
+                        case_sensitive,
+                        negate,
+                    })],
+                    negate: false,
+                },
+                ..GameQuery::default()
+            };
+            db.list_games(&query)
+                .unwrap()
+                .into_iter()
+                .map(|g| g.name)
+                .collect()
+        };
+        let name = TextField::Name;
+        assert_eq!(
+            names(name, TextOp::StartsWith, "trine", false, false),
+            ["Trine 2", "Trine 4"]
+        );
+        assert!(names(name, TextOp::StartsWith, "trine", true, false).is_empty());
+        assert_eq!(
+            names(name, TextOp::Contains, "BRÜT", false, false),
+            ["Brütal Legend"]
+        );
+        assert_eq!(
+            names(name, TextOp::EndsWith, " 4", false, false),
+            ["Trine 4"]
+        );
+        assert_eq!(
+            names(name, TextOp::Equals, "ape out", false, false),
+            ["Ape Out"]
+        );
+        assert_eq!(
+            names(name, TextOp::Matches, r"^trine \d$", false, true),
+            ["Ape Out", "Brütal Legend"]
+        );
+        // No notes: never contains anything, so the negation has every game.
+        assert!(names(TextField::Notes, TextOp::Contains, "x", false, false).is_empty());
+        assert_eq!(
+            names(TextField::Notes, TextOp::Contains, "x", false, true).len(),
+            4
+        );
+        // An empty text filters nothing.
+        assert_eq!(names(name, TextOp::Contains, "", false, false).len(), 4);
     }
 
     #[test]

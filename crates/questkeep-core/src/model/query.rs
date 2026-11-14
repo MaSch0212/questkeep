@@ -97,6 +97,62 @@ pub struct ListFilter {
     /// Value keys (see [`super::ValueCount::key`]), or [`NO_VALUE`].
     #[serde(default)]
     pub values: Vec<String>,
+    /// Games that do not match instead.
+    #[serde(default, skip_serializing_if = "is_false")]
+    #[ts(as = "Option<bool>", optional)]
+    pub negate: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !value
+}
+
+/// A field filtered by its text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum TextField {
+    Name,
+    SortingName,
+    Description,
+    Notes,
+    InstallDir,
+}
+
+/// How a text filter compares.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum TextOp {
+    #[default]
+    Contains,
+    StartsWith,
+    EndsWith,
+    /// The whole text.
+    Equals,
+    /// A regular expression (Rust `regex` syntax); one that does not compile matches nothing.
+    Matches,
+}
+
+/// Games by a text field. Games without the text (no notes, ...) never match, unless negated.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct TextFilter {
+    pub field: TextField,
+    #[serde(default)]
+    pub op: TextOp,
+    /// Empty filters nothing.
+    #[serde(default)]
+    pub value: String,
+    /// Case-insensitive unless set.
+    #[serde(default, skip_serializing_if = "is_false")]
+    #[ts(as = "Option<bool>", optional)]
+    pub case_sensitive: bool,
+    /// Games that do not match instead.
+    #[serde(default, skip_serializing_if = "is_false")]
+    #[ts(as = "Option<bool>", optional)]
+    pub negate: bool,
 }
 
 /// A field filtered by a range of numbers.
@@ -132,6 +188,10 @@ pub struct RangeFilter {
     pub min: Option<f64>,
     #[serde(default)]
     pub max: Option<f64>,
+    /// Games that do not match instead (games without a value included).
+    #[serde(default, skip_serializing_if = "is_false")]
+    #[ts(as = "Option<bool>", optional)]
+    pub negate: bool,
 }
 
 /// Whether a group needs all or any of its items.
@@ -151,6 +211,10 @@ pub enum MatchMode {
 pub struct FilterGroup {
     pub mode: MatchMode,
     pub items: Vec<FilterNode>,
+    /// Games that do not match the group instead.
+    #[serde(skip_serializing_if = "is_false")]
+    #[ts(as = "Option<bool>", optional)]
+    pub negate: bool,
 }
 
 /// One entry of a [`FilterGroup`].
@@ -161,6 +225,7 @@ pub enum FilterNode {
     Group(FilterGroup),
     List(ListFilter),
     Range(RangeFilter),
+    Text(TextFilter),
 }
 
 /// Which games to show with respect to the hidden flag.

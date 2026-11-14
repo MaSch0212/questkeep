@@ -9,4 +9,8 @@ export type ListFilter = { field: ListField, mode: ListMode,
 /**
  * Value keys (see [`super::ValueCount::key`]), or [`NO_VALUE`].
  */
-values: Array<string>, };
+values: Array<string>, 
+/**
+ * Games that do not match instead.
+ */
+negate?: boolean, };
