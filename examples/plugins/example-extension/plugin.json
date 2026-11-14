@@ -1,0 +1,48 @@
+{
+  "id": "example-extension",
+  "name": "Example Extension",
+  "version": "0.1.0",
+  "description": "Shows what an extension can add: a title bar button, menu entries, a page, a dialog and settings. Use it as a starting point for your own.",
+  "author": "Questkeep",
+  "apiVersion": 1,
+  "extension": {
+    "main": "main.js",
+    "styles": ["style.css"],
+    "settings": [
+      {
+        "key": "greet",
+        "label": "Say hello when the extension starts",
+        "type": "toggle",
+        "default": true
+      },
+      {
+        "key": "pool",
+        "label": "\"Surprise me\" picks from",
+        "hint": "Which games the title bar button chooses from.",
+        "type": "select",
+        "default": "installed",
+        "options": [
+          { "value": "installed", "label": "Installed games" },
+          { "value": "unplayed", "label": "Installed games I never played" },
+          { "value": "all", "label": "Every game in the library" }
+        ]
+      },
+      {
+        "key": "topStores",
+        "label": "Stores listed on the Library facts page",
+        "type": "number",
+        "default": 5,
+        "min": 1,
+        "max": 20,
+        "step": 1
+      },
+      {
+        "key": "highlight",
+        "label": "Highlight color",
+        "hint": "Used for the numbers on the Library facts page.",
+        "type": "color",
+        "default": "#7c9cff"
+      }
+    ]
+  }
+}

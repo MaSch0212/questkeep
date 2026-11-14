@@ -1,0 +1,73 @@
+/* Only the app's --qk-* variables: the extension follows every theme. */
+.example-surprise {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-3);
+}
+.example-surprise__name {
+  margin: 0;
+  font-size: var(--qk-font-size-xl);
+  font-weight: var(--qk-font-weight-bold);
+}
+.example-surprise__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--qk-space-2);
+}
+
+.example-facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-4);
+  max-width: var(--qk-settings-content-width);
+}
+.example-facts__numbers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--qk-space-3);
+}
+.example-facts__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-1);
+  min-width: 0;
+  padding: var(--qk-space-3) var(--qk-space-4);
+  background: var(--qk-color-surface);
+  border: 1px solid var(--qk-color-border);
+  border-radius: var(--qk-radius-md);
+}
+.example-facts__value {
+  font-size: var(--qk-font-size-title);
+  font-weight: var(--qk-font-weight-bold);
+  color: var(--qk-color-accent);
+}
+.example-facts__stores {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-1);
+}
+.example-facts__store {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--qk-space-3);
+  padding: var(--qk-space-2) var(--qk-space-3);
+  border-bottom: 1px solid var(--qk-color-border);
+}
+
+.example-preview {
+  display: flex;
+  align-items: center;
+  gap: var(--qk-space-3);
+  padding: var(--qk-space-3);
+  border: 1px solid var(--qk-color-border);
+  border-radius: var(--qk-radius-md);
+}
+.example-preview__swatch {
+  width: var(--qk-space-5);
+  height: var(--qk-space-5);
+  border-radius: var(--qk-radius-pill);
+  flex: none;
+}
