@@ -271,6 +271,7 @@ describe("api.games, events, theme, invoke", () => {
       createSettingsController({ declared: [], initial: {}, save }),
     );
     expect(reloaded.plugin.url("a.png")).toBe("qk://ext/a.png?v=4");
+    expect(app.pluginFileUrl).toHaveBeenLastCalledWith("ext", "@4/a.png");
   });
 });
 

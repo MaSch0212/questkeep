@@ -246,12 +246,9 @@ would run as a program. The install dialog says so.
    registered and activates the new one. An open page of the plugin stays open and is drawn by
    the new version.
 
-One caveat: the webview keeps every imported module until the app restarts. `main` and the
-style sheets are always loaded fresh, and so is anything loaded through `api.plugin.url(…)`
-(its URLs change with every reload). A file imported statically with a relative path
-(`import { x } from "./lib/x.js"`) is **not** loaded again after a reload. While developing,
-keep the code in `main`, import other modules with `await import(api.plugin.url("lib/x.js"))`,
-or bundle into one file.
+Every reload gives the plugin's files new URLs (a load counter is part of the path), so `main`,
+the style sheets, anything loaded through `api.plugin.url(…)` and the modules they import by a
+relative path (`import { x } from "./lib/x.js"`) are all fetched again.
 
 `api.log` output and errors go to the window's console (the developer tools of a dev build).
 Keep state that should survive a reload in `api.settings`.

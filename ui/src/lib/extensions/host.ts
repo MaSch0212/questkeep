@@ -30,9 +30,13 @@ export interface ExtensionState {
 /** Imports an extension's main module by URL. */
 export type Importer = (url: string) => Promise<unknown>;
 const importModule: Importer = (url) => import(/* @vite-ignore */ url);
-/** The file's URL with the plugin's load counter: the webview caches modules by URL. */
+/**
+ * The file's URL with the plugin's load counter: the webview caches modules by URL. The counter
+ * is also a path segment (`@<revision>/`, which the shell skips), so modules the file imports by
+ * a relative path are fresh after a reload too.
+ */
 const fresh = (plugin: PluginInfo, path: string) =>
-  `${app.pluginFileUrl(plugin.id, path)}?v=${plugin.revision}`;
+  `${app.pluginFileUrl(plugin.id, `@${plugin.revision}/${path}`)}?v=${plugin.revision}`;
 let importer = importModule;
 /** Replaces how modules are imported (tests); null brings back the real import. */
 export function setImporter(replacement: Importer | null) {

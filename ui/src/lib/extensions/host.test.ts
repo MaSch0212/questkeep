@@ -77,8 +77,8 @@ describe("extension host", () => {
     setImporter(importer);
     await syncExtensions([extension({ version: "2.0.0" })]);
 
-    expect(importer).toHaveBeenCalledWith("qk://plugins/ext/main.js?v=1");
-    expect(links()).toEqual(["qk://plugins/ext/style.css?v=1"]);
+    expect(importer).toHaveBeenCalledWith("qk://plugins/ext/@1/main.js?v=1");
+    expect(links()).toEqual(["qk://plugins/ext/@1/style.css?v=1"]);
     expect(received?.plugin).toMatchObject({ id: "ext", name: "Ext", version: "2.0.0" });
     expect(received?.apiVersion).toBe(1);
     expect(extensionStates()).toEqual({ ext: { status: "active" } });
@@ -113,7 +113,7 @@ describe("extension host", () => {
     await syncExtensions([extension({ revision: 2 })]);
     expect(log).toEqual(["activate one", "deactivate one", "cleanup one", "activate two"]);
     expect(labels()).toEqual(["two"]);
-    expect(links()).toEqual(["qk://plugins/ext/style.css?v=2"]);
+    expect(links()).toEqual(["qk://plugins/ext/@2/style.css?v=2"]);
     expect(extensionStates()).toEqual({ ext: { status: "active" } });
   });
 

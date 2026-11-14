@@ -54,9 +54,16 @@ fn status(code: StatusCode) -> Response<Vec<u8>> {
 }
 
 /// `/<plugin id>/<path>` as (id, path), percent-decoded. `None` when either part is missing.
+/// A first path segment `@<load counter>` is dropped: the UI adds it so the webview, which
+/// keeps modules by URL, fetches a reloaded plugin's files (and what they import by relative
+/// path) again.
 fn split_path(path: &str) -> Option<(String, String)> {
     let decoded = percent_decode(path)?;
     let (id, relative) = decoded.trim_start_matches('/').split_once('/')?;
+    let relative = match relative.split_once('/') {
+        Some((counter, rest)) if counter.starts_with('@') => rest,
+        _ => relative,
+    };
     (!id.is_empty() && !relative.is_empty()).then(|| (id.to_string(), relative.to_string()))
 }
 
@@ -120,12 +127,26 @@ mod tests {
             split_path("/p/img/box%20art.png"),
             Some(("p".into(), "img/box art.png".into()))
         );
+        assert_eq!(
+            split_path("/p/@12/ui/main.js"),
+            Some(("p".into(), "ui/main.js".into()))
+        );
         // Decoded dots reach the plugin manager, which refuses to leave the plugin folder.
         assert_eq!(
             split_path("/p/%2e%2e/secret"),
             Some(("p".into(), "../secret".into()))
         );
-        for bad in ["", "/", "/p", "/p/", "//x", "/p/%zz", "/p/%f", "/p/%ff%fe"] {
+        for bad in [
+            "",
+            "/",
+            "/p",
+            "/p/",
+            "//x",
+            "/p/%zz",
+            "/p/%f",
+            "/p/%ff%fe",
+            "/p/@3/",
+        ] {
             assert_eq!(split_path(bad), None, "{bad}");
         }
     }

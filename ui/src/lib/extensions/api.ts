@@ -52,8 +52,8 @@ export function createApi(plugin: ApiPlugin, settings: SettingsController): Ques
       name: plugin.name,
       version: plugin.version,
       url(path) {
-        const url = app.pluginFileUrl(id, String(path));
-        if (plugin.revision === undefined) return url;
+        if (plugin.revision === undefined) return app.pluginFileUrl(id, String(path));
+        const url = app.pluginFileUrl(id, `@${plugin.revision}/${path}`);
         return `${url}${url.includes("?") ? "&" : "?"}v=${plugin.revision}`;
       },
     },
