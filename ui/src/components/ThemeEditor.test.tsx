@@ -88,6 +88,38 @@ describe("ThemeEditor", () => {
     expect(screen.getByText("Save the theme before exporting it.")).toBeInTheDocument();
   });
 
+  it("shows what a derived color comes out as, with its expression as a tooltip", () => {
+    themeEditor.create("fjord");
+    render(() => <ThemeEditor />);
+    // Written as a plain color in the base theme: shown as it is, nothing to explain.
+    const plain = screen.getByLabelText(/^Background/, { selector: "input[type=text]" });
+    expect(plain).toHaveAttribute("placeholder", "#131a23");
+    expect(plain).not.toHaveAttribute("data-tooltip");
+    // Derived from the accent (the parameter is #123456): the result, and how it is made.
+    const accent = document.getElementById("theme-var-qk-color-accent") as HTMLElement;
+    expect(accent).toHaveAttribute("placeholder", "#123456");
+    expect(accent.getAttribute("data-tooltip")).toContain("var(--qk-param-accent");
+    // A see-through color keeps its alpha.
+    const divider = document.getElementById("theme-var-qk-color-accent-divider") as HTMLElement;
+    expect(divider.getAttribute("placeholder")).toMatch(/^#[0-9a-f]{8}$/);
+    expect(divider.getAttribute("data-tooltip")).toContain("color-mix(");
+    // The swatch shows the same color (without the alpha a color input cannot hold).
+    expect(screen.getByLabelText("Accent divider: pick a color")).toHaveValue(
+      (divider.getAttribute("placeholder") ?? "").slice(0, 7),
+    );
+  });
+
+  it("keeps a size's placeholder as it is written", async () => {
+    themeEditor.create("fjord");
+    render(() => <ThemeEditor />);
+    await fireEvent.input(screen.getByRole("searchbox", { name: "Search variables" }), {
+      target: { value: "sidebar width" },
+    });
+    const field = screen.getByLabelText(/^Sidebar width/);
+    expect(field).toHaveAttribute("placeholder", "220px");
+    expect(field).not.toHaveAttribute("data-tooltip");
+  });
+
   it("applies a picked color at once, marks the variable and resets it", async () => {
     themeEditor.create("fjord");
     render(() => <ThemeEditor />);

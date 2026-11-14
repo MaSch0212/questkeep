@@ -77,6 +77,14 @@ function VariableRow(props: {
   const source = () => overrideSource(overrides(), name(), themeEditor.scheme());
   const inherited = () => props.baseVars.get(name()) ?? props.variable.base[themeEditor.scheme()];
   const stepped = () => props.variable.kind === "length" || props.variable.kind === "number";
+  const isColor = () => props.variable.kind === "color";
+  /** What the base gives a color as a hex value; null when it is not a color this can compute. */
+  const inheritedHex = () => (isColor() ? resolvedHex(name(), props.baseVars) : null);
+  /** The base's expression (a `color-mix()`, a `var()`), where the field shows its result. */
+  const expression = () => {
+    const hex = inheritedHex();
+    return hex !== null && hex !== inherited().trim().toLowerCase() ? inherited() : undefined;
+  };
 
   function typed(text: string) {
     if (text.trim() === "") {
@@ -111,7 +119,7 @@ function VariableRow(props: {
       </label>
       <Show when={source()}>{(where) => <span class="theme-var__mark">{tr(where())}</span>}</Show>
       <div class="theme-var__controls">
-        <Show when={props.variable.kind === "color"}>
+        <Show when={isColor()}>
           <input
             type="color"
             class="param-color theme-var__color"
@@ -130,7 +138,8 @@ function VariableRow(props: {
           spellcheck={false}
           autocomplete="off"
           aria-invalid={invalid() ? "true" : undefined}
-          placeholder={inherited()}
+          placeholder={inheritedHex() ?? inherited()}
+          data-tooltip={expression()}
           value={value() ?? ""}
           onInput={(e) => typed(e.currentTarget.value)}
           onKeyDown={onKeyDown}
@@ -174,7 +183,8 @@ export function ThemeEditor() {
   const draft = themeEditor.draft;
   const scheme = themeEditor.scheme;
   const base = createMemo(() => baseTheme(draft()));
-  const saved = () => appliedAppearance()?.params[draft().id];
+  // The values the preview shows: the saved ones, or those a new theme was made with.
+  const saved = () => appliedAppearance()?.params[draft().id] ?? themeEditor.startParams();
   const vars = createMemo(() => userThemeVars(draft(), base(), scheme(), { saved: saved() }));
   const baseVars = createMemo(() =>
     userThemeVars(draft(), base(), scheme(), { overrides: false, saved: saved() }),
