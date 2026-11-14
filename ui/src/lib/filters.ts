@@ -17,10 +17,13 @@ const tr = translator(libraryFilters);
 /** `ListFilter.values` entry for games without a value (the core's `NO_VALUE`). */
 export const NO_VALUE = ":none";
 
-export type FieldSection = "about" | "scores" | "you";
+export type FieldSection = "text" | "about" | "scores" | "you";
 
 /** Section headings of the field list; read at use time, so they follow the language. */
 export const SECTION_LABELS: Record<FieldSection, string> = {
+  get text() {
+    return tr("sectionText");
+  },
   get about() {
     return tr("sectionAbout");
   },
@@ -135,14 +138,33 @@ const range = (
   },
 });
 
-type TextKey = "textName" | "textSortingName" | "textDescription" | "textNotes" | "textInstallDir";
+type TextKey =
+  | "textAny"
+  | "textName"
+  | "textSortingName"
+  | "textDescription"
+  | "textNotes"
+  | "textInstallDir"
+  | "textSourceGameId"
+  | "textLaunchTarget"
+  | "textLaunchArgs";
 
-const textField = (field: TextField, key: TextKey, section: FieldSection): FieldInfo => ({
+const textField = (field: TextField, key: TextKey): FieldInfo => ({
   kind: "text",
   field,
-  section,
+  section: "text",
   get label() {
     return tr(key);
+  },
+});
+
+/** The names of a list field's values, matched as text ("Developer (text)"). */
+const listText = (field: TextField & ListField, key: ListKey): FieldInfo => ({
+  kind: "text",
+  field,
+  section: "text",
+  get label() {
+    return tr("listText", { label: tr(key) });
   },
 });
 
@@ -153,6 +175,8 @@ export const TEXT_OPS: readonly TextOp[] = [
   "endsWith",
   "equals",
   "matches",
+  "isEmpty",
+  "hasValue",
 ];
 
 const OP_KEYS = {
@@ -161,10 +185,15 @@ const OP_KEYS = {
   endsWith: "opEndsWith",
   equals: "opEquals",
   matches: "opMatches",
+  isEmpty: "opIsEmpty",
+  hasValue: "opHasValue",
 } as const satisfies Record<TextOp, string>;
 
 /** "contains", "starts with", ... in the current language. */
 export const opLabel = (op: TextOp) => tr(OP_KEYS[op]);
+
+/** Whether an operation compares with typed text (the empty checks don't). */
+export const needsValue = (op: TextOp) => op !== "isEmpty" && op !== "hasValue";
 
 /** A preset with a fixed label (numbers and units need no translation). */
 const fixed = (label: string, min: number | null, max: number | null): RangePreset => ({
@@ -186,9 +215,26 @@ export const daysAgo = (days: number, now = Date.now()) => Math.floor(now / 1000
 
 /** Every field the filter panel can add, in picker order. */
 export const FIELDS: FieldInfo[] = [
-  textField("name", "textName", "about"),
-  textField("sortingName", "textSortingName", "about"),
-  textField("description", "textDescription", "about"),
+  textField("anyText", "textAny"),
+  textField("name", "textName"),
+  textField("sortingName", "textSortingName"),
+  textField("description", "textDescription"),
+  textField("notes", "textNotes"),
+  listText("developer", "developer"),
+  listText("publisher", "publisher"),
+  listText("series", "series"),
+  listText("genre", "genre"),
+  listText("tag", "tag"),
+  listText("feature", "feature"),
+  listText("platform", "platform"),
+  listText("ageRating", "ageRating"),
+  listText("gameMode", "gameMode"),
+  listText("theme", "theme"),
+  listText("perspective", "perspective"),
+  textField("installDir", "textInstallDir"),
+  textField("sourceGameId", "textSourceGameId"),
+  textField("launchTarget", "textLaunchTarget"),
+  textField("launchArgs", "textLaunchArgs"),
   list("genre", "genre", "about"),
   list("tag", "tag", "about"),
   list("feature", "feature", "about"),
@@ -230,8 +276,6 @@ export const FIELDS: FieldInfo[] = [
     fixed("< 1 GB", null, GB),
     fixed("50 GB +", 50 * GB, null),
   ]),
-  textField("notes", "textNotes", "you"),
-  textField("installDir", "textInstallDir", "you"),
 ];
 
 /** The date presets are relative to now, so they are made when shown. */
@@ -389,7 +433,7 @@ export function duplicateAt(group: FilterGroup, path: Path): FilterGroup {
 export function isActive(node: FilterNode | FilterGroup): boolean {
   if (!("kind" in node) || node.kind === "group") return node.items.some(isActive);
   if (node.kind === "list") return node.values.length > 0;
-  if (node.kind === "text") return node.value !== "";
+  if (node.kind === "text") return !needsValue(node.op) || node.value !== "";
   return node.min !== null || node.max !== null;
 }
 
@@ -477,23 +521,27 @@ function listValues(game: Game, field: ListField): string[] {
       return game.categories;
     case "completionStatus":
       return game.completionStatus === null ? [] : [game.completionStatus];
-    default: {
-      const names: Record<string, string[]> = {
-        genre: game.genres,
-        tag: game.tags,
-        feature: game.features,
-        series: game.series,
-        platform: game.platforms,
-        ageRating: game.ageRatings,
-        developer: game.developers,
-        publisher: game.publishers,
-        gameMode: game.gameModes,
-        theme: game.themes,
-        perspective: game.perspectives,
-      };
-      return (names[field] ?? []).map(valueKey);
-    }
+    default:
+      return (listNames(game, field) ?? []).map(valueKey);
   }
+}
+
+/** The value names of a metadata list field; `undefined` for other fields. */
+function listNames(game: Game, field: string): string[] | undefined {
+  const names: Record<string, string[]> = {
+    genre: game.genres,
+    tag: game.tags,
+    feature: game.features,
+    series: game.series,
+    platform: game.platforms,
+    ageRating: game.ageRatings,
+    developer: game.developers,
+    publisher: game.publishers,
+    gameMode: game.gameModes,
+    theme: game.themes,
+    perspective: game.perspectives,
+  };
+  return names[field];
 }
 
 const unixSeconds = (iso: string | null) => {
@@ -547,25 +595,34 @@ function matchesRange(filter: RangeFilter, game: Game): boolean {
   return true;
 }
 
-function textValue(game: Game, field: TextField): string | null {
+/** The texts behind a text field: one for most, several for "any text", stores and lists. */
+function textValues(game: Game, field: TextField): (string | null)[] {
   switch (field) {
     case "name":
-      return game.name;
+      return [game.name];
     case "sortingName":
-      return game.sortingName;
+      return [game.sortingName];
     case "description":
-      return game.description;
+      return [game.description];
     case "notes":
-      return game.notes;
+      return [game.notes];
     case "installDir":
-      return game.installDir;
+      return [game.installDir];
+    case "anyText":
+      return [game.name, game.description, game.notes];
+    case "sourceGameId":
+      return game.copies.map((copy) => copy.sourceGameId);
+    case "launchTarget":
+      return [game.playAction?.target ?? null];
+    case "launchArgs":
+      return [game.playAction?.args ?? null];
+    default:
+      return listNames(game, field) ?? [];
   }
 }
 
-/** A text filter (mirrors the core's `qk_text`; JavaScript and Rust regexes differ a little). */
-export function matchesText(filter: TextFilter, game: Game): boolean {
-  const value = textValue(game, filter.field);
-  if (value === null) return false;
+/** One text against a filter that compares (not an empty check). */
+function textHit(filter: TextFilter, value: string): boolean {
   if (filter.op === "matches") return textPattern(filter)?.test(value) ?? false;
   const fold = (s: string) => (filter.caseSensitive === true ? s : s.toLowerCase());
   const [have, want] = [fold(value), fold(filter.value)];
@@ -576,9 +633,22 @@ export function matchesText(filter: TextFilter, game: Game): boolean {
       return have.startsWith(want);
     case "endsWith":
       return have.endsWith(want);
-    case "equals":
+    default:
       return have === want;
   }
+}
+
+/**
+ * A text filter (mirrors the core's `qk_text`; JavaScript and Rust regexes differ a little): any
+ * of the field's texts matching is enough; "is empty" needs all of them empty.
+ */
+export function matchesText(filter: TextFilter, game: Game): boolean {
+  const values = textValues(game, filter.field);
+  if (!needsValue(filter.op)) {
+    const empty = values.every((v) => v === null || v.trim() === "");
+    return empty === (filter.op === "isEmpty");
+  }
+  return values.some((value) => value !== null && textHit(filter, value));
 }
 
 function matchesNode(node: FilterNode, game: Game): boolean {
@@ -676,6 +746,7 @@ export type Pill = {
 
 /** "contains “trine”", with "(match case)" when it compares case. */
 export function describeText(filter: TextFilter): string {
+  if (!needsValue(filter.op)) return opLabel(filter.op);
   const text = tr("textValue", { op: opLabel(filter.op), value: filter.value });
   return filter.caseSensitive === true ? `${text} (${tr("matchCaseShort")})` : text;
 }

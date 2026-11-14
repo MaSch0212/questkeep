@@ -938,6 +938,84 @@ mod tests {
         );
         // An empty text filters nothing.
         assert_eq!(names(name, TextOp::Contains, "", false, false).len(), 4);
+        // The empty checks need no text.
+        assert_eq!(
+            names(TextField::Notes, TextOp::IsEmpty, "", false, false).len(),
+            4
+        );
+        assert!(names(TextField::Notes, TextOp::HasValue, "", false, false).is_empty());
+        assert_eq!(
+            names(TextField::AnyText, TextOp::Contains, "legend", false, false),
+            ["Brütal Legend"]
+        );
+    }
+
+    #[test]
+    fn filters_by_store_ids_launch_and_value_names() {
+        use crate::model::{
+            FilterGroup, FilterNode, MatchMode, PlayAction, TextField, TextFilter, TextOp,
+        };
+        let db = Database::open_in_memory().unwrap();
+        for (name, id, developer) in [
+            ("Alpha", "steam-440", "Valve Software"),
+            ("Beta", "egs-1", "Ubisoft Montreal"),
+        ] {
+            let game = db
+                .insert_game(
+                    &NewGameRecord {
+                        name: name.into(),
+                        source: "manual".into(),
+                        source_game_id: Some(id.into()),
+                        play_action: Some(PlayAction::file(format!("C:\\Games\\{name}.exe"))),
+                        ..NewGameRecord::default()
+                    },
+                    Utc::now(),
+                )
+                .unwrap();
+            let meta = GameMetadata {
+                developers: vec![developer.into()],
+                ..GameMetadata::default()
+            };
+            db.set_source_metadata(game.id, "igdb", Some(&meta), Utc::now())
+                .unwrap();
+            db.resolve_entry(game.id, &MetadataPriority::default(), &sources())
+                .unwrap();
+        }
+        let names = |field, op, value: &str| -> Vec<String> {
+            let query = GameQuery {
+                filter: FilterGroup {
+                    mode: MatchMode::All,
+                    items: vec![FilterNode::Text(TextFilter {
+                        field,
+                        op,
+                        value: value.into(),
+                        case_sensitive: false,
+                        negate: false,
+                    })],
+                    negate: false,
+                },
+                ..GameQuery::default()
+            };
+            db.list_games(&query)
+                .unwrap()
+                .into_iter()
+                .map(|g| g.name)
+                .collect()
+        };
+        assert_eq!(
+            names(TextField::SourceGameId, TextOp::StartsWith, "steam-"),
+            ["Alpha"]
+        );
+        assert_eq!(
+            names(TextField::LaunchTarget, TextOp::EndsWith, "beta.exe"),
+            ["Beta"]
+        );
+        assert_eq!(
+            names(TextField::Developer, TextOp::Contains, "ubisoft"),
+            ["Beta"]
+        );
+        assert!(names(TextField::Publisher, TextOp::HasValue, "").is_empty());
+        assert_eq!(names(TextField::Developer, TextOp::HasValue, "").len(), 2);
     }
 
     #[test]

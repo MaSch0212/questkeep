@@ -3,4 +3,4 @@
 /**
  * How a text filter compares.
  */
-export type TextOp = "contains" | "startsWith" | "endsWith" | "equals" | "matches";
+export type TextOp = "contains" | "startsWith" | "endsWith" | "equals" | "matches" | "isEmpty" | "hasValue";

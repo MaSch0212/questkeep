@@ -117,6 +117,46 @@ pub enum TextField {
     Description,
     Notes,
     InstallDir,
+    /// The store's id of the game, in any of its stores.
+    SourceGameId,
+    /// The play action's executable path or URI.
+    LaunchTarget,
+    LaunchArgs,
+    /// Name, description or notes.
+    AnyText,
+    // The names of a list field's values: a game matches when any of them does.
+    Genre,
+    Tag,
+    Feature,
+    Series,
+    Platform,
+    AgeRating,
+    Developer,
+    Publisher,
+    GameMode,
+    Theme,
+    Perspective,
+}
+
+impl TextField {
+    /// The metadata field whose value names are matched (`None` for single texts).
+    pub fn metadata_field(self) -> Option<super::MetadataField> {
+        use super::MetadataField as F;
+        Some(match self {
+            Self::Genre => F::Genres,
+            Self::Tag => F::Tags,
+            Self::Feature => F::Features,
+            Self::Series => F::Series,
+            Self::Platform => F::Platforms,
+            Self::AgeRating => F::AgeRatings,
+            Self::Developer => F::Developers,
+            Self::Publisher => F::Publishers,
+            Self::GameMode => F::GameModes,
+            Self::Theme => F::Themes,
+            Self::Perspective => F::Perspectives,
+            _ => return None,
+        })
+    }
 }
 
 /// How a text filter compares.
@@ -132,6 +172,17 @@ pub enum TextOp {
     Equals,
     /// A regular expression (Rust `regex` syntax); one that does not compile matches nothing.
     Matches,
+    /// No text (or only spaces); for a list field, no values. Needs no `value`.
+    IsEmpty,
+    /// The opposite of [`TextOp::IsEmpty`].
+    HasValue,
+}
+
+impl TextOp {
+    /// Whether the operation compares against the filter's text (the empty checks don't).
+    pub fn needs_value(self) -> bool {
+        !matches!(self, Self::IsEmpty | Self::HasValue)
+    }
 }
 
 /// Games by a text field. Games without the text (no notes, ...) never match, unless negated.
@@ -142,7 +193,7 @@ pub struct TextFilter {
     pub field: TextField,
     #[serde(default)]
     pub op: TextOp,
-    /// Empty filters nothing.
+    /// Empty filters nothing (except for the empty checks, which ignore it).
     #[serde(default)]
     pub value: String,
     /// Case-insensitive unless set.

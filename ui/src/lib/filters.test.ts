@@ -10,6 +10,7 @@ import {
   describeRange,
   duplicateAt,
   fromInput,
+  isActive,
   matchesTree,
   NO_VALUE,
   pruneTree,
@@ -226,6 +227,37 @@ describe("text filters and negation", () => {
     expect(matchesTree(allOf(notEither), trine)).toBe(false);
     expect(matchesTree(allOf(notEither), brutal)).toBe(true);
     expect(matchesTree(allOf({ ...playtime(1, null), negate: true }), brutal)).toBe(true);
+  });
+
+  it("matches several texts, value names and the empty checks", () => {
+    const text = (field: TextFilter["field"], op: TextFilter["op"], value = ""): FilterGroup =>
+      allOf({ kind: "text", field, op, value });
+    const game = makeGame({
+      name: "Alpha",
+      notes: "  ",
+      description: "A legendary quest",
+      developers: ["Ubisoft Montreal"],
+      sourceGameId: "440",
+      playAction: {
+        kind: "file",
+        target: "C:\\Games\\alpha.exe",
+        args: "-windowed",
+        workingDir: null,
+        tracking: "default",
+        trackingPath: null,
+      },
+    });
+    expect(matchesTree(text("anyText", "contains", "legend"), game)).toBe(true);
+    expect(matchesTree(text("developer", "startsWith", "ubisoft"), game)).toBe(true);
+    expect(matchesTree(text("publisher", "isEmpty"), game)).toBe(true);
+    expect(matchesTree(text("notes", "isEmpty"), game)).toBe(true);
+    expect(matchesTree(text("notes", "hasValue"), game)).toBe(false);
+    expect(matchesTree(text("sourceGameId", "equals", "440"), game)).toBe(true);
+    expect(matchesTree(text("launchTarget", "endsWith", "ALPHA.EXE"), game)).toBe(true);
+    expect(matchesTree(text("launchArgs", "contains", "window"), game)).toBe(true);
+    // The empty checks are active without text.
+    expect(isActive({ kind: "text", field: "notes", op: "isEmpty", value: "" })).toBe(true);
+    expect(isActive({ kind: "text", field: "notes", op: "contains", value: "" })).toBe(false);
   });
 
   it("keeps negation when pruning, comparing and describing", () => {

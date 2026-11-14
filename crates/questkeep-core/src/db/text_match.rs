@@ -21,6 +21,8 @@ pub(super) fn op_code(op: TextOp) -> i64 {
         TextOp::EndsWith => 2,
         TextOp::Equals => 3,
         TextOp::Matches => 4,
+        TextOp::IsEmpty => 5,
+        TextOp::HasValue => 6,
     }
 }
 
@@ -35,6 +37,9 @@ pub fn compile(pattern: &str, case_sensitive: bool) -> Option<Regex> {
 
 /// Whether `text` passes a text filter (the same rules as the SQL function).
 pub fn text_matches(text: &str, needle: &str, op: TextOp, case_sensitive: bool) -> bool {
+    if !op.needs_value() {
+        return text.trim().is_empty() == (op == TextOp::IsEmpty);
+    }
     if op == TextOp::Matches {
         return compile(needle, case_sensitive).is_some_and(|re| re.is_match(text));
     }
@@ -54,7 +59,7 @@ fn compare(text: &str, needle: &str, op: TextOp) -> bool {
         TextOp::Contains => text.contains(needle),
         TextOp::StartsWith => text.starts_with(needle),
         TextOp::EndsWith => text.ends_with(needle),
-        TextOp::Equals | TextOp::Matches => text == needle,
+        TextOp::Equals | TextOp::Matches | TextOp::IsEmpty | TextOp::HasValue => text == needle,
     }
 }
 
@@ -87,6 +92,8 @@ fn evaluate(ctx: &Context<'_>) -> rusqlite::Result<bool> {
                 1 => TextOp::StartsWith,
                 2 => TextOp::EndsWith,
                 3 => TextOp::Equals,
+                5 => TextOp::IsEmpty,
+                6 => TextOp::HasValue,
                 _ => TextOp::Contains,
             };
             Ok(text_matches(&text, &needle, op, case_sensitive))

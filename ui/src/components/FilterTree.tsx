@@ -33,6 +33,7 @@ import {
   joinerWord,
   listInfo,
   newFilter,
+  needsValue,
   NO_VALUE,
   opLabel,
   presetsOf,
@@ -239,31 +240,33 @@ function TextRow(props: { filter: TextFilter; path: Path; change: (c: Change) =>
         >
           <For each={TEXT_OPS}>{(op) => <option value={op}>{opLabel(op)}</option>}</For>
         </select>
-        <input
-          type="text"
-          class="filter-row__input"
-          classList={{ "filter-row__input--invalid": invalid() }}
-          aria-label={tr("textValue", { label: info().label })}
-          aria-invalid={invalid()}
-          aria-describedby={invalid() ? hintId : undefined}
-          placeholder={
-            props.filter.op === "matches" ? tr("patternPlaceholder") : tr("textPlaceholder")
-          }
-          spellcheck={false}
-          value={props.filter.value}
-          onInput={(event) => update({ value: event.currentTarget.value })}
-        />
-        <button
-          type="button"
-          class="filter-case"
-          classList={{ "filter-case--on": props.filter.caseSensitive === true }}
-          aria-pressed={props.filter.caseSensitive === true}
-          aria-label={tr("matchCase")}
-          data-tooltip={tr("matchCase")}
-          onClick={() => update({ caseSensitive: props.filter.caseSensitive !== true })}
-        >
-          Aa
-        </button>
+        <Show when={needsValue(props.filter.op)}>
+          <input
+            type="text"
+            class="filter-row__input"
+            classList={{ "filter-row__input--invalid": invalid() }}
+            aria-label={tr("textValue", { label: info().label })}
+            aria-invalid={invalid()}
+            aria-describedby={invalid() ? hintId : undefined}
+            placeholder={
+              props.filter.op === "matches" ? tr("patternPlaceholder") : tr("textPlaceholder")
+            }
+            spellcheck={false}
+            value={props.filter.value}
+            onInput={(event) => update({ value: event.currentTarget.value })}
+          />
+          <button
+            type="button"
+            class="filter-case"
+            classList={{ "filter-case--on": props.filter.caseSensitive === true }}
+            aria-pressed={props.filter.caseSensitive === true}
+            aria-label={tr("matchCase")}
+            data-tooltip={tr("matchCase")}
+            onClick={() => update({ caseSensitive: props.filter.caseSensitive !== true })}
+          >
+            Aa
+          </button>
+        </Show>
       </div>
       <Show when={invalid()}>
         <p id={hintId} class="filter-row__hint" role="alert">

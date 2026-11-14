@@ -3,4 +3,4 @@
 /**
  * A field filtered by its text.
  */
-export type TextField = "name" | "sortingName" | "description" | "notes" | "installDir";
+export type TextField = "name" | "sortingName" | "description" | "notes" | "installDir" | "sourceGameId" | "launchTarget" | "launchArgs" | "anyText" | "genre" | "tag" | "feature" | "series" | "platform" | "ageRating" | "developer" | "publisher" | "gameMode" | "theme" | "perspective";

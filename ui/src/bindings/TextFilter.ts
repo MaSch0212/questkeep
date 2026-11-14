@@ -7,7 +7,7 @@ import type { TextOp } from "./TextOp";
  */
 export type TextFilter = { field: TextField, op: TextOp, 
 /**
- * Empty filters nothing.
+ * Empty filters nothing (except for the empty checks, which ignore it).
  */
 value: string, 
 /**

@@ -14,7 +14,7 @@ use crate::model::{
     FilterGroup, FilterNode, Game, GameCopy, GameKind, GameQuery, GameUpdate, HiddenFilter,
     ImportedGame, KindFilter, ListField, ListFilter, ListMode, MatchMode, MetadataField,
     NO_CATEGORY, NO_VALUE, PlayAction, PlayedFilter, RangeField, RangeFilter, ScanSummary,
-    SortField, TextField, TextFilter, TriState, sorting_name,
+    SortField, TextField, TextFilter, TextOp, TriState, sorting_name,
 };
 
 pub(super) const COLUMNS: &str = "id, name, sorting_name, source, source_game_id, installed, install_dir, \
@@ -186,30 +186,75 @@ fn negated(sql: Option<String>, negate: bool) -> Option<String> {
     })
 }
 
-/// The column behind a text field.
-fn text_column(field: TextField) -> &'static str {
+/// The texts of a game behind a single-text field (several for "any text"). List fields are
+/// matched by their value names instead (see [`text_sql`]).
+fn text_columns(field: TextField) -> &'static [&'static str] {
     match field {
-        TextField::Name => "name",
-        TextField::SortingName => "sorting_name",
-        TextField::Description => "description",
-        TextField::Notes => "notes",
-        TextField::InstallDir => "install_dir",
+        TextField::Name => &["name"],
+        TextField::SortingName => &["sorting_name"],
+        TextField::Description => &["description"],
+        TextField::Notes => &["notes"],
+        TextField::InstallDir => &["install_dir"],
+        TextField::SourceGameId => &["source_game_id"],
+        TextField::LaunchTarget => &["json_extract(play_action, '$.target')"],
+        TextField::LaunchArgs => &["json_extract(play_action, '$.args')"],
+        TextField::AnyText => &["name", "description", "notes"],
+        // List fields; never asked for.
+        _ => &[],
     }
 }
 
-/// SQL for a text filter, `None` without text.
-fn text_sql(filter: &TextFilter, args: &mut Vec<Box<dyn ToSql>>) -> Option<String> {
-    if filter.value.is_empty() {
-        return None;
-    }
-    let column = text_column(filter.field);
+/// `qk_text(expr, …)` with the filter's text, operation and case as arguments.
+fn text_call(expr: &str, filter: &TextFilter, args: &mut Vec<Box<dyn ToSql>>) -> String {
     let needle = push_arg(args, filter.value.clone());
     let op = push_arg(args, text_match::op_code(filter.op));
     let case = push_arg(args, filter.case_sensitive);
-    Some(format!(
-        "{}({column}, {needle}, {op}, {case})",
-        text_match::FUNCTION
-    ))
+    format!("{}({expr}, {needle}, {op}, {case})", text_match::FUNCTION)
+}
+
+/// SQL for a text filter, `None` without text (the empty checks need none).
+fn text_sql(filter: &TextFilter, args: &mut Vec<Box<dyn ToSql>>) -> Option<String> {
+    if filter.op.needs_value() && filter.value.is_empty() {
+        return None;
+    }
+    if let Some(meta) = filter.field.metadata_field() {
+        let f = push_arg(args, meta.key());
+        let values = format!(
+            "SELECT 1 FROM game_meta_values gv JOIN meta_values v ON v.id = gv.value_id \
+             WHERE gv.game_id = games.id AND v.field = {f}"
+        );
+        return Some(match filter.op {
+            TextOp::IsEmpty => format!("NOT EXISTS ({values})"),
+            TextOp::HasValue => format!("EXISTS ({values})"),
+            _ => format!(
+                "EXISTS ({values} AND {})",
+                text_call("v.name", filter, args)
+            ),
+        });
+    }
+    let columns = text_columns(filter.field);
+    let all_empty = || {
+        columns
+            .iter()
+            .map(|c| format!("COALESCE(trim({c}), '') = ''"))
+            .collect::<Vec<_>>()
+            .join(" AND ")
+    };
+    Some(match filter.op {
+        TextOp::IsEmpty => format!("({})", all_empty()),
+        TextOp::HasValue => format!("NOT ({})", all_empty()),
+        _ => {
+            let mut any: Vec<String> = columns.iter().map(|c| text_call(c, filter, args)).collect();
+            if filter.field == TextField::SourceGameId {
+                // The ids of the copies combined into this entry too.
+                any.push(format!(
+                    "EXISTS (SELECT 1 FROM games m WHERE m.merged_into = games.id AND {})",
+                    text_call("m.source_game_id", filter, args)
+                ));
+            }
+            format!("({})", any.join(" OR "))
+        }
+    })
 }
 
 fn push_arg(args: &mut Vec<Box<dyn ToSql>>, value: impl ToSql + 'static) -> String {
