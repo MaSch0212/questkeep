@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { AccountStatus } from "../bindings/AccountStatus";
 import type { AccountWarning } from "../bindings/AccountWarning";
@@ -149,6 +149,34 @@ export const setPluginWatch = (id: string, watch: boolean) =>
   invoke<PluginInfo>("set_plugin_watch", { id, watch });
 export const removePlugin = (id: string, deleteData: boolean) =>
   invoke<void>("remove_plugin", { id, deleteData });
+/** An extension plugin's own settings (a JSON object; empty when it never saved any). */
+export const getPluginSettings = (id: string) =>
+  invoke<Record<string, unknown>>("get_plugin_settings", { id });
+/** Replaces an extension plugin's settings with this object. */
+export const savePluginSettings = (id: string, settings: Record<string, unknown>) =>
+  invoke<void>("save_plugin_settings", { id, settings });
+/** Any app command by name, for extensions (`api.invoke`). */
+export const invokeCommand = <T = unknown>(command: string, args?: Record<string, unknown>) =>
+  invoke<T>(command, args);
+
+let pluginBase: string | undefined;
+/**
+ * The URL of a file in an installed plugin's folder (served by the shell's `qkplugin` scheme).
+ * Only the origin goes through `convertFileSrc`: it would encode the slashes of a path, which
+ * breaks relative imports inside the plugin.
+ */
+export function pluginFileUrl(id: string, path: string): string {
+  if (pluginBase === undefined) {
+    let base: string | undefined;
+    try {
+      base = convertFileSrc("", "qkplugin");
+    } catch {
+      base = undefined; // outside the app (tests)
+    }
+    pluginBase = (base || "http://qkplugin.localhost").replace(/\/+$/, "");
+  }
+  return `${pluginBase}/${encodeURIComponent(id)}/${encodeURI(path.replace(/^(\.?\/)+/, ""))}`;
+}
 export const listProviders = () => invoke<ProviderInfo[]>("list_providers");
 export const scanLibrary = (providerId: string) =>
   invoke<ScanSummary>("scan_library", { providerId });

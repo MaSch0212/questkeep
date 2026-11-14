@@ -2,7 +2,7 @@ import type { GameQuery } from "../bindings/GameQuery";
 
 /** Where the window is: a page, the open view and the game whose page shows. */
 export interface NavLocation {
-  page: "home" | "statistics" | "library" | "settings";
+  page: "home" | "statistics" | "library" | "settings" | `plugin:${string}`;
   /** The open view (only on the library page). */
   viewId: string | null;
   /** The game whose details show (only on the library page). */

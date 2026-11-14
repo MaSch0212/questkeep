@@ -31,6 +31,7 @@ import type { ViewUiState } from "../bindings/ViewUiState";
 import type { PopoverAnchor } from "../components/Popover";
 import * as api from "./api";
 import { errorMessage } from "./errors";
+import { emitCoreEvent, findPage, isPluginPage, resetRegistry } from "./extensions/registry";
 import { groupGames } from "./grouping";
 import { defaultDescending, defaultQuery, mergeSources } from "./query";
 import {
@@ -81,7 +82,8 @@ export interface NewViewInput {
   sectionId: string;
 }
 
-export type Page = "home" | "statistics" | "library" | "settings";
+/** A plugin page is `plugin:<plugin id>/<page id>` (an extension's `ui.addPage`). */
+export type Page = "home" | "statistics" | "library" | "settings" | `plugin:${string}`;
 
 export interface Toast {
   id: number;
@@ -544,6 +546,15 @@ function createAppStore() {
     void loadStart();
   }
 
+  /** Shows an extension's page, if it is registered. */
+  function showPluginPage(id: `plugin:${string}`) {
+    if (!findPage(id)) return;
+    batch(() => {
+      setPage(id);
+      setDetailsOpen(false);
+    });
+  }
+
   function showStatistics() {
     if (!showStatisticsPage()) return;
     batch(() => {
@@ -596,6 +607,12 @@ function createAppStore() {
     if (location.page === "statistics") return showStatistics();
     if (location.page === "settings") {
       setPage("settings");
+      return;
+    }
+    if (isPluginPage(location.page)) {
+      // A page whose plugin is gone falls back to the library.
+      if (findPage(location.page)) return showPluginPage(location.page);
+      setPage("library");
       return;
     }
     const exists =
@@ -657,7 +674,9 @@ function createAppStore() {
   // Remember the open start page or view for "The page I had open last" (never settings).
   createEffect(
     on([started, page, activeViewId], ([ready, current, viewId]) => {
+      // Plugin pages come and go with their plugin: never the page to reopen.
       if (!ready || current === "settings" || current === "statistics") return;
+      if (isPluginPage(current)) return;
       const value = current === "home" ? HOME_PAGE : viewId;
       // Explore always starts fresh, so it is never reopened at startup.
       if (value === null || value === EXPLORE_ID) return;
@@ -983,6 +1002,7 @@ function createAppStore() {
   }
 
   function handleCoreEvent(event: CoreEvent) {
+    emitCoreEvent(event);
     switch (event.type) {
       case "gamesChanged":
       case "gameRemoved":
@@ -1222,6 +1242,7 @@ function createAppStore() {
 
   function reset() {
     clearTimeout(refreshTimer);
+    resetRegistry();
     requestSeq++;
     batch(() => {
       setSections([]);
@@ -1400,6 +1421,7 @@ function createAppStore() {
     showHome,
     showStatisticsPage,
     showStatistics,
+    showPluginPage,
     showStartPage,
     startData,
     applySettings,

@@ -162,6 +162,8 @@ export function makePlugin(overrides: Partial<PluginInfo> = {}): PluginInfo {
     error: null,
     providers: ["example-store"],
     hasExtension: false,
+    extension: null,
+    revision: 1,
     themes: 0,
     permissions: { read: [], http: [] },
     ...overrides,
