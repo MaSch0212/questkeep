@@ -318,42 +318,44 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
       data-tauri-drag-region
     >
       <div class="titlebar__start" data-tauri-drag-region>
-        <button
-          ref={(el) => (buttons.app = el)}
-          type="button"
-          class="titlebar__brand"
-          classList={{ "titlebar__brand--open": open() === "app" }}
-          aria-label={tr("questkeepMenu")}
-          data-tooltip={tr("questkeepMenu")}
-          aria-haspopup="menu"
-          aria-expanded={open() === "app"}
-          onClick={() => toggle("app")}
-        >
-          <Logo class="logo titlebar__logo" />
-          <span class="titlebar__wordmark">Questkeep</span>
-          <ChevronDown class="icon titlebar__brand-arrow" aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          class="titlebar__tool"
-          aria-label={tr("back")}
-          data-tooltip={tr("backHint")}
-          disabled={!store.canGoBack()}
-          onClick={() => void store.goBack()}
-        >
-          <ArrowLeft class="icon" aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          class="titlebar__tool"
-          aria-label={tr("forward")}
-          data-tooltip={tr("forwardHint")}
-          disabled={!store.canGoForward()}
-          onClick={() => void store.goForward()}
-        >
-          <ArrowRight class="icon" aria-hidden="true" />
-        </button>
-        <span class="titlebar__separator titlebar__separator--start" aria-hidden="true" />
+        <div class="titlebar__lead" data-tauri-drag-region>
+          <button
+            ref={(el) => (buttons.app = el)}
+            type="button"
+            class="titlebar__brand"
+            classList={{ "titlebar__brand--open": open() === "app" }}
+            aria-label={tr("questkeepMenu")}
+            data-tooltip={tr("questkeepMenu")}
+            aria-haspopup="menu"
+            aria-expanded={open() === "app"}
+            onClick={() => toggle("app")}
+          >
+            <Logo class="logo titlebar__logo" />
+            <span class="titlebar__wordmark">Questkeep</span>
+            <ChevronDown class="icon titlebar__brand-arrow" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            class="titlebar__tool"
+            aria-label={tr("back")}
+            data-tooltip={tr("backHint")}
+            disabled={!store.canGoBack()}
+            onClick={() => void store.goBack()}
+          >
+            <ArrowLeft class="icon" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            class="titlebar__tool"
+            aria-label={tr("forward")}
+            data-tooltip={tr("forwardHint")}
+            disabled={!store.canGoForward()}
+            onClick={() => void store.goForward()}
+          >
+            <ArrowRight class="icon" aria-hidden="true" />
+          </button>
+          <span class="titlebar__separator titlebar__separator--start" aria-hidden="true" />
+        </div>
         {toolButton("add", tr("addGame"), () => (
           <Plus class="icon" aria-hidden="true" />
         ))}

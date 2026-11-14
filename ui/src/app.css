@@ -2357,6 +2357,19 @@ ul {
 .titlebar__start {
   padding-left: var(--qk-space-2);
 }
+/* Brand and history buttons; ends with the separator, right above the sidebar's border. */
+.titlebar__lead {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  height: 100%;
+  min-width: calc(var(--qk-sidebar-width) - var(--qk-space-2));
+  margin-right: var(--qk-space-2);
+}
+.titlebar__lead .titlebar__separator--start {
+  margin: 0 0 0 auto;
+}
 .titlebar__end {
   justify-content: flex-end;
 }
