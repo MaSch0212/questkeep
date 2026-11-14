@@ -1186,3 +1186,25 @@ pub async fn dismiss_account_warning(
 ) -> CmdResult<()> {
     blocking(state, move |s| s.library.dismiss_account_warning(&provider)).await
 }
+
+/// What a plugin's extension saved (an object; empty when nothing yet).
+#[tauri::command]
+pub async fn get_plugin_settings(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+) -> CmdResult<serde_json::Value> {
+    blocking(state, move |s| Ok(s.plugins.settings(&id)?)).await
+}
+
+/// Replaces what a plugin's extension saved.
+#[tauri::command]
+pub async fn save_plugin_settings(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    settings: serde_json::Value,
+) -> CmdResult<()> {
+    blocking(state, move |s| {
+        Ok(s.plugins.save_settings(&id, &settings)?)
+    })
+    .await
+}

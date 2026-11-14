@@ -5,6 +5,7 @@ mod backups;
 mod commands;
 mod i18n;
 mod install_kind;
+mod plugin_files;
 mod signin;
 mod tray;
 mod tray_theme;
@@ -374,6 +375,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .register_uri_scheme_protocol(plugin_files::SCHEME, plugin_files::serve)
         .setup(|app| {
             let (state, guard) = build_state(app.handle())?;
             let state = Arc::new(state);
@@ -457,6 +459,8 @@ pub fn run() {
             commands::set_plugin_enabled,
             commands::set_plugin_watch,
             commands::remove_plugin,
+            commands::get_plugin_settings,
+            commands::save_plugin_settings,
             commands::scan_library,
             commands::scan_all_libraries,
             commands::launch_game,

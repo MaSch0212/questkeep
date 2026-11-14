@@ -30,6 +30,15 @@ error: string | null,
  */
 providers: Array<string>, hasExtension: boolean, 
 /**
+ * The `extension` part of the manifest (its script, styles and declared settings) while the
+ * plugin is enabled and its manifest is readable; the UI loads the extension from it.
+ */
+extension: Record<string, unknown> | null, 
+/**
+ * Counts the times the plugin was loaded; a new number means its files may have changed.
+ */
+revision: number, 
+/**
  * How many themes the plugin brings.
  */
 themes: number, permissions: PluginPermissions, };

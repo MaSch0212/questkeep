@@ -25,7 +25,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost data: https:; style-src 'self' 'unsafe-inline'",
+      "csp": "default-src 'self'; script-src 'self' qkplugin: http://qkplugin.localhost; img-src 'self' asset: http://asset.localhost qkplugin: http://qkplugin.localhost data: https:; style-src 'self' 'unsafe-inline' qkplugin: http://qkplugin.localhost; font-src 'self' data: qkplugin: http://qkplugin.localhost; connect-src 'self' ipc: http://ipc.localhost qkplugin: http://qkplugin.localhost https:",
       "assetProtocol": {
         "enable": true,
         "scope": []

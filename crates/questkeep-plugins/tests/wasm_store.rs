@@ -279,7 +279,13 @@ fn example_store_loads_scans_reloads_and_unloads() {
     let restarted =
         PluginManager::new(fx.paths.clone(), next.registry.clone(), next.events.clone());
     restarted.load_enabled();
-    assert_eq!(restarted.list(), manager.list());
+    // (How often each one loaded the plugin differs.)
+    let unnumbered = |list: Vec<questkeep_plugins::PluginInfo>| -> Vec<_> {
+        list.into_iter()
+            .map(|p| questkeep_plugins::PluginInfo { revision: 0, ..p })
+            .collect()
+    };
+    assert_eq!(unnumbered(restarted.list()), unnumbered(manager.list()));
     assert_eq!(
         next.registry.get("example-store").unwrap().name(),
         "Example Store"

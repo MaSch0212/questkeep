@@ -20,6 +20,8 @@ use crate::wasm::{CallLimits, Runtime, Sandbox, WasmProvider};
 
 /// How long the source folder must be quiet before a watched plugin is reloaded.
 const WATCH_DEBOUNCE: Duration = Duration::from_millis(500);
+/// What an extension may save as its settings.
+const MAX_SETTINGS_BYTES: usize = 1024 * 1024;
 
 /// An installed plugin, as the UI lists it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -45,6 +47,13 @@ pub struct PluginInfo {
     /// Ids of the plugin's loaded stores.
     pub providers: Vec<String>,
     pub has_extension: bool,
+    /// The `extension` part of the manifest (its script, styles and declared settings) while the
+    /// plugin is enabled and its manifest is readable; the UI loads the extension from it.
+    #[ts(type = "Record<string, unknown> | null")]
+    pub extension: Option<serde_json::Value>,
+    /// Counts the times the plugin was loaded; a new number means its files may have changed.
+    #[ts(type = "number")]
+    pub revision: u64,
     /// How many themes the plugin brings.
     pub themes: u32,
     pub permissions: PluginPermissions,
@@ -68,6 +77,7 @@ struct Plugin {
     providers: Vec<Arc<WasmProvider>>,
     loaded: bool,
     error: Option<String>,
+    revision: u64,
     /// Dropping it stops the watch.
     watcher: Option<RecommendedWatcher>,
 }
@@ -80,6 +90,7 @@ impl Plugin {
             providers: Vec::new(),
             loaded: false,
             error: None,
+            revision: 0,
             watcher: None,
         }
     }
@@ -100,6 +111,10 @@ impl Plugin {
             error: self.error.clone(),
             providers: self.providers.iter().map(|p| p.id().to_string()).collect(),
             has_extension: manifest.is_some_and(|m| m.extension.is_some()),
+            extension: manifest
+                .filter(|_| self.entry.enabled)
+                .and_then(|m| m.extension.clone()),
+            revision: self.revision,
             themes: manifest.map_or(0, |m| m.themes.len() as u32),
             permissions: manifest
                 .map(|m| PluginPermissions {
@@ -317,6 +332,77 @@ impl PluginManager {
             .and_then(|p| p.manifest.clone())
     }
 
+    /// The file `relative` of an installed, enabled plugin, for handing it to the UI (extension
+    /// scripts, styles, images). `None` for anything that is not a file inside the plugin.
+    pub fn file(&self, id: &str, relative: &str) -> Option<PathBuf> {
+        let enabled = self
+            .inner
+            .plugins()
+            .iter()
+            .any(|p| p.entry.id == id && p.entry.enabled);
+        if !enabled {
+            return None;
+        }
+        let root = self.plugin_dir(id).canonicalize().ok()?;
+        let mut path = root.clone();
+        for part in relative.split('/').filter(|p| !p.is_empty()) {
+            if part == "." || part == ".." || part.contains(['\\', ':']) {
+                return None;
+            }
+            path.push(part);
+        }
+        // Links must not lead out of the plugin either.
+        let path = path.canonicalize().ok()?;
+        (path.starts_with(&root) && path.is_file()).then_some(path)
+    }
+
+    /// What the plugin's extension saved (`{}` when nothing yet). It lives with the plugin's own
+    /// data, so removing that data removes it too.
+    pub fn settings(&self, id: &str) -> Result<serde_json::Value> {
+        self.entry(id)?;
+        let file = self.settings_file(id);
+        let empty = || serde_json::Value::Object(serde_json::Map::new());
+        match std::fs::read_to_string(&file) {
+            Ok(text) => Ok(serde_json::from_str(&text)
+                .ok()
+                .filter(serde_json::Value::is_object)
+                .unwrap_or_else(empty)),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(empty()),
+            Err(err) => Err(PluginError::io(&file, err)),
+        }
+    }
+
+    /// Replaces what the plugin's extension saved; `settings` must be a JSON object.
+    pub fn save_settings(&self, id: &str, settings: &serde_json::Value) -> Result<()> {
+        self.entry(id)?;
+        if !settings.is_object() {
+            return Err(PluginError::Invalid(
+                "Plugin settings must be an object.".into(),
+            ));
+        }
+        let text = serde_json::to_string_pretty(settings)
+            .map_err(|e| PluginError::Invalid(e.to_string()))?;
+        if text.len() > MAX_SETTINGS_BYTES {
+            return Err(PluginError::Invalid(format!(
+                "The settings of the plugin \"{id}\" are too large."
+            )));
+        }
+        let file = self.settings_file(id);
+        let dir = self.inner.paths.plugin_data_dir().join(id);
+        std::fs::create_dir_all(&dir).map_err(|e| PluginError::io(&dir, e))?;
+        let tmp = file.with_extension("json.tmp");
+        std::fs::write(&tmp, text).map_err(|e| PluginError::io(&tmp, e))?;
+        std::fs::rename(&tmp, &file).map_err(|e| PluginError::io(&file, e))
+    }
+
+    fn settings_file(&self, id: &str) -> PathBuf {
+        self.inner
+            .paths
+            .plugin_data_dir()
+            .join(id)
+            .join("settings.json")
+    }
+
     fn info(&self, id: &str) -> Result<PluginInfo> {
         self.inner
             .plugins()
@@ -453,6 +539,7 @@ impl Inner {
             return;
         };
         plugin.manifest = manifest;
+        plugin.revision += 1;
         match outcome {
             Ok(providers) => {
                 for provider in &providers {
@@ -664,6 +751,56 @@ mod tests {
     }
 
     #[test]
+    fn serves_plugin_files_and_keeps_extension_settings() {
+        let fx = Fixture::new();
+        let manager = fx.manager();
+        let source = fx.root.join("src/ext");
+        write_plugin(&source, "ext", "1.0.0");
+        std::fs::create_dir_all(source.join("ui")).unwrap();
+        std::fs::write(source.join("ui/main.js"), "export function activate() {}").unwrap();
+        std::fs::write(fx.root.join("secret.txt"), "no").unwrap();
+        let first = manager.install(&source).unwrap();
+
+        let file = manager.file("ext", "ui/main.js").unwrap();
+        assert!(file.ends_with("main.js") && file.is_file());
+        assert_eq!(manager.file("ext", "/ui//main.js"), Some(file));
+        for outside in [
+            "../../secret.txt",
+            "ui/../../../secret.txt",
+            "ui",
+            "missing.js",
+            "C:/Windows/win.ini",
+            r"ui\main.js",
+            "",
+        ] {
+            assert_eq!(manager.file("ext", outside), None, "{outside}");
+        }
+        assert_eq!(manager.file("nope", "ui/main.js"), None);
+
+        // Each load gets a new number, so the UI knows to fetch the files again.
+        let reloaded = manager.reload("ext").unwrap();
+        assert!(reloaded.revision > first.revision);
+
+        assert_eq!(manager.settings("ext").unwrap(), serde_json::json!({}));
+        let saved = serde_json::json!({ "greeting": "hi", "count": 3 });
+        manager.save_settings("ext", &saved).unwrap();
+        assert_eq!(manager.settings("ext").unwrap(), saved);
+        assert!(
+            manager
+                .save_settings("ext", &serde_json::json!([1]))
+                .is_err()
+        );
+        assert!(manager.settings("nope").is_err());
+
+        // A disabled plugin hands out no files.
+        manager.set_enabled("ext", false).unwrap();
+        assert_eq!(manager.file("ext", "ui/main.js"), None);
+        // Its settings go with its data.
+        manager.remove("ext", true).unwrap();
+        assert!(!fx.paths.plugin_data_dir().join("ext").exists());
+    }
+
+    #[test]
     fn installs_lists_disables_and_removes() {
         let fx = Fixture::new();
         let manager = fx.manager();
@@ -701,7 +838,13 @@ mod tests {
         // A second manager (the next start) reads the same list.
         let again = fx.manager();
         again.load_enabled();
-        assert_eq!(again.list(), manager.list());
+        // (How often each one loaded the plugin differs.)
+        let unnumbered = |list: Vec<PluginInfo>| -> Vec<PluginInfo> {
+            list.into_iter()
+                .map(|p| PluginInfo { revision: 0, ..p })
+                .collect()
+        };
+        assert_eq!(unnumbered(again.list()), unnumbered(manager.list()));
 
         manager.set_enabled("theme-pack", true).unwrap();
         std::fs::create_dir_all(fx.paths.plugin_data_dir().join("theme-pack")).unwrap();
