@@ -126,6 +126,106 @@ const yesNo = (): readonly (readonly [TriState, string])[] => [
 const query = () => store.query();
 const set = (patch: Partial<GameQuery>) => store.changeQuery(patch);
 
+/** The filter choices and the filter tree for a query (a view's, or an auto category's). */
+export function FilterFields(props: {
+  query: GameQuery;
+  onChange: (patch: Partial<GameQuery>) => void;
+}): JSX.Element {
+  return (
+    <div class="filters__body">
+      <div class="filters__grid">
+        <PickRow
+          id="stores"
+          label={trFilters("source")}
+          choose={tr("chooseStores")}
+          placeholder={tr("searchStores")}
+          items={store.sources().map((source) => ({
+            id: source.id,
+            label: source.name,
+            checked: props.query.sources.includes(source.id),
+          }))}
+          onPick={(id) => props.onChange({ sources: toggleSource(props.query.sources, id) })}
+        />
+        <Show
+          when={store.categories().length > 0}
+          fallback={
+            <>
+              <span class="filters__label">{trFilters("category")}</span>
+              <p class="filters__hint">{tr("noCategories")}</p>
+            </>
+          }
+        >
+          <PickRow
+            id="categories"
+            label={trFilters("category")}
+            choose={tr("chooseCategories")}
+            placeholder={tr("searchCategories")}
+            items={[
+              ...store.categories().map((category) => ({
+                id: category.id,
+                label: category.name,
+                checked: props.query.categories.includes(category.id),
+              })),
+              {
+                id: NO_CATEGORY,
+                label: trCommon("noCategory"),
+                special: true,
+                checked: props.query.categories.includes(NO_CATEGORY),
+              },
+            ]}
+            onPick={(id) =>
+              props.onChange({ categories: toggleSource(props.query.categories, id) })
+            }
+          />
+        </Show>
+        <Choice<KindFilter>
+          label={tr("type")}
+          value={props.query.kind}
+          options={[
+            ["games", tr("games")],
+            ["apps", tr("apps")],
+            ["both", tr("both")],
+          ]}
+          onChange={(kind) => props.onChange({ kind })}
+        />
+        <Choice
+          label={tr("installed")}
+          value={props.query.installed}
+          options={yesNo()}
+          onChange={(installed) => props.onChange({ installed })}
+        />
+        <Choice
+          label={tr("favorite")}
+          value={props.query.favorite}
+          options={yesNo()}
+          onChange={(favorite) => props.onChange({ favorite })}
+        />
+        <Choice<PlayedFilter>
+          label={tr("played")}
+          value={props.query.played}
+          options={[
+            ["any", tr("any")],
+            ["played", tr("played")],
+            ["never", tr("never")],
+          ]}
+          onChange={(played) => props.onChange({ played })}
+        />
+        <Choice<HiddenFilter>
+          label={tr("hiddenGames")}
+          value={props.query.hidden}
+          options={[
+            ["visible", tr("leaveOut")],
+            ["all", tr("include")],
+            ["hidden", tr("only")],
+          ]}
+          onChange={(hidden) => props.onChange({ hidden })}
+        />
+      </div>
+      <FilterTree tree={props.query.filter} onChange={(filter) => props.onChange({ filter })} />
+    </div>
+  );
+}
+
 /** The open view's filters. Changes apply at once and are kept as the view's draft. */
 export function FilterPanel(props: {
   anchor: PopoverAnchor;
@@ -155,95 +255,7 @@ export function FilterPanel(props: {
           })}
         </span>
       </div>
-      <div class="filters__body">
-        <div class="filters__grid">
-          <PickRow
-            id="stores"
-            label={trFilters("source")}
-            choose={tr("chooseStores")}
-            placeholder={tr("searchStores")}
-            items={store.sources().map((source) => ({
-              id: source.id,
-              label: source.name,
-              checked: query().sources.includes(source.id),
-            }))}
-            onPick={(id) => set({ sources: toggleSource(query().sources, id) })}
-          />
-          <Show
-            when={store.categories().length > 0}
-            fallback={
-              <>
-                <span class="filters__label">{trFilters("category")}</span>
-                <p class="filters__hint">{tr("noCategories")}</p>
-              </>
-            }
-          >
-            <PickRow
-              id="categories"
-              label={trFilters("category")}
-              choose={tr("chooseCategories")}
-              placeholder={tr("searchCategories")}
-              items={[
-                ...store.categories().map((category) => ({
-                  id: category.id,
-                  label: category.name,
-                  checked: query().categories.includes(category.id),
-                })),
-                {
-                  id: NO_CATEGORY,
-                  label: trCommon("noCategory"),
-                  special: true,
-                  checked: query().categories.includes(NO_CATEGORY),
-                },
-              ]}
-              onPick={(id) => set({ categories: toggleSource(query().categories, id) })}
-            />
-          </Show>
-          <Choice<KindFilter>
-            label={tr("type")}
-            value={query().kind}
-            options={[
-              ["games", tr("games")],
-              ["apps", tr("apps")],
-              ["both", tr("both")],
-            ]}
-            onChange={(kind) => set({ kind })}
-          />
-          <Choice
-            label={tr("installed")}
-            value={query().installed}
-            options={yesNo()}
-            onChange={(installed) => set({ installed })}
-          />
-          <Choice
-            label={tr("favorite")}
-            value={query().favorite}
-            options={yesNo()}
-            onChange={(favorite) => set({ favorite })}
-          />
-          <Choice<PlayedFilter>
-            label={tr("played")}
-            value={query().played}
-            options={[
-              ["any", tr("any")],
-              ["played", tr("played")],
-              ["never", tr("never")],
-            ]}
-            onChange={(played) => set({ played })}
-          />
-          <Choice<HiddenFilter>
-            label={tr("hiddenGames")}
-            value={query().hidden}
-            options={[
-              ["visible", tr("leaveOut")],
-              ["all", tr("include")],
-              ["hidden", tr("only")],
-            ]}
-            onChange={(hidden) => set({ hidden })}
-          />
-        </div>
-        <FilterTree tree={query().filter} onChange={(filter) => set({ filter })} />
-      </div>
+      <FilterFields query={query()} onChange={set} />
       <div class="filters__footer">
         <button
           type="button"

@@ -23,6 +23,7 @@ const category = (id: string, name: string): Category => ({
   name,
   gameCount: 0,
   sources: [],
+  autoFilter: null,
 });
 const categories = [category("c2", "co-op"), category("c1", "RPG"), category("c3", "Empty")];
 const sourceName = (id: string) => ({ steam: "Steam", epic: "Epic Games" })[id] ?? id;

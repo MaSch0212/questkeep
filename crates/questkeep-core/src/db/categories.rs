@@ -3,15 +3,17 @@
 //!
 //! A game's categories (`game_category_links`) are its store's tags mapped through
 //! `category_sources`, plus the user's own links, minus the imported ones the user took off.
+//! An auto category (`auto_filter`) is given to the games matching its filter as they are added
+//! or change; one the user took off a game is remembered (`excluded`) and not given again.
 
 use std::collections::{HashMap, HashSet};
 
-use rusqlite::{OptionalExtension, Transaction, params};
+use rusqlite::{OptionalExtension, ToSql, Transaction, params};
 use uuid::Uuid;
 
 use super::Database;
 use crate::error::{CoreError, Result};
-use crate::model::{Category, CategorySource};
+use crate::model::{Category, CategorySource, GameQuery};
 
 fn clean_name(name: &str) -> Result<String> {
     let name = name.trim();
@@ -125,7 +127,7 @@ pub(super) fn set_categories(
             "DELETE FROM game_categories WHERE game_id = ?1 AND category_id = ?2",
             [&game, id],
         )?;
-        if has_category(tx, &game, id)? {
+        if has_category(tx, &game, id)? || is_auto(tx, id)? {
             tx.execute(
                 "INSERT INTO game_categories (game_id, category_id, excluded) \
                  VALUES (?1, ?2, 1)",
@@ -146,6 +148,25 @@ pub(super) fn set_categories(
         }
     }
     Ok(())
+}
+
+/// Whether the category has a filter that hands it out (see [`Database::apply_auto_categories`]).
+fn is_auto(tx: &Transaction<'_>, category: &str) -> Result<bool> {
+    Ok(tx
+        .query_row(
+            "SELECT auto_filter IS NOT NULL FROM categories WHERE id = ?1",
+            [category],
+            |r| r.get(0),
+        )
+        .optional()?
+        .unwrap_or(false))
+}
+
+/// Reads a stored filter; an unreadable one counts as none.
+fn parse_filter(json: Option<String>) -> Option<GameQuery> {
+    serde_json::from_str(&json?)
+        .inspect_err(|err| tracing::warn!(%err, "ignoring an unreadable category filter"))
+        .ok()
 }
 
 fn has_category(tx: &Transaction<'_>, game: &str, category: &str) -> Result<bool> {
@@ -189,7 +210,8 @@ impl Database {
         }
         let mut stmt = conn.prepare_cached(
             "SELECT c.id, c.name, \
-             (SELECT COUNT(*) FROM game_category_links l WHERE l.category_id = c.id) \
+             (SELECT COUNT(*) FROM game_category_links l WHERE l.category_id = c.id), \
+             c.auto_filter \
              FROM categories c ORDER BY c.position, c.name COLLATE NOCASE, c.id",
         )?;
         let categories = stmt
@@ -200,6 +222,7 @@ impl Database {
                     id,
                     name: r.get(1)?,
                     game_count: u32::try_from(r.get::<_, i64>(2)?).unwrap_or_default(),
+                    auto_filter: parse_filter(r.get(3)?),
                 })
             })?
             .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -250,6 +273,82 @@ impl Database {
             tx.commit()?;
         }
         self.category(id)
+    }
+
+    /// Sets or clears the filter of an auto category. Its search text never counts.
+    pub fn set_category_filter(&self, id: &str, filter: Option<&GameQuery>) -> Result<()> {
+        let json = filter
+            .map(|f| {
+                let mut f = f.clone();
+                f.search = None;
+                serde_json::to_string(&f)
+            })
+            .transpose()
+            .map_err(|e| CoreError::Invalid(e.to_string()))?;
+        let changed = self.conn().execute(
+            "UPDATE categories SET auto_filter = ?2 WHERE id = ?1",
+            params![id, json],
+        )?;
+        if changed == 0 {
+            return Err(not_found());
+        }
+        Ok(())
+    }
+
+    /// Gives every auto category to the games matching its filter, among `only` (all games
+    /// when `None`). Games that have it already, or that the user took it off, are left alone.
+    /// Returns the games that got a category.
+    pub fn apply_auto_categories(&self, only: Option<&[Uuid]>) -> Result<Vec<Uuid>> {
+        if only.is_some_and(<[Uuid]>::is_empty) {
+            return Ok(Vec::new());
+        }
+        let mut conn = self.conn();
+        let tx = conn.transaction()?;
+        let autos: Vec<(String, Option<String>)> = tx
+            .prepare("SELECT id, auto_filter FROM categories WHERE auto_filter IS NOT NULL")?
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
+            .collect::<rusqlite::Result<_>>()?;
+        let only_json = only.map(|ids| {
+            serde_json::Value::from(ids.iter().map(Uuid::to_string).collect::<Vec<_>>()).to_string()
+        });
+        let mut changed: HashSet<String> = HashSet::new();
+        for (category, json) in autos {
+            let Some(query) = parse_filter(json) else {
+                continue;
+            };
+            let (where_sql, mut args) = super::games::query_filter(&query);
+            args.push(Box::new(category.clone()));
+            let c = args.len();
+            let join = if where_sql.is_empty() { "WHERE" } else { "AND" };
+            let mut sql = format!(
+                "SELECT games.id FROM library_entries AS games {where_sql} {join} \
+                 NOT EXISTS (SELECT 1 FROM game_categories x \
+                 WHERE x.game_id = games.id AND x.category_id = ?{c}) AND NOT EXISTS \
+                 (SELECT 1 FROM game_category_links l \
+                 WHERE l.game_id = games.id AND l.category_id = ?{c})"
+            );
+            if let Some(ids) = &only_json {
+                args.push(Box::new(ids.clone()));
+                sql.push_str(&format!(
+                    " AND games.id IN (SELECT value FROM json_each(?{}))",
+                    args.len()
+                ));
+            }
+            let params: Vec<&dyn ToSql> = args.iter().map(AsRef::as_ref).collect();
+            let games: Vec<String> = tx
+                .prepare(&sql)?
+                .query_map(params.as_slice(), |r| r.get(0))?
+                .collect::<rusqlite::Result<_>>()?;
+            for game in games {
+                tx.execute(
+                    "INSERT OR IGNORE INTO game_categories (game_id, category_id) VALUES (?1, ?2)",
+                    [&game, &category],
+                )?;
+                changed.insert(game);
+            }
+        }
+        tx.commit()?;
+        Ok(uuids(changed))
     }
 
     /// Puts the categories in this order; ones not listed keep their order after them.
@@ -794,5 +893,46 @@ mod tests {
             listed(&db),
             vec![("Playing".into(), 2), ("Currently playing".into(), 1)]
         );
+    }
+
+    #[test]
+    fn auto_categories_follow_their_filter_but_keep_removals() {
+        let db = db();
+        let steam = db.create_category("From Steam").unwrap();
+        let a = store_game(&db, "steam", "a");
+        let epic = store_game(&db, "epic", "e");
+        let filter = GameQuery {
+            sources: vec!["steam".into()],
+            hidden: HiddenFilter::All,
+            search: Some("ignored".into()),
+            ..GameQuery::default()
+        };
+        db.set_category_filter(&steam.id, Some(&filter)).unwrap();
+        let saved = by_name(&db, "From Steam").auto_filter.unwrap();
+        assert_eq!(saved.search, None);
+        assert_eq!(db.apply_auto_categories(None).unwrap(), vec![a]);
+        assert_eq!(names(&db, a), vec!["From Steam"]);
+        assert!(names(&db, epic).is_empty());
+        // Nothing new the second time.
+        assert!(db.apply_auto_categories(None).unwrap().is_empty());
+
+        // Taken off by hand: never given again, until the user adds it back.
+        db.set_game_categories(a, &[]).unwrap();
+        assert!(db.apply_auto_categories(Some(&[a])).unwrap().is_empty());
+        assert!(names(&db, a).is_empty());
+        db.set_game_categories(a, std::slice::from_ref(&steam.id))
+            .unwrap();
+        assert_eq!(names(&db, a), vec!["From Steam"]);
+
+        // Only the given games are looked at; games that stop matching keep it; manual adds work.
+        let b = store_game(&db, "steam", "b");
+        assert!(db.apply_auto_categories(Some(&[epic])).unwrap().is_empty());
+        assert_eq!(db.apply_auto_categories(Some(&[b, epic])).unwrap(), vec![b]);
+        db.set_game_categories(epic, std::slice::from_ref(&steam.id))
+            .unwrap();
+        db.set_category_filter(&steam.id, None).unwrap();
+        assert!(by_name(&db, "From Steam").auto_filter.is_none());
+        assert_eq!(by_name(&db, "From Steam").game_count, 3);
+        assert!(db.set_category_filter("missing", None).is_err());
     }
 }

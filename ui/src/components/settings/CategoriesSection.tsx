@@ -3,12 +3,14 @@ import Merge from "lucide-solid/icons/merge";
 import Pencil from "lucide-solid/icons/pencil";
 import Trash from "lucide-solid/icons/trash";
 import Unlink from "lucide-solid/icons/unlink";
+import WandSparkles from "lucide-solid/icons/wand-sparkles";
 import { createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import type { Category } from "../../bindings/Category";
 import { translator } from "../../i18n";
 import { settingsLibrary } from "../../i18n/settingsLibrary";
 import { dropIndexAt, moveBefore, nudge } from "../../lib/categoryOrder";
 import { store } from "../../lib/store";
+import { CategoryFilterDialog } from "../CategoryFilterDialog";
 import { Menu } from "../Menu";
 import type { PopoverAnchor } from "../Popover";
 import { SourceIcon, sourceName } from "../SourceIcon";
@@ -150,6 +152,7 @@ function CategoryRow(props: {
   const [editing, setEditing] = createSignal(false);
   const [confirm, setConfirm] = createSignal<Confirm | null>(null);
   const [mergeMenu, setMergeMenu] = createSignal<PopoverAnchor | null>(null);
+  const [filtering, setFiltering] = createSignal(false);
   let mergeButton: HTMLButtonElement | undefined;
   const games = () => tr("games", { count: props.category.gameCount });
   const others = () => store.categories().filter((c) => c.id !== props.category.id);
@@ -239,7 +242,24 @@ function CategoryRow(props: {
           }}
         </For>
       </span>
+      <Show when={props.category.autoFilter}>
+        <span class="category-list__auto" title={tr("autoBadgeTitle")}>
+          <WandSparkles class="icon" aria-hidden="true" />
+          {tr("autoBadge")}
+        </span>
+      </Show>
       <span class="category-list__count">{games()}</span>
+      <button
+        type="button"
+        class="icon-btn icon-btn--small"
+        classList={{ "icon-btn--on": props.category.autoFilter !== null }}
+        aria-label={tr("autoAria", { name: props.category.name })}
+        title={tr("autoButtonTitle")}
+        aria-haspopup="dialog"
+        onClick={() => setFiltering(true)}
+      >
+        <WandSparkles class="icon" aria-hidden="true" />
+      </button>
       <button
         ref={(el) => (mergeButton = el)}
         type="button"
@@ -294,6 +314,9 @@ function CategoryRow(props: {
             ]}
           />
         )}
+      </Show>
+      <Show when={filtering()}>
+        <CategoryFilterDialog category={props.category} onClose={() => setFiltering(false)} />
       </Show>
       <Show when={confirm()?.kind === "delete"}>
         <div class="category-list__confirm" role="alert">

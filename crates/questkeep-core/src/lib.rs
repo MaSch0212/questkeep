@@ -4,6 +4,7 @@
 
 /// Store account sign-in, from the store plugin interface.
 pub use questkeep_store_api::auth;
+pub mod auto_categories;
 pub mod backup;
 pub mod db;
 pub mod error;

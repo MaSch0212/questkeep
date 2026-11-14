@@ -86,6 +86,9 @@ export const createCategory = (name: string) => invoke<Category>("create_categor
 export const renameCategory = (id: string, name: string) =>
   invoke<Category>("rename_category", { id, name });
 export const deleteCategory = (id: string) => invoke<void>("delete_category", { id });
+/** Sets (or with null clears) an auto category's filter; matching games get it now and later. */
+export const setCategoryFilter = (id: string, filter: GameQuery | null) =>
+  invoke<Category>("set_category_filter", { id, filter });
 /** Puts the categories in this order. */
 export const reorderCategories = (ids: string[]) => invoke<void>("reorder_categories", { ids });
 /** Merges `from` into `into` (games and store categories); returns `into`. */

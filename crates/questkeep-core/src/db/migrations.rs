@@ -412,6 +412,12 @@ pub(crate) const MIGRATIONS: &[&str] = &[
     CREATE INDEX playtime_days_day ON playtime_days (day);
     CREATE INDEX play_sessions_started ON play_sessions (started_at);
     "#,
+    // 17: auto categories. `auto_filter` is a `GameQuery` (JSON); matching games are given the
+    // category as they are added or change. A game the user takes it off keeps an `excluded`
+    // row in `game_categories`, so the filter does not bring it back.
+    r#"
+    ALTER TABLE categories ADD COLUMN auto_filter TEXT;
+    "#,
 ];
 
 /// Latest schema version this build knows.

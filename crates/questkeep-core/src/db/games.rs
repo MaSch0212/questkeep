@@ -75,7 +75,7 @@ fn search_key(name: &str) -> String {
 }
 
 /// The `WHERE` clause (empty when nothing filters) and its arguments for a query's filters.
-fn query_filter(query: &GameQuery) -> (String, Vec<Box<dyn ToSql>>) {
+pub(super) fn query_filter(query: &GameQuery) -> (String, Vec<Box<dyn ToSql>>) {
     let mut clauses: Vec<String> = Vec::new();
     let mut args: Vec<Box<dyn ToSql>> = Vec::new();
 

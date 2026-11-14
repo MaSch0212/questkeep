@@ -132,6 +132,31 @@ impl EventBus {
     }
 }
 
+impl EventBus {
+    /// A handle that publishes while the bus lives, without keeping it alive (for workers the
+    /// bus's own subscribers feed).
+    pub fn downgrade(&self) -> WeakEventBus {
+        WeakEventBus {
+            subscribers: Arc::downgrade(&self.subscribers),
+        }
+    }
+}
+
+/// See [`EventBus::downgrade`].
+#[derive(Clone)]
+pub struct WeakEventBus {
+    subscribers: std::sync::Weak<RwLock<Vec<Subscriber>>>,
+}
+
+impl WeakEventBus {
+    /// Publishes on the bus if it still exists.
+    pub fn publish(&self, event: CoreEvent) {
+        if let Some(subscribers) = self.subscribers.upgrade() {
+            EventBus { subscribers }.publish(event);
+        }
+    }
+}
+
 impl std::fmt::Debug for EventBus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let count = self.subscribers.read().map(|s| s.len()).unwrap_or_default();

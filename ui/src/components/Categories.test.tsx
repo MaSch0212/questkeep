@@ -25,7 +25,7 @@ const category = (
   name: string,
   gameCount = 1,
   sources: Category["sources"] = [],
-): Category => ({ id, name, gameCount, sources });
+): Category => ({ id, name, gameCount, sources, autoFilter: null });
 const rpg = category("c1", "RPG", 2);
 const coop = category("c2", "Co-op");
 

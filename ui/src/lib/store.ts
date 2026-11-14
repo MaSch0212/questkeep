@@ -1346,6 +1346,8 @@ function createAppStore() {
     loadCategories,
     setGameCategories,
     createCategory: (name: string) => editCategories(() => api.createCategory(name)),
+    setCategoryFilter: (id: string, filter: GameQuery | null) =>
+      editCategories(() => api.setCategoryFilter(id, filter)),
     renameCategory: (id: string, name: string) =>
       editCategories(() => api.renameCategory(id, name)),
     deleteCategory: (id: string) => editCategories(() => api.deleteCategory(id)),

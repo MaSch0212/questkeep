@@ -134,6 +134,7 @@ impl Library {
         {
             tracing::warn!(%err, "could not recompute sorting names");
         }
+        crate::auto_categories::watch(db.clone(), &events);
         let resolver = MetadataResolver::new(db.clone(), &providers, loaded.metadata_priority);
         if db.resolve_pending().unwrap_or(false) {
             match resolver.resolve_all() {
@@ -609,6 +610,19 @@ impl Library {
         let (target, changed) = self.db.separate_category_source(id, source, name)?;
         self.categories_changed(changed);
         self.db.category(&target)
+    }
+
+    /// Sets or clears a category's filter (an auto category); the games matching it get the
+    /// category right away, later ones as they are added or change.
+    pub fn set_category_filter(&self, id: &str, filter: Option<&GameQuery>) -> Result<Category> {
+        self.db.set_category_filter(id, filter)?;
+        let changed = if filter.is_some() {
+            self.db.apply_auto_categories(None)?
+        } else {
+            Vec::new()
+        };
+        self.categories_changed(changed);
+        self.db.category(id)
     }
 
     fn categories_changed(&self, games: Vec<Uuid>) {

@@ -771,6 +771,19 @@ pub async fn rename_category(
     blocking(state, move |s| s.library.rename_category(&id, &name)).await
 }
 
+/// Sets or clears a category's filter; matching games get the category.
+#[tauri::command]
+pub async fn set_category_filter(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    filter: Option<GameQuery>,
+) -> CmdResult<Category> {
+    blocking(state, move |s| {
+        s.library.set_category_filter(&id, filter.as_ref())
+    })
+    .await
+}
+
 #[tauri::command]
 pub async fn delete_category(state: State<'_, Arc<AppState>>, id: String) -> CmdResult<()> {
     blocking(state, move |s| s.library.delete_category(&id)).await

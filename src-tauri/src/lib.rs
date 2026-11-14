@@ -504,6 +504,7 @@ pub fn run() {
             commands::create_category,
             commands::rename_category,
             commands::delete_category,
+            commands::set_category_filter,
             commands::reorder_categories,
             commands::merge_categories,
             commands::separate_category_source,
