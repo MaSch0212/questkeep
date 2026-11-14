@@ -348,7 +348,7 @@ fn unzip(archive: &Path, to: &Path) -> Result<()> {
         let Some(relative) = entry.enclosed_name() else {
             return Err(PluginError::Invalid(format!(
                 "The archive contains \"{}\", which points outside the plugin folder.",
-                entry.name()
+                String::from_utf8_lossy(entry.name_raw())
             )));
         };
         let target = to.join(relative);

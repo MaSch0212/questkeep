@@ -17,36 +17,42 @@ pub(crate) struct Basics {
 }
 
 pub(crate) fn read_basics() -> Basics {
+    // Fails only where sysinfo cannot read the system at all; the fields then stay empty.
     let sys = System::new_with_specifics(
         RefreshKind::nothing()
             .with_cpu(CpuRefreshKind::nothing())
             .with_memory(MemoryRefreshKind::nothing().with_ram()),
-    );
-    let threads = u32::try_from(sys.cpus().len()).unwrap_or(0);
-    let cpu = sys.cpus().first().map(|c| CpuInfo {
+    )
+    .ok();
+    let cpus = sys.as_ref().map_or(&[][..], System::cpus);
+    let threads = u32::try_from(cpus.len()).unwrap_or(0);
+    let cpu = cpus.first().map(|c| CpuInfo {
         name: clean_cpu_name(c.brand()),
         cores: System::physical_core_count()
+            .ok()
             .and_then(|n| u32::try_from(n).ok())
             .unwrap_or(threads),
         threads,
     });
     let os = System::long_os_version()
-        .or_else(System::name)
-        .unwrap_or_else(|| "Unknown".to_string());
+        .or_else(|_| System::name())
+        .unwrap_or_else(|_| "Unknown".to_string());
     Basics {
         os,
         cpu: cpu.filter(|c| !c.name.is_empty()),
-        memory_bytes: sys.total_memory(),
-        uptime_seconds: System::uptime(),
+        memory_bytes: sys.as_ref().map_or(0, System::total_memory),
+        uptime_seconds: System::uptime().unwrap_or(0),
         drives: read_drives(),
     }
 }
 
 fn read_drives() -> Vec<DriveInfo> {
-    let disks = Disks::new_with_refreshed_list();
+    let Ok(disks) = Disks::new_with_refreshed_list() else {
+        return Vec::new();
+    };
     let mut seen = HashSet::new();
     let mut out = Vec::new();
-    for d in disks.list() {
+    for d in disks.iter() {
         let mount = d.mount_point().to_string_lossy().into_owned();
         let fs = d.file_system().to_string_lossy().into_owned();
         if d.total_space() == 0 || is_pseudo(&mount, &fs) || !seen.insert(mount.clone()) {

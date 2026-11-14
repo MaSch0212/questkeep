@@ -32,13 +32,14 @@ pub trait ProcessProbe: Send + Sync {
 
 /// Real probe backed by `sysinfo` (Windows and Linux).
 pub struct SystemProbe {
-    system: Mutex<System>,
+    /// Created on the first snapshot; stays `None` while sysinfo cannot read this system.
+    system: Mutex<Option<System>>,
 }
 
 impl SystemProbe {
     pub fn new() -> Self {
         Self {
-            system: Mutex::new(System::new()),
+            system: Mutex::new(None),
         }
     }
 }
@@ -51,7 +52,19 @@ impl Default for SystemProbe {
 
 impl ProcessProbe for SystemProbe {
     fn snapshot(&self) -> Vec<ProcInfo> {
-        let mut system = self.system.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut guard = self.system.lock().unwrap_or_else(PoisonError::into_inner);
+        if guard.is_none() {
+            match System::new() {
+                Ok(system) => *guard = Some(system),
+                Err(err) => {
+                    tracing::warn!("cannot list processes: {err}");
+                    return Vec::new();
+                }
+            }
+        }
+        let Some(system) = guard.as_mut() else {
+            return Vec::new();
+        };
         let kind = ProcessRefreshKind::nothing().with_exe(UpdateKind::OnlyIfNotSet);
         #[cfg(target_os = "linux")]
         let kind = kind
