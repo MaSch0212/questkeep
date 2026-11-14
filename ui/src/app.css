@@ -2083,6 +2083,9 @@ ul {
 .modal--wide {
   width: var(--qk-dialog-wide-width);
 }
+.modal--tall {
+  height: var(--qk-dialog-tall-height);
+}
 .modal__body {
   flex: 1 1 auto;
   min-height: 0;
@@ -3540,26 +3543,55 @@ ul {
   color: var(--qk-color-accent);
 }
 /* Auto category filter: the filters beside a live list of matching games */
+/* Fills the fixed-height dialog; the filters and the game list scroll on their own. */
+.modal__body:has(> .auto-filter) {
+  container: auto-filter / inline-size;
+  overflow: hidden;
+}
 .auto-filter {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);
   gap: var(--qk-space-4);
+  height: 100%;
 }
 .auto-filter__filters {
   display: flex;
-  flex: 3 1 var(--qk-auto-filter-min-width);
   flex-direction: column;
   gap: var(--qk-space-3);
   min-width: 0;
+  min-height: 0;
+  padding-right: var(--qk-space-2);
+  overflow-y: auto;
+}
+/* The whole column scrolls, intro included, not the filter fields alone. */
+.auto-filter__filters .filters__body {
+  flex: none;
+  overflow: visible;
 }
 .auto-filter__preview {
-  flex: 2 1 var(--qk-auto-filter-preview-min-width);
   display: flex;
   flex-direction: column;
   gap: var(--qk-space-2);
   min-width: 0;
-  padding-left: var(--qk-space-4);
-  border-left: 1px solid var(--qk-color-border);
+  min-height: 0;
+  padding-top: var(--qk-space-4);
+  border-top: 1px solid var(--qk-color-border);
+}
+/* Side by side once both fit (--qk-auto-filter-min-width + preview min width + gap). */
+@container auto-filter (min-width: 680px) {
+  .auto-filter {
+    grid-template-columns: minmax(var(--qk-auto-filter-min-width), 3fr) minmax(
+        var(--qk-auto-filter-preview-min-width),
+        2fr
+      );
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .auto-filter__preview {
+    padding-top: 0;
+    padding-left: var(--qk-space-4);
+    border-top: 0;
+    border-left: 1px solid var(--qk-color-border);
+  }
 }
 .auto-filter__heading {
   font-size: var(--qk-font-size-sm);
@@ -3568,7 +3600,10 @@ ul {
 }
 .auto-filter__list {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
   margin: 0;
   padding: 0;
   list-style: none;

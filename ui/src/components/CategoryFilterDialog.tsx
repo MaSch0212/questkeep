@@ -91,6 +91,7 @@ export function CategoryFilterDialog(props: { category: Category; onClose: () =>
     <Modal
       title={tr("autoTitle", { name: props.category.name })}
       wide
+      tall
       onClose={props.onClose}
       footer={footer}
     >

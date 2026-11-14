@@ -277,6 +277,8 @@
   /* Auto category dialog: filters and the preview sit side by side while both fit. */
   --qk-auto-filter-min-width: 420px;
   --qk-auto-filter-preview-min-width: 240px;
+  /* Dialogs whose content changes size while open (the auto category filter). */
+  --qk-dialog-tall-height: 680px;
   --qk-command-popup-top: calc(var(--qk-titlebar-height) + var(--qk-space-1));
   --qk-command-height: 30px;
   --qk-command-panel-width: 500px;
