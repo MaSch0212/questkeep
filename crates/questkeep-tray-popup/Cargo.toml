@@ -29,7 +29,7 @@ windows = { version = "0.62.2", features = [
   "Win32_UI_Shell",
   "Win32_UI_WindowsAndMessaging",
 ] }
-windows-numerics = "0.3.1"
+windows-numerics = "0.100.0"
 # Screen-reader support (UI Automation).
 accesskit = "0.25.1"
 accesskit_windows = "0.35.1"
