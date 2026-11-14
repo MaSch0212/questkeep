@@ -1,6 +1,6 @@
 import { intlLocale, translator } from "../i18n";
 import { gameSections } from "../i18n/gameSections";
-import { For, Show, type JSX } from "solid-js";
+import { createSignal, For, Show, type JSX } from "solid-js";
 import type { Achievements } from "../bindings/Achievements";
 import type { Game } from "../bindings/Game";
 import type { GameActivity } from "../bindings/GameActivity";
@@ -12,6 +12,16 @@ import { store } from "../lib/store";
 import { openLink } from "./settings/openLink";
 
 const tr = translator(gameSections);
+
+/** An achievement's icon; a star when it has none or it does not load. */
+function AchievementIcon(props: { src: string | null; alt: string }) {
+  const [failed, setFailed] = createSignal(false);
+  return (
+    <Show when={!failed() && props.src} fallback={<span aria-hidden="true">★</span>}>
+      {(src) => <img src={src()} alt={props.alt} loading="lazy" onError={() => setFailed(true)} />}
+    </Show>
+  );
+}
 
 let sectionSeq = 0;
 
@@ -213,9 +223,7 @@ export function AchievementsCard(props: { achievements: Achievements | null | un
                       class="ach__icon"
                       data-tooltip={`${item.name}${item.description ? ` – ${item.description}` : ""}`}
                     >
-                      <Show when={item.icon} fallback={<span aria-hidden="true">★</span>}>
-                        {(src) => <img src={src()} alt={item.name} loading="lazy" />}
-                      </Show>
+                      <AchievementIcon src={item.icon} alt={item.name} />
                     </li>
                   )}
                 </For>
@@ -224,7 +232,7 @@ export function AchievementsCard(props: { achievements: Achievements | null | un
             <Show when={rarest()}>
               {(r) => (
                 <div class="ach__rare">
-                  <Show when={r().icon}>{(src) => <img src={src()} alt="" />}</Show>
+                  <AchievementIcon src={r().icon} alt="" />
                   <div>
                     <b>{r().name}</b>
                     <small>
