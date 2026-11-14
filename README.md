@@ -7,7 +7,12 @@
 A lightweight, extensible game library manager and launcher for **Windows and Linux**, built with
 Tauri 2, Rust and SolidJS. Inspired by [Playnite](https://github.com/JosefNemec/Playnite).
 
-> **Status:** v0.1, early development. Expect rough edges.
+> **Status:** v0.\*, early development. Expect rough edges.
+
+**[Read the wiki](https://github.com/MaSch0212/questkeep/wiki)** for the
+[user manual](https://github.com/MaSch0212/questkeep/wiki/User-Manual) and the
+[developer manual](https://github.com/MaSch0212/questkeep/wiki/Developer-Manual), including
+tutorials for writing theme, extension and store plugins.
 
 ## Features
 
@@ -66,6 +71,8 @@ See [AGENTS.md](AGENTS.md) for the full command list, module map and conventions
 
 ## Documentation
 
+- [Wiki](https://github.com/MaSch0212/questkeep/wiki): user manual, developer manual and plugin
+  tutorials
 - [docs/SPEC.md](docs/SPEC.md): v0.1 specification
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): modules, data model, event flow, measurements
 - [docs/DECISIONS.md](docs/DECISIONS.md): decisions and their rationale

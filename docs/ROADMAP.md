@@ -11,7 +11,7 @@ in the OS keyring): owned games, Epic playtime, covers, backgrounds and metadata
 native popup, start with the system, optional GOG launch through Galaxy, signed auto-updates and
 the release workflow.
 
-## Done for v0.2
+## Done in v0.2
 
 Xbox account sign-in (owned PC games, playtime); Xbox covers, backgrounds and descriptions from the
 Microsoft Store catalog; Epic covers without sign-in (public catalog); Uninstall action per store;
@@ -22,12 +22,40 @@ from Heroic/Lutris libraries; IGDB metadata for games without store data.
 
 Also: GOG playtime from GOG Galaxy's local database; IGDB fills missing genres (Epic genres).
 
+## Done in v0.3
+
+Categories (synced from Steam collections, GOG Galaxy tags and Lutris); saved views in sidebar
+sections; the title bar with Questkeep menu, Add game, Open launcher, Sync and the Ctrl+K command
+bar; update check at start; combined games for titles in several stores; redesigned game details
+with the Edit dialog. New stores: Amazon Games, Ubisoft Connect, Battle.net, EA app and Prism
+Launcher; sign-in for Steam, Amazon, Battle.net and EA. One "Stores and accounts" list in Settings.
+
+## Done in v0.4
+
+Multi-select with Change all, bulk combine and the combine screen; docked, resizable details
+panel; games started outside Questkeep are tracked; a richer game page (links, scores, time to
+beat, achievements, news, players now); richer metadata with source priority, and/or filter
+groups, more sort and group fields, completion statuses and Explore; Edit game for every field
+(user values survive refreshes), launch profiles and the image picker; Home page; table columns;
+first-run setup; apps vs games; backups; translations (de, fr, it, es, pt).
+
+## Done in v0.5
+
+Groups as a list beside the games; the Statistics page; store order; background sync every 15
+minutes; installs watched until done; portable exe and rpm package; store websites and price
+comparison sites in the + menu.
+
+## Done in the next release
+
+Plugins: sandboxed WASM stores, JavaScript extensions and themes; appearance settings with light
+and dark mode, new themes and theme parameters; the theme editor; auto categories; text filters,
+"Not" and drag and drop for filters; back and forward navigation; the user and developer wiki.
+
 ## Next
 
 - **Verify on Linux**: Heroic Amazon (Nile) and sideloaded games, owned games from Heroic/Lutris.
 - **GOG playtime without Galaxy** (Linux/Heroic): no web endpoint accepts the Galaxy token.
-- **Ubisoft and Amazon follow-ups**: try launch/install/uninstall live; tray entries for both
-  launchers. Verify the Amazon and Steam sign-ins with real accounts (built from Playnite's flows,
+- **Ubisoft and Amazon follow-ups**: try launch/install/uninstall live. Verify the Amazon and Steam sign-ins with real accounts (built from Playnite's flows,
   not yet signed in live); Ubisoft owned games would need an account API Ubisoft doesn't offer.
 - **Battle.net and EA sign-ins**: verify with real accounts (built from Playnite's and Lutris'
   flows, not signed in live). Check the product codes of rarer Battle.net titles (only
@@ -37,15 +65,11 @@ Also: GOG playtime from GOG Galaxy's local database; IGDB fills missing genres (
 
 - **Launchers**: verify "Open launcher" on real installs for EA (registry command), Ubisoft
   (InstallDir), Battle.net and the Xbox app.
-- **More view filters**: genres, tags, platforms, release year, playtime ranges; saved per view.
-- **Categories follow-ups**: Heroic categories; assign categories to several games at once; more
-  group-by fields (genre, release year); map a single store category onto an existing category
-  without merging whole categories; check `sharedconfig.vdf` tags on an older Steam install.
+- **Categories follow-ups**: Heroic categories; map a single store category onto an existing
+  category without merging whole categories; check `sharedconfig.vdf` tags on an older Steam
+  install.
 - **Combined games follow-ups**: smarter duplicate matching (editions, "GOTY", subtitles);
-  edit launch options per copy; a bulk "combine selected" once multi-select exists.
-- **Edit all game details**: hand-edit description, genres, release date, developers and
-  publishers in the Edit dialog; user values must survive "Refresh metadata" (per-field override
-  flags or a separate user-values table).
+  edit launch options per copy.
 - **Group combining**: merge several groups of a grouped view into one (e.g. "Shooters" for FPS and TPS), in the headers and the group list alike.
 - **Command bar commands**: run app actions (sync a store, open settings, switch views) from
   Ctrl+K, not only games.
