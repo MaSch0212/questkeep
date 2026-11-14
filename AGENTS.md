@@ -161,6 +161,27 @@ ui/src/
 - Record non-obvious choices in `docs/DECISIONS.md` (one or two lines of rationale) and ideas in
   `docs/ROADMAP.md`.
 
+## Wiki
+
+The wiki (user manual, developer manual, plugin tutorials and references) is a separate repo,
+cloned next to this one as `../questkeep.wiki` (https://github.com/MaSch0212/questkeep.wiki.git).
+Read it for context on how features are meant to work and how they are explained to users.
+
+- **Keep it current.** A change that alters something the wiki describes (UI labels, settings,
+  shortcuts, behavior, the plugin API, `plugin.json`, theme variables, build steps) updates the
+  matching pages in the same piece of work. New user-visible features get documented.
+- **Layout.** `user/` and `developer/` hold the pages; GitHub flattens folders, so links are by
+  page name (`[Stores](Stores)`, `[Parameters](Theme-Reference#parameters)`). Every page must
+  be listed in `_Sidebar.md` and in its manual's `_Sidebar.md`. Images live in `images/` and are
+  embedded as `https://raw.githubusercontent.com/wiki/MaSch0212/questkeep/images/<name>.png`.
+- **Code in tutorials** must build and run against the current API; test it before changing it.
+- **Screenshots.** Take them yourself from the hidden test instance (see "Debugging and testing
+  the running app") only when they show no personal data: no account names, real library, local
+  paths with user names, or keys. Otherwise don't take them: add a placeholder
+  `<!-- SCREENSHOT: images/<name>.png — what it must show -->` above the image link and tell the
+  user which screenshots are needed. Updating a screenshot that a change made outdated counts too.
+- The wiki is its own git repo: commit and push it only when asked, like this one.
+
 ## Sub-agent policy
 
 The orchestrating agent owns architecture, the data model and migrations, concurrency (launcher,
