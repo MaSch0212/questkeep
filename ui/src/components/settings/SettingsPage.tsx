@@ -6,6 +6,7 @@ import { activeSection } from "../../lib/scrollSpy";
 import { store } from "../../lib/store";
 import { AboutSection } from "./AboutSection";
 import { AccountsSection } from "./AccountsSection";
+import { AppearanceSection } from "./AppearanceSection";
 import { ArtworkSection } from "./ArtworkSection";
 import { BackupsSection } from "./BackupsSection";
 import { CategoriesSection } from "./CategoriesSection";
@@ -27,6 +28,7 @@ interface SectionDef {
   title:
     | (() => string)
     | "general"
+    | "appearance"
     | "stores"
     | "categories"
     | "completion"
@@ -46,6 +48,7 @@ interface SectionDef {
 /** To add a settings section: write one component and add one entry here. */
 const SECTIONS: SectionDef[] = [
   { id: "general", title: "general", component: GeneralSection },
+  { id: "appearance", title: "appearance", component: AppearanceSection },
   { id: "stores", title: "stores", component: AccountsSection },
   { id: "categories", title: "categories", component: CategoriesSection },
   { id: "completion", title: "completion", component: CompletionSection },
