@@ -1,0 +1,61 @@
+# Dependabot version updates: one weekly pull request per ecosystem (minor and patch updates
+# grouped, majors on their own). `cooldown` keeps the 2-day minimum release age that pnpm
+# (`minimumReleaseAge`) and Cargo (`min-publish-age`) enforce locally.
+version: 2
+
+updates:
+  # pnpm workspace: the root package.json and ui/.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 2
+    versioning-strategy: increase-if-necessary
+    commit-message:
+      prefix: build(deps)
+    groups:
+      npm-minor-patch:
+        update-types: [minor, patch]
+
+  # Cargo workspace (crates/, src-tauri/).
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 2
+    commit-message:
+      prefix: build(deps)
+    groups:
+      cargo-minor-patch:
+        update-types: [minor, patch]
+
+  # The example store plugin is its own Cargo project with its own lockfile.
+  - package-ecosystem: cargo
+    directory: /examples/plugins/example-store
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 2
+    commit-message:
+      prefix: build(deps)
+    groups:
+      example-plugin:
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 2
+    commit-message:
+      prefix: ci(deps)
+    groups:
+      actions:
+        patterns: ["*"]
