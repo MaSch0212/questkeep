@@ -494,8 +494,8 @@
   --qk-titlebar-badge-size: 14px;
   --qk-titlebar-badge-font-size: 9px;
   --qk-dialog-narrow-width: 380px;
-  --qk-color-swatch-width: 40px;
-  --qk-color-hex-width: 90px;
+  --qk-swatch-width: 40px;
+  --qk-hex-field-width: 90px;
 }
 
 @media (prefers-reduced-motion: reduce) {

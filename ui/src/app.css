@@ -6210,7 +6210,7 @@ ul {
 }
 .plugin-setting__color {
   flex: none;
-  width: var(--qk-color-swatch-width);
+  width: var(--qk-swatch-width);
   height: var(--qk-edit-input-height);
   padding: 0;
   background: none;
@@ -6220,7 +6220,7 @@ ul {
 }
 .plugin-setting__hex {
   flex: none;
-  width: var(--qk-color-hex-width);
+  width: var(--qk-hex-field-width);
   font-family: var(--qk-font-mono);
 }
 .plugin-settings__section {
@@ -6231,6 +6231,8 @@ ul {
 .plugin-settings__title {
   margin: 0;
   font-size: var(--qk-font-size-md);
+}
+
 /* The scrollbar thumb has its own color: on light surfaces the hover color is too faint. */
 ::-webkit-scrollbar-thumb {
   background: var(--qk-color-scrollbar);
