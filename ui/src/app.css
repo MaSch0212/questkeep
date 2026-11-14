@@ -6290,7 +6290,6 @@ ul {
   background: var(--qk-color-surface-raised);
   border: 1px solid var(--qk-color-border);
   border-radius: var(--qk-radius-md);
-  cursor: pointer;
   transition: background var(--qk-duration-fast) var(--qk-easing);
 }
 .theme-card:hover {
@@ -6368,7 +6367,7 @@ ul {
   color: var(--qk-color-text-muted);
 }
 .param-row > label:first-child {
-  flex: 0 0 var(--qk-param-label-width);
+  flex: 0 0 var(--qk-settings-param-label-width);
   min-width: 0;
 }
 .param-row > .check:first-child {
@@ -6388,7 +6387,7 @@ ul {
   min-width: 0;
 }
 .param-color {
-  flex: 0 0 var(--qk-param-color-width);
+  flex: 0 0 var(--qk-settings-param-color-width);
   height: var(--qk-control-height);
   padding: 0;
   background: none;
@@ -6402,7 +6401,7 @@ ul {
   accent-color: var(--qk-color-accent);
 }
 .param-value {
-  flex: 0 0 var(--qk-param-value-width);
+  flex: 0 0 var(--qk-settings-param-value-width);
   text-align: right;
   font-variant-numeric: tabular-nums;
   color: var(--qk-color-text-muted);
@@ -6427,4 +6426,207 @@ ul {
   display: flex;
   justify-content: flex-end;
   padding: var(--qk-space-2) var(--qk-space-2) 0;
+}
+
+/* Theme cards: the pickable part (a label around an invisible radio) and the card's actions. */
+.theme-card__pick {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--qk-space-1);
+  min-width: 0;
+  cursor: pointer;
+}
+.theme-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--qk-space-1);
+}
+.appearance-actions--start {
+  justify-content: flex-start;
+}
+
+/* Theme editor: a panel beside the app, docked to an edge or dragged anywhere. */
+.theme-editor {
+  position: fixed;
+  top: calc(var(--qk-titlebar-height) + var(--qk-space-2));
+  right: var(--qk-space-2);
+  bottom: var(--qk-space-2);
+  z-index: var(--qk-z-editor);
+  display: flex;
+  flex-direction: column;
+  width: var(--qk-theme-editor-width);
+  max-width: calc(100vw - 2 * var(--qk-space-2));
+  overflow: hidden;
+  background: var(--qk-color-surface);
+  border: 1px solid var(--qk-color-border);
+  border-radius: var(--qk-radius-lg);
+  box-shadow: var(--qk-shadow-dialog);
+}
+.theme-editor--left {
+  right: auto;
+  left: var(--qk-space-2);
+}
+.theme-editor--floating {
+  top: var(--qk-theme-editor-y);
+  right: auto;
+  bottom: auto;
+  left: var(--qk-theme-editor-x);
+  height: calc(100vh - var(--qk-titlebar-height) - 2 * var(--qk-space-2));
+  max-height: calc(100vh - var(--qk-theme-editor-y));
+  min-height: var(--qk-theme-editor-min-height);
+}
+.theme-editor__header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--qk-space-2);
+  padding: var(--qk-space-2) var(--qk-space-2) var(--qk-space-2) var(--qk-space-3);
+  border-bottom: 1px solid var(--qk-color-border);
+  cursor: move;
+  user-select: none;
+  touch-action: none;
+}
+.theme-editor__header button {
+  cursor: pointer;
+}
+.theme-editor__title {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--qk-font-size-lg);
+}
+.theme-editor__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--qk-space-3);
+  min-height: 0;
+  padding: var(--qk-space-3);
+  overflow-y: auto;
+}
+.theme-editor__field {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: var(--qk-space-1);
+}
+.theme-editor__field > label,
+.theme-editor__row > span {
+  font-size: var(--qk-font-size-sm);
+  color: var(--qk-color-text-muted);
+}
+.theme-editor__row {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--qk-space-2);
+}
+.theme-editor__body > .input {
+  flex: none;
+}
+.theme-editor__note {
+  flex: none;
+  padding: var(--qk-space-2);
+  background: var(--qk-color-warn-soft);
+  border: 1px solid var(--qk-color-warn-border);
+  border-radius: var(--qk-radius-md);
+  color: var(--qk-color-text);
+}
+.theme-editor__group {
+  flex: none;
+  background: var(--qk-color-surface-raised);
+  border: 1px solid var(--qk-color-border);
+  border-radius: var(--qk-radius-md);
+}
+.theme-editor__group > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--qk-space-2);
+  padding: var(--qk-space-2) var(--qk-space-3);
+  font-weight: var(--qk-font-weight-medium);
+  cursor: pointer;
+}
+.theme-editor__count {
+  margin-left: auto;
+  font-size: var(--qk-font-size-xs);
+  font-weight: var(--qk-font-weight-normal);
+  color: var(--qk-color-accent);
+}
+.theme-editor__vars {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-3);
+  padding: var(--qk-space-1) var(--qk-space-3) var(--qk-space-3);
+}
+.theme-var {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--qk-space-1) var(--qk-space-2);
+}
+.theme-var__label {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: var(--qk-font-size-sm);
+}
+.theme-var__name {
+  overflow: hidden;
+  font-family: var(--qk-font-mono);
+  font-size: var(--qk-font-size-xs);
+  color: var(--qk-color-text-faint);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.theme-var__mark {
+  padding: 0 var(--qk-space-2);
+  background: var(--qk-color-accent-soft);
+  border-radius: var(--qk-radius-pill);
+  font-size: var(--qk-font-size-xs);
+}
+.theme-var__controls {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: var(--qk-space-2);
+  min-width: 0;
+}
+.theme-var__controls .input {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--qk-edit-input-height);
+  padding: 0 var(--qk-space-2);
+  font-family: var(--qk-font-mono);
+  font-size: var(--qk-font-size-sm);
+}
+.theme-var__color {
+  flex-basis: var(--qk-theme-var-color-width);
+  height: var(--qk-edit-input-height);
+}
+.theme-var__error {
+  grid-column: 1 / -1;
+}
+.theme-editor__css {
+  min-height: var(--qk-theme-editor-css-height);
+  padding: var(--qk-space-2);
+  font-family: var(--qk-font-mono);
+  font-size: var(--qk-font-size-sm);
+  resize: vertical;
+}
+.theme-editor__footer {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: var(--qk-space-2);
+  padding: var(--qk-space-2) var(--qk-space-3);
+  border-top: 1px solid var(--qk-color-border);
+}
+.theme-editor__footer .btn {
+  min-height: var(--qk-edit-row-height);
+  padding: 0 var(--qk-space-3);
+}
+.theme-editor__footer-hint {
+  flex-basis: 100%;
 }

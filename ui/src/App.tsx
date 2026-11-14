@@ -41,6 +41,8 @@ import { QuitDuringBackupDialog } from "./components/QuitDuringBackupDialog";
 import type { CommandBarHandle } from "./components/CommandBar";
 import type { KeywordFilterHandle } from "./components/KeywordFilter";
 import { store } from "./lib/store";
+import { themeEditor } from "./lib/themeEditor";
+import { ThemeEditor } from "./components/ThemeEditor";
 
 const tr = translator(shellCommon);
 
@@ -333,6 +335,9 @@ export function App() {
         <FirstRunDialog />
       </Show>
       <ExtensionDialogs />
+      <Show when={themeEditor.isOpen()}>
+        <ThemeEditor />
+      </Show>
       <Toasts />
       <TooltipLayer />
     </div>

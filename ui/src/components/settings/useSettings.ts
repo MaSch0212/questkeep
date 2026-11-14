@@ -44,6 +44,15 @@ export function createSettingsModel() {
       .catch((error: unknown) => store.pushToast("error", errorMessage(error)));
   });
 
+  /** Loads the settings again after something else saved them (the theme editor). */
+  async function reload() {
+    try {
+      setSettings(await api.getSettings());
+    } catch (error) {
+      store.pushToast("error", errorMessage(error));
+    }
+  }
+
   /** Saves a change right away (optimistically) and tells the app shell about it. */
   async function update(patch: Partial<Settings>) {
     const previous = settings();
@@ -214,6 +223,7 @@ export function createSettingsModel() {
 
   return {
     settings,
+    reload,
     saveKeys,
     credentialDraft,
     setCredentialDraft,

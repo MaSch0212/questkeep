@@ -1,8 +1,9 @@
-import { createSignal, For, Match, onCleanup, Show, Switch } from "solid-js";
+import { createEffect, createSignal, For, Match, on, onCleanup, Show, Switch } from "solid-js";
 import type { Appearance } from "../../bindings/Appearance";
 import type { ColorScheme } from "../../bindings/ColorScheme";
 import { translator } from "../../i18n";
 import { settingsAppearance } from "../../i18n/settingsAppearance";
+import { themeEditorText } from "../../i18n/themeEditor";
 import { normalizeHex } from "../../lib/color";
 import {
   applyAppearance,
@@ -19,9 +20,13 @@ import {
   type ThemeDef,
   type ThemeParam,
 } from "../../lib/themes";
+import { themeEditor } from "../../lib/themeEditor";
+import { getUserTheme, isBaseMissing } from "../../lib/userThemeStore";
+import { ConfirmDialog } from "../ConfirmDialog";
 import type { SettingsModel } from "./useSettings";
 
 const tr = translator(settingsAppearance);
+const trEditor = translator(themeEditorText);
 
 const SCHEMES: ColorScheme[] = ["system", "light", "dark"];
 
@@ -41,46 +46,125 @@ function previewStyle(theme: ThemeDef): Record<string, string> {
   return style;
 }
 
-function ThemeCard(props: { theme: ThemeDef; selected: boolean; onSelect: () => void }) {
-  const descriptionId = () => `appearance-theme-${props.theme.id}-description`;
+/** The themes to pick from: a theme that is being created shows up once it is saved. */
+const pickable = () =>
+  themes().filter((item) => item.origin !== "user" || getUserTheme(item.id) !== undefined);
+
+/** What a user theme derives from, for its card. */
+function basedOn(id: string): string | null {
+  const theme = getUserTheme(id);
+  if (!theme) return null;
+  return isBaseMissing(theme)
+    ? trEditor("basedOnMissing", { id: theme.base })
+    : trEditor("basedOn", { name: getTheme(theme.base)?.name ?? theme.base });
+}
+
+/** A small labeled button on a theme card; the label names the theme for screen readers. */
+function CardAction(props: { label: string; name: string; onClick: () => void }) {
   return (
-    <label class="theme-card" classList={{ "theme-card--on": props.selected }}>
-      <input
-        type="radio"
-        name="appearance-theme"
-        value={props.theme.id}
-        checked={props.selected}
-        aria-label={props.theme.name}
-        aria-describedby={props.theme.description ? descriptionId() : undefined}
-        onChange={() => props.onSelect()}
-      />
-      <span class="theme-card__preview" style={previewStyle(props.theme)} aria-hidden="true">
-        <span class="theme-card__preview-side" />
-        <span class="theme-card__preview-body">
-          <span class="theme-card__preview-line" />
-          <span class="theme-card__preview-line theme-card__preview-line--short" />
-          <span class="theme-card__preview-accent" />
+    <button
+      type="button"
+      class="btn btn--small btn--ghost"
+      aria-label={props.name}
+      onClick={() => props.onClick()}
+    >
+      {props.label}
+    </button>
+  );
+}
+
+function ThemeCard(props: {
+  theme: ThemeDef;
+  selected: boolean;
+  onSelect: () => void;
+  onDelete: () => void;
+}) {
+  const descriptionId = () => `appearance-theme-${props.theme.id}-description`;
+  const name = () => ({ name: props.theme.name });
+  return (
+    <div class="theme-card" classList={{ "theme-card--on": props.selected }}>
+      <label class="theme-card__pick">
+        <input
+          type="radio"
+          name="appearance-theme"
+          value={props.theme.id}
+          checked={props.selected}
+          aria-label={props.theme.name}
+          aria-describedby={
+            props.theme.description || basedOn(props.theme.id) ? descriptionId() : undefined
+          }
+          onChange={() => props.onSelect()}
+        />
+        <span class="theme-card__preview" style={previewStyle(props.theme)} aria-hidden="true">
+          <span class="theme-card__preview-side" />
+          <span class="theme-card__preview-body">
+            <span class="theme-card__preview-line" />
+            <span class="theme-card__preview-line theme-card__preview-line--short" />
+            <span class="theme-card__preview-accent" />
+          </span>
         </span>
-      </span>
-      <span class="theme-card__head">
-        <span class="theme-card__name">{props.theme.name}</span>
-        <Show when={props.theme.origin !== "builtin"}>
-          <span class="theme-card__badge">
-            {tr(props.theme.origin === "plugin" ? "fromPlugin" : "fromUser")}
-          </span>
+        <span class="theme-card__head">
+          <span class="theme-card__name">{props.theme.name}</span>
+          <Show when={props.theme.origin !== "builtin"}>
+            <span class="theme-card__badge">
+              {tr(props.theme.origin === "plugin" ? "fromPlugin" : "fromUser")}
+            </span>
+          </Show>
+        </span>
+        <Show when={props.theme.description}>
+          {(description) => (
+            <span class="theme-card__description" id={descriptionId()}>
+              {themeText(props.theme, description())}
+            </span>
+          )}
         </Show>
-      </span>
-      <Show when={props.theme.description}>
-        {(description) => (
-          <span class="theme-card__description" id={descriptionId()}>
-            {themeText(props.theme, description())}
-          </span>
-        )}
-      </Show>
-      <Show when={props.theme.origin !== "builtin" && props.theme.author}>
-        {(author) => <span class="theme-card__description">{tr("by", { author: author() })}</span>}
-      </Show>
-    </label>
+        <Show when={!props.theme.description && basedOn(props.theme.id)}>
+          {(text) => (
+            <span class="theme-card__description" id={descriptionId()}>
+              {text()}
+            </span>
+          )}
+        </Show>
+        <Show when={props.theme.origin !== "builtin" && props.theme.author}>
+          {(author) => (
+            <span class="theme-card__description">{tr("by", { author: author() })}</span>
+          )}
+        </Show>
+      </label>
+      <div class="theme-card__actions">
+        <Show
+          when={props.theme.origin === "user"}
+          fallback={
+            <CardAction
+              label={trEditor("customize")}
+              name={trEditor("customizeTheme", name())}
+              onClick={() => themeEditor.create(props.theme.id)}
+            />
+          }
+        >
+          <CardAction
+            label={trEditor("edit")}
+            name={trEditor("editTheme", name())}
+            onClick={() => themeEditor.edit(props.theme.id)}
+          />
+          <CardAction
+            label={trEditor("duplicate")}
+            name={trEditor("duplicateTheme", name())}
+            onClick={() => themeEditor.create(props.theme.id)}
+          />
+          <CardAction
+            label={trEditor("exportShort")}
+            name={trEditor("exportTheme", name())}
+            onClick={() => void themeEditor.exportPlugin(props.theme.id)}
+          />
+          <CardAction
+            label={trEditor("remove")}
+            name={trEditor("removeTheme", name())}
+            onClick={() => props.onDelete()}
+          />
+        </Show>
+      </div>
+    </div>
   );
 }
 
@@ -265,6 +349,12 @@ export function AppearanceSection(props: { model: SettingsModel }) {
     if (timer !== undefined) void save();
   });
 
+  // The theme editor saves the settings itself (selecting a new theme): show what it saved.
+  createEffect(on(themeEditor.settingsSaved, () => void props.model.reload(), { defer: true }));
+
+  /** The user theme a delete was asked for, while its confirmation shows. */
+  const [deleting, setDeleting] = createSignal<ThemeDef | null>(null);
+
   /** The theme whose options show: the chosen one, or the default while that is missing. */
   const theme = () => getTheme(current().theme) ?? getTheme(DEFAULT_THEME_ID);
   const missing = () => getTheme(current().theme) === undefined;
@@ -293,16 +383,38 @@ export function AppearanceSection(props: { model: SettingsModel }) {
       <fieldset class="fieldset settings-group">
         <legend class="fieldset__legend">{tr("theme")}</legend>
         <div class="theme-picker" role="radiogroup" aria-label={tr("theme")}>
-          <For each={themes()}>
+          <For each={pickable()}>
             {(item) => (
               <ThemeCard
                 theme={item}
                 selected={theme()?.id === item.id}
                 onSelect={() => change({ ...current(), theme: item.id })}
+                onDelete={() => setDeleting(item)}
               />
             )}
           </For>
         </div>
+        <div class="appearance-actions appearance-actions--start">
+          <button
+            type="button"
+            class="btn btn--small"
+            onClick={() => themeEditor.create(theme()?.id ?? DEFAULT_THEME_ID)}
+          >
+            {trEditor("createTheme")}
+          </button>
+        </div>
+        <Show when={deleting()} keyed>
+          {(item) => (
+            // Confirming closes the dialog first, so the theme is taken from here, not the signal.
+            <ConfirmDialog
+              title={trEditor("deleteTitle")}
+              message={trEditor("deleteMessage", { name: item.name })}
+              confirmLabel={trEditor("remove")}
+              onConfirm={() => void themeEditor.remove(item.id)}
+              onClose={() => setDeleting(null)}
+            />
+          )}
+        </Show>
         <Show when={missing()}>
           <p class="field__hint">{tr("missingTheme", { id: current().theme })}</p>
         </Show>

@@ -12,6 +12,9 @@ import {
   unregisterTheme,
   type ThemeDef,
 } from "../../lib/themes";
+import { themeEditor } from "../../lib/themeEditor";
+import { setSavedUserThemes } from "../../lib/userThemeStore";
+import { emptyOverrides } from "../../lib/userThemes";
 import { AppearanceSection } from "./AppearanceSection";
 import { createSettingsModel } from "./useSettings";
 
@@ -21,6 +24,7 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn<() => void>(),
 }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn<() => void>() }));
+vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn<() => void>() }));
 
 const root = document.documentElement;
 
@@ -68,6 +72,8 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+  themeEditor.close();
+  setSavedUserThemes([]);
   unregisterTheme("plugin.neon");
 });
 
@@ -237,5 +243,137 @@ describe("AppearanceSection", () => {
     expect(screen.getByRole("radio", { name: "High contrast" })).toBeInTheDocument();
     expect(screen.getByLabelText("Akzentfarbe")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Ecken zurücksetzen" })).toBeInTheDocument();
+  });
+});
+/** The whole card of a theme (its radio, texts and action buttons). */
+const card = (name: string) =>
+  screen.getByRole("radio", { name }).closest(".theme-card") as HTMLElement;
+
+describe("AppearanceSection theme actions", () => {
+  const mine = {
+    id: "user-mine",
+    name: "Mine",
+    base: "fjord",
+    overrides: { ...emptyOverrides(), dark: { "--qk-color-bg": "#010203" } },
+    css: "",
+  };
+
+  it("offers Customize on built-in themes, which opens the editor on a new theme", async () => {
+    renderSection({ scheme: "dark" });
+    await screen.findByRole("radiogroup", { name: "Theme" });
+    const actions = within(card("Fjord")).getAllByRole("button");
+    expect(actions.map((b) => b.textContent)).toEqual(["Customize…"]);
+    await fireEvent.click(within(card("Fjord")).getByRole("button", { name: "Customize Fjord" }));
+    expect(themeEditor.isOpen()).toBe(true);
+    expect(themeEditor.draft()).toMatchObject({ name: "Fjord custom", base: "fjord" });
+    // The theme being created is not offered in the picker until it is saved.
+    expect(screen.queryByRole("radio", { name: "Fjord custom" })).toBeNull();
+    expect(api.saveSettings).not.toHaveBeenCalled();
+  });
+
+  it("creates a theme from the active one", async () => {
+    renderSection({ scheme: "dark", theme: "ember" });
+    await fireEvent.click(await screen.findByRole("button", { name: "Create theme…" }));
+    expect(themeEditor.draft()).toMatchObject({ name: "Ember custom", base: "ember" });
+  });
+
+  it("shows user themes with what they are based on and their actions", async () => {
+    setSavedUserThemes([mine]);
+    renderSection({ scheme: "dark", theme: "user-mine" });
+    const radio = await screen.findByRole("radio", { name: "Mine" });
+    expect(radio).toBeChecked();
+    expect(radio).toHaveAccessibleDescription("Based on Fjord");
+    expect(within(card("Mine")).getByText("Custom")).toBeInTheDocument();
+    expect(
+      within(card("Mine"))
+        .getAllByRole("button")
+        .map((b) => b.textContent),
+    ).toEqual(["Edit", "Duplicate", "Export…", "Delete"]);
+    // Its options are those of its base.
+    expect(screen.getByRole("group", { name: "Mine options" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Accent color")).toHaveValue("#6cc5e8");
+
+    await fireEvent.click(within(card("Mine")).getByRole("button", { name: "Duplicate Mine" }));
+    expect(themeEditor.draft()).toMatchObject({
+      id: "user-mine-copy",
+      name: "Mine copy",
+      base: "fjord",
+      overrides: mine.overrides,
+    });
+    themeEditor.close();
+    await fireEvent.click(within(card("Mine")).getByRole("button", { name: "Edit Mine" }));
+    expect(themeEditor.draft().id).toBe("user-mine");
+    expect(themeEditor.isNew()).toBe(false);
+  });
+
+  it("names a missing base theme on the card", async () => {
+    setSavedUserThemes([{ ...mine, base: "plugin.gone" }]);
+    renderSection({ scheme: "dark" });
+    expect(await screen.findByRole("radio", { name: "Mine" })).toHaveAccessibleDescription(
+      "Based on Questkeep (plugin.gone is not available)",
+    );
+  });
+
+  it("deletes a user theme after confirming and falls back to its base theme", async () => {
+    setSavedUserThemes([mine]);
+    vi.mocked(api.deleteUserTheme).mockResolvedValue(undefined);
+    renderSection({
+      scheme: "dark",
+      theme: "user-mine",
+      params: { "user-mine": { accent: "#ff0000" } },
+    });
+    await screen.findByRole("radio", { name: "Mine" });
+    applyAppearance({ theme: "user-mine", scheme: "dark", params: {} });
+    await fireEvent.click(within(card("Mine")).getByRole("button", { name: "Delete Mine" }));
+    const dialog = screen.getByRole("dialog", { name: "Delete theme" });
+    expect(dialog).toHaveTextContent("Delete the theme “Mine”? This cannot be undone.");
+    expect(api.deleteUserTheme).not.toHaveBeenCalled();
+    await fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+
+    await fireEvent.click(within(card("Mine")).getByRole("button", { name: "Delete Mine" }));
+    // The settings the editor module reads and the section then loads again.
+    vi.mocked(api.getSettings).mockResolvedValue(
+      settings({
+        scheme: "dark",
+        theme: "user-mine",
+        params: { "user-mine": { accent: "#ff0000" } },
+      }),
+    );
+    await fireEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" }),
+    );
+    await waitFor(() => expect(api.deleteUserTheme).toHaveBeenCalledWith("user-mine"));
+    await waitFor(() =>
+      expect(lastSaved()).toEqual({ theme: "fjord", scheme: "dark", params: {} }),
+    );
+    await waitFor(() =>
+      expect(store.toasts().map((t) => t.message)).toContain("Deleted the theme “Mine”"),
+    );
+    expect(screen.queryByRole("radio", { name: "Mine" })).toBeNull();
+    expect(root.dataset.theme).toBe("fjord");
+  });
+
+  it("loads the settings again after the editor saved a new theme", async () => {
+    renderSection({ scheme: "dark" });
+    await fireEvent.click(await screen.findByRole("button", { name: "Create theme…" }));
+    vi.mocked(api.saveUserTheme).mockResolvedValue(undefined);
+    let stored = settings({ scheme: "dark" });
+    vi.mocked(api.getSettings).mockImplementation(() => Promise.resolve(stored));
+    vi.mocked(api.saveSettings).mockImplementation((next) => {
+      stored = next;
+      return Promise.resolve();
+    });
+    expect(await themeEditor.save()).toBe(true);
+    // The new theme is in the picker and selected, as saved by the editor.
+    await waitFor(() =>
+      expect(screen.getByRole("radio", { name: "Questkeep custom" })).toBeChecked(),
+    );
+    expect(stored.appearance.theme).toBe("user-questkeep-custom");
+    // A later change in the section builds on that, not on what it loaded at first.
+    themeEditor.close();
+    await fireEvent.click(screen.getByRole("radio", { name: "Light" }));
+    await waitFor(() => expect(stored.appearance.scheme).toBe("light"));
+    expect(stored.appearance.theme).toBe("user-questkeep-custom");
   });
 });
