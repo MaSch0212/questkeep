@@ -18,6 +18,7 @@ use questkeep_core::model::{
 use questkeep_core::providers::ProviderInfo;
 use questkeep_core::settings::Settings;
 use questkeep_core::{AppInfo, CoreError};
+use questkeep_plugins::PluginInfo;
 use tauri::State;
 use uuid::Uuid;
 
@@ -134,6 +135,62 @@ pub async fn remove_games(state: State<'_, Arc<AppState>>, ids: Vec<String>) -> 
 #[tauri::command]
 pub async fn list_providers(state: State<'_, Arc<AppState>>) -> CmdResult<Vec<ProviderInfo>> {
     blocking(state, |s| Ok(s.library.provider_infos())).await
+}
+
+/// Every installed plugin, loaded or not. The `pluginsChanged` core event says when to ask again
+/// (and to re-read the providers: plugins bring stores).
+#[tauri::command]
+pub async fn list_plugins(state: State<'_, Arc<AppState>>) -> CmdResult<Vec<PluginInfo>> {
+    blocking(state, |s| Ok(s.plugins.list())).await
+}
+
+/// Installs the plugin in a folder or zip file, enables and loads it; an installed plugin with
+/// the same id is replaced.
+#[tauri::command]
+pub async fn install_plugin(
+    state: State<'_, Arc<AppState>>,
+    path: String,
+) -> CmdResult<PluginInfo> {
+    blocking(state, move |s| {
+        Ok(s.plugins.install(&PathBuf::from(path))?)
+    })
+    .await
+}
+
+/// Copies the plugin from its source again (when that still exists) and loads the new copy.
+#[tauri::command]
+pub async fn reload_plugin(state: State<'_, Arc<AppState>>, id: String) -> CmdResult<PluginInfo> {
+    blocking(state, move |s| Ok(s.plugins.reload(&id)?)).await
+}
+
+#[tauri::command]
+pub async fn set_plugin_enabled(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    enabled: bool,
+) -> CmdResult<PluginInfo> {
+    blocking(state, move |s| Ok(s.plugins.set_enabled(&id, enabled)?)).await
+}
+
+/// Reload the plugin whenever its source folder changes (for plugin authors).
+#[tauri::command]
+pub async fn set_plugin_watch(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    watch: bool,
+) -> CmdResult<PluginInfo> {
+    blocking(state, move |s| Ok(s.plugins.set_watch(&id, watch)?)).await
+}
+
+/// Unloads the plugin and deletes its installed copy; `delete_data` also deletes what the plugin
+/// stored itself. Games of its stores stay in the library.
+#[tauri::command]
+pub async fn remove_plugin(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    delete_data: bool,
+) -> CmdResult<()> {
+    blocking(state, move |s| Ok(s.plugins.remove(&id, delete_data)?)).await
 }
 
 /// Scans every store, one after another. Progress and results arrive as core events

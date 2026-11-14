@@ -57,8 +57,9 @@ Also: GOG playtime from GOG Galaxy's local database; IGDB fills missing genres (
 
 ## Later
 
-- Plugin host: WASM providers (wasmtime + WIT) and CSS/JS UI extensions; theme loader on top of
-  `theme.css` variables.
+- Plugins beyond stores (store plugins exist, see ARCHITECTURE): CSS/JS UI extensions and a theme
+  loader on top of `theme.css` variables; later a plugin gallery, signature checks, account
+  sign-in and registry access for plugin stores, guest output (stdout/stderr) in the log.
 - Fullscreen / controller mode (the grid keyboard navigation is the groundwork).
 - Multiple play actions per game, emulator profiles, pre/post scripts.
 - Roman numeral support in sorting names (Playnite's converter handles many edge cases).

@@ -9,6 +9,44 @@ so a change in one store or in the popup rebuilds only that crate and the app. `
 forwards core events to the webview. The SolidJS UI in `ui/` talks to the core only through
 those commands and events.
 
+## Plugins (`crates/questkeep-plugins`, `crates/questkeep-plugin-sdk`)
+
+A plugin is a folder (or zip) with a `plugin.json`: id, name, version, `apiVersion`, its stores
+(`providers: [{ wasm }]`), what they may reach (`permissions.read`, `permissions.http`) and,
+for the UI, `extension` and `themes` (carried along untouched). Installing copies it to
+`<data>/plugins/<id>/` (staged next to it, then swapped, so a copy is whole or absent) and
+`<data>/plugins/plugins.json` remembers `{ id, source, enabled, watch }`. `PluginManager`
+(created by the shell with the library's `ProviderRegistry`) loads the enabled plugins at
+startup, before the first sync, and installs, reloads (copies the source again), enables,
+disables, watches (reload when the source folder changes, 500 ms after the last change) and
+removes them while the app runs. Every change publishes `PluginsChanged`. A plugin that fails
+to load is listed with its error.
+
+A plugin's store is a WebAssembly component built with `questkeep-plugin-sdk` for
+`wasm32-wasip2`. The interface (`wit/plugin.wit`) is two exports, `describe()` and
+`call(method, args-json)`, plus the host imports `log` and `http-request`; the typed
+`Provider` trait of the SDK and `WasmProvider` (a `LibraryProvider`) on the app side share the
+`wire` module and the `questkeep-store-model` types, so the binary interface stays the same
+when the model grows. `WasmProvider` answers the cheap questions (id, name, icon, capabilities,
+launcher, settings) from the last `describe` answer and runs everything else in one wasmtime
+instance behind a mutex:
+
+- Files: `/plugin` (the installed copy, read-only), `/data` (`<data>/plugin-data/<id>`,
+  read-write) and the declared `read` folders (read-only, `%VAR%` and `~` expanded, skipped
+  when missing). No environment, arguments, stdio or sockets.
+- HTTP goes through the app's `ureq`: https only (http for hosts declared as `http://host`),
+  declared hosts only (`host` or `*.domain`), no redirects followed, answers up to 16 MB.
+- A call may take 120 s (scans, metadata, images) or 10 s (the rest), counted by an epoch
+  clock that ticks every 100 ms while a plugin is loaded; an instance may use 256 MB. A call
+  that runs over or traps fails with a readable error, its instance is dropped and the next
+  call starts a fresh one (the last `configure` is replayed).
+- The store id must be the plugin id or start with `<plugin id>-` and must be free; the icon
+  is replaced by a generic one unless it is plain SVG without scripts or event handlers;
+  credentials in the store's settings are dropped (option switches only, no sign-in).
+
+Unloading takes the stores out of the registry and closes them; their games stay in the
+library like games of any missing store.
+
 ```
  ┌────────────── ui/ (SolidJS) ───────────────┐
  │ components ─ stores ─ lib/api.ts (invoke)  │
@@ -199,6 +237,10 @@ when it is queued again (the cover arriving emits `GamesChanged`, the tray reque
 | `update_game(id, update)` | Rename, favorite, hidden, play action, cover. |
 | `remove_game(id)` | Delete game (and its cached images). |
 | `list_providers()` | Registered providers. |
+| `list_plugins()` | `PluginInfo[]`: every installed plugin with its state, error, stores and permissions. Ask again on the `pluginsChanged` event (and re-read the providers). |
+| `install_plugin(path)` | Installs a plugin folder or zip, enables and loads it; the same id again is an update. Returns its `PluginInfo`. |
+| `reload_plugin(id)` / `set_plugin_enabled(id, enabled)` / `set_plugin_watch(id, watch)` | Copy the source again and load it / load or unload / reload on source changes. Each returns the new `PluginInfo`. |
+| `remove_plugin(id, delete_data)` | Unloads the plugin and deletes its copy, optionally also its own data. Its stores' games stay. |
 | `scan_library(provider_id)` | Scan installed (and owned) games, upsert, queue covers and metadata. |
 | `launch_game(id)` / `running_games()` | Launch and active sessions. |
 | `install_game(id)` | Opens the provider's install action (e.g. `steam://install/440`). |

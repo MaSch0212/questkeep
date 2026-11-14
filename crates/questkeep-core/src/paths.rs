@@ -85,6 +85,16 @@ impl DataPaths {
         self.root.join("webview")
     }
 
+    /// Installed plugins: one folder per plugin and `plugins.json`, the list of them.
+    pub fn plugins_dir(&self) -> PathBuf {
+        self.root.join("plugins")
+    }
+
+    /// What plugins store themselves (one folder per plugin); survives updates of the plugin.
+    pub fn plugin_data_dir(&self) -> PathBuf {
+        self.root.join("plugin-data")
+    }
+
     /// Where the main window was last placed.
     pub fn window_file(&self) -> PathBuf {
         self.root.join("window.json")

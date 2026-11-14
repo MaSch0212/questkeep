@@ -1,0 +1,59 @@
+/// The interface between Questkeep and a store plugin. It is deliberately tiny: every provider
+/// method travels through `call` as JSON (see the `wire` module of `questkeep-plugin-sdk`), so
+/// the model can grow without breaking this ABI.
+package questkeep:plugin@1.0.0;
+
+/// What the app offers a plugin besides the WASI file system mounts.
+interface host {
+  enum log-level {
+    debug,
+    info,
+    warn,
+    error,
+  }
+
+  record request {
+    /// `GET`, `POST`, ...
+    method: string,
+    /// An `https` URL on one of the hosts the plugin declared in `permissions.http`.
+    url: string,
+    headers: list<tuple<string, string>>,
+    body: option<list<u8>>,
+  }
+
+  record response {
+    status: u16,
+    headers: list<tuple<string, string>>,
+    body: list<u8>,
+  }
+
+  /// Writes a line to Questkeep's log.
+  log: func(level: log-level, message: string);
+
+  /// Sends an HTTP request through the app. Fails (with a readable message) when the host is
+  /// not declared, the request could not be sent or the answer is too large; an answer with an
+  /// error status is still an answer.
+  http-request: func(request: request) -> result<response, string>;
+}
+
+world provider {
+  import host;
+
+  /// Mirrors the app's provider errors; the texts are shown to users.
+  variant provider-error {
+    not-found(string),
+    io(string),
+    parse(string),
+    unsupported,
+    not-configured(string),
+    network(string),
+  }
+
+  /// The provider's description as JSON (`ProviderDescriptor`). Called when the plugin is loaded
+  /// and again after every `configure`.
+  export describe: func() -> string;
+
+  /// Calls one provider method. `method` is its snake_case name, `args` a JSON object
+  /// (`CallArgs`), the answer the JSON of the method's return value.
+  export call: func(method: string, args: string) -> result<string, provider-error>;
+}

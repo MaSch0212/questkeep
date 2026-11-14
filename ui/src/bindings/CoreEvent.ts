@@ -6,7 +6,7 @@ import type { WorkQueue } from "./WorkQueue";
 /**
  * Something that happened in the core.
  */
-export type CoreEvent = { "type": "gamesChanged", ids: Array<string>, } | { "type": "gameRemoved", id: string, } | { "type": "categoriesChanged" } | { "type": "scansQueued", providers: Array<string>, 
+export type CoreEvent = { "type": "gamesChanged", ids: Array<string>, } | { "type": "gameRemoved", id: string, } | { "type": "categoriesChanged" } | { "type": "pluginsChanged" } | { "type": "scansQueued", providers: Array<string>, 
 /**
  * Started by Questkeep itself (the automatic sync), not by the user: the UI shows no
  * result message for it.

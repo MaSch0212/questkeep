@@ -15,6 +15,7 @@ tauri-build = { version = "2.7.3", features = [] }
 
 [dependencies]
 questkeep-core = { path = "../crates/questkeep-core" }
+questkeep-plugins = { path = "../crates/questkeep-plugins" }
 questkeep-stores = { path = "../crates/questkeep-stores" }
 tauri = { version = "2.12.4", features = ["protocol-asset", "tray-icon", "image-png"] }
 tauri-plugin-autostart = "2.7.0"

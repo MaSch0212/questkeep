@@ -24,6 +24,7 @@ use questkeep_core::launcher::Launcher;
 use questkeep_core::paths::DataPaths;
 use questkeep_core::providers::ProviderRegistry;
 use questkeep_core::tray::{self as tray_logic, MINIMIZED_ARG};
+use questkeep_plugins::PluginManager;
 use tauri::{Emitter, Manager, RunEvent};
 use tauri_plugin_autostart::MacosLauncher;
 use tracing_appender::non_blocking::WorkerGuard;
@@ -43,6 +44,8 @@ pub struct AppState {
     pub launcher: Launcher,
     pub covers: CoverFetcher,
     pub metadata: MetadataFetcher,
+    /// Installed plugins; their stores live in the library's provider registry.
+    pub plugins: PluginManager,
 }
 
 impl AppState {
@@ -182,6 +185,8 @@ fn build_state(app: &tauri::AppHandle) -> Result<(AppState, Option<WorkerGuard>)
             paths.webview_dir(),
         ))),
     ));
+    // Plugin stores are added to the very registry the library and the fetchers use.
+    let plugins = PluginManager::new(paths.clone(), providers.clone(), events.clone());
     let library = Library::open(paths, providers.clone(), events.clone(), keyring)
         .map_err(|e| e.to_string())?;
     match library.database().recover_open_sessions() {
@@ -217,6 +222,7 @@ fn build_state(app: &tauri::AppHandle) -> Result<(AppState, Option<WorkerGuard>)
             launcher,
             covers,
             metadata,
+            plugins,
         },
         guard,
     ))
@@ -226,6 +232,8 @@ fn build_state(app: &tauri::AppHandle) -> Result<(AppState, Option<WorkerGuard>)
 fn spawn_startup_tasks(state: Arc<AppState>) {
     let watcher = state.clone();
     tauri::async_runtime::spawn_blocking(move || {
+        // Before the first sync, so the stores of plugins are synced too.
+        state.plugins.load_enabled();
         if state.library.settings().scan_on_startup {
             state.library.scan_all();
         } else {
@@ -443,6 +451,12 @@ pub fn run() {
             commands::set_cover,
             commands::remove_game,
             commands::list_providers,
+            commands::list_plugins,
+            commands::install_plugin,
+            commands::reload_plugin,
+            commands::set_plugin_enabled,
+            commands::set_plugin_watch,
+            commands::remove_plugin,
             commands::scan_library,
             commands::scan_all_libraries,
             commands::launch_game,

@@ -1,0 +1,13 @@
+{
+  "id": "example-store",
+  "name": "Example Store",
+  "version": "0.1.0",
+  "description": "A store that reports the games listed in its games.json. Use it as a starting point for your own store plugin.",
+  "author": "Questkeep",
+  "apiVersion": 1,
+  "providers": [{ "wasm": "provider.wasm" }],
+  "permissions": {
+    "read": [],
+    "http": []
+  }
+}

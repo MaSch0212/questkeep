@@ -1,0 +1,24 @@
+[package]
+name = "questkeep-plugin-sdk"
+description = "SDK for Questkeep store plugins: the Provider trait, the export macro and host helpers for WASM (wasm32-wasip2) stores"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+questkeep-store-model = { path = "../questkeep-store-model" }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+
+# The guest glue: only plugins (WASM) get it, the app uses this crate for the wire types alone.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wit-bindgen = "0.63.0"
+
+[lints]
+workspace = true
+
+# A misbehaving store the app's plugin tests load (see the file); built for wasm32-wasip2 only there.
+[[example]]
+name = "sandbox_probe"
+crate-type = ["cdylib"]

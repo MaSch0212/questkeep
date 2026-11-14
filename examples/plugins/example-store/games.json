@@ -1,0 +1,34 @@
+[
+  {
+    "id": "starfall",
+    "name": "Starfall Odyssey",
+    "exe": "C:/Games/Starfall Odyssey/starfall.exe",
+    "installDir": "C:/Games/Starfall Odyssey",
+    "playtimeSeconds": 5400,
+    "description": "Chart a course through a collapsing galaxy.",
+    "genres": ["Adventure", "Strategy"],
+    "developers": ["Example Studio"],
+    "releaseDate": "2024-03-14",
+    "cover": "https://example.com/covers/starfall.jpg"
+  },
+  {
+    "id": "pixel-kart",
+    "name": "Pixel Kart",
+    "exe": "C:/Games/Pixel Kart/kart.exe",
+    "installDir": "C:/Games/Pixel Kart"
+  },
+  {
+    "id": "moonlit-garden",
+    "name": "Moonlit Garden",
+    "installed": false,
+    "description": "A quiet puzzle game about growing things at night.",
+    "genres": ["Puzzle"]
+  },
+  {
+    "id": "starfall-demo",
+    "name": "Starfall Odyssey Demo",
+    "exe": "C:/Games/Starfall Odyssey Demo/starfall.exe",
+    "installDir": "C:/Games/Starfall Odyssey Demo",
+    "demo": true
+  }
+]

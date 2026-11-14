@@ -1,0 +1,30 @@
+[package]
+name = "questkeep-plugins"
+description = "Questkeep plugins: the plugin package, installing and loading it, and sandboxed WASM stores"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+questkeep-core = { path = "../questkeep-core" }
+questkeep-store-api = { path = "../questkeep-store-api" }
+# The wire format shared with plugins and the WIT file.
+questkeep-plugin-sdk = { path = "../questkeep-plugin-sdk" }
+notify = "8.2.1"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+thiserror = "2.0.21"
+tracing = "0.1.44"
+ts-rs = { version = "12.0.1", features = ["serde-json-impl", "no-serde-warnings"] }
+ureq = "3.4.2"
+# Only what running components needs: no wat parser, cache, profiling or async support.
+wasmtime = { version = "50.0.1", default-features = false, features = ["cranelift", "component-model", "runtime", "std"] }
+wasmtime-wasi = { version = "50.0.1", default-features = false, features = ["p2"] }
+zip = { version = "4.6.1", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+
+[dev-dependencies]
+tempfile = "3.27.0"
+
+[lints]
+workspace = true

@@ -15,6 +15,7 @@ Guide for humans and coding agents working on Questkeep.
 | Add a changeset (every user-visible PR) | `pnpm changeset add <major\|minor\|patch> "summary"` |
 | Show version, pending changesets, next version | `pnpm changeset status` |
 | List installed Steam games (dev tool) | `cargo run -p questkeep-store-steam --example scan_steam` |
+| Build the example store plugin (needs `rustup target add wasm32-wasip2`) | `examples/plugins/example-store/build.ps1` |
 | Check executable icon extraction on real games (dev tool) | `cargo run -p questkeep-core --example exe_icons -- <out dir> <exe>...` |
 | Regenerate app icons from `assets/logo.svg` | `node scripts/make-icon.mjs && pnpm tauri icon assets/icon.svg -o src-tauri/icons` (tray glyphs: run `pnpm tauri icon assets/tray-dark.svg -o target/tray-dark`, same for `tray-light`, and copy `32x32.png`/`64x64.png` to `src-tauri/icons/tray-*.png`/`tray-*@2x.png`) |
 
@@ -67,6 +68,18 @@ crates/stores/<id>/            one crate per store (questkeep-store-<id>): steam
                                helpers + sideloaded games); icon.svg, login/session scripts,
                                fixtures/ next to src/
 crates/questkeep-stores/       the built-in store list (`builtin`); only the app depends on it
+crates/questkeep-store-model/  what stores report (model.rs, settings.rs): plain serde data, also
+                               compiled into WASM store plugins
+crates/questkeep-plugin-sdk/   SDK for store plugins (wasm32-wasip2): Provider trait,
+                               export_provider!, log/http helpers, wire.rs (the JSON call format,
+                               shared with the host), wit/plugin.wit; examples/sandbox_probe.rs is
+                               a test fixture
+crates/questkeep-plugins/      plugin host: manifest.rs (plugin.json), install.rs (copy into
+                               <data>/plugins/<id>, plugins.json), manager.rs (PluginManager:
+                               load/unload/reload/watch, PluginInfo), wasm.rs (WasmProvider on
+                               wasmtime: WASI mounts, host http/log, deadlines, memory cap)
+examples/plugins/              example plugins, each its own cargo project (not in the workspace);
+                               example-store is loaded by the plugin tests
 crates/questkeep-imaging/      icon decoding and scaling (core and tray popup)
 crates/questkeep-tray-popup/   Windows tray popup (Win32 + Direct2D: layout, render, window, a11y);
                                own input types, no core dependency

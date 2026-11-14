@@ -34,3 +34,6 @@ desktop.ini
 
 # Brainstorm companion scratch files
 .superpowers/
+
+# Built store plugins (see examples/plugins/README.md)
+examples/plugins/*/provider.wasm
