@@ -116,6 +116,21 @@ export function setTomlVersion(text, section, version) {
   return text.slice(0, bodyStart) + replaced + text.slice(bodyEnd);
 }
 
+/** The roadmap heading for work that is done but not released yet. */
+export const ROADMAP_NEXT_HEADING = "## Done in the next release";
+
+/**
+ * Renames the roadmap's "Done in the next release" heading to the released version: `v0.6` for
+ * `0.6.0`, the full version for a patch release. Returns the text unchanged without that heading.
+ */
+export function releaseRoadmap(text, version) {
+  const v = parseSemver(version);
+  if (!v) throw new Error(`'${version}' is not a valid X.Y.Z version`);
+  const name = v.patch === 0 ? `v${v.major}.${v.minor}` : `v${formatSemver(v)}`;
+  const heading = new RegExp(`^${ROADMAP_NEXT_HEADING}[ \\t]*$`, "m");
+  return text.replace(heading, `## Done in ${name}`);
+}
+
 /** Replaces the top-level `"version"` string of a JSON text without reformatting the file. */
 export function setJsonVersion(text, version) {
   if (!/^ {0,4}"version"\s*:\s*"[^"]*"/m.test(text)) throw new Error("no top-level version found");

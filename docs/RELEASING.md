@@ -46,7 +46,8 @@ pnpm changeset status                                 # current version, pending
       installed (Windows: no installer registry entry or `uninstall.exe` for its folder) links to
       the release page instead of updating. The release notes get a "Portable use" note.
    3. `release` (not on dry runs) fails if `main` moved during the build, then commits
-      `chore(release): vX.Y.Z` (version files + deleted changesets) as `github-actions[bot]`,
+      `chore(release): vX.Y.Z` (version files, deleted changesets, and `docs/ROADMAP.md` with
+      "Done in the next release" renamed to "Done in vX.Y") as `github-actions[bot]`,
       pushes it, pushes the annotated tag `vX.Y.Z`, generates `latest.json` from the `.sig` files
       and runs `gh release create` with the notes and every asset.
 4. Only one release runs at a time (`concurrency: release`). If the `release` job fails after the

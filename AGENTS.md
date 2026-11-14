@@ -160,6 +160,10 @@ ui/src/
   Docs/CI-only changes need no changeset.
 - Record non-obvious choices in `docs/DECISIONS.md` (one or two lines of rationale) and ideas in
   `docs/ROADMAP.md`.
+- **Roadmap:** when a change finishes a roadmap item or a notable feature, add a short line under
+  `## Done in the next release` in `docs/ROADMAP.md` (create the heading above `## Next` if it's
+  missing) and drop finished items from Next/Later. Never write a version number there: the
+  release workflow renames the heading to `## Done in vX.Y`.
 
 ## Wiki
 

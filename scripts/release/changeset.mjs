@@ -21,6 +21,7 @@ import {
   nextVersion,
   parseChangeset,
   parseSemver,
+  releaseRoadmap,
   renderNotes,
   setCargoLockVersions,
   setJsonVersion,
@@ -82,6 +83,8 @@ function writeVersion(version) {
     ["crates/questkeep-core/Cargo.toml", (t) => setTomlVersion(t, "package", version)],
     // Every workspace crate (core, store API, stores, ...) inherits the workspace version.
     ["Cargo.lock", (t) => setCargoLockVersions(t, localCargoPackages(t), version)],
+    // "Done in the next release" becomes "Done in vX.Y".
+    ["docs/ROADMAP.md", (t) => releaseRoadmap(t, version)],
   ];
   for (const [rel, edit] of edits) {
     const before = readRel(rel);

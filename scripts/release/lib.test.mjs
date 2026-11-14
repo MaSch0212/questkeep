@@ -10,6 +10,7 @@ import {
   localCargoPackages,
   parseChangeset,
   parseSemver,
+  releaseRoadmap,
   renderNotes,
   setCargoLockVersions,
   setJsonVersion,
@@ -169,4 +170,16 @@ test("updaterPlatforms and buildLatestJson", () => {
       },
     },
   });
+});
+
+test("releaseRoadmap names the next-release heading after the version", () => {
+  const text = "# Roadmap\n\n## Done in v0.5\n\nOld.\n\n## Done in the next release\n\nNew.\n\n## Next\n";
+  assert.equal(
+    releaseRoadmap(text, "0.6.0"),
+    "# Roadmap\n\n## Done in v0.5\n\nOld.\n\n## Done in v0.6\n\nNew.\n\n## Next\n",
+  );
+  assert.match(releaseRoadmap(text, "0.6.1"), /^## Done in v0\.6\.1$/m);
+  assert.match(releaseRoadmap(text.replace("release\n", "release\r\n"), "1.0.0"), /^## Done in v1\.0\r$/m);
+  assert.equal(releaseRoadmap("# Roadmap\n\n## Next\n", "0.6.0"), "# Roadmap\n\n## Next\n");
+  assert.throws(() => releaseRoadmap(text, "v0.6.0"));
 });
