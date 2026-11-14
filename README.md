@@ -4,6 +4,13 @@
 
 # Questkeep
 
+[![Latest release](https://img.shields.io/github/v/release/MaSch0212/questkeep?label=release)](https://github.com/MaSch0212/questkeep/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/MaSch0212/questkeep/total)](https://github.com/MaSch0212/questkeep/releases)
+[![CI](https://github.com/MaSch0212/questkeep/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/MaSch0212/questkeep/actions/workflows/ci.yml)
+[![Platforms: Windows, Linux](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-informational)](https://github.com/MaSch0212/questkeep/wiki/Installation)
+[![Wiki](https://img.shields.io/badge/docs-wiki-blue)](https://github.com/MaSch0212/questkeep/wiki)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
 A lightweight, extensible game library manager and launcher for **Windows and Linux**, built with
 Tauri 2, Rust and SolidJS. Inspired by [Playnite](https://github.com/JosefNemec/Playnite).
 
