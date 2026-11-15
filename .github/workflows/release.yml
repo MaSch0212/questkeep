@@ -118,6 +118,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Windows runners are slow mostly on disk I/O: target/ is a Dev Drive (ReFS) mounted in place.
+      - uses: samypr100/setup-dev-drive@v4
+        if: runner.os == 'Windows'
+        with:
+          drive-size: 15GB
+          mount-path: target
+          trusted-dev-drive: true
+
       - name: Install Tauri system dependencies
         if: runner.os == 'Linux'
         run: |
@@ -136,7 +144,10 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      # Shared with CI's release builds on main, so a release starts from a warm cache.
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-${{ matrix.name }}
 
       - name: Write version ${{ env.VERSION }} into the project files
         run: node scripts/release/changeset.mjs version --write "$env:VERSION"

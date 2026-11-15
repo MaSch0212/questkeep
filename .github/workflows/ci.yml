@@ -99,7 +99,10 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      # Shared with the release workflow's Windows build, so releases start from a warm cache.
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-windows
 
       - name: Install JS dependencies
         run: pnpm install --frozen-lockfile
