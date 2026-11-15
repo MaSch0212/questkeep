@@ -83,8 +83,30 @@ dialog asks before Escape or a click outside discard changes.
 - **Categories follow-ups**: Heroic categories; map a single store category onto an existing
   category without merging whole categories; check `sharedconfig.vdf` tags on an older Steam
   install.
+- **Small gaps**: an import exclusion list (a removed store game comes back on the next sync
+  today), a random game picker that respects the current filter, region, version and manual
+  (path or URL) fields.
 - **Command bar commands**: run app actions (sync a store, open settings, switch views) from
-  Ctrl+K, not only games.
+  Ctrl+K, not only games; also the home for the random picker and plugin commands.
+- **URI protocol, CLI start and desktop shortcuts**: `questkeep://` start/show game/search,
+  `--start <id>`; enables Stream Deck, Steam shortcuts and launcher integrations.
+- **Multiple play actions per game**: file, URL, script and emulator actions, play and non-play
+  (e.g. a config tool); the groundwork for emulation.
+- **Logos and trailers**: a logo image kind (Steam, SteamGridDB) and trailers on the game page;
+  the media Playnite themes rely on most (Extra Metadata Loader), later a launch splash screen.
+- **Discord Rich Presence and per-game HDR, display and audio**; HDR state is already read in
+  `questkeep-system`.
+- **Plugin gallery**: browse, install and update plugins from within the app, with signature
+  checks.
+- **Metadata provider plugins**, fitted into source priority; then PCGamingWiki and ProtonDB as
+  the first providers.
+- **New stores**: itch.io, Humble, Rockstar, PlayStation (as store crates or WASM plugins).
+- **Controller navigation in desktop mode** (Gamepad API on top of the grid navigation), then
+  **fullscreen / controller mode** (controller-first shell, on-screen keyboard, game menu and
+  settings, music, power menu, fullscreen themes).
+- **Emulation**: emulator definitions and custom profiles, ROM scanner (archives,
+  multi-disc), DAT matching by CRC or serial, platform list. Playnite's emulator and platform
+  YAML is MIT-licensed and could be reused with attribution.
 
 ## Blocked
 
@@ -95,7 +117,6 @@ dialog asks before Escape or a click outside discard changes.
 
 - Plugins (stores, extensions and themes exist, see `docs/PLUGINS.md` and `docs/THEMES.md`),
   still open:
-  - a plugin gallery (browse and install from within the app) and signature checks;
   - account sign-in and credentials for plugin stores, registry access for WASM stores, guest
     output (stdout/stderr) in the log;
   - extensions: more places to add to (game page sections, filters, columns), translations per
@@ -103,6 +124,11 @@ dialog asks before Escape or a click outside discard changes.
   - themes: theming the native tray popup and the window's background color at startup (both
     are drawn outside the page), `@import` of relative files in theme CSS, translated theme
     texts for plugin themes.
-- Fullscreen / controller mode (the grid keyboard navigation is the groundwork).
-- Multiple play actions per game, emulator profiles.
 - Cloud sync of the library database.
+
+---
+
+The items from "Small gaps" to "Emulation" under Next come from a comparison with Playnite and
+its add-ons ([Questkeep vs Playnite](https://claude.ai/artifact/ETqu1V4TVLWaZ5hmbNUnok), private
+report, 2026-11-15), in its suggested order: value per day of work, with dependencies respected.
+The report also lists every compared feature and add-on with rough effort estimates.
