@@ -214,8 +214,10 @@ pub struct GlobalScripts {
     /// The pre scripts in run order, with the place of the games' own scripts.
     pub pre_order: Vec<ScriptSlot>,
     pub post_order: Vec<ScriptSlot>,
-    /// How many games have own scripts.
-    pub games_with_scripts: u32,
+    /// How many games have own pre scripts.
+    pub games_with_pre_scripts: u32,
+    /// How many games have own post scripts.
+    pub games_with_post_scripts: u32,
 }
 
 /// The scripts of one game, for the Edit dialog and the game page.

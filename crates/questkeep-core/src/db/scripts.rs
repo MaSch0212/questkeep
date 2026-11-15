@@ -268,10 +268,11 @@ impl Database {
     }
 
     /// How many entries have own scripts.
-    pub fn games_with_scripts(&self) -> Result<u32> {
+    /// How many games have own scripts of `kind`.
+    pub fn games_with_scripts(&self, kind: ScriptKind) -> Result<u32> {
         let n: i64 = self.conn().query_row(
-            "SELECT COUNT(DISTINCT game_id) FROM scripts WHERE game_id IS NOT NULL",
-            [],
+            "SELECT COUNT(DISTINCT game_id) FROM scripts WHERE game_id IS NOT NULL AND kind = ?1",
+            [kind.as_str()],
             |r| r.get(0),
         )?;
         Ok(u32::try_from(n).unwrap_or_default())
@@ -382,7 +383,8 @@ mod tests {
             .save_script(&input("Mods", ScriptKind::Action, Some(gog)))
             .unwrap();
         assert_eq!(db.own_scripts(gog).unwrap(), std::slice::from_ref(&own));
-        assert_eq!(db.games_with_scripts().unwrap(), 1);
+        assert_eq!(db.games_with_scripts(ScriptKind::Action).unwrap(), 1);
+        assert_eq!(db.games_with_scripts(ScriptKind::Pre).unwrap(), 0);
 
         db.combine_games(steam, &[gog]).unwrap();
         // Combining moves the copy's scripts onto the entry.

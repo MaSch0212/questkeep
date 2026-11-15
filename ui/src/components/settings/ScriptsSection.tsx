@@ -22,6 +22,9 @@ import { type ListRow, ScriptList, ScriptRowContent } from "../ScriptList";
 
 const tr = translator(scriptsText);
 
+/** The hint of the games' own scripts row: how many games have some of that kind. */
+const ownHint = (count: number) => (count > 0 ? tr("ownHintCount", { count }) : tr("ownHint"));
+
 const CARDS: readonly {
   kind: ScriptKind;
   title: "preTitle" | "postTitle" | "actionsTitle";
@@ -83,10 +86,7 @@ export function ScriptsSection() {
             key: "gameScripts",
             kind: "placeholder",
             title: kind === "pre" ? tr("ownPre") : tr("ownPost"),
-            hint:
-              all.gamesWithScripts > 0
-                ? tr("ownHintCount", { count: all.gamesWithScripts })
-                : tr("ownHint"),
+            hint: ownHint(kind === "pre" ? all.gamesWithPreScripts : all.gamesWithPostScripts),
           },
         ];
       }

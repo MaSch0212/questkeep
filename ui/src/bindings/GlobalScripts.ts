@@ -11,6 +11,10 @@ export type GlobalScripts = { scripts: Array<Script>,
  */
 preOrder: Array<ScriptSlot>, postOrder: Array<ScriptSlot>, 
 /**
- * How many games have own scripts.
+ * How many games have own pre scripts.
  */
-gamesWithScripts: number, };
+gamesWithPreScripts: number, 
+/**
+ * How many games have own post scripts.
+ */
+gamesWithPostScripts: number, };

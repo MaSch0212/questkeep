@@ -198,7 +198,8 @@ impl Scripts {
                 .collect(),
             pre_order: self.db().global_order(ScriptKind::Pre)?,
             post_order: self.db().global_order(ScriptKind::Post)?,
-            games_with_scripts: self.db().games_with_scripts()?,
+            games_with_pre_scripts: self.db().games_with_scripts(ScriptKind::Pre)?,
+            games_with_post_scripts: self.db().games_with_scripts(ScriptKind::Post)?,
         })
     }
 

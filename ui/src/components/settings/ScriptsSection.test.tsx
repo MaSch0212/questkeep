@@ -56,7 +56,8 @@ function data(overrides: Partial<GlobalScripts> = {}): GlobalScripts {
       { type: "script", id: "c" },
     ],
     postOrder: [{ type: "gameScripts" }, { type: "script", id: "p" }],
-    gamesWithScripts: 3,
+    gamesWithPreScripts: 3,
+    gamesWithPostScripts: 0,
     ...overrides,
   };
 }
@@ -106,9 +107,10 @@ describe("Settings › Scripts", () => {
       "Game's own pre scripts",
       "Pause OneDrive",
     ]);
-    expect(
-      within(card("After a game closes")).getByText("Game's own post scripts"),
-    ).toBeInTheDocument();
+    const postCard = card("After a game closes");
+    expect(within(postCard).getByText("Game's own post scripts")).toBeInTheDocument();
+    // Counted per kind: no game has own post scripts here.
+    expect(within(postCard).getByText("Set in each game's Edit dialog")).toBeInTheDocument();
     expect(within(card("Actions")).getByText("Open save folder")).toBeInTheDocument();
     expect(within(pre).getByText("Filter")).toBeInTheDocument();
     expect(within(pre).getAllByText("Global")).toHaveLength(2);
