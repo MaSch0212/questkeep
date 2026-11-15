@@ -62,6 +62,12 @@ impl Lifecycle {
     }
 }
 
+/// Debug builds with `QUESTKEEP_DEMO=1` (demo data for screenshots): sign-ins live in memory only,
+/// so the keyring's accounts never show.
+pub(crate) fn demo_mode() -> bool {
+    cfg!(debug_assertions) && std::env::var("QUESTKEEP_DEMO").is_ok_and(|v| v == "1")
+}
+
 pub(crate) fn keep_hidden() -> bool {
     cfg!(debug_assertions) && std::env::var("QUESTKEEP_HIDDEN").is_ok_and(|v| v == "1")
 }

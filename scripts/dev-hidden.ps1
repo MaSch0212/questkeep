@@ -7,10 +7,17 @@
 param(
   [int]$Port = 9222,
   [int]$Jobs = [Math]::Max(1, [Math]::Floor([Environment]::ProcessorCount / 3)),
-  [switch]$Portable
+  [switch]$Portable,
+  # Demo data for screenshots (see docs/screenshots.md): implies -Portable; sign-ins stay in
+  # memory, so no keyring account shows.
+  [switch]$Demo
 )
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
+if ($Demo) {
+  $Portable = $true
+  $env:QUESTKEEP_DEMO = "1"
+}
 
 (Get-Process -Id $PID).PriorityClass = "BelowNormal"
 $env:CARGO_BUILD_JOBS = "$Jobs"

@@ -18,6 +18,7 @@ Guide for humans and coding agents working on Questkeep.
 | List installed Steam games (dev tool) | `cargo run -p questkeep-store-steam --example scan_steam` |
 | Build the example store plugin (needs `rustup target add wasm32-wasip2`) | `examples/plugins/example-store/build.ps1` |
 | List the programs Add game offers on this PC (dev tool) | `cargo run -p questkeep-core --example installed_programs` |
+| Made-up library for wiki screenshots (dev tool, see `docs/screenshots.md`) | `cargo run -p questkeep-core --example demo_library -- <empty data dir>`, then `scripts/dev-hidden.ps1 -Demo` and `node scripts/demo-art.mjs <data dir>` |
 | Check executable icon extraction on real games (dev tool) | `cargo run -p questkeep-core --example exe_icons -- <out dir> <exe>...` |
 | Regenerate app icons from `assets/logo.svg` | `node scripts/make-icon.mjs && pnpm tauri icon assets/icon.svg -o src-tauri/icons` (tray glyphs: run `pnpm tauri icon assets/tray-dark.svg -o target/tray-dark`, same for `tray-light`, and copy `32x32.png`/`64x64.png` to `src-tauri/icons/tray-*.png`/`tray-*@2x.png`) |
 
@@ -195,8 +196,8 @@ Read it for context on how features are meant to work and how they are explained
   be listed in `_Sidebar.md` and in its manual's `_Sidebar.md`. Images live in `images/` and are
   embedded as `https://raw.githubusercontent.com/wiki/MaSch0212/questkeep/images/<name>.png`.
 - **Code in tutorials** must build and run against the current API; test it before changing it.
-- **Screenshots.** Take them yourself from the hidden test instance (see "Debugging and testing
-  the running app") only when they show no personal data: no account names, real library, local
+- **Screenshots.** Take them yourself from the hidden test instance with the demo library
+  (`docs/screenshots.md`), and only when they show no personal data: no account names, real library, local
   paths with user names, or keys. Otherwise don't take them: add a placeholder
   `<!-- SCREENSHOT: images/<name>.png — what it must show -->` above the image link and tell the
   user which screenshots are needed. Updating a screenshot that a change made outdated counts too.

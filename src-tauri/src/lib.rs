@@ -167,7 +167,11 @@ fn build_state(app: &tauri::AppHandle) -> Result<(AppState, Option<WorkerGuard>)
     // development build) has its own browser profiles, where a website sign-in may look signed
     // out while the installed app still has it: such a copy never drops a shared sign-in on its
     // own. A hidden test instance deletes nothing at all.
-    let keyring: Arc<dyn TokenStore> = if window::keep_hidden() {
+    // Demo runs (screenshots) start signed out everywhere and never touch the keyring.
+    let keyring: Arc<dyn TokenStore> = if window::demo_mode() {
+        tracing::info!("QUESTKEEP_DEMO=1: sign-ins are kept in memory only");
+        Arc::new(questkeep_core::auth::MemoryTokenStore::default())
+    } else if window::keep_hidden() {
         Arc::new(SharedTokenStore {
             deletes: false,
             label: "hidden test run",
