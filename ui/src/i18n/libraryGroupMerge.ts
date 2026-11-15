@@ -17,6 +17,16 @@ const en = {
   save: "Save",
   split: "Split up",
   inOther: "in “{name}”",
+  managerTitle: "Combined groups",
+  managerHint: "Combined groups show several groups as one in every view grouped by {field}.",
+  noMerges: "No combined groups yet.",
+  newMerge: "Combine groups…",
+  edit: "Edit…",
+  editNamed: "Edit {name}",
+  splitNamed: "Split up {name}",
+  close: "Close",
+  settingsIntro:
+    "Groups shown as one in grouped views, per grouping field. To combine groups, group a view and choose Combine groups… in its group menu, or right-click a group header.",
 };
 
 /** Combining groups of a grouped view (GroupMergeDialog, group header and group list menus). */
@@ -39,6 +49,17 @@ export const libraryGroupMerge: Translations<typeof en> = {
     save: "Speichern",
     split: "Wieder aufteilen",
     inOther: "in „{name}“",
+    managerTitle: "Zusammengefasste Gruppen",
+    managerHint:
+      "Zusammengefasste Gruppen zeigen mehrere Gruppen als eine – in jeder nach {field} gruppierten Ansicht.",
+    noMerges: "Noch keine zusammengefassten Gruppen.",
+    newMerge: "Gruppen zusammenfassen…",
+    edit: "Bearbeiten…",
+    editNamed: "{name} bearbeiten",
+    splitNamed: "{name} wieder aufteilen",
+    close: "Schließen",
+    settingsIntro:
+      "Gruppen, die in gruppierten Ansichten als eine gezeigt werden, je Gruppierung. Zum Zusammenfassen gruppiere eine Ansicht und wähle „Gruppen zusammenfassen…“ im Gruppierungsmenü oder klicke mit rechts auf einen Gruppenkopf.",
   },
   fr: {
     combineGroups: "Regrouper des groupes…",
@@ -57,6 +78,17 @@ export const libraryGroupMerge: Translations<typeof en> = {
     save: "Enregistrer",
     split: "Séparer",
     inOther: "dans « {name} »",
+    managerTitle: "Groupes combinés",
+    managerHint:
+      "Les groupes combinés affichent plusieurs groupes comme un seul dans chaque vue groupée par {field}.",
+    noMerges: "Aucun groupe combiné pour l'instant.",
+    newMerge: "Combiner des groupes…",
+    edit: "Modifier…",
+    editNamed: "Modifier {name}",
+    splitNamed: "Séparer {name}",
+    close: "Fermer",
+    settingsIntro:
+      "Les groupes affichés comme un seul dans les vues groupées, par champ de regroupement. Pour combiner des groupes, groupez une vue et choisissez « Combiner des groupes… » dans son menu de regroupement, ou faites un clic droit sur un en-tête de groupe.",
   },
   it: {
     combineGroups: "Unisci gruppi…",
@@ -75,6 +107,17 @@ export const libraryGroupMerge: Translations<typeof en> = {
     save: "Salva",
     split: "Separa",
     inOther: "in “{name}”",
+    managerTitle: "Gruppi combinati",
+    managerHint:
+      "I gruppi combinati mostrano più gruppi come uno solo in ogni vista raggruppata per {field}.",
+    noMerges: "Ancora nessun gruppo combinato.",
+    newMerge: "Combina gruppi…",
+    edit: "Modifica…",
+    editNamed: "Modifica {name}",
+    splitNamed: "Separa {name}",
+    close: "Chiudi",
+    settingsIntro:
+      "I gruppi mostrati come uno solo nelle viste raggruppate, per campo di raggruppamento. Per combinare gruppi, raggruppa una vista e scegli «Combina gruppi…» nel suo menu di raggruppamento, oppure fai clic destro sull'intestazione di un gruppo.",
   },
   es: {
     combineGroups: "Combinar grupos…",
@@ -93,6 +136,17 @@ export const libraryGroupMerge: Translations<typeof en> = {
     save: "Guardar",
     split: "Separar",
     inOther: "en «{name}»",
+    managerTitle: "Grupos combinados",
+    managerHint:
+      "Los grupos combinados muestran varios grupos como uno solo en cada vista agrupada por {field}.",
+    noMerges: "Aún no hay grupos combinados.",
+    newMerge: "Combinar grupos…",
+    edit: "Editar…",
+    editNamed: "Editar {name}",
+    splitNamed: "Separar {name}",
+    close: "Cerrar",
+    settingsIntro:
+      "Los grupos que se muestran como uno solo en las vistas agrupadas, por campo de agrupación. Para combinar grupos, agrupa una vista y elige «Combinar grupos…» en su menú de agrupación, o haz clic derecho en el encabezado de un grupo.",
   },
   pt: {
     combineGroups: "Combinar grupos…",
@@ -111,5 +165,16 @@ export const libraryGroupMerge: Translations<typeof en> = {
     save: "Guardar",
     split: "Separar",
     inOther: "em “{name}”",
+    managerTitle: "Grupos combinados",
+    managerHint:
+      "Grupos combinados mostram vários grupos como um só em toda visualização agrupada por {field}.",
+    noMerges: "Ainda não há grupos combinados.",
+    newMerge: "Combinar grupos…",
+    edit: "Editar…",
+    editNamed: "Editar {name}",
+    splitNamed: "Separar {name}",
+    close: "Fechar",
+    settingsIntro:
+      "Os grupos mostrados como um só nas visualizações agrupadas, por campo de agrupamento. Para combinar grupos, agrupe uma visualização e escolha “Combinar grupos…” no menu de agrupamento, ou clique com o botão direito no cabeçalho de um grupo.",
   },
 };

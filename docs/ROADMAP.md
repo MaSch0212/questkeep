@@ -60,7 +60,10 @@ installs found through the launcher's newer install records; the Battle.net sign
 uninstall and remove from the game's right-click menu work again. Add game is the Edit dialog
 with a Setup section: installed programs to pick from (Apps list and Start menu) and a metadata
 match from IGDB, the Steam store or the GOG catalog that later refreshes keep using; the game page
-scrolls sideways instead of squeezing in narrow windows.
+scrolls sideways instead of squeezing in narrow windows. Every change in the Edit dialog, images
+and launch profiles included, waits for Save, and Add game creates nothing before it; Combine
+groups… lists the grouping's combined groups to edit or split up, and Settings has an overview of
+all of them.
 
 ## Next
 

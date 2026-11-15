@@ -8,10 +8,7 @@ import type { Game } from "../bindings/Game";
 import type { LaunchProfile } from "../bindings/LaunchProfile";
 import type { LaunchProfiles } from "../bindings/LaunchProfiles";
 import type { PlayAction } from "../bindings/PlayAction";
-import { updateGame } from "../lib/actions";
-import * as api from "../lib/api";
 import { moveItem } from "../lib/editGame";
-import { errorMessage } from "../lib/errors";
 import { pickDirectory, pickExecutable } from "../lib/pickers";
 import { Menu, type MenuEntry } from "./Menu";
 import type { PopoverAnchor } from "./Popover";
@@ -39,7 +36,7 @@ function ProfileForm(props: {
     basedOn: string;
     args: string | null;
     action: PlayAction | null;
-  }) => Promise<string | null>;
+  }) => string | null;
   onCancel: () => void;
 }) {
   const own = () => props.profile === null || props.profile.own;
@@ -55,7 +52,6 @@ function ProfileForm(props: {
   const [target, setTarget] = createSignal(startAction()?.target ?? "");
   const [workingDir, setWorkingDir] = createSignal(startAction()?.workingDir ?? "");
   const [error, setError] = createSignal<string | null>(null);
-  const [saving, setSaving] = createSignal(false);
   const argsId = createUniqueId();
 
   const executable = () => manualCopy() || basedOn() === EXECUTABLE;
@@ -66,7 +62,7 @@ function ProfileForm(props: {
     return props.argsSupportedFor(basedOn());
   };
 
-  async function save(event: SubmitEvent) {
+  function save(event: SubmitEvent) {
     event.preventDefault();
     event.stopPropagation();
     const base = startAction();
@@ -84,19 +80,17 @@ function ProfileForm(props: {
       setError(tr("chooseExecutable"));
       return;
     }
-    setSaving(true);
-    const failure = await props.onSave({
+    const failure = props.onSave({
       name: emptyToNull(name()),
       basedOn: basedOn(),
       args: executable() ? null : emptyToNull(args()),
       action,
     });
-    setSaving(false);
     setError(failure);
   }
 
   return (
-    <form class="profile__body" onSubmit={(event) => void save(event)}>
+    <form class="profile__body" onSubmit={save}>
       <label class="field">
         <span class="field__label">{tr("name")}</span>
         <input
@@ -209,7 +203,7 @@ function ProfileForm(props: {
         <button type="button" class="btn" onClick={() => props.onCancel()}>
           {tr("cancel")}
         </button>
-        <button type="submit" class="btn btn--primary" disabled={saving()}>
+        <button type="submit" class="btn btn--primary">
           {props.profile ? tr("saveProfile") : tr("addProfile")}
         </button>
       </div>
@@ -218,16 +212,19 @@ function ProfileForm(props: {
 }
 
 /**
- * The Launch section: the game's launch profiles. Changes here apply at once (they don't wait
- * for the dialog's Save). Drag a profile, or use its menu, to reorder.
+ * The Launch section: the game's launch profiles. Changes are a draft like the rest of the Edit
+ * dialog: `onChange` gets the edited list, the dialog saves it with Save. A manual copy's own
+ * profile edits that copy's launch (`onCopyAction`). Drag a profile, or use its menu, to reorder.
  */
 export function EditLaunchSection(props: {
   game: Game;
   profiles: LaunchProfiles | undefined;
   onChange: (profiles: LaunchProfiles) => void;
+  /** The (edited) launch of a manual copy. */
+  copyAction: (copyId: string) => PlayAction | null;
+  onCopyAction: (copyId: string, action: PlayAction) => void;
 }) {
   const [open, setOpen] = createSignal<string | null>(null);
-  const [error, setError] = createSignal<string | null>(null);
   const [menu, setMenu] = createSignal<{ profile: LaunchProfile; anchor: PopoverAnchor } | null>(
     null,
   );
@@ -235,46 +232,64 @@ export function EditLaunchSection(props: {
   const menuButtons = new Map<string, HTMLButtonElement>();
   const list = () => props.profiles?.profiles ?? [];
 
-  async function apply(work: () => Promise<LaunchProfiles>): Promise<string | null> {
-    setError(null);
-    try {
-      props.onChange(await work());
-      return null;
-    } catch (failure) {
-      const message = errorMessage(failure);
-      setError(message);
-      return message;
-    }
+  function change(profiles: LaunchProfile[], defaultId = props.profiles?.defaultId ?? null) {
+    const current = props.profiles;
+    if (!current) return;
+    const kept = defaultId !== null && profiles.some((p) => p.id === defaultId) ? defaultId : null;
+    props.onChange({ ...current, profiles, defaultId: kept });
   }
 
-  async function saveProfile(
+  const setDefault = (id: string | null) => change(list(), id);
+
+  /** The name a profile shows without one of the user's. */
+  function baseName(profile: LaunchProfile): string {
+    if (profile.own) return tr("profileNumber", { number: list().indexOf(profile) + 1 });
+    return profile.source === "manual" || profile.source === null
+      ? tr("executable")
+      : sourceName(profile.source);
+  }
+
+  function saveProfile(
     profile: LaunchProfile | null,
     input: { name: string | null; basedOn: string; args: string | null; action: PlayAction | null },
-  ): Promise<string | null> {
-    const id = props.game.id;
+  ): string | null {
     // A manual game's own profile is its launch: that is the copy's play action.
     if (profile && !profile.own && profile.source === "manual" && input.action) {
-      try {
-        const failed = await updateGame(profile.id, { playAction: input.action });
-        if (failed) return failed;
-      } catch (failure) {
-        return errorMessage(failure);
-      }
+      props.onCopyAction(profile.id, input.action);
     }
-    const failure = await apply(() =>
-      api.saveLaunchProfile(id, profile?.id ?? null, {
-        name: input.name,
-        copyId: input.basedOn === EXECUTABLE ? null : input.basedOn,
-        args: profile && !profile.own && profile.source === "manual" ? null : input.args,
-        action: profile && !profile.own ? null : input.action,
-      }),
-    );
-    if (!failure) setOpen(null);
-    return failure;
+    const copy =
+      input.basedOn === EXECUTABLE ? null : props.game.copies.find((c) => c.id === input.basedOn);
+    if (profile && !profile.own) {
+      const manual = profile.source === "manual";
+      const next: LaunchProfile = {
+        ...profile,
+        customName: input.name,
+        name: input.name ?? (profile.customName === null ? profile.name : baseName(profile)),
+        args: manual ? null : input.args,
+      };
+      change(list().map((p) => (p.id === profile.id ? next : p)));
+    } else {
+      const next: LaunchProfile = {
+        id: profile?.id ?? crypto.randomUUID(),
+        name: input.name ?? profile?.name ?? tr("profileNumber", { number: list().length + 1 }),
+        customName: input.name,
+        copyId: copy?.id ?? null,
+        source: copy?.source ?? null,
+        own: true,
+        args: input.args,
+        action: copy ? null : input.action,
+        argsSupported: copy ? argsSupportedFor(copy.id) : true,
+        installed: copy?.installed ?? true,
+      };
+      change(profile ? list().map((p) => (p.id === profile.id ? next : p)) : [...list(), next]);
+    }
+    setOpen(null);
+    return null;
   }
 
   function reorder(ids: string[]) {
-    void apply(() => api.orderLaunchProfiles(props.game.id, ids));
+    const byId = new Map(list().map((p) => [p.id, p]));
+    change(ids.flatMap((id) => byId.get(id) ?? []));
   }
 
   function move(index: number, by: -1 | 1) {
@@ -290,26 +305,28 @@ export function EditLaunchSection(props: {
         onSelect: () => setOpen(profile.id),
       },
       isDefault
-        ? {
-            label: tr("useAutomatic"),
-            onSelect: () => void apply(() => api.setDefaultLaunchProfile(props.game.id, null)),
-          }
-        : {
-            label: tr("makeDefault"),
-            onSelect: () =>
-              void apply(() => api.setDefaultLaunchProfile(props.game.id, profile.id)),
-          },
+        ? { label: tr("useAutomatic"), onSelect: () => setDefault(null) }
+        : { label: tr("makeDefault"), onSelect: () => setDefault(profile.id) },
       {
         label: tr("duplicate"),
-        onSelect: () =>
-          void apply(() =>
-            api.saveLaunchProfile(props.game.id, null, {
-              name: tr("copyName", { name: profile.name }),
-              copyId: profile.copyId,
-              args: profile.args,
-              action: profile.action,
-            }),
-          ),
+        onSelect: () => {
+          const name = tr("copyName", { name: profile.name });
+          const duplicate: LaunchProfile = {
+            ...profile,
+            id: crypto.randomUUID(),
+            name,
+            customName: name,
+            own: true,
+            copyId: profile.copyId,
+            // A copy's profile starts its copy; a manual copy's launch is its executable.
+            action:
+              profile.own || profile.source !== "manual"
+                ? profile.action
+                : props.copyAction(profile.id),
+          };
+          if (!profile.own && profile.source === "manual") duplicate.copyId = null;
+          change([...list(), duplicate]);
+        },
       },
       { kind: "separator" },
       { label: tr("moveUp"), disabled: index <= 0, onSelect: () => move(index, -1) },
@@ -324,7 +341,7 @@ export function EditLaunchSection(props: {
             {
               label: tr("delete"),
               danger: true,
-              onSelect: () => void apply(() => api.deleteLaunchProfile(props.game.id, profile.id)),
+              onSelect: () => change(list().filter((p) => p.id !== profile.id)),
             },
           ] satisfies MenuEntry[])
         : []),
@@ -334,7 +351,7 @@ export function EditLaunchSection(props: {
   const argsSupportedFor = (copyId: string) =>
     list().find((p) => p.id === copyId && !p.own)?.argsSupported ?? false;
   const copyAction = (profile: LaunchProfile) =>
-    profile.source === "manual" ? props.game.playAction : null;
+    profile.source === "manual" ? props.copyAction(profile.id) : null;
 
   return (
     <div class="edit-section">
@@ -342,11 +359,7 @@ export function EditLaunchSection(props: {
       <p class="profiles__default">
         <Show when={props.profiles?.defaultId} fallback={<>{tr("playStartsAutomatic")}</>}>
           {tr("playStartsDefault")}{" "}
-          <button
-            type="button"
-            class="link-btn"
-            onClick={() => void apply(() => api.setDefaultLaunchProfile(props.game.id, null))}
-          >
+          <button type="button" class="link-btn" onClick={() => setDefault(null)}>
             {tr("useAutomatic")}
           </button>
         </Show>
@@ -409,9 +422,7 @@ export function EditLaunchSection(props: {
                     <button
                       type="button"
                       class="btn btn--sm btn--ghost"
-                      onClick={() =>
-                        void apply(() => api.setDefaultLaunchProfile(props.game.id, profile.id))
-                      }
+                      onClick={() => setDefault(profile.id)}
                     >
                       {tr("makeDefault")}
                     </button>
@@ -465,11 +476,6 @@ export function EditLaunchSection(props: {
             onCancel={() => setOpen(null)}
           />
         </div>
-      </Show>
-      <Show when={error()}>
-        <p class="error-text" role="alert">
-          {error()}
-        </p>
       </Show>
       <Show when={menu()}>
         {(current) => (

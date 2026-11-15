@@ -13,6 +13,7 @@ import { CategoriesSection } from "./CategoriesSection";
 import { CompletionSection } from "./CompletionSection";
 import { DeveloperSection } from "./DeveloperSection";
 import { GeneralSection } from "./GeneralSection";
+import { GroupMergesSection } from "./GroupMergesSection";
 import { MetadataSection } from "./MetadataSection";
 import { PluginSettings, pluginsWithSettings } from "./PluginSettings";
 import { PluginsSection } from "./PluginsSection";
@@ -31,6 +32,7 @@ interface SectionDef {
     | "appearance"
     | "stores"
     | "categories"
+    | "groupMerges"
     | "completion"
     | "artwork"
     | "metadata"
@@ -51,6 +53,7 @@ const SECTIONS: SectionDef[] = [
   { id: "appearance", title: "appearance", component: AppearanceSection },
   { id: "stores", title: "stores", component: AccountsSection },
   { id: "categories", title: "categories", component: CategoriesSection },
+  { id: "groupMerges", title: "groupMerges", component: GroupMergesSection },
   { id: "completion", title: "completion", component: CompletionSection },
   { id: "artwork", title: "artwork", component: ArtworkSection },
   { id: "metadata", title: "metadata", component: MetadataSection },

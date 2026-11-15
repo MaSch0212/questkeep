@@ -228,7 +228,7 @@ describe("DetailsPanel", () => {
     );
   });
 
-  it("sets a chosen image file at once and shows errors", async () => {
+  it("applies a chosen image file on Save and shows errors", async () => {
     mockEditInfo();
     const { open } = await import("@tauri-apps/plugin-dialog");
     vi.mocked(open).mockResolvedValue("C:\\img\\new.png");
@@ -239,6 +239,9 @@ describe("DetailsPanel", () => {
     await fireEvent.click(within(dialog).getByRole("button", { name: "Images" }));
     const [chooseCover] = within(dialog).getAllByRole("button", { name: "Choose file…" });
     if (chooseCover) await fireEvent.click(chooseCover);
+    await waitFor(() => expect(open).toHaveBeenCalled());
+    expect(api.setUserImage).not.toHaveBeenCalled();
+    await fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     expect(await within(dialog).findByRole("alert")).toHaveTextContent("Unsupported image");
     expect(api.setUserImage).toHaveBeenCalledWith("g1", "cover", "C:\\img\\new.png");
   });
@@ -265,7 +268,8 @@ describe("DetailsPanel", () => {
       playId: "g1",
     };
     vi.mocked(api.launchProfiles).mockResolvedValue(profiles);
-    vi.mocked(api.saveLaunchProfile).mockResolvedValue(profiles);
+    vi.mocked(api.replaceLaunchProfiles).mockResolvedValue(profiles);
+    vi.mocked(api.getGame).mockResolvedValue(makeGame());
     render(() => <DetailsPanel game={makeGame()} onClose={vi.fn<() => void>()} />);
     await fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     const dialog = screen.getByRole("dialog", { name: "Edit game" });
@@ -275,19 +279,14 @@ describe("DetailsPanel", () => {
       target: { value: "-windowed" },
     });
     await fireEvent.click(within(dialog).getByRole("button", { name: "Save profile" }));
+    expect(api.updateGame).not.toHaveBeenCalled();
+    await fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await waitFor(() =>
       expect(api.updateGame).toHaveBeenCalledWith(
         "g1",
         expect.objectContaining({
           playAction: expect.objectContaining({ args: "-windowed" }),
         }),
-      ),
-    );
-    await waitFor(() =>
-      expect(api.saveLaunchProfile).toHaveBeenCalledWith(
-        "g1",
-        "g1",
-        expect.objectContaining({ args: null }),
       ),
     );
   });

@@ -40,7 +40,8 @@ interface Loaded {
  * runs only when its tab is opened or Search is pressed.
  */
 export function ImagePicker(props: {
-  gameId: string;
+  /** The game, or null for one that isn't added yet: then only the web search is offered. */
+  gameId: string | null;
   gameName: string;
   slot: ImageSlot;
   /** The image the game has now (a local path), shown first. */
@@ -61,13 +62,18 @@ export function ImagePicker(props: {
   let searched = false;
 
   onMount(() => {
+    const gameId = props.gameId;
+    if (gameId === null) {
+      openTab(WEB);
+      return;
+    }
     api
-      .imageSources(props.gameId, props.slot)
+      .imageSources(gameId, props.slot)
       .then((sources) => {
         setLoaded(sources.map((source) => ({ source, options: null, error: null })));
         for (const source of sources) {
           api
-            .imageOptions(props.gameId, props.slot, source.id)
+            .imageOptions(gameId, props.slot, source.id)
             .then((options) => update(source.id, options, null))
             .catch((error: unknown) => update(source.id, [], errorMessage(error)));
         }

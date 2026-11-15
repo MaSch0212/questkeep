@@ -444,6 +444,7 @@ pub fn run() {
             commands::search_web_images,
             commands::launch_profiles,
             commands::save_launch_profile,
+            commands::replace_launch_profiles,
             commands::delete_launch_profile,
             commands::order_launch_profiles,
             commands::set_default_launch_profile,

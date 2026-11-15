@@ -1,6 +1,7 @@
 import { translator } from "../i18n";
 import { gameEdit } from "../i18n/gameEdit";
 import { gameSetup } from "../i18n/gameSetup";
+import { shellAddGame } from "../i18n/shellAddGame";
 import {
   createEffect,
   createResource,
@@ -20,9 +21,11 @@ import type { GameEditInfo } from "../bindings/GameEditInfo";
 import type { GameLink } from "../bindings/GameLink";
 import type { GameMetadata } from "../bindings/GameMetadata";
 import type { ImageSlot } from "../bindings/ImageSlot";
+import type { InstalledProgram } from "../bindings/InstalledProgram";
 import type { LaunchProfiles } from "../bindings/LaunchProfiles";
 import type { MetadataLink } from "../bindings/MetadataLink";
 import type { MetadataField } from "../bindings/MetadataField";
+import type { PlayAction } from "../bindings/PlayAction";
 import { refreshMetadata, updateGame } from "../lib/actions";
 import * as api from "../lib/api";
 import {
@@ -41,8 +44,17 @@ import {
   sourceName,
   startValues,
 } from "../lib/editGame";
+import {
+  fileAction,
+  type ImageDrafts,
+  newGameInfo,
+  newGameProfiles,
+  profilesDraft,
+  sameAction,
+} from "../lib/editDrafts";
 import { errorMessage } from "../lib/errors";
-import { pickGameImage } from "../lib/pickers";
+import { deriveGameName } from "../lib/names";
+import { pickDirectory, pickExecutable, pickGameImage } from "../lib/pickers";
 import { store } from "../lib/store";
 import { ChipInput } from "./ChipInput";
 import { Cover } from "./Cover";
@@ -50,10 +62,12 @@ import { EditLaunchSection } from "./EditLaunchSection";
 import { ImagePicker, imageSrc } from "./ImagePicker";
 import { MetadataLinkPicker } from "./MetadataLinkPicker";
 import { Modal } from "./Modal";
+import { ProgramPicker } from "./ProgramPicker";
 import { sourceName as storeName } from "./SourceIcon";
 
 const tr = translator(gameEdit);
 const trSetup = translator(gameSetup);
+const trAdd = translator(shellAddGame);
 
 export type Section = "setup" | "general" | "details" | "links" | "launch" | "tracking" | "images";
 
@@ -91,6 +105,12 @@ const nameOf = (id: string) => storeName(id);
 function urlOf(game: Game, slot: ImageSlot): string | null {
   if (slot === "cover") return store.coverUrl(game);
   return slot === "icon" ? store.iconUrl(game) : store.backgroundUrl(game);
+}
+
+/** Changes a game, failing like the other Save steps. */
+async function patch(gameId: string, update: Parameters<typeof updateGame>[1]) {
+  const failed = await updateGame(gameId, update);
+  if (failed) throw new Error(failed);
 }
 
 /** The id of a metadata field's input, for its label. */
@@ -133,6 +153,8 @@ function ImageRow(props: {
   title: string;
   hint: string;
   path: string | null;
+  /** A change waiting for Save: the new image's file or URL, or null when it goes. */
+  draft: string | null | undefined;
   user: boolean;
   onChoose: () => void;
   onPick: () => void;
@@ -141,24 +163,34 @@ function ImageRow(props: {
   return (
     <div class={`image-row image-row--${props.slot}`}>
       <div class="image-row__frame">
-        <Show
-          when={props.slot === "cover"}
-          fallback={
-            <Show when={props.path} fallback={<span class="muted">{tr("none")}</span>}>
-              {(path) => (
-                <img
-                  class="image-row__img"
-                  src={urlOf(props.game, props.slot) ?? imageSrc(path())}
-                  alt=""
-                />
-              )}
+        <Switch>
+          <Match when={typeof props.draft === "string" && props.draft}>
+            {(draft) => <img class="image-row__img" src={imageSrc(draft())} alt="" />}
+          </Match>
+          <Match when={props.draft === null}>
+            <span class="muted">{tr("none")}</span>
+          </Match>
+          <Match when={true}>
+            <Show
+              when={props.slot === "cover"}
+              fallback={
+                <Show when={props.path} fallback={<span class="muted">{tr("none")}</span>}>
+                  {(path) => (
+                    <img
+                      class="image-row__img"
+                      src={urlOf(props.game, props.slot) ?? imageSrc(path())}
+                      alt=""
+                    />
+                  )}
+                </Show>
+              }
+            >
+              <div class="image-row__cover">
+                <Cover game={props.game} />
+              </div>
             </Show>
-          }
-        >
-          <div class="image-row__cover">
-            <Cover game={props.game} />
-          </div>
-        </Show>
+          </Match>
+        </Switch>
       </div>
       <div class="image-row__info">
         <b>{props.title}</b>
@@ -175,7 +207,13 @@ function ImageRow(props: {
           <button
             type="button"
             class="btn btn--ghost"
-            disabled={props.slot === "icon" ? !props.user : props.path === null}
+            disabled={
+              props.slot === "icon"
+                ? !props.user
+                : props.draft === undefined
+                  ? props.path === null
+                  : props.draft === null
+            }
             onClick={() => props.onRemove()}
           >
             {props.slot === "icon" ? tr("reset") : tr("remove")}
@@ -188,57 +226,116 @@ function ImageRow(props: {
 
 /**
  * The Edit game dialog: every metadata field (edits are kept through refreshes), links, launch
- * profiles, playtime tracking and images, in sections listed on the left. Metadata, name,
- * "You" fields and tracking are drafts until Save; images and profiles apply at once.
+ * profiles, playtime tracking and images, in sections listed on the left; games added by hand
+ * also have Setup (their executable and the store or IGDB game their details come from).
+ * Everything is a draft until Save. With `isNew` it is Add game: `game` is a stand-in
+ * ([`newGame`]) and Save adds the game, then applies the rest to it.
  */
 export function EditGameDialog(props: {
   game: Game;
   onClose: () => void;
+  /** Add game: the game is created on Save. */
+  isNew?: boolean;
   /** Section to show first. */
   section?: Section;
   /** Dialog title (default "Edit game"). */
   title?: string;
-  /** Cancel, Esc and the close button (default: `onClose`); Add game removes the new game. */
-  onCancel?: () => void;
-  /** Called after Save, before `onClose`. */
-  onSaved?: () => void;
+  /** Called with the saved game after Save, before `onClose`. */
+  onSaved?: (game: Game) => void;
   /** The Save button's label (default "Save"). */
   saveLabel?: string;
 }) {
+  const isNew = props.isNew === true;
   const game = () => props.game;
   const id = props.game.id;
-  const cancel = () => (props.onCancel ?? props.onClose)();
   const [section, setSection] = createSignal<Section>(props.section ?? "general");
   const sections = () =>
     SECTIONS.filter((entry) => entry.id !== "setup" || game().source === "manual");
   // Asked again when the shown metadata changes (e.g. a linked game's details arrive).
-  const [info] = createResource(
+  const [loadedInfo] = createResource(
     () =>
-      JSON.stringify([game().fieldSources, game().description, game().genres, game().releaseDate]),
+      isNew
+        ? false
+        : JSON.stringify([
+            game().fieldSources,
+            game().description,
+            game().genres,
+            game().releaseDate,
+          ]),
     () => api.gameEditInfo(id),
   );
+  const blankInfo = newGameInfo();
+  const info = (): GameEditInfo | undefined => (isNew ? blankInfo : loadedInfo());
+
+  // Setup: the store or IGDB game the details come from (undefined: unchanged).
   const [metadataLink, setMetadataLink] = createSignal<MetadataLink | null | undefined>(undefined);
   const currentLink = () => {
     const chosen = metadataLink();
     return chosen === undefined ? (info()?.metadataLink ?? null) : chosen;
   };
-
-  async function changeLink(next: MetadataLink | null) {
-    setError(null);
-    try {
-      store.upsertGame(await api.setMetadataLink(id, next));
-      setMetadataLink(next);
-    } catch (failure) {
-      setError(errorMessage(failure));
-    }
+  const linkChanged = () => {
+    const chosen = metadataLink();
+    if (chosen === undefined) return false;
+    const saved = info()?.metadataLink ?? null;
+    return JSON.stringify(chosen) !== JSON.stringify(saved);
+  };
+  // Launches of manual copies (the Setup fields and their own launch profile), by copy id.
+  const [actions, setActions] = createSignal<ReadonlyMap<string, PlayAction>>(new Map());
+  const copyAction = (copyId: string): PlayAction | null => {
+    const changed = actions().get(copyId);
+    if (changed) return changed;
+    if (copyId === id) return game().playAction;
+    return store.games().find((g) => g.id === copyId)?.playAction ?? null;
+  };
+  const setCopyAction = (copyId: string, action: PlayAction) =>
+    setActions((all) => new Map(all).set(copyId, action));
+  const setupAction = () => copyAction(id) ?? fileAction("", "", "");
+  function changeSetup(change: Partial<PlayAction>) {
+    setCopyAction(id, { ...setupAction(), ...change });
   }
-  const [profiles, setProfiles] = createSignal<LaunchProfiles>();
+  // Add game: the name follows the executable until the user types one.
+  const [nameTouched, setNameTouched] = createSignal(!isNew);
+  const [programs, setPrograms] = createSignal(false);
+  function proposeName(value: string) {
+    if (!nameTouched()) setName(value);
+  }
+  async function chooseExecutable() {
+    const path = await pickExecutable();
+    if (path === null) return;
+    changeSetup({ target: path });
+    proposeName(deriveGameName(path));
+  }
+  async function chooseWorkingDir() {
+    const path = await pickDirectory();
+    if (path !== null) changeSetup({ workingDir: path });
+  }
+  function useProgram(program: InstalledProgram) {
+    setPrograms(false);
+    setCopyAction(id, fileAction(program.executable, program.args ?? "", program.workingDir ?? ""));
+    proposeName(program.name);
+  }
+
+  const [profiles, setProfiles] = createSignal<LaunchProfiles | undefined>(
+    isNew ? newGameProfiles(trSetup("executableProfile")) : undefined,
+  );
+  const [profilesChanged, setProfilesChanged] = createSignal(false);
   onMount(() => {
+    if (isNew) return;
     Promise.resolve()
       .then(() => api.launchProfiles(id))
-      .then(setProfiles)
+      .then((loaded) => {
+        if (!profilesChanged()) setProfiles(loaded);
+      })
       .catch(() => undefined);
   });
+  function changeProfiles(next: LaunchProfiles) {
+    setProfiles(next);
+    setProfilesChanged(true);
+  }
+  // Images waiting for Save.
+  const [imageDrafts, setImageDrafts] = createSignal<ImageDrafts>(new Map());
+  const setImageDraft = (slot: ImageSlot, value: string | null) =>
+    setImageDrafts((all) => new Map(all).set(slot, value));
 
   // Drafts.
   const [name, setName] = createSignal(props.game.name);
@@ -382,16 +479,29 @@ export function EditGameDialog(props: {
     return null;
   }
 
-  /** Changes plain game fields; throws the error message. */
-  async function patch(update: Parameters<typeof updateGame>[1]) {
-    const failed = await updateGame(id, update);
-    if (failed) throw new Error(failed);
+  /** Changes plain fields of a game row; throws the error message. */
+  /** Add game: creates the game from the Setup fields; returns its id. */
+  async function create(gameName: string): Promise<string> {
+    const action = setupAction();
+    const created = await api.addManualGame({
+      name: gameName,
+      executable: action.target,
+      args: action.args,
+      workingDir: action.workingDir,
+      coverImage: null,
+    });
+    return created.id;
   }
 
   async function save() {
     const trimmed = name().trim();
+    if (isNew && setupAction().target.trim() === "") {
+      setSection("setup");
+      setError(trSetup("exeRequired"));
+      return;
+    }
     if (trimmed === "") {
-      setSection("general");
+      setSection(isNew ? "setup" : "general");
       setError(tr("nameError"));
       return;
     }
@@ -403,44 +513,84 @@ export function EditGameDialog(props: {
     setError(null);
     setSaving(true);
     try {
+      const gameId = isNew ? await create(trimmed) : id;
+      // The draft's ids (Add game's stand-in) become the new game's.
+      const real = (draftId: string) => (draftId === id ? gameId : draftId);
       const current = values();
       const steps: (() => Promise<unknown>)[] = [];
-      if (trimmed !== props.game.name) steps.push(() => patch({ name: trimmed }));
-      if (kind() !== props.game.kind) steps.push(() => patch({ kind: kind() }));
+      if (!isNew && trimmed !== props.game.name) {
+        steps.push(() => patch(gameId, { name: trimmed }));
+      }
+      if (!isNew) {
+        for (const [copyId, action] of actions()) {
+          const before =
+            copyId === id
+              ? props.game.playAction
+              : (store.games().find((g) => g.id === copyId)?.playAction ?? null);
+          if (!sameAction(action, before)) {
+            steps.push(() => patch(copyId, { playAction: action }));
+          }
+        }
+      }
+      if (linkChanged() || (isNew && currentLink() !== null)) {
+        steps.push(() => api.setMetadataLink(gameId, currentLink()));
+      }
+      if (kind() !== props.game.kind) steps.push(() => patch(gameId, { kind: kind() }));
       if (
         detectLaunches() !== props.game.detectLaunches ||
         ignoredList().join("\n") !== props.game.ignoredProcesses.join("\n")
       ) {
         steps.push(() =>
-          patch({ detectLaunches: detectLaunches(), ignoredProcesses: ignoredList() }),
+          patch(gameId, { detectLaunches: detectLaunches(), ignoredProcesses: ignoredList() }),
         );
       }
       if (current) {
         const date = current.releaseDate?.trim() ?? "";
         const meta = { ...current, releaseDate: date === "" ? null : date };
-        steps.push(() =>
-          api.saveGameEdits(id, {
-            edits: buildEdits(meta, edited(), ownLinks(), hidden()),
-            sortingName: sortingName(),
-            userScore: score(),
-            notes: notes(),
-          }),
-        );
+        const edits = {
+          edits: buildEdits(meta, edited(), ownLinks(), hidden()),
+          sortingName: sortingName(),
+          userScore: score(),
+          notes: notes(),
+        };
+        const nothing =
+          edits.edits.edited.length === 0 &&
+          ownLinks().length === 0 &&
+          sortingName() === null &&
+          score() === null &&
+          notes().trim() === "";
+        if (!isNew || !nothing) steps.push(() => api.saveGameEdits(gameId, edits));
       }
       if (kind() === "game" && completion() !== props.game.completionStatus) {
-        steps.push(() => store.setCompletionStatus([id], completion()));
+        steps.push(() => store.setCompletionStatus([gameId], completion()));
       }
       const wanted = await categoryIds();
       if (wanted.toSorted().join() !== props.game.categories.toSorted().join()) {
-        steps.push(() => store.setGameCategories(id, wanted));
+        steps.push(() => store.setGameCategories(gameId, wanted));
+      }
+      for (const [slot, value] of imageDrafts()) {
+        steps.push(() =>
+          value === null
+            ? api.removeUserImage(gameId, slot)
+            : api.setUserImage(gameId, slot, value),
+        );
+      }
+      const draftProfiles = profiles();
+      if (profilesChanged() && draftProfiles) {
+        steps.push(() => api.replaceLaunchProfiles(gameId, profilesDraft(draftProfiles, real)));
       }
       // In order: a failing step stops the rest.
-      await steps.reduce<Promise<unknown>>(
-        (previous, step) => previous.then(step),
-        Promise.resolve(),
-      );
-      store.upsertGame(await api.getGame(id));
-      props.onSaved?.();
+      await steps
+        .reduce<Promise<unknown>>((previous, step) => previous.then(step), Promise.resolve())
+        .catch((failure: unknown) => {
+          // Add game: the game exists now, so the dialog can't stay open as a new one.
+          if (isNew) store.pushToast("error", errorMessage(failure));
+          else throw failure;
+        });
+      if (isNew) await store.refresh();
+      const saved = await api.getGame(gameId);
+      store.upsertGame(saved);
+      props.onSaved?.(saved);
       props.onClose();
     } catch (failure) {
       setError(errorMessage(failure));
@@ -467,35 +617,19 @@ export function EditGameDialog(props: {
     return found.flatMap((category) => (category ? [category.id] : []));
   }
 
-  async function imageAction(work: () => Promise<Game>) {
-    setError(null);
-    try {
-      store.upsertGame(await work());
-    } catch (failure) {
-      setError(errorMessage(failure));
-    }
-  }
-
   async function chooseFile(slot: ImageSlot) {
     const path = await pickGameImage(slot === "icon");
-    if (path !== null) await imageAction(() => api.setUserImage(id, slot, path));
+    if (path !== null) setImageDraft(slot, path);
   }
 
   const pathOf = (slot: ImageSlot) =>
     ({ cover: game().coverPath, background: game().backgroundPath, icon: game().iconPath })[slot];
+  /** Whether the image is (or will be on Save) one the user chose. */
   const userImage = (slot: ImageSlot) => {
-    const loaded = info();
-    if (!loaded) return false;
-    return loaded.userImages[slot] || userChanged().has(slot);
+    const draft = imageDrafts();
+    if (draft.has(slot)) return draft.get(slot) !== null || slot !== "icon";
+    return info()?.userImages[slot] ?? false;
   };
-  const [userChanged, setUserChanged] = createSignal<ReadonlySet<ImageSlot>>(new Set());
-  const markUser = (slot: ImageSlot, on: boolean) =>
-    setUserChanged((all) => {
-      const next = new Set(all);
-      if (on) next.add(slot);
-      else next.delete(slot);
-      return next;
-    });
 
   const sectionCount = (s: Section): string | null => {
     if (s === "general" || s === "details") {
@@ -553,7 +687,7 @@ export function EditGameDialog(props: {
   }
 
   return (
-    <Modal title={props.title ?? tr("editGame")} wide onClose={cancel}>
+    <Modal title={props.title ?? tr("editGame")} wide onClose={() => props.onClose()}>
       <div class="edit-game">
         <div class="edit-game__main">
           <nav class="edit-game__nav" aria-label={tr("sections")}>
@@ -577,18 +711,92 @@ export function EditGameDialog(props: {
             <Switch>
               <Match when={section() === "setup"}>
                 <div class="edit-section">
+                  <button
+                    type="button"
+                    class="btn add-game__programs"
+                    onClick={() => setPrograms(true)}
+                  >
+                    {trSetup("installedPrograms")}
+                  </button>
+                  <div class="field">
+                    <span class="field__label">{trAdd("executable")}</span>
+                    <span class="field__row">
+                      <input
+                        class="input"
+                        aria-label={trAdd("executablePath")}
+                        placeholder={trAdd("noFile")}
+                        value={setupAction().target}
+                        onInput={(event) => changeSetup({ target: event.currentTarget.value })}
+                      />
+                      <button
+                        type="button"
+                        class="btn"
+                        data-autofocus={isNew ? true : undefined}
+                        onClick={() => void chooseExecutable()}
+                      >
+                        {trAdd("chooseExecutable")}
+                      </button>
+                    </span>
+                  </div>
+                  <div class="edit-grid">
+                    <label class="field field--full">
+                      <span class="field__label">{tr("name")}</span>
+                      <input
+                        class="input"
+                        value={name()}
+                        onInput={(event) => {
+                          setNameTouched(true);
+                          setName(event.currentTarget.value);
+                        }}
+                      />
+                    </label>
+                    <label class="field">
+                      <span class="field__label">{trAdd("arguments")}</span>
+                      <input
+                        class="input"
+                        value={setupAction().args ?? ""}
+                        onInput={(event) =>
+                          changeSetup({ args: event.currentTarget.value.trim() || null })
+                        }
+                      />
+                    </label>
+                    <label class="field">
+                      <span class="field__label">{trAdd("workingDir")}</span>
+                      <span class="field__row">
+                        <input
+                          class="input"
+                          value={setupAction().workingDir ?? ""}
+                          onInput={(event) =>
+                            changeSetup({ workingDir: event.currentTarget.value.trim() || null })
+                          }
+                        />
+                        <button type="button" class="btn" onClick={() => void chooseWorkingDir()}>
+                          {trAdd("browse")}
+                        </button>
+                      </span>
+                    </label>
+                  </div>
                   <h3 class="edit-section__title">{trSetup("metadataTitle")}</h3>
                   <p class="field__hint">{trSetup("metadataHint")}</p>
                   <MetadataLinkPicker
-                    query={game().name}
+                    query={name()}
                     link={currentLink()}
-                    onChange={(next) => void changeLink(next)}
+                    pending={isNew || linkChanged()}
+                    onChange={(next) => {
+                      setMetadataLink(next);
+                      if (next !== null) proposeName(next.name);
+                    }}
                   />
-                  <p class="field__hint">{trSetup("launchHint")}</p>
                 </div>
               </Match>
               <Match when={section() === "launch"}>
-                <EditLaunchSection game={game()} profiles={profiles()} onChange={setProfiles} />
+                <EditLaunchSection
+                  game={game()}
+                  profiles={profiles()}
+                  onChange={changeProfiles}
+                  copyAction={copyAction}
+                  onCopyAction={setCopyAction}
+                />
               </Match>
               <Match when={section() === "tracking"}>
                 <div class="edit-section">
@@ -624,14 +832,11 @@ export function EditGameDialog(props: {
                     title={tr("imgCover")}
                     hint={tr("imgCoverHint")}
                     path={game().coverPath}
+                    draft={imageDrafts().get("cover")}
                     user={userImage("cover")}
-                    onChoose={() => void chooseFile("cover").then(() => markUser("cover", true))}
+                    onChoose={() => void chooseFile("cover")}
                     onPick={() => setPicker("cover")}
-                    onRemove={() =>
-                      void imageAction(() => api.removeUserImage(id, "cover")).then(() =>
-                        markUser("cover", true),
-                      )
-                    }
+                    onRemove={() => setImageDraft("cover", null)}
                   />
                   <ImageRow
                     game={game()}
@@ -639,16 +844,11 @@ export function EditGameDialog(props: {
                     title={tr("imgBackground")}
                     hint={tr("imgBackgroundHint")}
                     path={game().backgroundPath}
+                    draft={imageDrafts().get("background")}
                     user={userImage("background")}
-                    onChoose={() =>
-                      void chooseFile("background").then(() => markUser("background", true))
-                    }
+                    onChoose={() => void chooseFile("background")}
                     onPick={() => setPicker("background")}
-                    onRemove={() =>
-                      void imageAction(() => api.removeUserImage(id, "background")).then(() =>
-                        markUser("background", true),
-                      )
-                    }
+                    onRemove={() => setImageDraft("background", null)}
                   />
                   <ImageRow
                     game={game()}
@@ -656,14 +856,13 @@ export function EditGameDialog(props: {
                     title={tr("imgIcon")}
                     hint={tr("imgIconHint")}
                     path={game().iconPath}
-                    user={userImage("icon") && game().iconPath !== null}
-                    onChoose={() => void chooseFile("icon").then(() => markUser("icon", true))}
-                    onPick={() => setPicker("icon")}
-                    onRemove={() =>
-                      void imageAction(() => api.removeUserImage(id, "icon")).then(() =>
-                        markUser("icon", false),
-                      )
+                    draft={imageDrafts().get("icon")}
+                    user={
+                      userImage("icon") && (imageDrafts().has("icon") || game().iconPath !== null)
                     }
+                    onChoose={() => void chooseFile("icon")}
+                    onPick={() => setPicker("icon")}
+                    onRemove={() => setImageDraft("icon", null)}
                   />
                   <p class="field__hint">{tr("imagesHint")}</p>
                 </div>
@@ -998,19 +1197,21 @@ export function EditGameDialog(props: {
           </p>
         </Show>
         <div class="edit-game__footer">
-          <button
-            type="button"
-            class="btn btn--ghost"
-            onClick={() =>
-              void refreshMetadata(id).then((failure) =>
-                failure ? setError(failure) : store.pushToast("info", tr("refreshing")),
-              )
-            }
-          >
-            {tr("refreshMetadata")}
-          </button>
+          <Show when={!isNew} fallback={<span />}>
+            <button
+              type="button"
+              class="btn btn--ghost"
+              onClick={() =>
+                void refreshMetadata(id).then((failure) =>
+                  failure ? setError(failure) : store.pushToast("info", tr("refreshing")),
+                )
+              }
+            >
+              {tr("refreshMetadata")}
+            </button>
+          </Show>
           <span class="edit-game__buttons">
-            <button type="button" class="btn" onClick={cancel}>
+            <button type="button" class="btn" onClick={() => props.onClose()}>
               {tr("cancel")}
             </button>
             <button
@@ -1029,21 +1230,23 @@ export function EditGameDialog(props: {
           <Portal>
             {/* Outside the dialog, so its focus trap doesn't fight the picker's. */}
             <ImagePicker
-              gameId={id}
-              gameName={game().name}
+              gameId={isNew ? null : id}
+              gameName={name() || game().name}
               slot={slot()}
-              current={urlOf(game(), slot()) ?? pathOf(slot())}
+              current={imageDrafts().get(slot()) ?? urlOf(game(), slot()) ?? pathOf(slot())}
               onClose={() => setPicker(null)}
               onPick={(url) => {
-                const chosen = slot();
+                setImageDraft(slot(), url);
                 setPicker(null);
-                void imageAction(() => api.setUserImage(id, chosen, url)).then(() =>
-                  markUser(chosen, true),
-                );
               }}
             />
           </Portal>
         )}
+      </Show>
+      <Show when={programs()}>
+        <Portal>
+          <ProgramPicker onClose={() => setPrograms(false)} onPick={useProgram} />
+        </Portal>
       </Show>
     </Modal>
   );

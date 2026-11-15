@@ -21,7 +21,8 @@ export function groupMenuEntries(group: GameGroup): MenuEntry[] {
       {
         label: tr("editCombined"),
         icon: () => <Pencil class="icon" aria-hidden="true" />,
-        onSelect: () => store.setMergeDialog({ keys: [], mergeId: merge.id }),
+        onSelect: () =>
+          store.setMergeDialog({ field: store.groupBy(), keys: [], mergeId: merge.id }),
       },
       {
         label: tr("splitUp"),
@@ -42,7 +43,8 @@ export function groupMenuEntries(group: GameGroup): MenuEntry[] {
     {
       label: tr("combineWith"),
       icon: () => <Combine class="icon" aria-hidden="true" />,
-      onSelect: () => store.setMergeDialog({ keys: [group.key], mergeId: null }),
+      onSelect: () =>
+        store.setMergeDialog({ field: store.groupBy(), keys: [group.key], mergeId: null }),
     },
   ];
 }

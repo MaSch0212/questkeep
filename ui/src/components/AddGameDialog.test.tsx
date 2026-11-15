@@ -46,8 +46,9 @@ describe("AddGameDialog", () => {
 
   it("submits and selects the new game", async () => {
     vi.mocked(open).mockResolvedValue("C:\\Games\\Hades\\Hades.exe");
-    const game = makeGame({ id: "new" });
+    const game = makeGame({ id: "g9" });
     vi.mocked(api.addManualGame).mockResolvedValue(game);
+    vi.mocked(api.getGame).mockResolvedValue(game);
     vi.mocked(api.listGames).mockResolvedValue([game]);
     const onClose = vi.fn<() => void>();
     render(() => <AddGameDialog onClose={onClose} />);
@@ -62,7 +63,7 @@ describe("AddGameDialog", () => {
       workingDir: null,
       coverImage: null,
     });
-    expect(store.selectedId()).toBe("new");
+    expect(store.selectedId()).toBe("g9");
     expect(store.detailsOpen()).toBe(true);
   });
 
@@ -92,8 +93,9 @@ describe("AddGameDialog", () => {
     vi.mocked(api.searchMetadata).mockResolvedValue([
       { id: "1145360", name: "Hades", releaseYear: 2020, image: null },
     ]);
-    const game = makeGame({ id: "new", source: "manual" });
+    const game = makeGame({ id: "g9", source: "manual" });
     vi.mocked(api.addManualGame).mockResolvedValue(game);
+    vi.mocked(api.getGame).mockResolvedValue(game);
     vi.mocked(api.setMetadataLink).mockResolvedValue(game);
     vi.mocked(api.listGames).mockResolvedValue([game]);
     render(() => <AddGameDialog onClose={vi.fn<() => void>()} />);
@@ -113,7 +115,7 @@ describe("AddGameDialog", () => {
     expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue("Hades");
     await fireEvent.click(screen.getByRole("button", { name: "Add game" }));
     await waitFor(() =>
-      expect(api.setMetadataLink).toHaveBeenCalledWith("new", {
+      expect(api.setMetadataLink).toHaveBeenCalledWith("g9", {
         source: "steam",
         id: "1145360",
         name: "Hades",
@@ -121,38 +123,55 @@ describe("AddGameDialog", () => {
     );
   });
 
-  it("creates the game on leaving Setup and removes it on Cancel", async () => {
+  it("keeps everything a draft until Add game, and Cancel just closes", async () => {
     vi.mocked(open).mockResolvedValue("C:\\Games\\Hades\\Hades.exe");
-    const game = makeGame({ id: "new", name: "Hades", source: "manual" });
-    vi.mocked(api.addManualGame).mockResolvedValue(game);
-    vi.mocked(api.listGames).mockResolvedValue([game]);
-    vi.mocked(api.removeGame).mockResolvedValue();
     const onClose = vi.fn<() => void>();
     render(() => <AddGameDialog onClose={onClose} />);
-
-    // Without an executable the game can't be created yet.
-    await fireEvent.click(screen.getByRole("button", { name: "Images" }));
-    expect(screen.getByRole("alert")).toHaveTextContent("Choose an executable first.");
-    expect(api.addManualGame).not.toHaveBeenCalled();
-
     await fireEvent.click(screen.getByRole("button", { name: "Choose executable…" }));
     await waitFor(() =>
       expect(screen.getByRole("textbox", { name: "Executable path" })).toHaveValue(
         "C:\\Games\\Hades\\Hades.exe",
       ),
     );
+    // Other sections open without creating the game.
     await fireEvent.click(screen.getByRole("button", { name: "Images" }));
-    await waitFor(() => expect(api.addManualGame).toHaveBeenCalled());
-    // The full edit dialog, on the chosen section.
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Images" })).toHaveAttribute(
-        "aria-current",
-        "page",
-      ),
-    );
+    expect(screen.getByRole("button", { name: "Images" })).toHaveAttribute("aria-current", "page");
     await fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    await waitFor(() => expect(onClose).toHaveBeenCalled());
-    expect(api.removeGame).toHaveBeenCalledWith("new");
+    expect(onClose).toHaveBeenCalled();
+    expect(api.addManualGame).not.toHaveBeenCalled();
+    expect(api.removeGame).not.toHaveBeenCalled();
+  });
+
+  it("asks for an executable before adding", async () => {
+    render(() => <AddGameDialog onClose={vi.fn<() => void>()} />);
+    await fireEvent.click(screen.getByRole("button", { name: "Images" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Add game" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Choose an executable first.");
+    expect(screen.getByRole("button", { name: "Setup" })).toHaveAttribute("aria-current", "page");
+    expect(api.addManualGame).not.toHaveBeenCalled();
+  });
+
+  it("applies a chosen image to the added game", async () => {
+    vi.mocked(open)
+      .mockResolvedValueOnce("C:\\Games\\Hades\\Hades.exe")
+      .mockResolvedValueOnce("C:\\Pictures\\hades.png");
+    const game = makeGame({ id: "g9", name: "Hades", source: "manual" });
+    vi.mocked(api.addManualGame).mockResolvedValue(game);
+    vi.mocked(api.getGame).mockResolvedValue(game);
+    vi.mocked(api.listGames).mockResolvedValue([game]);
+    vi.mocked(api.setUserImage).mockResolvedValue(game);
+    render(() => <AddGameDialog onClose={vi.fn<() => void>()} />);
+    await fireEvent.click(screen.getByRole("button", { name: "Choose executable…" }));
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue("Hades"));
+    await fireEvent.click(screen.getByRole("button", { name: "Images" }));
+    const [chooseCover] = screen.getAllByRole("button", { name: "Choose file…" });
+    if (chooseCover) await fireEvent.click(chooseCover);
+    await waitFor(() => expect(open).toHaveBeenCalledTimes(2));
+    expect(api.setUserImage).not.toHaveBeenCalled();
+    await fireEvent.click(screen.getByRole("button", { name: "Add game" }));
+    await waitFor(() =>
+      expect(api.setUserImage).toHaveBeenCalledWith("g9", "cover", "C:\\Pictures\\hades.png"),
+    );
   });
 
   it("closes on Escape", async () => {

@@ -86,6 +86,49 @@ impl Database {
         Ok(())
     }
 
+    /// Writes an entry's whole profile list at once (the Edit dialog's Save): `rows` are saved,
+    /// `removed` deleted and the default set, all or nothing.
+    pub fn replace_profiles(
+        &self,
+        entry_id: Uuid,
+        rows: &[ProfileRow],
+        removed: &[Uuid],
+        default: Option<Uuid>,
+    ) -> Result<()> {
+        let mut conn = self.conn();
+        let tx = conn.transaction()?;
+        for id in removed {
+            tx.execute(
+                "DELETE FROM launch_profiles WHERE id = ?1",
+                [id.to_string()],
+            )?;
+        }
+        for row in rows {
+            let action = row.action.as_ref().map(serde_json::to_string).transpose()?;
+            tx.execute(
+                "INSERT INTO launch_profiles (id, entry_id, copy_id, name, args, action, position) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) ON CONFLICT (id) DO UPDATE SET \
+                 entry_id = excluded.entry_id, copy_id = excluded.copy_id, name = excluded.name, \
+                 args = excluded.args, action = excluded.action, position = excluded.position",
+                params![
+                    row.id.to_string(),
+                    row.entry_id.map(|id| id.to_string()),
+                    row.copy_id.map(|id| id.to_string()),
+                    row.name,
+                    row.args,
+                    action,
+                    row.position
+                ],
+            )?;
+        }
+        tx.execute(
+            "UPDATE games SET default_profile = ?2 WHERE id = ?1",
+            params![entry_id.to_string(), default.map(|p| p.to_string())],
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
     /// Deletes an own profile; a copy's profile only loses its changes.
     pub fn delete_profile(&self, id: Uuid) -> Result<()> {
         self.conn().execute(

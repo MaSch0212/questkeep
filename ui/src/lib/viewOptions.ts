@@ -82,6 +82,8 @@ export const NUMBER_GROUPS: Option<GroupBy>[] = [
 
 const ALL_SORTS = [...SORTS, ...MORE_SORTS];
 const ALL_GROUPS = [...GROUPS, ...GAME_GROUPS, ...NUMBER_GROUPS];
+/** Every grouping field, in menu order. */
+export const GROUP_FIELDS: readonly GroupBy[] = ALL_GROUPS.map((g) => g.id);
 
 export const sortLabel = (id: SortField) => ALL_SORTS.find((s) => s.id === id)?.label ?? id;
 export const groupLabel = (id: GroupBy) => ALL_GROUPS.find((g) => g.id === id)?.label ?? id;

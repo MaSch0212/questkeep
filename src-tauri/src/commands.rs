@@ -1135,6 +1135,19 @@ pub async fn launch_profiles(
 }
 
 /// Adds (`profile_id` none) or changes a launch profile.
+/// Saves the Edit dialog's whole profile list (order, default, new and removed profiles).
+#[tauri::command]
+pub async fn replace_launch_profiles(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    draft: questkeep_core::model::ProfilesDraft,
+) -> CmdResult<LaunchProfiles> {
+    blocking(state, move |s| {
+        s.library.replace_launch_profiles(parse_id(&id)?, &draft)
+    })
+    .await
+}
+
 #[tauri::command]
 pub async fn save_launch_profile(
     state: State<'_, Arc<AppState>>,

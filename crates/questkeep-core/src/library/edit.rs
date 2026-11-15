@@ -14,8 +14,8 @@ use crate::images::{
 };
 use crate::model::{
     ActionKind, EditLink, Game, GameEditInfo, GameEdits, ImageOption, ImageSlot, ImageSource,
-    LaunchProfile, LaunchProfiles, PlayAction, ProfileInput, USER_SOURCE, UserImages, resolve,
-    sorting_name, url_key,
+    LaunchProfile, LaunchProfiles, PlayAction, ProfileInput, ProfilesDraft, USER_SOURCE,
+    UserImages, resolve, sorting_name, url_key,
 };
 use crate::providers::ImageCandidate;
 
@@ -525,6 +525,109 @@ impl Library {
         self.profiles_changed(entry)
     }
 
+    /// Saves the Edit dialog's profile list at once: names, arguments and launches, the order,
+    /// new own profiles (with the ids the dialog gave them), removed ones and the default. The
+    /// whole list is checked first; nothing is written when one profile is invalid.
+    pub fn replace_launch_profiles(
+        &self,
+        id: Uuid,
+        draft: &ProfilesDraft,
+    ) -> Result<LaunchProfiles> {
+        let entry = self.db.entry_of(id)?;
+        let current = self.launch_profiles(entry)?;
+        let copy_profile = |copy: Uuid| current.profiles.iter().any(|p| !p.own && p.id == copy);
+        let mut rows: Vec<ProfileRow> = Vec::new();
+        for profile in &draft.profiles {
+            if rows.iter().any(|r| r.id == profile.id) {
+                continue;
+            }
+            let existing = current.profiles.iter().find(|p| p.id == profile.id);
+            let name = trimmed(profile.name.as_deref());
+            let args = trimmed(profile.args.as_deref());
+            let row = if profile.own {
+                if existing.is_some_and(|p| !p.own) {
+                    return Err(CoreError::Invalid("That launch profile is gone.".into()));
+                }
+                match (profile.copy_id, &profile.action) {
+                    (Some(copy), _) if !copy_profile(copy) => {
+                        return Err(CoreError::Invalid(
+                            "That store's copy isn't part of this game.".into(),
+                        ));
+                    }
+                    (Some(_), _) => {}
+                    (None, Some(action)) if !action.target.trim().is_empty() => {}
+                    (None, _) => {
+                        return Err(CoreError::Invalid(
+                            "Choose the executable this profile starts.".into(),
+                        ));
+                    }
+                }
+                ProfileRow {
+                    id: profile.id,
+                    entry_id: Some(entry),
+                    copy_id: profile.copy_id,
+                    name: name.or_else(|| Some(format!("Profile {}", rows.len() + 1))),
+                    args,
+                    action: profile
+                        .copy_id
+                        .is_none()
+                        .then(|| profile.action.clone())
+                        .flatten(),
+                    position: 0,
+                }
+            } else {
+                if !copy_profile(profile.id) {
+                    return Err(CoreError::Invalid("That launch profile is gone.".into()));
+                }
+                ProfileRow {
+                    id: profile.id,
+                    entry_id: None,
+                    copy_id: Some(profile.id),
+                    name,
+                    args,
+                    action: None,
+                    position: 0,
+                }
+            };
+            if row.args.is_some()
+                && let Some(copy) = row.copy_id
+                && !self.args_supported(copy)
+            {
+                return Err(CoreError::Invalid(
+                    "This store can't pass arguments; base the profile on the executable instead."
+                        .into(),
+                ));
+            }
+            rows.push(row);
+        }
+        // Copies the draft left out (e.g. combined meanwhile) keep their profile, at the end.
+        for profile in current.profiles.iter().filter(|p| !p.own) {
+            if !rows.iter().any(|r| r.id == profile.id) {
+                rows.push(ProfileRow {
+                    id: profile.id,
+                    entry_id: None,
+                    copy_id: profile.copy_id,
+                    name: profile.custom_name.clone(),
+                    args: profile.args.clone(),
+                    action: None,
+                    position: 0,
+                });
+            }
+        }
+        for (position, row) in rows.iter_mut().enumerate() {
+            row.position = position as i64;
+        }
+        let removed: Vec<Uuid> = current
+            .profiles
+            .iter()
+            .filter(|p| p.own && !rows.iter().any(|r| r.id == p.id))
+            .map(|p| p.id)
+            .collect();
+        let default = draft.default_id.filter(|d| rows.iter().any(|r| r.id == *d));
+        self.db.replace_profiles(entry, &rows, &removed, default)?;
+        self.profiles_changed(entry)
+    }
+
     /// Where a profile is in the list now, written as its stored position.
     fn position_of(&self, current: &LaunchProfiles, id: Uuid) -> i64 {
         current
@@ -721,7 +824,9 @@ fn image_name(url: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{GameLink, GameMetadata, MetadataField, NewManualGame, UserEdits};
+    use crate::model::{
+        GameLink, GameMetadata, MetadataField, NewManualGame, ProfileDraft, UserEdits,
+    };
 
     fn library() -> (tempfile::TempDir, Library, Uuid) {
         let (tmp, lib) = super::super::tests::test_library();
@@ -890,6 +995,85 @@ mod tests {
                 .is_err(),
             "an own profile needs an executable or a copy"
         );
+    }
+
+    #[test]
+    fn a_profile_draft_is_saved_at_once_or_not_at_all() {
+        let (tmp, lib, id) = library();
+        let tool = tmp.path().join("tool.exe");
+        std::fs::write(&tool, b"MZ").unwrap();
+        let old = lib
+            .save_launch_profile(
+                id,
+                None,
+                &ProfileInput {
+                    name: Some("Old".into()),
+                    action: Some(PlayAction::file(tool.display().to_string())),
+                    ..ProfileInput::default()
+                },
+            )
+            .unwrap()
+            .profiles[1]
+            .id;
+        let new = Uuid::new_v4();
+        let draft = |extra: Option<ProfileDraft>| ProfilesDraft {
+            profiles: [
+                Some(ProfileDraft {
+                    id: new,
+                    own: true,
+                    name: Some(" Editor ".into()),
+                    copy_id: None,
+                    args: Some("-edit".into()),
+                    action: Some(PlayAction::file(tool.display().to_string())),
+                }),
+                Some(ProfileDraft {
+                    id,
+                    own: false,
+                    name: None,
+                    copy_id: None,
+                    args: Some("-windowed".into()),
+                    action: None,
+                }),
+                extra,
+            ]
+            .into_iter()
+            .flatten()
+            .collect(),
+            default_id: Some(new),
+        };
+
+        // One bad profile: nothing changes.
+        let bad = ProfileDraft {
+            id: Uuid::new_v4(),
+            own: true,
+            name: None,
+            copy_id: None,
+            args: None,
+            action: None,
+        };
+        assert!(lib.replace_launch_profiles(id, &draft(Some(bad))).is_err());
+        let unchanged = lib.launch_profiles(id).unwrap();
+        assert_eq!(unchanged.profiles.len(), 2);
+        assert_eq!(unchanged.default_id, None);
+
+        // New first and the default, "Old" (left out) deleted, the copy's arguments kept.
+        let saved = lib.replace_launch_profiles(id, &draft(None)).unwrap();
+        let names: Vec<&str> = saved.profiles.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(names, ["Editor", "Executable"]);
+        assert_eq!(saved.profiles[0].id, new);
+        assert_eq!(saved.profiles[0].args.as_deref(), Some("-edit"));
+        assert_eq!(saved.profiles[1].args.as_deref(), Some("-windowed"));
+        assert_eq!(saved.default_id, Some(new));
+        assert!(!saved.profiles.iter().any(|p| p.id == old));
+
+        // A copy left out of the draft keeps its profile.
+        let empty = ProfilesDraft {
+            profiles: Vec::new(),
+            default_id: None,
+        };
+        let saved = lib.replace_launch_profiles(id, &empty).unwrap();
+        assert_eq!(saved.profiles.len(), 1);
+        assert_eq!(saved.profiles[0].id, id);
     }
 
     #[test]

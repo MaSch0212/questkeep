@@ -14,6 +14,7 @@ import { findPage, isPluginPage, pluginOfPage } from "./lib/extensions/registry"
 import { AddGameDialog } from "./components/AddGameDialog";
 import { DuplicatesDialog } from "./components/DuplicatesDialog";
 import { GroupMergeDialog } from "./components/GroupMergeDialog";
+import { GroupMergesDialog } from "./components/GroupMergesDialog";
 import { ExtensionDialogs } from "./components/ExtensionDialogs";
 import { FirstRunDialog } from "./components/FirstRunDialog";
 import { CombineDialog } from "./components/CombineDialog";
@@ -313,9 +314,15 @@ export function App() {
       <Show when={store.duplicatesOpen()}>
         <DuplicatesDialog onClose={() => store.setDuplicatesOpen(false)} />
       </Show>
+      <Show when={store.mergeManager()}>
+        {(field) => (
+          <GroupMergesDialog field={field()} onClose={() => store.setMergeManager(null)} />
+        )}
+      </Show>
       <Show when={store.mergeDialog()}>
         {(open) => (
           <GroupMergeDialog
+            field={open().field}
             keys={open().keys}
             mergeId={open().mergeId}
             onClose={() => store.setMergeDialog(null)}

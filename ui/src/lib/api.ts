@@ -25,6 +25,7 @@ import type { ImageSlot } from "../bindings/ImageSlot";
 import type { ImageSource } from "../bindings/ImageSource";
 import type { LaunchProfiles } from "../bindings/LaunchProfiles";
 import type { ProfileInput } from "../bindings/ProfileInput";
+import type { ProfilesDraft } from "../bindings/ProfilesDraft";
 import type { GameNews } from "../bindings/GameNews";
 import type { GameQuery } from "../bindings/GameQuery";
 import type { GameUpdate } from "../bindings/GameUpdate";
@@ -330,6 +331,9 @@ export const searchMetadata = (source: string, query: string) =>
 export const setMetadataLink = (id: string, link: MetadataLink | null) =>
   invoke<Game>("set_metadata_link", { id, link });
 export const launchProfiles = (id: string) => invoke<LaunchProfiles>("launch_profiles", { id });
+/** Saves a whole profile list (the Edit dialog's draft) in one step. */
+export const replaceLaunchProfiles = (id: string, draft: ProfilesDraft) =>
+  invoke<LaunchProfiles>("replace_launch_profiles", { id, draft });
 export const saveLaunchProfile = (id: string, profileId: string | null, input: ProfileInput) =>
   invoke<LaunchProfiles>("save_launch_profile", { id, profileId, input });
 export const deleteLaunchProfile = (id: string, profileId: string) =>

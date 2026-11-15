@@ -127,7 +127,7 @@ const groupEntries = (): MenuEntry[] => [
   {
     label: trMerge("combineGroups"),
     disabled: store.groupBy() === "none",
-    onSelect: () => store.setMergeDialog({ keys: [], mergeId: null }),
+    onSelect: () => store.setMergeManager(store.groupBy()),
   },
 ];
 

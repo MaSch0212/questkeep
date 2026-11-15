@@ -162,11 +162,17 @@ function createAppStore() {
   const [seenSources, setSeenSources] = createSignal<ReadonlySet<string>>(new Set());
   const [toasts, setToasts] = createSignal<Toast[]>([]);
   const [duplicatesOpen, setDuplicatesOpen] = createSignal(false);
-  /** The Combine groups dialog: the groups to start with and the merge being edited, if any. */
+  /**
+   * The Combine groups dialog: the grouping field, the groups to start with and the merge being
+   * edited, if any.
+   */
   const [mergeDialog, setMergeDialog] = createSignal<{
+    field: GroupBy;
     keys: string[];
     mergeId: string | null;
   } | null>(null);
+  /** The list of a grouping field's combined groups (Combine groups… in the group menu). */
+  const [mergeManager, setMergeManager] = createSignal<GroupBy | null>(null);
   /** A newer app version (checked after start); the title bar offers it. */
   const [update, setUpdate] = createSignal<api.UpdateInfo | null>(null);
   const [updateOpen, setUpdateOpen] = createSignal(false);
@@ -270,6 +276,9 @@ function createAppStore() {
   );
   /** The open view's groups as they are without combining (to pick what to combine). */
   const plainGroups = createMemo(() => groupGames(games(), groupBy(), groupContext()));
+  /** The open view's groups by any field, without combining. */
+  const plainGroupsBy = (field: GroupBy) =>
+    field === groupBy() ? plainGroups() : groupGames(games(), field, groupContext());
   /** The group picked in the group list, while it still exists; null: all groups. */
   const pickedGroup = createMemo<string | null>(() => {
     if (!groupList()) return null;
@@ -1349,8 +1358,11 @@ function createAppStore() {
     setDuplicatesOpen,
     mergeDialog,
     setMergeDialog,
+    mergeManager,
+    setMergeManager,
     activeMerges,
     plainGroups,
+    plainGroupsBy,
     loadProviders,
     loadPlugins,
     update,

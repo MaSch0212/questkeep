@@ -1,4 +1,5 @@
 import { createSignal, For, Show } from "solid-js";
+import type { GroupBy } from "../bindings/GroupBy";
 import type { GroupMerge } from "../bindings/GroupMerge";
 import type { GroupMergeMember } from "../bindings/GroupMergeMember";
 import { translator } from "../i18n";
@@ -24,26 +25,28 @@ interface Choice {
 }
 
 /**
- * Combines groups of the open view's grouping field under one name, or edits or splits up a
+ * Combines groups of a grouping field under one name, or edits or splits up a
  * combined group. The combination is saved per grouping field, so every view grouped the same
  * way shows it (the dialog says so).
  */
 export function GroupMergeDialog(props: {
+  /** The grouping field whose groups are combined. */
+  field: GroupBy;
   /** Groups ticked at the start. */
   keys: string[];
   /** The combined group being edited; null for a new one. */
   mergeId: string | null;
   onClose: () => void;
 }) {
-  const field = store.groupBy();
-  const merges = store.activeMerges();
+  const field = props.field;
+  const merges = store.groupMerges()[field] ?? [];
   const editing = merges.find((m) => m.id === props.mergeId) ?? null;
   const takenBy = new Map<string, string>();
   for (const merge of merges) {
     if (merge.id === editing?.id) continue;
     for (const member of merge.members) takenBy.set(member.key, merge.name);
   }
-  const plain = store.plainGroups().filter((g) => g.key !== NO_CATEGORY && g.key !== "");
+  const plain = store.plainGroupsBy(field).filter((g) => g.key !== NO_CATEGORY && g.key !== "");
   const choices: Choice[] = [
     ...plain.map((g) => ({
       key: g.key,

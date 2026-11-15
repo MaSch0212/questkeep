@@ -23,7 +23,7 @@ const en = {
   chosen: "chosen",
   noSources:
     "No source can be searched yet. Add IGDB credentials in Settings → Metadata, or turn on the Steam or GOG store.",
-  launchHint: "Executable, arguments and working directory are in the Launch section.",
+  executableProfile: "Executable",
   exeRequired: "Choose an executable first.",
 };
 
@@ -53,7 +53,7 @@ export const gameSetup: Translations<typeof en> = {
     chosen: "gewählt",
     noSources:
       "Noch keine Quelle durchsuchbar. Trage IGDB-Zugangsdaten unter Einstellungen → Metadaten ein oder aktiviere den Steam- oder GOG-Store.",
-    launchHint: "Ausführbare Datei, Argumente und Arbeitsverzeichnis findest du unter Start.",
+    executableProfile: "Ausführbare Datei",
     exeRequired: "Wähle zuerst eine ausführbare Datei.",
   },
   fr: {
@@ -79,8 +79,7 @@ export const gameSetup: Translations<typeof en> = {
     chosen: "choisi",
     noSources:
       "Aucune source consultable. Ajoutez des identifiants IGDB dans Paramètres → Métadonnées ou activez la boutique Steam ou GOG.",
-    launchHint:
-      "L'exécutable, les arguments et le dossier de travail sont dans la section Lancement.",
+    executableProfile: "Exécutable",
     exeRequired: "Choisissez d'abord un exécutable.",
   },
   it: {
@@ -106,7 +105,7 @@ export const gameSetup: Translations<typeof en> = {
     chosen: "scelto",
     noSources:
       "Ancora nessuna fonte consultabile. Aggiungi le credenziali IGDB in Impostazioni → Metadati o attiva lo store Steam o GOG.",
-    launchHint: "Eseguibile, argomenti e cartella di lavoro sono nella sezione Avvio.",
+    executableProfile: "Eseguibile",
     exeRequired: "Scegli prima un eseguibile.",
   },
   es: {
@@ -132,7 +131,7 @@ export const gameSetup: Translations<typeof en> = {
     chosen: "elegido",
     noSources:
       "Aún no se puede buscar en ninguna fuente. Añade credenciales de IGDB en Ajustes → Metadatos o activa la tienda Steam o GOG.",
-    launchHint: "El ejecutable, los argumentos y la carpeta de trabajo están en la sección Inicio.",
+    executableProfile: "Ejecutable",
     exeRequired: "Elige primero un ejecutable.",
   },
   pt: {
@@ -158,7 +157,7 @@ export const gameSetup: Translations<typeof en> = {
     chosen: "escolhido",
     noSources:
       "Ainda não há fonte pesquisável. Adicione credenciais do IGDB em Configurações → Metadados ou ative a loja Steam ou GOG.",
-    launchHint: "Executável, argumentos e pasta de trabalho ficam na seção Inicialização.",
+    executableProfile: "Executável",
     exeRequired: "Escolha um executável primeiro.",
   },
 };

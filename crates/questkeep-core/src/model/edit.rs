@@ -162,6 +162,34 @@ pub struct ProfileInput {
     pub action: Option<PlayAction>,
 }
 
+/// One profile of an edited profile list (see [`ProfilesDraft`]).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct ProfileDraft {
+    /// An existing profile's id, a copy's id for a copy's profile, or a new id the dialog made
+    /// up for a new own profile.
+    pub id: Uuid,
+    /// The user's own profile (can be removed); `false` for the profile a store copy brings.
+    pub own: bool,
+    pub name: Option<String>,
+    /// For own profiles: the copy it starts, `None` for an executable profile.
+    pub copy_id: Option<Uuid>,
+    pub args: Option<String>,
+    /// For own executable profiles: the executable to start.
+    pub action: Option<PlayAction>,
+}
+
+/// An entry's launch profiles as edited in the Edit dialog: the whole list in order (own
+/// profiles missing from it are deleted) and the default. Saved at once.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct ProfilesDraft {
+    pub profiles: Vec<ProfileDraft>,
+    pub default_id: Option<Uuid>,
+}
+
 /// An image the picker offers.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]

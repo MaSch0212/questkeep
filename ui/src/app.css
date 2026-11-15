@@ -2179,6 +2179,50 @@ ul {
 .group-merge__split {
   margin-right: auto;
 }
+.group-merges__new {
+  margin-right: auto;
+}
+.merge-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.merge-list__row {
+  display: flex;
+  align-items: center;
+  gap: var(--qk-space-3);
+  padding: var(--qk-space-2) var(--qk-space-3);
+  border: 1px solid var(--qk-color-border);
+  border-radius: var(--qk-radius-md);
+}
+.merge-list__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.merge-list__name,
+.merge-list__members {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.merge-list__members {
+  color: var(--qk-color-text-muted);
+  font-size: var(--qk-font-size-sm);
+}
+.merge-list__buttons {
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--qk-space-2);
+}
+.merge-fields__title {
+  margin: var(--qk-space-3) 0 var(--qk-space-2);
+  font-size: var(--qk-font-size-md);
+}
 .field {
   display: flex;
   flex-direction: column;
