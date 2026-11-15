@@ -51,6 +51,9 @@ pub struct DetectionDir {
     pub ignored_processes: Vec<String>,
 }
 
+/// A game row's store, install folder and launch target (see [`Database::install_targets`]).
+pub type InstallTarget = (String, Option<String>, Option<String>);
+
 /// A game without description or genres (see [`Database::games_missing_metadata`]).
 #[derive(Debug, Clone)]
 pub struct GameMissingMetadata {
@@ -988,6 +991,44 @@ impl Database {
     /// Store games whose metadata was never fetched: `(id, source, source_game_id)`.
     pub fn games_needing_metadata(&self) -> Result<Vec<(Uuid, String, String)>> {
         self.store_game_keys("metadata_updated_at IS NULL AND merged_into IS NULL")
+    }
+
+    /// Every game row's store, install folder and launch target, for telling which installed
+    /// programs are in the library already.
+    pub fn install_targets(&self) -> Result<Vec<InstallTarget>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT source, install_dir, json_extract(play_action, '$.target') FROM games",
+        )?;
+        let rows = stmt
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    /// Library entries added by hand that the user linked to a store or IGDB game.
+    pub fn linked_manual_games(&self) -> Result<Vec<Uuid>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT id FROM games WHERE source = 'manual' AND merged_into IS NULL \
+             AND json_extract(extra, '$.metadataLink') IS NOT NULL",
+        )?;
+        let ids = stmt
+            .query_map([], |r| r.get::<_, String>(0))?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(ids
+            .iter()
+            .filter_map(|id| Uuid::parse_str(id).ok())
+            .collect())
+    }
+
+    /// Removes what one source said about a game row (an unlinked store or IGDB game).
+    pub fn delete_source_metadata(&self, game_id: Uuid, source: &str) -> Result<()> {
+        self.conn().execute(
+            "DELETE FROM metadata_sources WHERE game_id = ?1 AND source = ?2",
+            rusqlite::params![game_id.to_string(), source],
+        )?;
+        Ok(())
     }
 
     /// Games that have no cover yet, including manual ones: `(id, source, source_game_id)`.

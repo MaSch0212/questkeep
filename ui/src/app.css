@@ -1058,10 +1058,14 @@ ul {
 }
 
 /* Details view: narrow list on the left, the selected game on the right */
+/* The details view keeps its page readable: in a narrow window the library scrolls sideways
+   instead of squeezing the page (its own min width plus the list). */
+.app__content:has(> .dview) {
+  overflow-x: auto;
+}
 .dview {
   display: flex;
   flex: 1;
-  min-width: 0;
   min-height: 0;
 }
 .dview__list {
@@ -1074,8 +1078,10 @@ ul {
 .dview__page {
   display: flex;
   flex: 1;
-  min-width: 0;
+  min-width: var(--qk-dview-page-min-width);
   min-height: 0;
+  /* Its content never widens it: the minimum above is what the view keeps. */
+  contain: inline-size;
 }
 .dview__empty {
   margin: auto;
@@ -1872,6 +1878,108 @@ ul {
   white-space: nowrap;
 }
 /* Image picker */
+/* Add game: installed programs and the metadata search (MetadataLinkPicker). */
+.add-game__programs {
+  align-self: flex-start;
+}
+.link-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-2);
+}
+.link-picker__current {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--qk-space-2);
+  padding: var(--qk-space-2) var(--qk-space-3);
+  background: var(--qk-color-accent-soft);
+  border-radius: var(--qk-radius-md);
+}
+.link-picker__search {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--qk-space-2);
+}
+.link-picker__hits {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: var(--qk-link-hits-max-height);
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.link-picker__hit,
+.program-picker__item {
+  display: flex;
+  align-items: center;
+  gap: var(--qk-space-3);
+  width: 100%;
+  padding: var(--qk-space-1) var(--qk-space-2);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--qk-radius-md);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.link-picker__hit:hover,
+.program-picker__item:hover {
+  background: var(--qk-color-surface-hover);
+}
+.link-picker__hit[aria-pressed="true"] {
+  background: var(--qk-color-accent-soft);
+  border-color: var(--qk-color-accent);
+}
+.link-picker__thumb {
+  flex: none;
+  width: var(--qk-link-hit-thumb-width);
+  aspect-ratio: 2 / 3;
+  overflow: hidden;
+  background: var(--qk-color-surface-raised);
+  border-radius: var(--qk-radius-sm);
+}
+.link-picker__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.link-picker__name,
+.program-picker__item {
+  min-width: 0;
+}
+.link-picker__name {
+  display: flex;
+  flex-direction: column;
+}
+.program-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-3);
+}
+.program-picker__list {
+  height: var(--qk-program-list-height);
+  max-height: calc(100vh - var(--qk-picker-chrome-height));
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.program-picker__item {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+}
+.program-picker__item small {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--qk-font-size-xs);
+}
 .image-picker {
   display: flex;
   flex-direction: column;

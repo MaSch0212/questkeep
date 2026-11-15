@@ -20,6 +20,7 @@ pub mod model;
 pub mod paths;
 pub mod platform;
 pub mod price_sites;
+pub mod programs;
 pub mod providers;
 pub mod resume;
 pub mod seed;

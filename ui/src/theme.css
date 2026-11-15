@@ -376,6 +376,8 @@
   --qk-compact-row-height: 32px;
   --qk-dview-list-width: 320px;
   --qk-dview-list-min-width: 240px;
+  /* Below this the details page stops shrinking and the library scrolls sideways. */
+  --qk-dview-page-min-width: 440px;
   /* Game page from 560px of content width (container queries in app.css can not read variables;
      the breakpoints 560px, 720px and 1000px live there). */
   --qk-details-page-cover-width: 150px;
@@ -395,6 +397,10 @@
   --qk-picker-icon-width: 80px;
   --qk-picker-grid-height: 420px;
   --qk-picker-chrome-height: 260px;
+  /* Add game: catalog hits (cover thumbnails) and the installed programs list. */
+  --qk-link-hit-thumb-width: 36px;
+  --qk-link-hits-max-height: 260px;
+  --qk-program-list-height: 420px;
   --qk-icon-size-xs: 12px;
   --qk-popover-width: 340px;
   --qk-popover-gap: 6px;

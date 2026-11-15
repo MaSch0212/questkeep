@@ -27,7 +27,7 @@ use crate::error::{CoreError, Result};
 
 pub use accounts::KnownAccount;
 pub use combine::{Combined, duplicate_key};
-pub use games::{DetectionDir, GameMissingMetadata, NewGameRecord};
+pub use games::{DetectionDir, GameMissingMetadata, InstallTarget, NewGameRecord};
 pub use playtime::{StatSession, StoreDay};
 pub use profiles::ProfileRow;
 pub use sessions::OpenSession;

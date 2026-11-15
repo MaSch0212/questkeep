@@ -93,6 +93,7 @@ impl Library {
                 background: is_user_image(&game, ImageKind::Background),
                 icon: is_user_image(&game, ImageKind::Icon),
             },
+            metadata_link: game.metadata_link(),
         })
     }
 
@@ -235,18 +236,24 @@ impl Library {
         let game = self.get_game(id)?;
         let kind = kind_of(slot);
         let mut sources: Vec<ImageSource> = Vec::new();
-        for copy in &game.copies {
-            let (Some(provider), Some(store_id)) = (
-                self.providers.get(&copy.source),
-                copy.source_game_id.as_deref(),
-            ) else {
+        let stores = game
+            .linked_store_game()
+            .into_iter()
+            .chain(
+                game.copies
+                    .iter()
+                    .filter_map(|c| Some((c.source.clone(), c.source_game_id.clone()?))),
+            )
+            .collect::<Vec<_>>();
+        for (store, store_id) in &stores {
+            let Some(provider) = self.providers.get(store) else {
                 continue;
             };
-            if !store_candidates(provider.as_ref(), store_id, kind).is_empty()
-                && !sources.iter().any(|s| s.id == copy.source)
+            if !sources.iter().any(|s| &s.id == store)
+                && !store_candidates(provider.as_ref(), store_id, kind).is_empty()
             {
                 sources.push(ImageSource {
-                    id: copy.source.clone(),
+                    id: store.clone(),
                     name: provider.name().to_string(),
                 });
             }
@@ -285,6 +292,7 @@ impl Library {
                 &IgdbLookup {
                     name: &game.name,
                     year,
+                    id: game.linked_igdb_id(),
                 },
                 kind,
             ),
@@ -305,14 +313,19 @@ impl Library {
                 )
             }
             store => {
-                let Some(copy) = game.copies.iter().find(|c| c.source == store) else {
+                let linked = game.linked_store_game().filter(|(s, _)| s == store);
+                let store_id = match linked {
+                    Some((_, id)) => Some(id),
+                    None => game
+                        .copies
+                        .iter()
+                        .find(|c| c.source == store)
+                        .and_then(|c| c.source_game_id.clone()),
+                };
+                let (Some(provider), Some(store_id)) = (self.providers.get(store), store_id) else {
                     return Ok(Vec::new());
                 };
-                let (Some(provider), Some(store_id)) =
-                    (self.providers.get(store), copy.source_game_id.as_deref())
-                else {
-                    return Ok(Vec::new());
-                };
+                let store_id = store_id.as_str();
                 let name = provider.name().to_string();
                 Ok(store_candidates(provider.as_ref(), store_id, kind)
                     .into_iter()

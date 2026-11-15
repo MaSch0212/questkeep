@@ -20,7 +20,7 @@ use serde::Deserialize;
 use super::fetcher::http_agent;
 use super::steamgriddb::encode;
 use crate::error::{CoreError, Result};
-use crate::model::{GameLink, GameMetadata, ImageOption, Score, TimeToBeat};
+use crate::model::{CatalogHit, GameLink, GameMetadata, ImageOption, Score, TimeToBeat};
 
 const TOKEN_URL: &str = "https://id.twitch.tv/oauth2/token";
 const GAMES_URL: &str = "https://api.igdb.com/v4/games";
@@ -46,6 +46,8 @@ pub struct IgdbLookup<'a> {
     pub name: &'a str,
     /// Release year when the game has one (used to tell same-named games apart).
     pub year: Option<i32>,
+    /// The IGDB game the user linked: used instead of searching by name.
+    pub id: Option<u64>,
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -299,15 +301,10 @@ impl Igdb {
     /// has no matching game (or none with any data); errors are transient or credential problems
     /// and should not be remembered as "checked".
     pub fn fetch_metadata(&self, lookup: &IgdbLookup<'_>) -> Result<Option<GameMetadata>> {
-        if search_text(lookup.name).is_empty() {
-            return Ok(None);
-        }
-        let body = search_body(lookup.name);
-        let hits = parse_games(&self.query(&self.inner.games_url, &body)?)?;
-        let Some(game) = best_match(&hits, lookup) else {
+        let Some(game) = self.find_game(lookup)? else {
             return Ok(None);
         };
-        let mut meta = to_metadata(game).unwrap_or_default();
+        let mut meta = to_metadata(&game).unwrap_or_default();
         if let Some(id) = game.id {
             // A missing time to beat must not lose the rest.
             match self.query(
@@ -328,12 +325,17 @@ impl Igdb {
         lookup: &IgdbLookup<'_>,
         kind: super::ImageKind,
     ) -> Result<Vec<ImageOption>> {
-        if search_text(lookup.name).is_empty() || kind == super::ImageKind::Icon {
+        if kind == super::ImageKind::Icon {
             return Ok(Vec::new());
         }
-        let hits = parse_games(&self.query(&self.inner.games_url, &search_body(lookup.name))?)?;
-        let Some(id) = best_match(&hits, lookup).and_then(|g| g.id) else {
-            return Ok(Vec::new());
+        let id = match lookup.id {
+            Some(id) => id,
+            None => {
+                let Some(id) = self.find_game(lookup)?.and_then(|g| g.id) else {
+                    return Ok(Vec::new());
+                };
+                id
+            }
         };
         let body = format!(
             "fields cover.image_id,cover.width,cover.height,artworks.image_id,artworks.width,\
@@ -343,6 +345,33 @@ impl Igdb {
         Ok(parse_images(
             &self.query(&self.inner.games_url, &body)?,
             kind,
+        ))
+    }
+
+    /// The linked game, or else the search hit with the same name.
+    fn find_game(&self, lookup: &IgdbLookup<'_>) -> Result<Option<Game>> {
+        if let Some(id) = lookup.id {
+            let body = format!("fields {FIELDS}; where id = {id};");
+            let games = parse_games(&self.query(&self.inner.games_url, &body)?)?;
+            return Ok(games.into_iter().next());
+        }
+        if search_text(lookup.name).is_empty() {
+            return Ok(None);
+        }
+        let hits = parse_games(&self.query(&self.inner.games_url, &search_body(lookup.name))?)?;
+        Ok(best_match(&hits, lookup).cloned())
+    }
+
+    /// Games whose name matches `query`, best first, for linking a game added by hand.
+    pub fn search(&self, query: &str) -> Result<Vec<CatalogHit>> {
+        let text = search_text(query);
+        if text.is_empty() {
+            return Ok(Vec::new());
+        }
+        let body =
+            format!("search \"{text}\"; fields name,first_release_date,cover.image_id; limit 20;");
+        Ok(parse_search_hits(
+            &self.query(&self.inner.games_url, &body)?,
         ))
     }
 
@@ -640,6 +669,46 @@ fn parse_images(body: &str, kind: super::ImageKind) -> Vec<ImageOption> {
     }
 }
 
+#[derive(Debug, Default, Deserialize)]
+struct SearchHit {
+    #[serde(default)]
+    id: Option<u64>,
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    first_release_date: Option<i64>,
+    #[serde(default)]
+    cover: Option<IgdbImage>,
+}
+
+/// The hits of a name search (id, name, year and a small cover).
+fn parse_search_hits(body: &str) -> Vec<CatalogHit> {
+    let hits: Vec<SearchHit> = serde_json::from_str(body).unwrap_or_default();
+    hits.into_iter()
+        .filter_map(|hit| {
+            let name = hit.name.trim();
+            if name.is_empty() {
+                return None;
+            }
+            Some(CatalogHit {
+                id: hit.id?.to_string(),
+                name: name.to_string(),
+                release_year: hit
+                    .first_release_date
+                    .and_then(|t| DateTime::from_timestamp(t, 0))
+                    .map(|d| d.year()),
+                image: hit
+                    .cover
+                    .filter(|c| {
+                        !c.image_id.is_empty()
+                            && c.image_id.chars().all(|ch| ch.is_ascii_alphanumeric())
+                    })
+                    .map(|c| igdb_image_url("cover_small", &c.image_id)),
+            })
+        })
+        .collect()
+}
+
 pub(crate) fn parse_games(body: &str) -> Result<Vec<Game>> {
     serde_json::from_str(body)
         .map_err(|err| CoreError::Network(format!("IGDB sent an unexpected reply: {err}")))
@@ -890,7 +959,11 @@ mod tests {
     }
 
     fn lookup(name: &str) -> IgdbLookup<'_> {
-        IgdbLookup { name, year: None }
+        IgdbLookup {
+            name,
+            year: None,
+            id: None,
+        }
     }
 
     #[test]
@@ -1027,6 +1100,7 @@ mod tests {
         let in_1993 = IgdbLookup {
             name: "Doom",
             year: Some(1993),
+            id: None,
         };
         assert_eq!(
             best_match(&hits, &in_1993).unwrap().first_release_date,
@@ -1036,6 +1110,7 @@ mod tests {
         let other = IgdbLookup {
             name: "Doom",
             year: Some(1850),
+            id: None,
         };
         assert_eq!(
             best_match(&hits, &other).unwrap().first_release_date,
@@ -1144,6 +1219,47 @@ mod tests {
                 .body
                 .starts_with("search \"The Witcher 3: Wild Hunt\";")
         );
+    }
+
+    #[test]
+    fn searches_by_name_and_fetches_linked_games_by_id() {
+        let server = serve(vec![
+            (200, TOKEN),
+            (
+                200,
+                r#"[{"id":1942,"name":" The Witcher 3 ","first_release_date":1431993600,
+                    "cover":{"image_id":"co1wyy"}},
+                   {"id":7,"name":""},{"name":"No id"},
+                   {"id":8,"name":"Bad cover","cover":{"image_id":"../x"}}]"#,
+            ),
+            (200, WITCHER),
+            (200, "[]"),
+        ]);
+        let igdb = client(&server.base);
+        let hits = igdb.search("witcher \"3\"").unwrap();
+        assert_eq!(hits.len(), 2);
+        assert_eq!(hits[0].id, "1942");
+        assert_eq!(hits[0].name, "The Witcher 3");
+        assert_eq!(hits[0].release_year, Some(2015));
+        assert_eq!(
+            hits[0].image.as_deref(),
+            Some("https://images.igdb.com/igdb/image/upload/t_cover_small/co1wyy.jpg")
+        );
+        assert_eq!(hits[1].image, None);
+        assert!(igdb.search("  ").unwrap().is_empty());
+
+        // A linked game is fetched by id, whatever the game's own name is.
+        let meta = igdb
+            .fetch_metadata(&IgdbLookup {
+                name: "witcher3.exe",
+                year: None,
+                id: Some(1942),
+            })
+            .unwrap();
+        assert!(meta.is_some());
+        let requests = server.requests.lock().unwrap();
+        assert!(requests[1].body.starts_with("search \"witcher 3\";"));
+        assert!(requests[2].body.ends_with("where id = 1942;"));
     }
 
     #[test]

@@ -7,7 +7,7 @@ use std::time::Duration;
 use serde::Deserialize;
 
 use questkeep_store_api::ProviderError;
-use questkeep_store_api::model::{GameLink, GameMetadata};
+use questkeep_store_api::model::{CatalogHit, GameLink, GameMetadata};
 
 const API_BASE: &str = "https://api.gog.com/v2/games";
 
@@ -292,6 +292,68 @@ pub fn http_agent() -> ureq::Agent {
         .user_agent(concat!("Questkeep/", env!("CARGO_PKG_VERSION")))
         .build()
         .into()
+}
+
+/// Searches GOG's public catalog by name (games only, best first).
+pub fn search_catalog(http: &ureq::Agent, query: &str) -> Result<Vec<CatalogHit>, ProviderError> {
+    let query = query.trim();
+    if query.is_empty() {
+        return Ok(Vec::new());
+    }
+    let encoded: String = query
+        .bytes()
+        .map(|b| {
+            if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'~') {
+                (b as char).to_string()
+            } else {
+                format!("%{b:02X}")
+            }
+        })
+        .collect();
+    let url = format!(
+        "https://catalog.gog.com/v1/catalog?limit=24&query=like:{encoded}&productType=in:game,pack&locale=en-US"
+    );
+    let mut response = http
+        .get(&url)
+        .call()
+        .map_err(|e| ProviderError::Network(e.to_string()))?;
+    let body = response
+        .body_mut()
+        .read_to_string()
+        .map_err(|e| ProviderError::Network(e.to_string()))?;
+    parse_catalog_search(&body)
+}
+
+/// The products of a catalog answer: `{"products": [{"id": "1207664663", "title": ...,
+/// "releaseDate": "2015.05.18", "coverVertical": ...}]}`.
+pub fn parse_catalog_search(body: &str) -> Result<Vec<CatalogHit>, ProviderError> {
+    let value: serde_json::Value =
+        serde_json::from_str(body).map_err(|e| ProviderError::Parse(e.to_string()))?;
+    let text = |v: &serde_json::Value, key: &str| {
+        v.get(key)
+            .and_then(serde_json::Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+    };
+    Ok(value
+        .get("products")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|product| {
+            let id = text(product, "id").filter(|id| is_product_id(id))?;
+            Some(CatalogHit {
+                id,
+                name: text(product, "title")?,
+                release_year: text(product, "releaseDate")
+                    .and_then(|d| d.get(..4).and_then(|y| y.parse().ok())),
+                image: text(product, "coverVertical")
+                    .or_else(|| text(product, "coverHorizontal"))
+                    .filter(|u| u.starts_with("https://")),
+            })
+        })
+        .collect())
 }
 
 /// Fetches a game from the public API. `Ok(None)` when GOG does not know the id (404).
@@ -626,5 +688,28 @@ mod tests {
     fn invalid_ids_never_reach_the_network() {
         let http = http_agent();
         assert!(matches!(fetch_game(&http, "../x"), Ok(None)));
+    }
+
+    #[test]
+    fn reads_catalog_search_hits() {
+        let body = r#"{"products":[
+            {"id":"1207664663","title":" The Witcher 3: Wild Hunt ","releaseDate":"2015.05.18",
+             "coverVertical":"https://images.gog-statics.com/a.jpg"},
+            {"id":"x1","title":"Bad id"},
+            {"id":"12","title":"","releaseDate":"2001.01.01"},
+            {"id":"13","title":"No date","coverHorizontal":"http://insecure"}
+        ]}"#;
+        let hits = parse_catalog_search(body).unwrap();
+        assert_eq!(hits.len(), 2);
+        assert_eq!(hits[0].id, "1207664663");
+        assert_eq!(hits[0].name, "The Witcher 3: Wild Hunt");
+        assert_eq!(hits[0].release_year, Some(2015));
+        assert_eq!(
+            hits[0].image.as_deref(),
+            Some("https://images.gog-statics.com/a.jpg")
+        );
+        assert_eq!(hits[1].release_year, None);
+        assert_eq!(hits[1].image, None);
+        assert!(parse_catalog_search("{}").unwrap().is_empty());
     }
 }

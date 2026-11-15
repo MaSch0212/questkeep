@@ -6,8 +6,8 @@ use ts_rs::TS;
 use uuid::Uuid;
 
 pub use questkeep_store_api::model::{
-    Achievement, Achievements, ActionKind, GameLink, GameMetadata, GameNews, ImportedGame,
-    NewsItem, PlayAction, Score, TimeToBeat, TrackingMode,
+    Achievement, Achievements, ActionKind, CatalogHit, GameLink, GameMetadata, GameNews,
+    ImportedGame, NewsItem, PlayAction, Score, TimeToBeat, TrackingMode,
 };
 
 /// Provider id used for games added by hand.
@@ -116,6 +116,48 @@ pub struct Game {
     /// Free-form data for future fields and plugins.
     #[ts(type = "Record<string, unknown>")]
     pub extra: serde_json::Value,
+}
+
+/// `games.extra` key of a game's [`MetadataLink`].
+pub const METADATA_LINK_KEY: &str = "metadataLink";
+
+/// The store or IGDB game a game added by hand takes its metadata and images from, picked by
+/// the user from a search. Stored in `extra`, so refreshing metadata keeps using it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct MetadataLink {
+    /// `igdb` or a store id (`steam`, `gog`, ...).
+    pub source: String,
+    /// The game's id there.
+    pub id: String,
+    /// Its name there, for showing the link.
+    pub name: String,
+}
+
+impl Game {
+    /// The game's metadata link, when it has a valid one.
+    pub fn metadata_link(&self) -> Option<MetadataLink> {
+        let value = self.extra.get(METADATA_LINK_KEY)?;
+        serde_json::from_value(value.clone()).ok()
+    }
+
+    /// The IGDB game the user linked this game to.
+    pub fn linked_igdb_id(&self) -> Option<u64> {
+        self.metadata_link()
+            .filter(|l| l.source == super::IGDB_SOURCE)
+            .and_then(|l| l.id.parse().ok())
+    }
+
+    /// The store game a game added by hand is linked to: its store and id there.
+    pub fn linked_store_game(&self) -> Option<(String, String)> {
+        if self.source != MANUAL_SOURCE {
+            return None;
+        }
+        self.metadata_link()
+            .filter(|l| l.source != super::IGDB_SOURCE)
+            .map(|l| (l.source, l.id))
+    }
 }
 
 /// One store's copy of a library entry (see [`Game::copies`]).

@@ -1,6 +1,5 @@
 import type { Game } from "../bindings/Game";
 import type { GameUpdate } from "../bindings/GameUpdate";
-import type { NewManualGame } from "../bindings/NewManualGame";
 import type { PlayAction } from "../bindings/PlayAction";
 import { translator } from "../i18n";
 import { shellCommon } from "../i18n/shellCommon";
@@ -136,17 +135,6 @@ export function removeGame(id: string): Promise<string | null> {
     await api.removeGame(id);
     store.handleCoreEvent({ type: "gameRemoved", id });
   });
-}
-
-export async function addGame(input: NewManualGame): Promise<{ game: Game } | { error: string }> {
-  try {
-    const game = await api.addManualGame(input);
-    await store.refresh();
-    store.selectAndOpen(game.id);
-    return { game };
-  } catch (error) {
-    return { error: errorMessage(error) };
-  }
 }
 
 /** Replaces cover and background with SteamGridDB's; the result arrives as `gamesChanged`. */

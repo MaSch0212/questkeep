@@ -188,6 +188,15 @@ impl CoverFetcher {
             .unwrap_or_else(PoisonError::into_inner)
             .take();
     }
+
+    /// Lets a game be queued again in this run (its cover source changed).
+    pub fn forget(&self, id: Uuid) {
+        self.shared
+            .attempted
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .remove(&id);
+    }
 }
 
 impl Drop for CoverFetcher {
@@ -559,6 +568,23 @@ fn process_metadata(
 }
 
 fn fetch_metadata(shared: &MetadataShared, job: &MetadataJob, last_request: &mut Option<Instant>) {
+    // A game added by hand may have been linked to a store game after its job was queued (the
+    // queue keeps one job per game), so the link is read when the job runs.
+    let linked;
+    let job = match shared.db.find_game(job.game_id) {
+        Ok(Some(game)) if job.source_game_id.is_none() => match game.linked_store_game() {
+            Some((source, id)) if shared.providers.get(&source).is_some() => {
+                linked = MetadataJob {
+                    source,
+                    source_game_id: Some(id),
+                    ..job.clone()
+                };
+                &linked
+            }
+            _ => job,
+        },
+        _ => job,
+    };
     // Automatic jobs ask each site once per game; a manual refresh (`force`) asks again.
     let unread = |game_id: Uuid, source: &str| {
         job.force || !matches!(shared.db.source_checked(game_id, source), Ok(Some(_)))
@@ -636,13 +662,21 @@ fn fetch_igdb(shared: &MetadataShared, id: Uuid) -> bool {
     let Ok(Some(game)) = shared.db.find_game(entry) else {
         return false;
     };
-    // Apps keep their store metadata: IGDB only knows games.
-    if game.kind == GameKind::App {
+    // The user picked the game in a store: a by-name guess on IGDB could only add a wrong game.
+    // An earlier guess (from before the link) goes.
+    if game.linked_store_game().is_some() {
+        let guessed = matches!(shared.db.source_checked(entry, IGDB_SOURCE), Ok(Some(_)));
+        return guessed && shared.db.delete_source_metadata(entry, IGDB_SOURCE).is_ok();
+    }
+    let linked = game.linked_igdb_id();
+    // Apps keep their store metadata: IGDB only knows games (unless the user linked one).
+    if game.kind == GameKind::App && linked.is_none() {
         return false;
     }
     let lookup = IgdbLookup {
         name: &game.name,
         year: release_year(game.release_date.as_deref()),
+        id: linked,
     };
     match shared.igdb.fetch_metadata(&lookup) {
         Ok(found) => {
@@ -1548,6 +1582,77 @@ mod tests {
                 _ => Err(ProviderError::Network("offline".into())),
             }
         }
+    }
+
+    #[test]
+    fn jobs_of_linked_manual_games_ask_the_linked_store() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = DataPaths::new(tmp.path().join("data"));
+        paths.ensure_dirs().unwrap();
+        let db = Arc::new(Database::open_in_memory().unwrap());
+        let game = db
+            .insert_game(
+                &NewGameRecord {
+                    name: "my.exe".into(),
+                    source: "manual".into(),
+                    ..Default::default()
+                },
+                Utc::now(),
+            )
+            .unwrap();
+        // A by-name IGDB guess from before the link.
+        let guess = GameMetadata {
+            description: Some("Another game.".into()),
+            ..Default::default()
+        };
+        db.set_source_metadata(game.id, IGDB_SOURCE, Some(&guess), Utc::now())
+            .unwrap();
+        // Linked after its by-name job was queued: the job still says "manual".
+        let link = serde_json::json!({ "source": "partial", "id": "has", "name": "Has" });
+        db.set_extra_value(game.id, crate::model::METADATA_LINK_KEY, Some(link))
+            .unwrap();
+        let mut providers = ProviderRegistry::new();
+        providers.register(Arc::new(PartialStore));
+        let fetcher = MetadataFetcher::new(
+            db.clone(),
+            ImageCache::new(paths),
+            providers,
+            EventBus::new(),
+            SteamGridDb::new(None),
+            // Configured, but never reached: no requests may be made.
+            Igdb::with_endpoints(
+                Some("id".into()),
+                Some("secret".into()),
+                Duration::ZERO,
+                "http://127.0.0.1:9/token".into(),
+                "http://127.0.0.1:9/games".into(),
+            ),
+            MetadataResolver::new(db.clone(), &ProviderRegistry::new(), Default::default()),
+            Duration::ZERO,
+        );
+        fetcher.enqueue([MetadataJob {
+            game_id: game.id,
+            source: "manual".into(),
+            source_game_id: None,
+            igdb: true,
+            force: true,
+        }]);
+        let start = Instant::now();
+        while !fetcher.shared.queued.lock().unwrap().is_empty() {
+            assert!(
+                start.elapsed() < Duration::from_secs(5),
+                "job did not finish"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(
+            db.source_checked(game.id, IGDB_SOURCE).unwrap().is_none(),
+            "guess dropped"
+        );
+        let stored = db.source_metadata(game.id, "partial").unwrap().unwrap();
+        assert_eq!(stored.description.as_deref(), Some("From the store."));
+        let game = db.get_game(game.id).unwrap();
+        assert_eq!(game.description.as_deref(), Some("From the store."));
     }
 
     const IGDB_TOKEN: &str = r#"{"access_token":"t","expires_in":3600,"token_type":"bearer"}"#;

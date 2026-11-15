@@ -9,7 +9,9 @@ use chrono::DateTime;
 use serde_json::Value;
 
 use questkeep_store_api::ProviderError;
-use questkeep_store_api::model::{GameLink, GameMetadata, ImportedGame, PlayAction, Score};
+use questkeep_store_api::model::{
+    CatalogHit, GameLink, GameMetadata, ImportedGame, PlayAction, Score,
+};
 
 /// Why a request failed, without any URL (which may contain the API key).
 pub(crate) enum HttpFailure {
@@ -74,6 +76,52 @@ pub fn fetch_owned(
         )))),
         Err(HttpFailure::Other(message)) => Err(OwnedError::Other(ProviderError::Network(message))),
     }
+}
+
+/// Searches the Steam store by name (`storesearch`, anonymous): apps only, best first.
+pub fn search_store(query: &str) -> Result<Vec<CatalogHit>, ProviderError> {
+    let query = query.trim();
+    if query.is_empty() {
+        return Ok(Vec::new());
+    }
+    let url = format!(
+        "https://store.steampowered.com/api/storesearch/?term={}&l=english&cc=US",
+        encode(query)
+    );
+    match http_get(&url, None) {
+        Ok(body) => parse_store_search(&body),
+        Err(HttpFailure::Status(code)) => Err(ProviderError::Network(format!(
+            "Steam store search returned HTTP {code}"
+        ))),
+        Err(HttpFailure::Other(message)) => Err(ProviderError::Network(message)),
+    }
+}
+
+/// The apps of a `storesearch` answer (`{"items": [{"type": "app", "id": 620, "name": ...,
+/// ...}]}`); bundles and other item types are left out. It has no release year.
+pub(crate) fn parse_store_search(body: &str) -> Result<Vec<CatalogHit>, ProviderError> {
+    let value: Value =
+        serde_json::from_str(body).map_err(|e| ProviderError::Parse(e.to_string()))?;
+    let items = value.get("items").and_then(Value::as_array);
+    Ok(items
+        .into_iter()
+        .flatten()
+        .filter(|item| item.get("type").and_then(Value::as_str) == Some("app"))
+        .filter_map(|item| {
+            let id = item.get("id").and_then(Value::as_u64)?;
+            let name = item.get("name").and_then(Value::as_str)?.trim();
+            (!name.is_empty()).then(|| CatalogHit {
+                id: id.to_string(),
+                name: name.to_string(),
+                release_year: None,
+                // The portrait library art (the answer only has a wide capsule); a few apps lack
+                // it, the picker then shows no image.
+                image: Some(format!(
+                    "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{id}/library_600x900.jpg"
+                )),
+            })
+        })
+        .collect())
 }
 
 /// Fetches store metadata; `Ok(None)` when the store has no data for the app. The app details
@@ -783,6 +831,43 @@ pub fn parse_release_date(text: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_store_search_hits() {
+        // Shape recorded from storesearch (2026-11-15), shortened.
+        let body = r#"{"total":3,"items":[
+            {"type":"app","name":"Portal 2","id":620,"tiny_image":"https:\/\/cdn\/620\/capsule_231x87.jpg"},
+            {"type":"sub","name":"Portal Bundle","id":7932,"tiny_image":"https:\/\/cdn\/b.jpg"},
+            {"type":"app","name":" ","id":1},
+            {"type":"app","name":"Portal","id":400}
+        ]}"#;
+        let hits = parse_store_search(body).unwrap();
+        assert_eq!(
+            hits,
+            vec![
+                CatalogHit {
+                    id: "620".into(),
+                    name: "Portal 2".into(),
+                    release_year: None,
+                    image: Some(
+                        "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/620/library_600x900.jpg"
+                            .into(),
+                    ),
+                },
+                CatalogHit {
+                    id: "400".into(),
+                    name: "Portal".into(),
+                    release_year: None,
+                    image: Some(
+                        "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/400/library_600x900.jpg"
+                            .into(),
+                    ),
+                },
+            ]
+        );
+        assert!(parse_store_search(r#"{"total":0}"#).unwrap().is_empty());
+        assert!(parse_store_search("not json").is_err());
+    }
 
     #[test]
     fn reads_app_types_from_store_items() {

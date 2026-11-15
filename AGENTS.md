@@ -17,6 +17,7 @@ Guide for humans and coding agents working on Questkeep.
 | Show version, pending changesets, next version | `pnpm changeset status` |
 | List installed Steam games (dev tool) | `cargo run -p questkeep-store-steam --example scan_steam` |
 | Build the example store plugin (needs `rustup target add wasm32-wasip2`) | `examples/plugins/example-store/build.ps1` |
+| List the programs Add game offers on this PC (dev tool) | `cargo run -p questkeep-core --example installed_programs` |
 | Check executable icon extraction on real games (dev tool) | `cargo run -p questkeep-core --example exe_icons -- <out dir> <exe>...` |
 | Regenerate app icons from `assets/logo.svg` | `node scripts/make-icon.mjs && pnpm tauri icon assets/icon.svg -o src-tauri/icons` (tray glyphs: run `pnpm tauri icon assets/tray-dark.svg -o target/tray-dark`, same for `tray-light`, and copy `32x32.png`/`64x64.png` to `src-tauri/icons/tray-*.png`/`tray-*@2x.png`) |
 
@@ -100,6 +101,8 @@ crates/questkeep-core/src/     all app logic; sees stores only through the store
   images/                      cover/background cache (mod.rs) + cover and metadata fetchers (fetcher.rs)
   events.rs                    EventBus + CoreEvent
   platform/                    executable icons, URI opening, processes, argument handling (cfg-gated)
+  programs/                    installed programs for Add game (Apps list + Start menu, lnk.rs
+                               reads .lnk files)
   user_themes.rs               themes from the theme editor (<data>/themes/*.json), plugin export
   settings.rs, paths.rs, seed.rs, error.rs
 src-tauri/src/                 thin shell: commands.rs (one wrapper per command), lib.rs (setup)

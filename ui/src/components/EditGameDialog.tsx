@@ -1,6 +1,8 @@
 import { translator } from "../i18n";
 import { gameEdit } from "../i18n/gameEdit";
+import { gameSetup } from "../i18n/gameSetup";
 import {
+  createEffect,
   createResource,
   createSignal,
   For,
@@ -8,6 +10,7 @@ import {
   onMount,
   Show,
   Switch,
+  untrack,
   type JSX,
 } from "solid-js";
 import { Portal } from "solid-js/web";
@@ -18,6 +21,7 @@ import type { GameLink } from "../bindings/GameLink";
 import type { GameMetadata } from "../bindings/GameMetadata";
 import type { ImageSlot } from "../bindings/ImageSlot";
 import type { LaunchProfiles } from "../bindings/LaunchProfiles";
+import type { MetadataLink } from "../bindings/MetadataLink";
 import type { MetadataField } from "../bindings/MetadataField";
 import { refreshMetadata, updateGame } from "../lib/actions";
 import * as api from "../lib/api";
@@ -44,22 +48,33 @@ import { ChipInput } from "./ChipInput";
 import { Cover } from "./Cover";
 import { EditLaunchSection } from "./EditLaunchSection";
 import { ImagePicker, imageSrc } from "./ImagePicker";
+import { MetadataLinkPicker } from "./MetadataLinkPicker";
 import { Modal } from "./Modal";
 import { sourceName as storeName } from "./SourceIcon";
 
 const tr = translator(gameEdit);
+const trSetup = translator(gameSetup);
 
-type Section = "general" | "details" | "links" | "launch" | "tracking" | "images";
+export type Section = "setup" | "general" | "details" | "links" | "launch" | "tracking" | "images";
 
 const KINDS: readonly (readonly [GameKind, "kindGame" | "kindApp"])[] = [
   ["game", "kindGame"],
   ["app", "kindApp"],
 ];
 
-const SECTIONS: {
+/** The sections in order; Setup only for games added by hand. */
+export const SECTIONS: {
   id: Section;
-  label: "secGeneral" | "secDetails" | "secLinks" | "secLaunch" | "secTracking" | "secImages";
+  label:
+    | "secSetup"
+    | "secGeneral"
+    | "secDetails"
+    | "secLinks"
+    | "secLaunch"
+    | "secTracking"
+    | "secImages";
 }[] = [
+  { id: "setup", label: "secSetup" },
   { id: "general", label: "secGeneral" },
   { id: "details", label: "secDetails" },
   { id: "links", label: "secLinks" },
@@ -181,11 +196,42 @@ export function EditGameDialog(props: {
   onClose: () => void;
   /** Section to show first. */
   section?: Section;
+  /** Dialog title (default "Edit game"). */
+  title?: string;
+  /** Cancel, Esc and the close button (default: `onClose`); Add game removes the new game. */
+  onCancel?: () => void;
+  /** Called after Save, before `onClose`. */
+  onSaved?: () => void;
+  /** The Save button's label (default "Save"). */
+  saveLabel?: string;
 }) {
   const game = () => props.game;
   const id = props.game.id;
+  const cancel = () => (props.onCancel ?? props.onClose)();
   const [section, setSection] = createSignal<Section>(props.section ?? "general");
-  const [info] = createResource(() => api.gameEditInfo(id));
+  const sections = () =>
+    SECTIONS.filter((entry) => entry.id !== "setup" || game().source === "manual");
+  // Asked again when the shown metadata changes (e.g. a linked game's details arrive).
+  const [info] = createResource(
+    () =>
+      JSON.stringify([game().fieldSources, game().description, game().genres, game().releaseDate]),
+    () => api.gameEditInfo(id),
+  );
+  const [metadataLink, setMetadataLink] = createSignal<MetadataLink | null | undefined>(undefined);
+  const currentLink = () => {
+    const chosen = metadataLink();
+    return chosen === undefined ? (info()?.metadataLink ?? null) : chosen;
+  };
+
+  async function changeLink(next: MetadataLink | null) {
+    setError(null);
+    try {
+      store.upsertGame(await api.setMetadataLink(id, next));
+      setMetadataLink(next);
+    } catch (failure) {
+      setError(errorMessage(failure));
+    }
+  }
   const [profiles, setProfiles] = createSignal<LaunchProfiles>();
   onMount(() => {
     Promise.resolve()
@@ -221,10 +267,25 @@ export function EditGameDialog(props: {
   const [error, setError] = createSignal<string | null>(null);
   const [saving, setSaving] = createSignal(false);
 
-  // Start the drafts once the edit info arrives.
-  const ready = () => {
+  // Start the drafts once the edit info arrives, and again when newer info arrives while the
+  // user changed nothing (metadata of a game just added or linked).
+  let base: GameEditInfo | undefined;
+  const untouched = (prev: GameEditInfo) =>
+    [...edited()].toSorted().join() === prev.edits.edited.toSorted().join() &&
+    ownLinks() === prev.edits.meta.links &&
+    hidden() === prev.edits.hiddenLinks &&
+    sortingName() === prev.sortingName;
+  createEffect(() => {
     const loaded = info();
-    if (loaded && values() === null) {
+    if (!loaded || loaded === base) return;
+    if (base !== undefined && !untrack(() => untouched(base as GameEditInfo))) return;
+    base = loaded;
+    untrack(() => startDrafts(loaded));
+  });
+  const ready = () => info() !== undefined && values() !== null;
+
+  function startDrafts(loaded: GameEditInfo) {
+    {
       const start = startValues(loaded);
       setValues(start);
       setEdited(new Set(loaded.edits.edited));
@@ -241,8 +302,7 @@ export function EditGameDialog(props: {
       });
       for (const f of LIST_FIELDS) void store.loadValues(f.values);
     }
-    return loaded !== undefined && values() !== null;
-  };
+  }
 
   function setField<K extends MetadataField>(field: K, value: GameMetadata[K]) {
     setValues((current) => (current ? { ...current, [field]: value } : current));
@@ -380,6 +440,7 @@ export function EditGameDialog(props: {
         Promise.resolve(),
       );
       store.upsertGame(await api.getGame(id));
+      props.onSaved?.();
       props.onClose();
     } catch (failure) {
       setError(errorMessage(failure));
@@ -492,11 +553,11 @@ export function EditGameDialog(props: {
   }
 
   return (
-    <Modal title={tr("editGame")} wide onClose={props.onClose}>
+    <Modal title={props.title ?? tr("editGame")} wide onClose={cancel}>
       <div class="edit-game">
         <div class="edit-game__main">
           <nav class="edit-game__nav" aria-label={tr("sections")}>
-            <For each={SECTIONS}>
+            <For each={sections()}>
               {(entry) => (
                 <button
                   type="button"
@@ -514,6 +575,18 @@ export function EditGameDialog(props: {
           </nav>
           <div class="edit-game__pane">
             <Switch>
+              <Match when={section() === "setup"}>
+                <div class="edit-section">
+                  <h3 class="edit-section__title">{trSetup("metadataTitle")}</h3>
+                  <p class="field__hint">{trSetup("metadataHint")}</p>
+                  <MetadataLinkPicker
+                    query={game().name}
+                    link={currentLink()}
+                    onChange={(next) => void changeLink(next)}
+                  />
+                  <p class="field__hint">{trSetup("launchHint")}</p>
+                </div>
+              </Match>
               <Match when={section() === "launch"}>
                 <EditLaunchSection game={game()} profiles={profiles()} onChange={setProfiles} />
               </Match>
@@ -937,7 +1010,7 @@ export function EditGameDialog(props: {
             {tr("refreshMetadata")}
           </button>
           <span class="edit-game__buttons">
-            <button type="button" class="btn" onClick={props.onClose}>
+            <button type="button" class="btn" onClick={cancel}>
               {tr("cancel")}
             </button>
             <button
@@ -946,7 +1019,7 @@ export function EditGameDialog(props: {
               disabled={saving() || !ready()}
               onClick={() => void save()}
             >
-              {tr("save")}
+              {props.saveLabel ?? tr("save")}
             </button>
           </span>
         </div>

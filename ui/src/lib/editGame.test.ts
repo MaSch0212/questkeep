@@ -68,6 +68,7 @@ describe("edit game helpers", () => {
       automaticSortingName: "Hades",
       sortingName: null,
       userImages: { cover: false, background: false, icon: false },
+      metadataLink: null,
     };
     const values = startValues(info);
     expect(values.description).toBe("Mine");

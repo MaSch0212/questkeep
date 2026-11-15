@@ -21,12 +21,12 @@ use crate::images::{
 use crate::live::LiveData;
 use crate::metadata::MetadataResolver;
 use crate::model::{
-    Achievements, ActionKind, BulkChange, Category, CombinePlan, CompletionSettings, Game,
-    GameActivity, GameNews, GameQuery, GameUpdate, GroupBy, GroupMerge, GroupMergeMember,
+    Achievements, ActionKind, BulkChange, CatalogHit, Category, CombinePlan, CompletionSettings,
+    Game, GameActivity, GameNews, GameQuery, GameUpdate, GroupBy, GroupMerge, GroupMergeMember,
     HLTB_SOURCE, HiddenFilter, IGDB_SOURCE, ImportedGame, KindFilter, LibraryView, ListField,
-    MANUAL_SOURCE, NewManualGame, NewView, PlayAction, ScanSummary, SectionOrder, SetupState,
-    StartPage, SyncTimes, TriState, ValueCount, ViewSection, ViewUiState, ViewUpdate,
-    display_name_from_path, set_ignored_prefixes,
+    MANUAL_SOURCE, METADATA_LINK_KEY, MetadataLink, NewManualGame, NewView, PlayAction,
+    ScanSummary, SectionOrder, SetupState, StartPage, SyncTimes, TriState, ValueCount, ViewSection,
+    ViewUiState, ViewUpdate, display_name_from_path, set_ignored_prefixes,
 };
 use crate::paths::DataPaths;
 use crate::providers::{LibraryProvider, ProviderError, ProviderInfo, ProviderRegistry};
@@ -1360,6 +1360,10 @@ impl Library {
             .db
             .games_without_cover()?
             .into_iter()
+            .map(|(game_id, source, source_game_id)| {
+                let (source, source_game_id) = self.store_target(game_id, source, source_game_id);
+                (game_id, source, source_game_id)
+            })
             .filter(|(_, source, source_game_id)| {
                 !is_fake_source(source)
                     && (has_key
@@ -1435,6 +1439,25 @@ impl Library {
                 force: false,
             })
             .collect();
+        // Games added by hand and linked to a store game whose store was not asked yet (the
+        // fetch right after linking failed, e.g. offline).
+        for id in self.db.linked_manual_games()? {
+            let Ok(game) = self.db.get_game(id) else {
+                continue;
+            };
+            if let Some((store, store_id)) = game.linked_store_game()
+                && self.providers.get(&store).is_some()
+                && self.db.source_checked(id, &store)?.is_none()
+            {
+                jobs.push(MetadataJob {
+                    game_id: id,
+                    source: store,
+                    source_game_id: Some(store_id),
+                    igdb: true,
+                    force: false,
+                });
+            }
+        }
         if self.igdb.is_configured() {
             let known: std::collections::HashSet<Uuid> = jobs.iter().map(|j| j.game_id).collect();
             jobs.extend(
@@ -1508,15 +1531,170 @@ impl Library {
             .collect();
         match jobs.first_mut() {
             Some(first) => first.igdb = true,
-            None => jobs.push(MetadataJob {
-                game_id: entry.id,
-                source: entry.source.clone(),
-                source_game_id: None,
-                igdb: true,
-                force: true,
-            }),
+            None => {
+                let (source, source_game_id) =
+                    self.store_target(entry.id, entry.source.clone(), None);
+                jobs.push(MetadataJob {
+                    game_id: entry.id,
+                    source,
+                    source_game_id,
+                    igdb: true,
+                    force: true,
+                });
+            }
         }
         jobs
+    }
+
+    /// Where a game's store data comes from: its own store, or for a game added by hand the
+    /// store game the user linked it to (when that store is registered).
+    fn store_target(
+        &self,
+        game_id: Uuid,
+        source: String,
+        source_game_id: Option<String>,
+    ) -> (String, Option<String>) {
+        if source == MANUAL_SOURCE
+            && source_game_id.is_none()
+            && let Ok(Some(game)) = self.db.find_game(game_id)
+            && let Some((store, id)) = game.linked_store_game()
+            && self.providers.get(&store).is_some()
+        {
+            return (store, Some(id));
+        }
+        (source, source_game_id)
+    }
+
+    /// Programs on this PC that are not in the library yet, for adding one as a game.
+    pub fn installed_programs(&self) -> Result<Vec<crate::programs::InstalledProgram>> {
+        let rows = self.db.install_targets()?;
+        Ok(crate::programs::not_in_library(
+            crate::programs::installed_programs(),
+            &rows,
+        ))
+    }
+
+    /// The sites a game added by hand can be linked to: IGDB when configured, then every store
+    /// whose catalog can be searched.
+    pub fn metadata_search_sources(&self) -> Vec<MetadataSourceInfo> {
+        let mut sources = Vec::new();
+        if self.igdb.is_configured() {
+            sources.push(MetadataSourceInfo {
+                id: IGDB_SOURCE.into(),
+                name: "IGDB".into(),
+            });
+        }
+        sources.extend(
+            self.providers
+                .iter()
+                .filter(|p| p.can_search_catalog())
+                .map(|p| MetadataSourceInfo {
+                    id: p.id().to_string(),
+                    name: p.name().to_string(),
+                }),
+        );
+        sources
+    }
+
+    /// Games named like `query` on IGDB or in a store's catalog, for linking.
+    pub fn search_metadata(&self, source: &str, query: &str) -> Result<Vec<CatalogHit>> {
+        if query.trim().is_empty() {
+            return Ok(Vec::new());
+        }
+        if source == IGDB_SOURCE {
+            return self.igdb.search(query);
+        }
+        let provider = self
+            .providers
+            .get(source)
+            .filter(|p| p.can_search_catalog())
+            .ok_or_else(|| CoreError::Invalid(format!("'{source}' can't be searched.")))?;
+        provider
+            .search_catalog(query)
+            .map_err(|err| CoreError::Provider {
+                provider: provider.name().to_string(),
+                message: err.to_string(),
+            })
+    }
+
+    /// Links a game added by hand to a store or IGDB game (`None` removes the link) and returns
+    /// the jobs that fetch its metadata and images from there. The previous link's data is
+    /// dropped, and so are cover and background that were downloaded (not picked by the user),
+    /// so the linked store's replace them.
+    pub fn set_metadata_link(
+        &self,
+        id: Uuid,
+        link: Option<MetadataLink>,
+    ) -> Result<(Vec<MetadataJob>, Option<CoverJob>)> {
+        let game = self.db.get_game(id)?;
+        if game.source != MANUAL_SOURCE || self.db.entry_of(id)? != id {
+            return Err(CoreError::Invalid(
+                "Only games added by hand can be linked to a store or IGDB game.".into(),
+            ));
+        }
+        let link = link
+            .map(|l| MetadataLink {
+                source: l.source.trim().to_string(),
+                id: l.id.trim().to_string(),
+                name: l.name.trim().to_string(),
+            })
+            .filter(|l| !l.source.is_empty() && !l.id.is_empty());
+        if let Some(link) = &link {
+            let known = link.source == IGDB_SOURCE
+                || self
+                    .providers
+                    .get(&link.source)
+                    .is_some_and(|p| p.can_search_catalog());
+            if !known {
+                return Err(CoreError::Invalid(format!(
+                    "'{}' can't be linked.",
+                    link.source
+                )));
+            }
+        }
+        let old = game.metadata_link();
+        if old == link {
+            return Ok((Vec::new(), None));
+        }
+        if let Some(old) = &old {
+            self.db.delete_source_metadata(id, &old.source)?;
+        }
+        // IGDB's answer by name is replaced by the linked game's (or asked again by name).
+        self.db.delete_source_metadata(id, IGDB_SOURCE)?;
+        self.db.set_extra_value(id, IGDB_CHECKED_KEY, None)?;
+        let value = link.as_ref().map(serde_json::to_value).transpose()?;
+        self.db.set_extra_value(id, METADATA_LINK_KEY, value)?;
+        let store_link = link.as_ref().is_some_and(|l| l.source != IGDB_SOURCE);
+        if store_link {
+            for kind in [ImageKind::Cover, ImageKind::Background] {
+                if crate::images::is_user_image(&game, kind) {
+                    continue;
+                }
+                self.images.remove_image(kind, id)?;
+                match kind {
+                    ImageKind::Cover => {
+                        self.db.set_cover_path(id, None)?;
+                        crate::images::drop_cover_icon(&self.db, &self.images, &game)?;
+                    }
+                    _ => self.db.set_background_path(id, None)?,
+                }
+                self.db
+                    .set_extra_value(id, crate::images::checked_key(kind), None)?;
+            }
+        }
+        self.resolver.resolve(id)?;
+        self.events
+            .publish(CoreEvent::GamesChanged { ids: vec![id] });
+        let game = self.db.get_game(id)?;
+        let jobs = self.entry_jobs(&game);
+        let (source, source_game_id) = self.store_target(id, game.source.clone(), None);
+        let cover = (store_link && game.cover_path.is_none()).then_some(CoverJob {
+            game_id: id,
+            source,
+            source_game_id,
+            force: false,
+        });
+        Ok((jobs, cover))
     }
 
     /// The store action that installs a game that is owned but not installed. The caller opens
@@ -2996,6 +3174,116 @@ mod tests {
         lib.save_settings(&settings).unwrap();
         assert!(!lib.igdb().is_configured());
         assert!(lib.missing_metadata_jobs().unwrap().is_empty());
+    }
+
+    struct Catalog;
+    impl LibraryProvider for Catalog {
+        fn id(&self) -> &str {
+            "cat"
+        }
+        fn name(&self) -> &str {
+            "Catalog"
+        }
+        fn icon_svg(&self) -> &'static str {
+            "<svg/>"
+        }
+        fn scan_installed(&self) -> Result<Vec<ImportedGame>, ProviderError> {
+            Ok(Vec::new())
+        }
+        fn can_search_catalog(&self) -> bool {
+            true
+        }
+        fn search_catalog(&self, query: &str) -> Result<Vec<CatalogHit>, ProviderError> {
+            Ok(vec![CatalogHit {
+                id: "42".into(),
+                name: format!("{query} (found)"),
+                release_year: Some(2020),
+                image: None,
+            }])
+        }
+    }
+
+    #[test]
+    fn manual_games_take_metadata_and_covers_from_the_linked_game() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut providers = ProviderRegistry::new();
+        providers.register(Arc::new(Catalog));
+        let (lib, _) = library(tmp.path(), providers);
+        std::fs::write(tmp.path().join("hades.exe"), b"x").unwrap();
+        let game = lib
+            .add_manual_game(&NewManualGame {
+                name: Some("Hades".into()),
+                executable: tmp.path().join("hades.exe").display().to_string(),
+                args: None,
+                working_dir: None,
+                cover_image: None,
+            })
+            .unwrap();
+
+        let sources = lib.metadata_search_sources();
+        assert_eq!(
+            sources.iter().map(|s| s.id.as_str()).collect::<Vec<_>>(),
+            ["cat"],
+            "IGDB only with credentials"
+        );
+        let hits = lib.search_metadata("cat", "Hades").unwrap();
+        assert_eq!(hits[0].name, "Hades (found)");
+        assert!(lib.search_metadata("manual", "Hades").is_err());
+        assert!(lib.search_metadata("cat", "  ").unwrap().is_empty());
+
+        let link = MetadataLink {
+            source: "cat".into(),
+            id: " 42 ".into(),
+            name: "Hades".into(),
+        };
+        let (jobs, cover) = lib.set_metadata_link(game.id, Some(link)).unwrap();
+        assert_eq!(jobs.len(), 1);
+        assert_eq!(jobs[0].source, "cat");
+        assert_eq!(jobs[0].source_game_id.as_deref(), Some("42"));
+        assert!(jobs[0].igdb && jobs[0].force);
+        let cover = cover.unwrap();
+        assert_eq!(
+            (cover.source.as_str(), cover.source_game_id.as_deref()),
+            ("cat", Some("42"))
+        );
+        let info = lib.game_edit_info(game.id).unwrap();
+        assert_eq!(info.metadata_link.unwrap().id, "42");
+
+        // Refreshes, startup cover jobs and the retry of a failed fetch use the link too.
+        assert_eq!(
+            lib.metadata_jobs(game.id).unwrap()[0]
+                .source_game_id
+                .as_deref(),
+            Some("42")
+        );
+        let missing = lib.missing_cover_jobs().unwrap();
+        assert_eq!(missing[0].source, "cat");
+        let retry = lib.missing_metadata_jobs().unwrap();
+        assert_eq!(retry.len(), 1);
+        assert_eq!(retry[0].source, "cat");
+        lib.database()
+            .set_source_metadata(game.id, "cat", None, Utc::now())
+            .unwrap();
+        assert!(lib.missing_metadata_jobs().unwrap().is_empty());
+
+        // Unlinking drops the store's data.
+        let (jobs, cover) = lib.set_metadata_link(game.id, None).unwrap();
+        assert!(cover.is_none());
+        assert_eq!(jobs[0].source_game_id, None);
+        assert!(
+            lib.database()
+                .source_checked(game.id, "cat")
+                .unwrap()
+                .is_none()
+        );
+        assert!(lib.game_edit_info(game.id).unwrap().metadata_link.is_none());
+
+        let unknown = MetadataLink {
+            source: "nowhere".into(),
+            id: "1".into(),
+            name: String::new(),
+        };
+        assert!(lib.set_metadata_link(game.id, Some(unknown)).is_err());
     }
 
     #[test]

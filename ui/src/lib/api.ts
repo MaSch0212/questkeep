@@ -5,6 +5,9 @@ import type { AccountWarning } from "../bindings/AccountWarning";
 import type { Achievements } from "../bindings/Achievements";
 import type { BackupInfo } from "../bindings/BackupInfo";
 import type { BulkChange } from "../bindings/BulkChange";
+import type { CatalogHit } from "../bindings/CatalogHit";
+import type { InstalledProgram } from "../bindings/InstalledProgram";
+import type { MetadataLink } from "../bindings/MetadataLink";
 import type { CombinePlan } from "../bindings/CombinePlan";
 import type { AppInfo } from "../bindings/AppInfo";
 import type { Category } from "../bindings/Category";
@@ -315,6 +318,14 @@ export const imageOptions = (id: string, slot: ImageSlot, source: string) =>
   invoke<ImageOption[]>("image_options", { id, slot, source });
 export const searchWebImages = (query: string, large: boolean, transparent: boolean) =>
   invoke<ImageOption[]>("search_web_images", { query, large, transparent });
+/** Programs on this PC that are not in the library (Add game). */
+export const installedPrograms = () => invoke<InstalledProgram[]>("installed_programs");
+/** IGDB and the stores whose catalog can be searched, for linking a game added by hand. */
+export const metadataSearchSources = () => invoke<MetadataSourceInfo[]>("metadata_search_sources");
+export const searchMetadata = (source: string, query: string) =>
+  invoke<CatalogHit[]>("search_metadata", { source, query });
+export const setMetadataLink = (id: string, link: MetadataLink | null) =>
+  invoke<Game>("set_metadata_link", { id, link });
 export const launchProfiles = (id: string) => invoke<LaunchProfiles>("launch_profiles", { id });
 export const saveLaunchProfile = (id: string, profileId: string | null, input: ProfileInput) =>
   invoke<LaunchProfiles>("save_launch_profile", { id, profileId, input });

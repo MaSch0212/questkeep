@@ -84,6 +84,7 @@ function mockEditInfo() {
     automaticSortingName: "Hades",
     sortingName: null,
     userImages: { cover: false, background: false, icon: false },
+    metadataLink: null,
   });
   vi.mocked(api.saveGameEdits).mockResolvedValue(makeGame());
   vi.mocked(api.getGame).mockResolvedValue(makeGame());

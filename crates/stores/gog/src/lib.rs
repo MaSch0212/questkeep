@@ -34,7 +34,7 @@ use questkeep_store_heroic::{self as heroic, HeroicPaths, owned_with_local};
 /// Setting key (under `providers.gog`) for launching through GOG Galaxy.
 pub const LAUNCH_THROUGH_GALAXY: &str = "launchThroughGalaxy";
 use questkeep_store_api::auth::AccountAuth;
-use questkeep_store_api::model::{GameMetadata, ImportedGame, PlayAction};
+use questkeep_store_api::model::{CatalogHit, GameMetadata, ImportedGame, PlayAction};
 use questkeep_store_api::settings::{StoreOption, StoreSettings};
 use questkeep_store_api::{ImageCandidate, LibraryProvider, ProviderError};
 
@@ -369,6 +369,14 @@ impl LibraryProvider for GogProvider {
 
     fn metadata(&self, source_game_id: &str) -> Result<Option<GameMetadata>, ProviderError> {
         Ok(self.store_game(source_game_id)?.map(|game| game.metadata()))
+    }
+
+    fn can_search_catalog(&self) -> bool {
+        true
+    }
+
+    fn search_catalog(&self, query: &str) -> Result<Vec<CatalogHit>, ProviderError> {
+        api::search_catalog(&self.http, query)
     }
 
     /// Portrait cover from the Galaxy product database, then the catalogue API's box art. This

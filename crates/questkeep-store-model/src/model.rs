@@ -269,3 +269,17 @@ pub struct AddGameOption {
     /// Menu text, e.g. `New Minecraft instance`.
     pub label: String,
 }
+
+/// A game found by searching a store's catalog by name, so a game added by hand can get its
+/// details and images from that store (see `LibraryProvider::search_catalog`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct CatalogHit {
+    /// The store's id for the game, as `metadata` and the image candidates take it.
+    pub id: String,
+    pub name: String,
+    pub release_year: Option<i32>,
+    /// A small picture to tell similar names apart (a capsule, cover or logo URL).
+    pub image: Option<String>,
+}

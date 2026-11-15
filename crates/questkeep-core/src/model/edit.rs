@@ -86,6 +86,8 @@ pub struct GameEditInfo {
     pub sorting_name: Option<String>,
     /// Which images the user picked themselves (they survive metadata refreshes).
     pub user_images: UserImages,
+    /// The store or IGDB game the user linked a game added by hand to.
+    pub metadata_link: Option<super::MetadataLink>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]

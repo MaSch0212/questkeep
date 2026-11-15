@@ -211,6 +211,17 @@ impl LibraryProvider for SteamProvider {
         web::fetch_metadata(app_id)
     }
 
+    fn can_search_catalog(&self) -> bool {
+        true
+    }
+
+    fn search_catalog(
+        &self,
+        query: &str,
+    ) -> Result<Vec<questkeep_store_api::model::CatalogHit>, ProviderError> {
+        web::search_store(query)
+    }
+
     fn player_count(&self, app_id: &str) -> Result<Option<u32>, ProviderError> {
         live::fetch_player_count(app_id)
     }

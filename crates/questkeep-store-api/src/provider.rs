@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use crate::auth::AccountAuth;
 pub use crate::model::AddGameOption;
-use crate::model::{Achievements, GameMetadata, GameNews, ImportedGame, PlayAction};
+use crate::model::{Achievements, CatalogHit, GameMetadata, GameNews, ImportedGame, PlayAction};
 use crate::settings::StoreSettings;
 
 /// Errors a provider can report. Messages are shown to users.
@@ -105,6 +105,18 @@ pub trait LibraryProvider: Send + Sync {
     /// one request in flight per provider; `Ok(None)` means the store has no data for this game.
     fn metadata(&self, _source_game_id: &str) -> Result<Option<GameMetadata>, ProviderError> {
         Ok(None)
+    }
+    /// Whether [`search_catalog`](Self::search_catalog) works: the store's catalog can be
+    /// searched by name without the game being owned or installed. Must be cheap.
+    fn can_search_catalog(&self) -> bool {
+        false
+    }
+    /// Games in the store's catalog matching `query` (a name), best first, at most a few dozen.
+    /// A hit's id must work with [`metadata`](Self::metadata) and the image candidates, so a game
+    /// added by hand can take its details and images from this store. Called on demand from a
+    /// background thread.
+    fn search_catalog(&self, _query: &str) -> Result<Vec<CatalogHit>, ProviderError> {
+        Err(ProviderError::Unsupported)
     }
     /// How many people play the game right now. Called only while its game page is open;
     /// `Ok(None)` (the default) when the store can't tell.

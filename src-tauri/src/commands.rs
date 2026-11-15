@@ -9,11 +9,11 @@ use questkeep_core::auth::AccountStatus;
 use questkeep_core::backup::BackupInfo;
 use questkeep_core::library::{AccountWarning, MetadataSourceInfo};
 use questkeep_core::model::{
-    Achievements, BulkChange, Category, CombinePlan, CompletionSettings, Game, GameActivity,
-    GameEditInfo, GameEdits, GameNews, GameQuery, GameUpdate, GroupBy, GroupMerge, ImageOption,
-    ImageSlot, ImageSource, LaunchProfiles, LibraryView, ListField, NewManualGame, NewView,
-    ProfileInput, ScanSummary, SectionOrder, SetupState, StartPage, SyncTimes, ValueCount,
-    ViewSection, ViewUiState, ViewUpdate,
+    Achievements, BulkChange, CatalogHit, Category, CombinePlan, CompletionSettings, Game,
+    GameActivity, GameEditInfo, GameEdits, GameNews, GameQuery, GameUpdate, GroupBy, GroupMerge,
+    ImageOption, ImageSlot, ImageSource, LaunchProfiles, LibraryView, ListField, MetadataLink,
+    NewManualGame, NewView, ProfileInput, ScanSummary, SectionOrder, SetupState, StartPage,
+    SyncTimes, ValueCount, ViewSection, ViewUiState, ViewUpdate,
 };
 use questkeep_core::providers::ProviderInfo;
 use questkeep_core::settings::Settings;
@@ -385,6 +385,52 @@ pub async fn refresh_metadata(state: State<'_, Arc<AppState>>, id: String) -> Cm
         let jobs = s.library.metadata_jobs(parse_id(&id)?)?;
         s.metadata.enqueue(jobs);
         Ok(())
+    })
+    .await
+}
+
+/// Programs on this PC that are not in the library, for "Add game".
+#[tauri::command]
+pub async fn installed_programs(
+    state: State<'_, Arc<AppState>>,
+) -> CmdResult<Vec<questkeep_core::programs::InstalledProgram>> {
+    blocking(state, |s| s.library.installed_programs()).await
+}
+
+/// Where a game added by hand can find its metadata: IGDB and searchable store catalogs.
+#[tauri::command]
+pub async fn metadata_search_sources(
+    state: State<'_, Arc<AppState>>,
+) -> CmdResult<Vec<MetadataSourceInfo>> {
+    blocking(state, |s| Ok(s.library.metadata_search_sources())).await
+}
+
+#[tauri::command]
+pub async fn search_metadata(
+    state: State<'_, Arc<AppState>>,
+    source: String,
+    query: String,
+) -> CmdResult<Vec<CatalogHit>> {
+    blocking(state, move |s| s.library.search_metadata(&source, &query)).await
+}
+
+/// Links a game added by hand to a store or IGDB game (`None` unlinks it) and fetches its
+/// metadata and images from there.
+#[tauri::command]
+pub async fn set_metadata_link(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    link: Option<MetadataLink>,
+) -> CmdResult<Game> {
+    blocking(state, move |s| {
+        let id = parse_id(&id)?;
+        let (jobs, cover) = s.library.set_metadata_link(id, link)?;
+        s.metadata.enqueue(jobs);
+        if let Some(cover) = cover {
+            s.covers.forget(id);
+            s.covers.enqueue([cover]);
+        }
+        s.library.get_game(id)
     })
     .await
 }

@@ -57,7 +57,10 @@ grouping field); duplicates found across editions ("GOTY", "Definitive Edition")
 styles ("VII" / "7"); sorting names read roman numerals and number words like Playnite; Amazon
 uninstalls through the game's own remover, EA's uninstaller gets the UAC prompt it needs; Epic
 installs found through the launcher's newer install records; the Battle.net sign-out notice;
-uninstall and remove from the game's right-click menu work again.
+uninstall and remove from the game's right-click menu work again. Add game is the Edit dialog
+with a Setup section: installed programs to pick from (Apps list and Start menu) and a metadata
+match from IGDB, the Steam store or the GOG catalog that later refreshes keep using; the game page
+scrolls sideways instead of squeezing in narrow windows.
 
 ## Next
 
