@@ -223,6 +223,29 @@ pub fn show_main_window(app: &AppHandle) {
     }
 }
 
+/// Brings the window back after a game without taking focus from what the user does now:
+/// un-minimizes it, or builds it again when it waits in the tray. Blocks while it is built.
+pub fn restore_main_window(app: &AppHandle) {
+    if keep_hidden() {
+        return;
+    }
+    let lifecycle = app.state::<Lifecycle>();
+    let _guard = lifecycle
+        .window_lock
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+    if let Some(window) = app.get_webview_window(MAIN_WINDOW) {
+        let _ = window.unminimize();
+        let _ = window.show();
+        lifecycle.set_hidden_to_tray(false);
+        return;
+    }
+    match create_main_window(app) {
+        Ok(()) => lifecycle.set_hidden_to_tray(false),
+        Err(err) => tracing::error!(%err, "could not bring the main window back"),
+    }
+}
+
 /// [`show_main_window`] on a short-lived thread, for callers on the event loop.
 pub fn show_main_window_async(app: &AppHandle) {
     let app = app.clone();
@@ -230,7 +253,7 @@ pub fn show_main_window_async(app: &AppHandle) {
 }
 
 /// Destroys the main window and keeps the app alive in the tray.
-fn hide_to_tray(app: &AppHandle) {
+pub(crate) fn hide_to_tray(app: &AppHandle) {
     // Set first: destroying the last window triggers an exit request that must see the flag.
     app.state::<Lifecycle>().set_hidden_to_tray(true);
     save_placement(app);

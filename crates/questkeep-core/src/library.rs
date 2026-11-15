@@ -95,6 +95,10 @@ pub struct Library {
     backup_run: BackupRun,
     /// Running scans; the automatic backup waits for them.
     scans: ScanCount,
+    /// Errors and warnings for the notification bell.
+    notifications: crate::notifications::Notifications,
+    /// Game scripts.
+    scripts: crate::scripts::Scripts,
 }
 
 impl Library {
@@ -136,6 +140,18 @@ impl Library {
             tracing::warn!(%err, "could not recompute sorting names");
         }
         crate::auto_categories::watch(db.clone(), &events);
+        let notifications =
+            crate::notifications::Notifications::open(paths.notifications_file(), &events);
+        notifications.watch(&events);
+        let scripts = crate::scripts::Scripts::new(
+            db.clone(),
+            paths.clone(),
+            ImageCache::new(paths.clone()),
+            providers.clone(),
+            notifications.clone(),
+            events.clone(),
+        );
+        scripts.clean_up_files();
         let resolver = MetadataResolver::new(db.clone(), &providers, loaded.metadata_priority);
         if db.resolve_pending().unwrap_or(false) {
             match resolver.resolve_all() {
@@ -158,6 +174,8 @@ impl Library {
             events,
             backup_run: BackupRun::default(),
             scans: ScanCount::default(),
+            notifications,
+            scripts,
         }
     }
 
@@ -316,6 +334,21 @@ impl Library {
 
     pub fn settings(&self) -> Settings {
         self.settings.load()
+    }
+
+    /// The settings file (for parts that read the settings on their own threads).
+    pub fn settings_store(&self) -> &SettingsStore {
+        &self.settings
+    }
+
+    /// Game scripts.
+    pub fn scripts(&self) -> &crate::scripts::Scripts {
+        &self.scripts
+    }
+
+    /// Errors and warnings for the notification bell.
+    pub fn notifications(&self) -> &crate::notifications::Notifications {
+        &self.notifications
     }
 
     pub fn save_settings(&self, settings: &Settings) -> Result<()> {
@@ -2449,6 +2482,12 @@ mod tests {
         let events = seen.lock().unwrap();
         let kinds: Vec<_> = events
             .iter()
+            .filter(|e| {
+                !matches!(
+                    e,
+                    CoreEvent::Notified { .. } | CoreEvent::NotificationsChanged
+                )
+            })
             .map(|e| match e {
                 CoreEvent::ScansQueued { providers, .. } => format!("queued {providers:?}"),
                 CoreEvent::ScanStarted { provider, .. } => format!("started {provider}"),

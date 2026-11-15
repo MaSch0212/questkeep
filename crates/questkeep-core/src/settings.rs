@@ -82,6 +82,19 @@ pub struct Settings {
     /// Groups shown as one, per grouping field (the `GroupBy` value, e.g. `genre`): every view
     /// grouped by that field shows them combined.
     pub group_merges: BTreeMap<String, Vec<crate::model::GroupMerge>>,
+    /// What happens to the window when a game started from Questkeep is running.
+    pub window_on_game_start: WindowOnGameStart,
+    /// Bring the window back when the last game started from Questkeep closes.
+    pub restore_window_after_game: bool,
+    /// Whether to close each store's launcher after playing, by store id (missing: never).
+    pub launcher_close: BTreeMap<String, LauncherClosePolicy>,
+    /// Seconds to wait after a game closes before its store's launcher is closed.
+    pub launcher_close_delay_seconds: u32,
+    /// Sessions shorter than this many minutes never close a launcher.
+    pub launcher_close_min_minutes: u32,
+    /// Errors and warnings also show as system notifications while the window is minimized or
+    /// hidden in the tray.
+    pub system_notifications: bool,
 }
 
 /// How the UI looks: the color scheme, the theme and the values of theme parameters.
@@ -165,6 +178,30 @@ impl SortPrefixes {
     }
 }
 
+/// What happens to the window when a game started from Questkeep is running.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum WindowOnGameStart {
+    #[default]
+    Nothing,
+    Minimize,
+    /// Hide to the tray (the app keeps running, whatever the close settings say).
+    HideToTray,
+}
+
+/// When a store's launcher is closed after playing.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum LauncherClosePolicy {
+    #[default]
+    Never,
+    Always,
+    /// Only when it wasn't running when the game was started.
+    IfStartedByGame,
+}
+
 /// The page Questkeep shows when it opens.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "camelCase")]
@@ -222,6 +259,12 @@ impl Default for Settings {
             store_order: Vec::new(),
             appearance: Appearance::default(),
             group_merges: BTreeMap::new(),
+            window_on_game_start: WindowOnGameStart::Nothing,
+            restore_window_after_game: false,
+            launcher_close: BTreeMap::new(),
+            launcher_close_delay_seconds: 60,
+            launcher_close_min_minutes: 2,
+            system_notifications: true,
         }
     }
 }
@@ -576,6 +619,12 @@ mod tests {
                     }],
                 }],
             )]),
+            window_on_game_start: WindowOnGameStart::HideToTray,
+            restore_window_after_game: true,
+            launcher_close: BTreeMap::from([("steam".into(), LauncherClosePolicy::Always)]),
+            launcher_close_delay_seconds: 30,
+            launcher_close_min_minutes: 5,
+            system_notifications: false,
         };
         store.save(&custom).unwrap();
         let raw = std::fs::read_to_string(&path).unwrap();

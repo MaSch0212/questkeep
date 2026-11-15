@@ -159,7 +159,12 @@ pub fn create(app: &AppHandle, state: &Arc<AppState>) -> tauri::Result<()> {
             | CoreEvent::BackgroundWork { .. }
             | CoreEvent::BackupProgress { .. }
             | CoreEvent::BackupFinished { .. }
-            | CoreEvent::QuitDuringBackup => return,
+            | CoreEvent::QuitDuringBackup
+            | CoreEvent::Notified { .. }
+            | CoreEvent::NotificationsChanged
+            | CoreEvent::ScriptsChanged
+            | CoreEvent::ScriptOutput { .. }
+            | CoreEvent::ScriptRunEnded { .. } => return,
         };
         // The receiver only goes away at shutdown.
         let _ = tx.send(trigger);

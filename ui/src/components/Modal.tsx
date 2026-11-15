@@ -1,4 +1,5 @@
 import X from "lucide-solid/icons/x";
+import { Portal } from "solid-js/web";
 import {
   createSignal,
   createUniqueId,
@@ -10,8 +11,10 @@ import {
 } from "solid-js";
 import { translator } from "../i18n";
 import { shellCommon } from "../i18n/shellCommon";
+import { shellNotifications } from "../i18n/shellNotifications";
 
 const tr = translator(shellCommon);
+const trAsk = translator(shellNotifications);
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -27,11 +30,22 @@ interface ModalProps {
   /** Stays below the scrolling body (e.g. the dialog buttons). */
   footer?: JSX.Element;
   onClose: () => void;
+  /**
+   * Whether there are unsaved changes. While true, Esc, a click outside and the close button
+   * ask first (Save / Discard / Keep editing) instead of closing. Needs `onSave`.
+   */
+  dirty?: () => boolean;
+  /** Saves the changes for the prompt's Save button; it closes the dialog when it succeeds. */
+  onSave?: () => void;
 }
 
-/** Accessible modal dialog: focus is trapped, Esc and backdrop click close it. */
+/**
+ * Accessible modal dialog: focus is trapped, Esc and backdrop click close it (after asking,
+ * when `dirty`). A button of the dialog itself that discards (Cancel) calls `onClose` directly.
+ */
 export function Modal(props: ParentProps<ModalProps>) {
   const [dialog, setDialog] = createSignal<HTMLDivElement>();
+  const [asking, setAsking] = createSignal(false);
   const titleId = createUniqueId();
   const previouslyFocused = document.activeElement;
 
@@ -45,10 +59,16 @@ export function Modal(props: ParentProps<ModalProps>) {
     if (previouslyFocused instanceof HTMLElement) previouslyFocused.focus();
   });
 
+  /** Closes the dialog, or asks first when it has unsaved changes. */
+  function requestClose() {
+    if (props.dirty?.() === true) setAsking(true);
+    else props.onClose();
+  }
+
   function onKeyDown(event: KeyboardEvent) {
     if (event.key === "Escape") {
       event.stopPropagation();
-      props.onClose();
+      requestClose();
       return;
     }
     if (event.key !== "Tab") return;
@@ -73,7 +93,7 @@ export function Modal(props: ParentProps<ModalProps>) {
     <div
       class="modal-backdrop"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) props.onClose();
+        if (event.target === event.currentTarget) requestClose();
       }}
     >
       <div
@@ -98,7 +118,7 @@ export function Modal(props: ParentProps<ModalProps>) {
             class="icon-btn"
             type="button"
             aria-label={tr("closeDialog")}
-            onClick={props.onClose}
+            onClick={requestClose}
           >
             <X class="icon" aria-hidden="true" />
           </button>
@@ -108,6 +128,40 @@ export function Modal(props: ParentProps<ModalProps>) {
           <footer class="modal__footer">{props.footer}</footer>
         </Show>
       </div>
+      <Show when={asking()}>
+        <Portal>
+          {/* Outside the dialog, so its focus trap doesn't fight the prompt's. */}
+          <Modal title={trAsk("unsavedTitle")} narrow onClose={() => setAsking(false)}>
+            <p class="confirm__message">{trAsk("unsavedMessage")}</p>
+            <div class="form__actions">
+              <button type="button" class="btn" onClick={() => setAsking(false)}>
+                {trAsk("keepEditing")}
+              </button>
+              <button
+                type="button"
+                class="btn btn--danger"
+                onClick={() => {
+                  setAsking(false);
+                  props.onClose();
+                }}
+              >
+                {trAsk("discard")}
+              </button>
+              <button
+                type="button"
+                class="btn btn--primary"
+                data-autofocus
+                onClick={() => {
+                  setAsking(false);
+                  props.onSave?.();
+                }}
+              >
+                {trAsk("save")}
+              </button>
+            </div>
+          </Modal>
+        </Portal>
+      </Show>
     </div>
   );
 }

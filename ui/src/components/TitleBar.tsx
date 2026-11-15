@@ -33,6 +33,7 @@ import { ExtensionTitleBarButtons } from "./ExtensionButtons";
 import { extensionEntries } from "./ExtensionIcon";
 import { Logo } from "./Logo";
 import { Menu, type MenuEntry } from "./Menu";
+import { NotificationBell } from "./NotificationBell";
 import type { PopoverAnchor } from "./Popover";
 import { sourceName, SourceIcon } from "./SourceIcon";
 import { openLink } from "./settings/openLink";
@@ -442,6 +443,7 @@ export function TitleBar(props: { onAdd: () => void; commandRef?: (h: CommandBar
         >
           <Settings class="icon" aria-hidden="true" />
         </button>
+        <NotificationBell />
         <span class="titlebar__separator" aria-hidden="true" />
         <div class="titlebar__controls">
           <button

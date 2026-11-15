@@ -18,6 +18,7 @@ import { MetadataSection } from "./MetadataSection";
 import { PluginSettings, pluginsWithSettings } from "./PluginSettings";
 import { PluginsSection } from "./PluginsSection";
 import { PriceSitesSection } from "./PriceSitesSection";
+import { ScriptsSection } from "./ScriptsSection";
 import { UpdatesSection } from "./UpdatesSection";
 import { createSettingsModel, type SettingsModel } from "./useSettings";
 
@@ -37,6 +38,7 @@ interface SectionDef {
     | "artwork"
     | "metadata"
     | "priceSites"
+    | "scripts"
     | "plugins"
     | "developer"
     | "backups"
@@ -58,6 +60,7 @@ const SECTIONS: SectionDef[] = [
   { id: "artwork", title: "artwork", component: ArtworkSection },
   { id: "metadata", title: "metadata", component: MetadataSection },
   { id: "priceSites", title: "priceSites", component: PriceSitesSection },
+  { id: "scripts", title: "scripts", component: ScriptsSection },
   { id: "plugins", title: "plugins", component: PluginsSection },
   {
     id: "developer",

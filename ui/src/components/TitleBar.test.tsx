@@ -26,6 +26,7 @@ function provider(id: string, name: string, canScan = true): ProviderInfo {
     canScanOwned: false,
     canUninstall: false,
     launcherPages: false,
+    launcherClose: null,
     shopUrl: null,
     installed: true,
     syncable: canScan,

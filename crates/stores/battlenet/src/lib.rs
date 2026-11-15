@@ -518,6 +518,20 @@ impl LibraryProvider for BattleNetProvider {
         Some(PlayAction::file(exe.to_string_lossy()))
     }
 
+    /// The client as a running program and how to close it (only when it is installed).
+    fn launcher_process(&self) -> Option<questkeep_store_api::model::LauncherProcess> {
+        use questkeep_store_api::model::{ActionKind, LauncherClose, LauncherProcess};
+        let launcher = self.launcher().filter(|a| a.kind == ActionKind::File)?;
+        Some(LauncherProcess {
+            process_names: vec!["Battle.net.exe".into()],
+            close: {
+                let mut action = launcher;
+                action.args = Some("--exec=shutdown".into());
+                LauncherClose::Command(action)
+            },
+        })
+    }
+
     /// Opens the game's page in Battle.net, which offers the install.
     fn install_action(&self, source_game_id: &str) -> Option<PlayAction> {
         (self.agent_dir.is_some() && source_game_id.chars().all(|c| c.is_ascii_alphanumeric()))
@@ -591,6 +605,15 @@ mod tests {
     fn launcher_is_none_for_fixed_data() {
         let p = BattleNetProvider::with_agent_dir(PathBuf::from("agent"), Vec::new());
         assert!(p.launcher().is_none());
+    }
+
+    #[test]
+    fn launcher_process_is_none_without_the_launcher() {
+        assert!(
+            BattleNetProvider::with_agent_dir(PathBuf::from("agent"), Vec::new())
+                .launcher_process()
+                .is_none()
+        );
     }
 
     fn varint(mut v: u64, out: &mut Vec<u8>) {

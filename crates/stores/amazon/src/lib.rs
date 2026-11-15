@@ -145,6 +145,19 @@ impl LibraryProvider for AmazonProvider {
         self.app.as_ref()?.launcher_action()
     }
 
+    /// The client as a running program and how to close it (only when it is installed).
+    fn launcher_process(&self) -> Option<questkeep_store_api::model::LauncherProcess> {
+        use questkeep_store_api::model::{ActionKind, LauncherClose, LauncherProcess};
+        self.launcher().filter(|a| a.kind == ActionKind::File)?;
+        Some(LauncherProcess {
+            process_names: vec!["Amazon Games.exe".into()],
+            close: LauncherClose::CloseWindows {
+                // Only the UI process reacts to a close request.
+                process_names: vec!["Amazon Games UI.exe".into()],
+            },
+        })
+    }
+
     /// Windows only; Heroic has no install URI.
     fn install_action(&self, source_game_id: &str) -> Option<PlayAction> {
         self.app.as_ref()?.install_action(source_game_id)
@@ -225,6 +238,28 @@ mod tests {
         assert_eq!(action.kind, questkeep_store_api::model::ActionKind::File);
         assert!(action.target.ends_with("Amazon Games.exe"));
         assert!(AmazonProvider::default().launcher().is_none());
+    }
+
+    #[test]
+    fn launcher_process_closes_the_ui_process() {
+        use questkeep_store_api::model::LauncherClose;
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = AmazonAppPaths::below(tmp.path());
+        assert!(
+            AmazonProvider::with_app(paths.clone())
+                .launcher_process()
+                .is_none()
+        );
+        write(&tmp.path().join("Amazon Games/App/Amazon Games.exe"), "x");
+        let process = AmazonProvider::with_app(paths).launcher_process().unwrap();
+        assert_eq!(process.process_names, vec!["Amazon Games.exe"]);
+        assert_eq!(
+            process.close,
+            LauncherClose::CloseWindows {
+                process_names: vec!["Amazon Games UI.exe".into()]
+            }
+        );
+        assert!(AmazonProvider::default().launcher_process().is_none());
     }
 
     #[test]

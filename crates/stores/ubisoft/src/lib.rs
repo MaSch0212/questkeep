@@ -246,6 +246,18 @@ impl LibraryProvider for UbisoftProvider {
         }
     }
 
+    /// The client as a running program and how to close it (only when it is installed).
+    fn launcher_process(&self) -> Option<questkeep_store_api::model::LauncherProcess> {
+        use questkeep_store_api::model::{ActionKind, LauncherClose, LauncherProcess};
+        self.launcher().filter(|a| a.kind == ActionKind::File)?;
+        Some(LauncherProcess {
+            process_names: vec!["upc.exe".into()],
+            close: LauncherClose::CloseWindows {
+                process_names: vec!["upc.exe".into()],
+            },
+        })
+    }
+
     /// Hands the install to Ubisoft Connect, which asks where to put the game.
     fn install_action(&self, source_game_id: &str) -> Option<PlayAction> {
         (cfg!(windows) && install::is_product_id(source_game_id))
@@ -316,6 +328,15 @@ mod tests {
         assert!(
             UbisoftProvider::with_data(Vec::new(), None)
                 .launcher()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn launcher_process_is_none_without_the_launcher() {
+        assert!(
+            UbisoftProvider::with_data(Vec::new(), None)
+                .launcher_process()
                 .is_none()
         );
     }

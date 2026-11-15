@@ -4,7 +4,9 @@ use std::collections::HashMap;
 
 use serde::Serialize;
 
-use crate::model::{Achievements, AddGameOption, GameMetadata, GameNews, ImportedGame, PlayAction};
+use crate::model::{
+    Achievements, AddGameOption, GameMetadata, GameNews, ImportedGame, LauncherProcess, PlayAction,
+};
 use crate::settings::StoreSettings;
 use crate::wire::{CallArgs, ImageCandidate, Method, ProviderDescriptor};
 
@@ -165,6 +167,11 @@ pub trait Provider {
     fn launcher(&self) -> Option<PlayAction> {
         None
     }
+    /// The launcher as a running program and how to close it, for the "Close launcher after
+    /// playing" setting, or `None` (the default) to offer no such setting.
+    fn launcher_process(&self) -> Option<LauncherProcess> {
+        None
+    }
     /// Whether the store's client is on this PC. Stores that aren't installed are not synced
     /// (unless [`has_owned_source`](Self::has_owned_source)): a store without a client that
     /// reads its games from files returns `true`.
@@ -202,6 +209,7 @@ pub fn descriptor<P: Provider + ?Sized>(provider: &P) -> ProviderDescriptor {
         has_launcher_pages: provider.has_launcher_pages(),
         shop_url: provider.shop_url(),
         launcher: provider.launcher(),
+        launcher_process: provider.launcher_process(),
         installed: provider.is_installed(),
         settings: provider.settings(),
         add_game_options: provider.add_game_options(),

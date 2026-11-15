@@ -4,6 +4,7 @@ import { batch, createEffect, createMemo, createRoot, createSignal, on, onCleanu
 import { createStore } from "solid-js/store";
 import type { AccountWarning } from "../bindings/AccountWarning";
 import { setLanguage, translator } from "../i18n";
+import { shellNotifications } from "../i18n/shellNotifications";
 import { shellCommon } from "../i18n/shellCommon";
 import { applyAppearance } from "./themes";
 import { loadUserThemes } from "./userThemeStore";
@@ -25,6 +26,9 @@ import type { SetupState } from "../bindings/SetupState";
 import type { SortField } from "../bindings/SortField";
 import type { StartPage } from "../bindings/StartPage";
 import type { StartupPage } from "../bindings/StartupPage";
+import type { Notification } from "../bindings/Notification";
+import type { NotificationLevel } from "../bindings/NotificationLevel";
+import type { NotificationSource } from "../bindings/NotificationSource";
 import type { SyncTimes } from "../bindings/SyncTimes";
 import type { ViewLayout } from "../bindings/ViewLayout";
 import type { ViewColumn } from "../bindings/ViewColumn";
@@ -35,6 +39,7 @@ import type { PopoverAnchor } from "../components/Popover";
 import * as api from "./api";
 import { errorMessage } from "./errors";
 import { emitCoreEvent, findPage, isPluginPage, resetRegistry } from "./extensions/registry";
+import { emitScriptRunEvent } from "./scriptRun";
 import { groupGames } from "./grouping";
 import { defaultDescending, defaultQuery, mergeSources } from "./query";
 import {
@@ -77,6 +82,7 @@ import {
 } from "./history";
 
 const tr = translator(shellCommon);
+const trNotes = translator(shellNotifications);
 
 /** What "Save as new view" asks for. */
 export interface NewViewInput {
@@ -105,6 +111,26 @@ function optional<T>(call: () => Promise<T>): Promise<T | null> {
   return Promise.resolve()
     .then(call)
     .catch(() => null);
+}
+
+/** Records an entry in the bell without a toast. Never fails or toasts: it is for errors. */
+function notify(
+  level: NotificationLevel,
+  source: NotificationSource,
+  message: string,
+  gameId: string | null = null,
+) {
+  void Promise.resolve()
+    .then(() =>
+      api.addNotification({
+        level,
+        source,
+        title: trNotes(level === "error" ? "errorTitle" : "warningLabel"),
+        message,
+        gameId,
+      }),
+    )
+    .catch(() => undefined);
 }
 
 function createAppStore() {
@@ -161,6 +187,14 @@ function createAppStore() {
   const [appInfo, setAppInfo] = createSignal<AppInfo | null>(null);
   const [seenSources, setSeenSources] = createSignal<ReadonlySet<string>>(new Set());
   const [toasts, setToasts] = createSignal<Toast[]>([]);
+  /** The bell's entries, newest first (kept by the core). */
+  const [notifications, setNotifications] = createSignal<Notification[]>([]);
+  /** Counts the requests to open the bell (shortcut, command bar, system notification). */
+  const [bellRequests, setBellRequests] = createSignal(0);
+  /** Counts `scriptsChanged` events: lists of scripts reload when it changes. */
+  const [scriptsRevision, setScriptsRevision] = createSignal(0);
+  /** The script whose dialog is open outside Settings (the bell's "Edit script"). */
+  const [scriptEditorId, setScriptEditorId] = createSignal<string | null>(null);
   const [duplicatesOpen, setDuplicatesOpen] = createSignal(false);
   /**
    * The Combine groups dialog: the grouping field, the groups to start with and the merge being
@@ -317,10 +351,57 @@ function createAppStore() {
     setToasts((list) => list.filter((t) => t.id !== id));
   }
 
-  function pushToast(kind: Toast["kind"], message: string, action?: Toast["action"]) {
+  /** A toast only; errors the core reports are already in the bell. */
+  function showToast(kind: Toast["kind"], message: string, action?: Toast["action"]) {
     const id = ++toastSeq;
     setToasts((list) => [...list.slice(-4), { id, kind, message, action }]);
     setTimeout(() => dismissToast(id), kind === "error" || action ? 8000 : 4500);
+  }
+
+  /** A toast; an error is also kept in the bell, as the app's own (the core records its own). */
+  function pushToast(kind: Toast["kind"], message: string, action?: Toast["action"]) {
+    showToast(kind, message, action);
+    if (kind === "error") notify("error", "app", message);
+  }
+
+  async function loadNotifications() {
+    try {
+      setNotifications((await api.notifications()) ?? []);
+    } catch {
+      // The bell is secondary; a failing load must not add another error to it.
+    }
+  }
+
+  /** Opens the bell when a system notification was shown while the window was in the background. */
+  async function checkOpenNotifications() {
+    try {
+      if ((await api.takeOpenNotifications()) === true) setBellRequests((n) => n + 1);
+    } catch {
+      // Not important enough to report.
+    }
+  }
+
+  /** Marks everything read (the list is optimistic; the core confirms with an event). */
+  function markNotificationsRead() {
+    if (!notifications().some((n) => !n.read)) return;
+    setNotifications((list) => list.map((n) => (n.read ? n : { ...n, read: true })));
+    void Promise.resolve()
+      .then(() => api.markNotificationsRead())
+      .catch(() => undefined);
+  }
+
+  function dismissNotification(id: string) {
+    setNotifications((list) => list.filter((n) => n.id !== id));
+    void Promise.resolve()
+      .then(() => api.dismissNotification(id))
+      .catch(() => undefined);
+  }
+
+  function clearNotifications() {
+    setNotifications([]);
+    void Promise.resolve()
+      .then(() => api.clearNotifications())
+      .catch(() => undefined);
   }
 
   // Groups of games in several stores that a toast already pointed out this session.
@@ -1049,7 +1130,10 @@ function createAppStore() {
   }
 
   function handleCoreEvent(event: CoreEvent) {
-    emitCoreEvent(event);
+    // The output of a script run from the script dialog is for that dialog only (and can be many
+    // events): extensions don't hear it.
+    if (event.type !== "scriptOutput") emitCoreEvent(event);
+    emitScriptRunEvent(event);
     switch (event.type) {
       case "gamesChanged":
       case "gameRemoved":
@@ -1096,7 +1180,14 @@ function createAppStore() {
           .catch((error: unknown) => pushToast("error", errorMessage(error)));
         break;
       case "gameError":
-        pushToast("error", event.message);
+        showToast("error", event.message);
+        break;
+      case "notified":
+      case "notificationsChanged":
+        void loadNotifications();
+        break;
+      case "scriptsChanged":
+        setScriptsRevision((n) => n + 1);
         break;
       case "installFinished":
         api
@@ -1267,6 +1358,7 @@ function createAppStore() {
       loadUpdate(),
       loadSetup(),
       loadAccountWarnings(),
+      loadNotifications(),
     ]).then((results) => {
       for (const r of results)
         if (r.status === "rejected") pushToast("error", errorMessage(r.reason));
@@ -1275,6 +1367,17 @@ function createAppStore() {
     window.addEventListener("beforeunload", flushUi);
     void showNotices();
     void showUpdateRequest();
+    // A system notification that arrived before the window listened (or while it was hidden).
+    void checkOpenNotifications();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void checkOpenNotifications();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    const unlistenFocus = Promise.resolve(
+      api.onWindowFocusChanged((focused) => {
+        if (focused) void checkOpenNotifications();
+      }),
+    ).catch(() => undefined);
     // A quit held back while the window did not exist yet (the app waited in the tray).
     void Promise.resolve(api.quitPending())
       .then((pending) => {
@@ -1285,6 +1388,8 @@ function createAppStore() {
       disposed = true;
       for (const fn of unlisteners) fn();
       window.removeEventListener("beforeunload", flushUi);
+      document.removeEventListener("visibilitychange", onVisible);
+      void unlistenFocus.then((fn) => (typeof fn === "function" ? fn() : undefined));
       uiSaver.flush();
       clearTimeout(refreshTimer);
       clearTimeout(startTimer);
@@ -1298,6 +1403,8 @@ function createAppStore() {
     batch(() => {
       setSections([]);
       setAccountWarnings([]);
+      setNotifications([]);
+      setScriptEditorId(null);
       setBackupProgress(null);
       setQuitDuringBackup(false);
       setUpdateProgress(null);
@@ -1570,6 +1677,20 @@ function createAppStore() {
     openDetails: () => setDetailsOpen(selectedId() !== null),
     closeDetails: () => setDetailsOpen(false),
     isRunning,
+    // notifications (the bell)
+    notifications,
+    bellRequests,
+    showNotifications: () => setBellRequests((n) => n + 1),
+    notify,
+    loadNotifications,
+    markNotificationsRead,
+    dismissNotification,
+    clearNotifications,
+    /** The bell's "Edit script" button: opens that script's dialog (rendered by the App). */
+    openScriptEditor: (id: string) => setScriptEditorId(id),
+    scriptEditorId,
+    closeScriptEditor: () => setScriptEditorId(null),
+    scriptsRevision,
     // toasts
     pushToast,
     dismissToast,

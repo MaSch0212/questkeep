@@ -184,6 +184,20 @@ impl LibraryProvider for SteamProvider {
         })
     }
 
+    /// The client as a running program and how to close it (only when it is installed).
+    fn launcher_process(&self) -> Option<questkeep_store_api::model::LauncherProcess> {
+        use questkeep_store_api::model::{ActionKind, LauncherClose, LauncherProcess};
+        let launcher = self.launcher().filter(|a| a.kind == ActionKind::File)?;
+        Some(LauncherProcess {
+            process_names: vec!["steam.exe".into()],
+            close: {
+                let mut action = launcher;
+                action.args = Some("-shutdown".into());
+                LauncherClose::Command(action)
+            },
+        })
+    }
+
     fn install_action(&self, app_id: &str) -> Option<PlayAction> {
         is_app_id(app_id).then(|| PlayAction::uri(format!("steam://install/{app_id}")))
     }
@@ -946,6 +960,36 @@ mod tests {
             .unwrap();
         assert_eq!(action.kind, ActionKind::Uri);
         assert_eq!(action.target, "steam://open/main");
+    }
+
+    #[test]
+    fn launcher_process_shuts_steam_down_with_its_exe() {
+        use questkeep_store_api::model::LauncherClose;
+        assert!(
+            SteamProvider::with_roots(Vec::new())
+                .launcher_process()
+                .is_none()
+        );
+        let dir = tempfile::tempdir().unwrap();
+        // Without steam.exe there is no program to run (Steam on Linux, or a bare root).
+        assert!(
+            SteamProvider::with_roots(vec![dir.path().to_path_buf()])
+                .launcher_process()
+                .is_none()
+        );
+        fs::write(dir.path().join("steam.exe"), "x").unwrap();
+        let process = SteamProvider::with_roots(vec![dir.path().to_path_buf()]).launcher_process();
+        if cfg!(windows) {
+            let process = process.unwrap();
+            assert_eq!(process.process_names, vec!["steam.exe"]);
+            let LauncherClose::Command(action) = process.close else {
+                panic!("expected a command");
+            };
+            assert!(action.target.ends_with("steam.exe"));
+            assert_eq!(action.args.as_deref(), Some("-shutdown"));
+        } else {
+            assert!(process.is_none());
+        }
     }
 
     #[test]

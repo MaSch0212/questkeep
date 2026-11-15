@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 use crate::backup::BackupInfo;
 use crate::model::ScanSummary;
+use crate::notifications::Notification;
 
 /// Something that happened in the core.
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
@@ -86,6 +87,36 @@ pub enum CoreEvent {
     },
     /// Quitting waits for a choice because a backup is running (the shell asks the UI).
     QuitDuringBackup,
+    /// A new entry for the notification bell (also shown as a system notification while the
+    /// window is in the background).
+    Notified {
+        notification: Notification,
+    },
+    /// The kept notifications changed (new, read, dismissed, cleared).
+    NotificationsChanged,
+    /// Game scripts were added, changed, reordered or deleted.
+    ScriptsChanged,
+    /// Output of a script run from the script dialog ("Run now"), as it arrives.
+    ScriptOutput {
+        run: Uuid,
+        stream: OutputStream,
+        text: String,
+    },
+    /// A script run from the script dialog ended: its exit code, or why it didn't run or end.
+    ScriptRunEnded {
+        run: Uuid,
+        exit_code: Option<i32>,
+        error: Option<String>,
+    },
+}
+
+/// Which output of a program a piece of text came from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum OutputStream {
+    Stdout,
+    Stderr,
 }
 
 /// A background download queue.

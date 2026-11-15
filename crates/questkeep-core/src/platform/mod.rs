@@ -5,12 +5,14 @@ use std::io;
 use std::path::Path;
 use std::process::Command;
 
+mod close;
 #[cfg(windows)]
 mod exe_icon;
 #[cfg(windows)]
 mod priority;
 mod processes;
 
+pub use close::{close_windows, terminate};
 pub use processes::{ProcessRef, list_processes, open_process};
 
 #[cfg(windows)]

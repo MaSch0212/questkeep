@@ -731,6 +731,20 @@ impl LibraryProvider for EpicProvider {
             .then(|| PlayAction::uri("com.epicgames.launcher://store"))
     }
 
+    /// The client as a running program and how to close it (only when it is installed).
+    fn launcher_process(&self) -> Option<questkeep_store_api::model::LauncherProcess> {
+        use questkeep_store_api::model::{ActionKind, LauncherClose, LauncherProcess};
+        // Playnite force-quits it; the Windows launcher only (the URI action marks it installed).
+        if !cfg!(windows) || self.heroic.is_some() {
+            return None;
+        }
+        self.launcher().filter(|a| a.kind == ActionKind::Uri)?;
+        Some(LauncherProcess {
+            process_names: vec!["EpicGamesLauncher.exe".into()],
+            close: LauncherClose::ForceQuit,
+        })
+    }
+
     /// Asks the launcher to install the game. Current launchers only act on the full
     /// `<namespace>:<catalogItemId>:<appName>` id (the bare appName just opens the launcher), so
     /// the signed-in library supplies the ids; without them the bare form is the fallback.
@@ -1456,6 +1470,29 @@ mod tests {
         let action = EpicProvider::with_data_root(tmp.path()).launcher().unwrap();
         assert_eq!(action.target, "com.epicgames.launcher://store");
         assert!(EpicProvider::default().launcher().is_none());
+    }
+
+    #[test]
+    fn launcher_process_needs_the_launcher_data_folder() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert!(
+            EpicProvider::with_data_root(tmp.path())
+                .launcher_process()
+                .is_none()
+        );
+        std::fs::create_dir_all(tmp.path().join("EpicGamesLauncher")).unwrap();
+        let process = EpicProvider::with_data_root(tmp.path()).launcher_process();
+        if cfg!(windows) {
+            let process = process.unwrap();
+            assert_eq!(process.process_names, vec!["EpicGamesLauncher.exe"]);
+            assert_eq!(
+                process.close,
+                questkeep_store_api::model::LauncherClose::ForceQuit
+            );
+        } else {
+            assert!(process.is_none());
+        }
+        assert!(EpicProvider::default().launcher_process().is_none());
     }
 
     #[test]

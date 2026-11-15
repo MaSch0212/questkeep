@@ -5,6 +5,7 @@
 /// Store account sign-in, from the store plugin interface.
 pub use questkeep_store_api::auth;
 pub mod auto_categories;
+pub mod automation;
 pub mod backup;
 pub mod db;
 pub mod error;
@@ -17,12 +18,14 @@ pub mod library;
 pub mod live;
 pub mod metadata;
 pub mod model;
+pub mod notifications;
 pub mod paths;
 pub mod platform;
 pub mod price_sites;
 pub mod programs;
 pub mod providers;
 pub mod resume;
+pub mod scripts;
 pub mod seed;
 pub mod settings;
 pub mod statistics;

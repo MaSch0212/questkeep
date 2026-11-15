@@ -121,6 +121,7 @@ describe("store banner and icon", () => {
         canScanOwned: true,
         canUninstall: true,
         launcherPages: false,
+        launcherClose: null,
         shopUrl: null,
         installed: true,
         syncable: true,

@@ -1,3 +1,13 @@
+import {
+  autoUpdate,
+  computePosition,
+  flip,
+  offset,
+  type Placement,
+  shift,
+  size,
+  type VirtualElement,
+} from "@floating-ui/dom";
 import { createSignal, onCleanup, onMount, type JSX } from "solid-js";
 import { Portal } from "solid-js/web";
 
@@ -9,42 +19,40 @@ export type PopoverAnchor =
   | { rect: DOMRect; align: "beside" }
   | { x: number; y: number };
 
-const GAP = 6; // px; matches --qk-popover-gap, read for the maths only
+const GAP = 6; // px; matches --qk-popover-gap
 const MARGIN = 8; // keeps popovers off the window edge
 const LIST_GAP = 2; // a combobox list sits right at its input
 
 /** Open popovers, oldest first: a popover opened later from inside another one is its child. */
 const openPanels: HTMLElement[] = [];
 
-function place(anchor: PopoverAnchor, width: number, height: number) {
-  let left: number;
-  let top: number;
+/** How floating-ui places a popover for an anchor. */
+function placement(anchor: PopoverAnchor): {
+  reference: VirtualElement;
+  placement: Placement;
+  offset: { mainAxis: number; crossAxis: number };
+} {
   if ("x" in anchor) {
-    left = anchor.x;
-    top = anchor.y;
-  } else if (anchor.align === "beside") {
-    left = anchor.rect.right + 2;
-    top = anchor.rect.top - GAP;
-    if (left + width > window.innerWidth - MARGIN) left = anchor.rect.left - width - 2;
-  } else if (anchor.align === "below") {
-    left = anchor.rect.left;
-    top = anchor.rect.bottom + LIST_GAP;
-    const above = anchor.rect.top - height - LIST_GAP;
-    if (top + height > window.innerHeight - MARGIN && above >= MARGIN) top = above;
-  } else {
-    top = anchor.rect.bottom + GAP;
-    left =
-      anchor.align === "start"
-        ? anchor.rect.left
-        : anchor.align === "end"
-          ? anchor.rect.right - width
-          : anchor.rect.left + (anchor.rect.width - width) / 2;
+    const point = new DOMRect(anchor.x, anchor.y, 0, 0);
+    return {
+      reference: { getBoundingClientRect: () => point },
+      placement: "bottom-start",
+      offset: { mainAxis: 0, crossAxis: 0 },
+    };
   }
-  left = Math.max(MARGIN, Math.min(left, window.innerWidth - width - MARGIN));
-  if (top + height > window.innerHeight - MARGIN) {
-    top = Math.max(MARGIN, window.innerHeight - height - MARGIN);
+  const reference = { getBoundingClientRect: () => anchor.rect };
+  switch (anchor.align) {
+    case "beside":
+      return { reference, placement: "right-start", offset: { mainAxis: 2, crossAxis: -GAP } };
+    case "below":
+      return { reference, placement: "bottom-start", offset: { mainAxis: LIST_GAP, crossAxis: 0 } };
+    case "start":
+      return { reference, placement: "bottom-start", offset: { mainAxis: GAP, crossAxis: 0 } };
+    case "end":
+      return { reference, placement: "bottom-end", offset: { mainAxis: GAP, crossAxis: 0 } };
+    default:
+      return { reference, placement: "bottom", offset: { mainAxis: GAP, crossAxis: 0 } };
   }
-  return { left, top: Math.max(MARGIN, top) };
 }
 
 export interface PopoverProps {
@@ -63,7 +71,8 @@ export interface PopoverProps {
 
 /**
  * A floating panel in a portal (so the sidebar or title bar doesn't clip it), kept inside the
- * window. Closes on Escape and on a pointer press outside it.
+ * window by floating-ui: it flips to the other side of its anchor or shifts along it when there is
+ * no room, also when its content grows after it opened. Closes on Escape and on a pointer press outside it.
  */
 export function Popover(props: PopoverProps) {
   const [position, setPosition] = createSignal({ left: -9999, top: -9999 });
@@ -72,8 +81,28 @@ export function Popover(props: PopoverProps) {
   onMount(() => {
     if (!panel) return;
     openPanels.push(panel);
-    const rect = panel.getBoundingClientRect();
-    setPosition(place(props.anchor, rect.width, rect.height));
+    const element = panel;
+    const how = placement(props.anchor);
+    // Placed again whenever the panel changes size (a list filling in after it opened), so it
+    // flips or shifts to stay inside the window.
+    const stop = autoUpdate(how.reference, element, () => {
+      void computePosition(how.reference, element, {
+        placement: how.placement,
+        strategy: "fixed",
+        middleware: [
+          offset(how.offset),
+          flip({ padding: MARGIN }),
+          shift({ padding: MARGIN, crossAxis: true }),
+          size({
+            padding: MARGIN,
+            apply({ availableHeight }) {
+              element.style.setProperty("--qk-popover-room", `${Math.max(0, availableHeight)}px`);
+            },
+          }),
+        ],
+      }).then(({ x, y }) => setPosition({ left: x, top: y }));
+    });
+    onCleanup(stop);
   });
 
   function onPointerDown(event: PointerEvent) {

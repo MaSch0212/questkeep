@@ -23,6 +23,21 @@ export function rankMatches(games: readonly Game[], search: string): Game[] {
     .slice(0, COMMAND_RESULTS);
 }
 
+/**
+ * An action the command bar offers next to the games: an app command, or an action script of
+ * the game that is selected ("Run: …").
+ */
+export type AppCommand =
+  | { id: "notifications"; label: string }
+  | { id: "script"; label: string; scriptId: string; gameId: string };
+
+/** The commands whose label contains the search (none for an empty search). */
+export function matchCommands(commands: readonly AppCommand[], search: string): AppCommand[] {
+  const needle = search.trim().toLowerCase();
+  if (needle === "") return [];
+  return commands.filter((command) => command.label.toLowerCase().includes(needle));
+}
+
 /** A name split around the first case-insensitive match, for highlighting. */
 export function splitMatch(
   name: string,

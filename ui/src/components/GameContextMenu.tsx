@@ -27,6 +27,8 @@ import {
 import { translator } from "../i18n";
 import { shellMenus } from "../i18n/shellMenus";
 import { launchProfiles } from "../lib/api";
+import { scriptsText } from "../i18n/scripts";
+import { createGameActions, runAction } from "../lib/gameActions";
 import { launcherPageCopies, playCopy } from "../lib/copies";
 import { store } from "../lib/store";
 import { CombinePicker } from "./CombinePicker";
@@ -35,9 +37,11 @@ import { EditGameDialog } from "./EditGameDialog";
 import { extensionEntries } from "./ExtensionIcon";
 import { Menu, type MenuEntry } from "./Menu";
 import type { PopoverAnchor } from "./Popover";
+import { ScriptIcon } from "./ScriptIcon";
 import { SourceIcon, sourceName } from "./SourceIcon";
 
 const tr = translator(shellMenus);
+const trScripts = translator(scriptsText);
 
 type Step = "menu" | "edit" | "combine" | "uninstall" | "remove";
 
@@ -73,6 +77,7 @@ export function GameContextMenu(props: {
         .catch(() => null),
   );
 
+  const actions = createGameActions(() => props.game.id);
   const running = () => store.isRunning(game().id);
   const uninstallCopy = () => {
     const copy = playCopy(game());
@@ -179,6 +184,20 @@ export function GameContextMenu(props: {
         ]),
     { kind: "submenu", label: tr("categories"), entries: categoryEntries },
     { label: tr("edit"), icon: iconOf(Pencil), hint: "F2", onSelect: () => setStep("edit") },
+    ...(actions().length === 0
+      ? []
+      : [
+          {
+            kind: "submenu" as const,
+            label: trScripts("actions"),
+            entries: (): MenuEntry[] =>
+              actions().map((script) => ({
+                label: script.name,
+                icon: () => <ScriptIcon name={script.icon} />,
+                onSelect: () => void runAction(script, game().id),
+              })),
+          },
+        ]),
     { kind: "separator" },
     {
       label: tr("refreshMetadata"),

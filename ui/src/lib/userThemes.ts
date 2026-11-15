@@ -391,7 +391,7 @@ export function variableGroup(name: string): VariableGroup {
   if (rest.startsWith("color-")) {
     const color = rest.slice("color-".length);
     if (/^(accent|group-band|edited-border)/.test(color)) return "accent";
-    if (color.startsWith("text")) return "text";
+    if (color.startsWith("text") || color.startsWith("ansi")) return "text";
     if (/^(bg|surface|border|scrollbar|cursor)/.test(color)) return "surfaces";
     if (/^(danger|success|warn|star|running|play|close-hover)/.test(color)) return "status";
     if (/^(series|heat|drive|ttb)/.test(color)) return "charts";

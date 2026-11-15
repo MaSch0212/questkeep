@@ -7,6 +7,7 @@ mod edit;
 mod game;
 mod metadata;
 mod query;
+mod script;
 mod sorting;
 mod start;
 mod sync;
@@ -19,6 +20,7 @@ pub use edit::*;
 pub use game::*;
 pub use metadata::*;
 pub use query::*;
+pub use script::*;
 pub(crate) use sorting::numbers_as_digits;
 pub use sorting::{
     DEFAULT_PREFIXES, display_name_from_path, set_ignored_prefixes, sorting_name, sorting_name_with,

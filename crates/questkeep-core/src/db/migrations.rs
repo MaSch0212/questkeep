@@ -418,6 +418,30 @@ pub(crate) const MIGRATIONS: &[&str] = &[
     r#"
     ALTER TABLE categories ADD COLUMN auto_filter TEXT;
     "#,
+    // 18: game scripts. `game_id` set: the entry's own script; else global, limited to games
+    // matching `filter` (a `GameQuery`) when set. `spec` is the `ScriptSpec` JSON (inline script
+    // text lives in files). `script_slots` is where the games' own scripts run in the global pre
+    // and post order; `script_opt_outs` lists entries that skip global scripts.
+    r#"
+    CREATE TABLE scripts (
+        id       TEXT PRIMARY KEY,
+        name     TEXT NOT NULL,
+        kind     TEXT NOT NULL,
+        enabled  INTEGER NOT NULL DEFAULT 1,
+        game_id  TEXT REFERENCES games (id) ON DELETE CASCADE,
+        filter   TEXT,
+        position INTEGER NOT NULL DEFAULT 0,
+        spec     TEXT NOT NULL
+    );
+    CREATE INDEX scripts_game ON scripts (game_id);
+    CREATE TABLE script_slots (
+        kind     TEXT PRIMARY KEY,
+        position INTEGER NOT NULL
+    );
+    CREATE TABLE script_opt_outs (
+        game_id TEXT PRIMARY KEY REFERENCES games (id) ON DELETE CASCADE
+    );
+    "#,
 ];
 
 /// Latest schema version this build knows.

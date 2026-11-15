@@ -400,6 +400,18 @@ impl LibraryProvider for EaProvider {
         Some(PlayAction::file(exe.to_string_lossy()))
     }
 
+    /// The client as a running program and how to close it (only when it is installed).
+    fn launcher_process(&self) -> Option<questkeep_store_api::model::LauncherProcess> {
+        use questkeep_store_api::model::{ActionKind, LauncherClose, LauncherProcess};
+        self.launcher().filter(|a| a.kind == ActionKind::File)?;
+        Some(LauncherProcess {
+            process_names: vec!["EADesktop.exe".into()],
+            close: LauncherClose::CloseWindows {
+                process_names: Vec::new(),
+            },
+        })
+    }
+
     /// Hands the install to the EA app (`origin2://`), which asks where to put the game.
     fn install_action(&self, source_game_id: &str) -> Option<PlayAction> {
         let plain = !source_game_id.is_empty()
@@ -445,6 +457,15 @@ mod tests {
     #[test]
     fn launcher_is_none_without_the_live_system() {
         assert!(EaProvider::with_entries(Vec::new()).launcher().is_none());
+    }
+
+    #[test]
+    fn launcher_process_is_none_without_the_launcher() {
+        assert!(
+            EaProvider::with_entries(Vec::new())
+                .launcher_process()
+                .is_none()
+        );
     }
 
     const DAI: &str = r#"<?xml version="1.0" encoding="utf-8"?>

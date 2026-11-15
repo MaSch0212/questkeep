@@ -32,6 +32,12 @@ function makeSettings(overrides: Partial<Settings> = {}): Settings {
     minimizeToTray: false,
     startWithSystem: false,
     startMinimized: true,
+    windowOnGameStart: "nothing",
+    restoreWindowAfterGame: false,
+    launcherClose: {},
+    launcherCloseDelaySeconds: 60,
+    launcherCloseMinMinutes: 2,
+    systemNotifications: true,
     detectExternalLaunches: true,
     showStartPage: true,
     showStatistics: true,
@@ -275,6 +281,12 @@ describe("SettingsPage", () => {
         minimizeToTray: false,
         startWithSystem: false,
         startMinimized: true,
+        windowOnGameStart: "nothing",
+        restoreWindowAfterGame: false,
+        launcherClose: {},
+        launcherCloseDelaySeconds: 60,
+        launcherCloseMinMinutes: 2,
+        systemNotifications: true,
         detectExternalLaunches: true,
         showStartPage: true,
         showStatistics: true,
@@ -323,6 +335,7 @@ describe("GOG Galaxy launch option", () => {
         canScanOwned: false,
         canUninstall: true,
         launcherPages: false,
+        launcherClose: null,
         shopUrl: null,
         installed: true,
         syncable: true,
@@ -367,6 +380,7 @@ describe("GOG Galaxy launch option", () => {
         canScanOwned: true,
         canUninstall: true,
         launcherPages: false,
+        launcherClose: null,
         shopUrl: null,
         installed: true,
         syncable: true,
@@ -402,6 +416,7 @@ describe("GOG Galaxy launch option", () => {
         canScanOwned: true,
         canUninstall: true,
         launcherPages: false,
+        launcherClose: null,
         shopUrl: null,
         installed: true,
         syncable: true,
@@ -431,5 +446,116 @@ describe("GOG Galaxy launch option", () => {
     render(() => <SettingsPage />);
     await screen.findByText("Close to the tray instead of quitting");
     expect(screen.queryByText("Launch GOG games through GOG Galaxy")).toBeNull();
+  });
+});
+
+const savedSettings = () => vi.mocked(api.saveSettings).mock.calls.at(-1)?.[0];
+
+describe("Launch automation settings", () => {
+  it("sets what happens to the window when a game starts", async () => {
+    render(() => <SettingsPage />);
+    const group = await screen.findByRole("radiogroup", { name: "When a game starts" });
+    const restore = screen.getByRole("checkbox", {
+      name: "Bring Questkeep back when the game closes",
+    });
+    // Nothing happens to the window, so there is nothing to bring back.
+    expect(within(group).getByRole("radio", { name: "Do nothing" })).toBeChecked();
+    expect(restore).toBeDisabled();
+
+    await fireEvent.click(within(group).getByRole("radio", { name: "Hide Questkeep to the tray" }));
+    await waitFor(() => expect(savedSettings()?.windowOnGameStart).toBe("hideToTray"));
+    expect(restore).toBeEnabled();
+
+    fireEvent.change(restore, { target: { checked: true } });
+    await waitFor(() => expect(savedSettings()?.restoreWindowAfterGame).toBe(true));
+  });
+
+  it("saves the launcher delays as whole numbers and keeps the old value for bad input", async () => {
+    render(() => <SettingsPage />);
+    const delay = await screen.findByLabelText("Wait before closing store launchers");
+    const minimum = screen.getByLabelText("Don't close launchers after sessions shorter than");
+    expect(delay).toHaveValue(60);
+    expect(minimum).toHaveValue(2);
+
+    fireEvent.change(delay, { target: { value: "90" } });
+    await waitFor(() => expect(savedSettings()?.launcherCloseDelaySeconds).toBe(90));
+    fireEvent.change(minimum, { target: { value: "5" } });
+    await waitFor(() => expect(savedSettings()?.launcherCloseMinMinutes).toBe(5));
+
+    vi.mocked(api.saveSettings).mockClear();
+    fireEvent.change(delay, { target: { value: "-4" } });
+    expect(api.saveSettings).not.toHaveBeenCalled();
+    expect(delay).toHaveValue(90);
+  });
+
+  it("turns system notifications off", async () => {
+    render(() => <SettingsPage />);
+    const box = await screen.findByRole("checkbox", {
+      name: "Show system notifications while Questkeep is in the background",
+    });
+    expect(box).toBeChecked();
+    fireEvent.change(box, { target: { checked: false } });
+    await waitFor(() => expect(savedSettings()?.systemNotifications).toBe(false));
+  });
+
+  it("offers closing the launcher only for stores that have one", async () => {
+    vi.mocked(api.listProviders).mockResolvedValue([
+      makeProvider({
+        id: "steam",
+        name: "Steam",
+        launcherClose: {
+          command: {
+            kind: "file",
+            target: "steam.exe",
+            args: "-shutdown",
+            workingDir: null,
+            tracking: "default",
+            trackingPath: null,
+          },
+        },
+      }),
+      makeProvider({ id: "epic", name: "Epic Games", launcherClose: "forceQuit" }),
+      makeProvider({ id: "prism", name: "Prism Launcher" }),
+    ]);
+    await store.loadProviders();
+    render(() => <SettingsPage />);
+
+    const steam = await screen.findByRole("group", { name: "Steam" });
+    await fireEvent.click(within(steam).getByRole("button", { name: "Steam settings" }));
+    const choice = within(steam).getByRole("radiogroup", { name: "Close Steam after playing" });
+    expect(within(choice).getByRole("radio", { name: "Never" })).toBeChecked();
+    expect(
+      within(steam).getByText(/asked to shut down cleanly 60 s after the game closes/),
+    ).toBeInTheDocument();
+
+    await fireEvent.click(
+      within(choice).getByRole("radio", {
+        name: "Only if it wasn't running when the game started",
+      }),
+    );
+    await waitFor(() =>
+      expect(savedSettings()?.launcherClose).toEqual({ steam: "ifStartedByGame" }),
+    );
+    expect(within(choice).getByRole("radio", { name: /Only if it wasn't/ })).toBeChecked();
+
+    const epic = screen.getByRole("group", { name: "Epic Games" });
+    await fireEvent.click(within(epic).getByRole("button", { name: "Epic Games settings" }));
+    expect(within(epic).getByText(/closed by force/)).toBeInTheDocument();
+    await fireEvent.click(
+      within(
+        within(epic).getByRole("radiogroup", { name: "Close Epic Games after playing" }),
+      ).getByRole("radio", { name: "Always" }),
+    );
+    await waitFor(() =>
+      expect(savedSettings()?.launcherClose).toEqual({ steam: "ifStartedByGame", epic: "always" }),
+    );
+
+    // Choosing Never again removes the entry.
+    await fireEvent.click(within(choice).getByRole("radio", { name: "Never" }));
+    await waitFor(() => expect(savedSettings()?.launcherClose).toEqual({ epic: "always" }));
+
+    // Prism has no launcher to close: no row to expand.
+    const prism = screen.queryByRole("group", { name: "Prism Launcher" });
+    expect(prism ? within(prism).queryByRole("radiogroup") : null).toBeNull();
   });
 });

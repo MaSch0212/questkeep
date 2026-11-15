@@ -39,6 +39,9 @@ pub struct ProviderInfo {
     pub add_game_options: Vec<AddGameOption>,
     /// The store's own settings (see [`LibraryProvider::settings`]).
     pub settings: StoreSettings,
+    /// How the store's launcher is closed after playing, when it can be (see
+    /// [`LibraryProvider::launcher_process`]); `None` hides the setting.
+    pub launcher_close: Option<questkeep_store_api::model::LauncherClose>,
 }
 
 type ProviderMap = BTreeMap<String, Arc<dyn LibraryProvider>>;
@@ -141,6 +144,7 @@ impl ProviderRegistry {
                         Vec::new()
                     },
                     settings: p.settings(),
+                    launcher_close: p.launcher_process().map(|l| l.close),
                 }
             })
             .collect()
@@ -195,6 +199,7 @@ mod tests {
                 syncable: false,
                 add_game_options: Vec::new(),
                 settings: StoreSettings::default(),
+                launcher_close: None,
             }]
         );
         assert!(matches!(

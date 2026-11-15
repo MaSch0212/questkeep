@@ -2,10 +2,12 @@
 import type { Appearance } from "./Appearance";
 import type { BackupSettings } from "./BackupSettings";
 import type { GroupMerge } from "./GroupMerge";
+import type { LauncherClosePolicy } from "./LauncherClosePolicy";
 import type { MetadataPriority } from "./MetadataPriority";
 import type { PriceSite } from "./PriceSite";
 import type { SortPrefixes } from "./SortPrefixes";
 import type { StartupPage } from "./StartupPage";
+import type { WindowOnGameStart } from "./WindowOnGameStart";
 
 export type Settings = { 
 /**
@@ -116,4 +118,29 @@ appearance: Appearance,
  * Groups shown as one, per grouping field (the `GroupBy` value, e.g. `genre`): every view
  * grouped by that field shows them combined.
  */
-groupMerges: { [key in string]: Array<GroupMerge> }, };
+groupMerges: { [key in string]: Array<GroupMerge> }, 
+/**
+ * What happens to the window when a game started from Questkeep is running.
+ */
+windowOnGameStart: WindowOnGameStart, 
+/**
+ * Bring the window back when the last game started from Questkeep closes.
+ */
+restoreWindowAfterGame: boolean, 
+/**
+ * Whether to close each store's launcher after playing, by store id (missing: never).
+ */
+launcherClose: { [key in string]: LauncherClosePolicy }, 
+/**
+ * Seconds to wait after a game closes before its store's launcher is closed.
+ */
+launcherCloseDelaySeconds: number, 
+/**
+ * Sessions shorter than this many minutes never close a launcher.
+ */
+launcherCloseMinMinutes: number, 
+/**
+ * Errors and warnings also show as system notifications while the window is minimized or
+ * hidden in the tray.
+ */
+systemNotifications: boolean, };

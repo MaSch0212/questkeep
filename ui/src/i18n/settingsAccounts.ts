@@ -60,6 +60,16 @@ const en = {
   griddbSaved: "SteamGridDB key saved",
   igdbRemoved: "IGDB credentials removed",
   igdbSaved: "IGDB credentials saved",
+  closeAfterPlaying: "Close {name} after playing",
+  closeNever: "Never",
+  closeAlways: "Always",
+  closeIfStarted: "Only if it wasn't running when the game started",
+  closeHintCommand:
+    "{name} is asked to shut down cleanly {seconds} s after the game closes (General › After playing). Never closed while another {name} game runs.",
+  closeHintWindows:
+    "{name} is asked to close; if it is still running after 2 minutes, it is ended by force. Never closed while another {name} game runs.",
+  closeHintForce:
+    "{name} has no clean way to quit, so it is closed by force. Never closed while another {name} game runs.",
 };
 
 /** Settings → Stores and accounts, credentials forms, account state and saved-key toasts. */
@@ -123,6 +133,16 @@ export const settingsAccounts: Translations<typeof en> = {
     griddbSaved: "SteamGridDB-Schlüssel gespeichert",
     igdbRemoved: "IGDB-Zugangsdaten entfernt",
     igdbSaved: "IGDB-Zugangsdaten gespeichert",
+    closeAfterPlaying: "{name} nach dem Spielen schließen",
+    closeNever: "Nie",
+    closeAlways: "Immer",
+    closeIfStarted: "Nur, wenn es beim Spielstart nicht lief",
+    closeHintCommand:
+      "{name} wird {seconds} s nach dem Ende des Spiels gebeten, sich sauber zu beenden (Allgemein › Nach dem Spielen). Wird nie geschlossen, solange ein anderes {name}-Spiel läuft.",
+    closeHintWindows:
+      "{name} wird gebeten, sich zu schließen; läuft es nach 2 Minuten noch, wird es zwangsweise beendet. Wird nie geschlossen, solange ein anderes {name}-Spiel läuft.",
+    closeHintForce:
+      "{name} lässt sich nicht sauber beenden und wird deshalb zwangsweise geschlossen. Wird nie geschlossen, solange ein anderes {name}-Spiel läuft.",
   },
   fr: {
     loading: "Chargement…",
@@ -182,6 +202,16 @@ export const settingsAccounts: Translations<typeof en> = {
     griddbSaved: "Clé SteamGridDB enregistrée",
     igdbRemoved: "Identifiants IGDB supprimés",
     igdbSaved: "Identifiants IGDB enregistrés",
+    closeAfterPlaying: "Fermer {name} après la partie",
+    closeNever: "Jamais",
+    closeAlways: "Toujours",
+    closeIfStarted: "Seulement s'il ne tournait pas au lancement du jeu",
+    closeHintCommand:
+      "{name} reçoit la demande de s'arrêter proprement {seconds} s après la fermeture du jeu (Général › Après la partie). Jamais fermé tant qu'un autre jeu {name} tourne.",
+    closeHintWindows:
+      "{name} reçoit la demande de se fermer ; s'il tourne encore après 2 minutes, il est arrêté de force. Jamais fermé tant qu'un autre jeu {name} tourne.",
+    closeHintForce:
+      "{name} n'a pas de moyen propre de quitter, il est donc fermé de force. Jamais fermé tant qu'un autre jeu {name} tourne.",
   },
   it: {
     loading: "Caricamento…",
@@ -241,6 +271,16 @@ export const settingsAccounts: Translations<typeof en> = {
     griddbSaved: "Chiave di SteamGridDB salvata",
     igdbRemoved: "Credenziali IGDB rimosse",
     igdbSaved: "Credenziali IGDB salvate",
+    closeAfterPlaying: "Chiudi {name} dopo aver giocato",
+    closeNever: "Mai",
+    closeAlways: "Sempre",
+    closeIfStarted: "Solo se non era in esecuzione all'avvio del gioco",
+    closeHintCommand:
+      "A {name} viene chiesto di chiudersi correttamente {seconds} s dopo la chiusura del gioco (Generali › Dopo aver giocato). Non viene mai chiuso mentre è in corso un altro gioco di {name}.",
+    closeHintWindows:
+      "A {name} viene chiesto di chiudersi; se dopo 2 minuti è ancora in esecuzione, viene terminato forzatamente. Non viene mai chiuso mentre è in corso un altro gioco di {name}.",
+    closeHintForce:
+      "{name} non ha un modo pulito per uscire, quindi viene chiuso forzatamente. Non viene mai chiuso mentre è in corso un altro gioco di {name}.",
   },
   es: {
     loading: "Cargando…",
@@ -299,6 +339,16 @@ export const settingsAccounts: Translations<typeof en> = {
     griddbSaved: "Clave de SteamGridDB guardada",
     igdbRemoved: "Credenciales de IGDB quitadas",
     igdbSaved: "Credenciales de IGDB guardadas",
+    closeAfterPlaying: "Cerrar {name} después de jugar",
+    closeNever: "Nunca",
+    closeAlways: "Siempre",
+    closeIfStarted: "Solo si no estaba en marcha al iniciar el juego",
+    closeHintCommand:
+      "A {name} se le pide que se cierre con normalidad {seconds} s después de cerrarse el juego (General › Después de jugar). Nunca se cierra mientras se ejecuta otro juego de {name}.",
+    closeHintWindows:
+      "A {name} se le pide que se cierre; si sigue en marcha tras 2 minutos, se finaliza a la fuerza. Nunca se cierra mientras se ejecuta otro juego de {name}.",
+    closeHintForce:
+      "{name} no tiene una forma limpia de salir, así que se cierra a la fuerza. Nunca se cierra mientras se ejecuta otro juego de {name}.",
   },
   pt: {
     loading: "Carregando…",
@@ -357,5 +407,15 @@ export const settingsAccounts: Translations<typeof en> = {
     griddbSaved: "Chave do SteamGridDB salva",
     igdbRemoved: "Credenciais do IGDB removidas",
     igdbSaved: "Credenciais do IGDB salvas",
+    closeAfterPlaying: "Fechar {name} depois de jogar",
+    closeNever: "Nunca",
+    closeAlways: "Sempre",
+    closeIfStarted: "Só se não estava a correr quando o jogo iniciou",
+    closeHintCommand:
+      "É pedido a {name} que se feche normalmente {seconds} s depois de o jogo fechar (Geral › Depois de jogar). Nunca é fechado enquanto outro jogo de {name} estiver a correr.",
+    closeHintWindows:
+      "É pedido a {name} que se feche; se ainda estiver a correr após 2 minutos, é terminado à força. Nunca é fechado enquanto outro jogo de {name} estiver a correr.",
+    closeHintForce:
+      "{name} não tem uma forma limpa de sair, por isso é fechado à força. Nunca é fechado enquanto outro jogo de {name} estiver a correr.",
   },
 };

@@ -40,6 +40,23 @@
   --qk-color-success-soft: #1c3529;
   --qk-color-star: #ffd166;
   --qk-color-running: #6fd6a0;
+  /* The 16 terminal colors of script output (ANSI escape codes). */
+  --qk-color-ansi-black: #5c6370;
+  --qk-color-ansi-red: #ff7a85;
+  --qk-color-ansi-green: #6fd6a0;
+  --qk-color-ansi-yellow: #e5c07b;
+  --qk-color-ansi-blue: #61afef;
+  --qk-color-ansi-magenta: #c678dd;
+  --qk-color-ansi-cyan: #56b6c2;
+  --qk-color-ansi-white: #c8ccd4;
+  --qk-color-ansi-bright-black: #7f848e;
+  --qk-color-ansi-bright-red: #ff9aa3;
+  --qk-color-ansi-bright-green: #98e8bd;
+  --qk-color-ansi-bright-yellow: #f0d197;
+  --qk-color-ansi-bright-blue: #8cc8ff;
+  --qk-color-ansi-bright-magenta: #dc9cf0;
+  --qk-color-ansi-bright-cyan: #7fd3dd;
+  --qk-color-ansi-bright-white: #ffffff;
   --qk-color-backdrop: #05060acc;
   --qk-color-quick-bg: #0b0d12e6;
   --qk-color-cover-bg: #0d0f13;
@@ -120,6 +137,23 @@
   --qk-color-success-soft: #dff3e8;
   --qk-color-star: #b87800;
   --qk-color-running: #1e7d4f;
+  /* The 16 terminal colors of script output (ANSI escape codes). */
+  --qk-color-ansi-black: #1f2328;
+  --qk-color-ansi-red: #c9283a;
+  --qk-color-ansi-green: #1e7d4f;
+  --qk-color-ansi-yellow: #8a6100;
+  --qk-color-ansi-blue: #0b5cad;
+  --qk-color-ansi-magenta: #8a3ab9;
+  --qk-color-ansi-cyan: #0f7a87;
+  --qk-color-ansi-white: #6e7781;
+  --qk-color-ansi-bright-black: #57606a;
+  --qk-color-ansi-bright-red: #e0485a;
+  --qk-color-ansi-bright-green: #2a9d63;
+  --qk-color-ansi-bright-yellow: #a77700;
+  --qk-color-ansi-bright-blue: #2f7bd4;
+  --qk-color-ansi-bright-magenta: #a855d6;
+  --qk-color-ansi-bright-cyan: #1797a6;
+  --qk-color-ansi-bright-white: #8c959f;
   --qk-color-backdrop: #20242e73;
   --qk-color-quick-bg: #ffffffe6;
   --qk-color-cover-bg: #dde1e8;
@@ -416,6 +450,10 @@
   --qk-titlebar-tool-width: 34px;
   --qk-titlebar-tool-height: 30px;
   --qk-titlebar-dot-size: 6px;
+  /* Notification bell: the popover's width and height limit, the level dot. */
+  --qk-notif-width: 400px;
+  --qk-notif-max-height: 480px;
+  --qk-notif-dot-size: 8px;
   --qk-command-width: 420px;
   /* Narrower than this, the title bar shows a button that opens the command bar as a popup. */
   --qk-command-min-width: 200px;
@@ -443,6 +481,9 @@
   --qk-picker-list-height: 340px;
   --qk-picker-check-size: 14px;
   --qk-picker-check-icon: 10px;
+  --qk-run-output-width: 600px;
+  --qk-run-output-height: 320px;
+  --qk-ansi-dim-opacity: 0.7;
   --qk-pill-height: 26px;
   --qk-source-order-width: 460px;
   --qk-source-nav-width: 200px;
@@ -474,6 +515,14 @@
   --qk-category-picker-width: 280px;
   --qk-combine-picker-width: 340px;
   --qk-dialog-wide-width: 900px;
+  --qk-script-vars-width: 260px;
+  --qk-script-switch-width: 30px;
+  --qk-script-switch-height: 16px;
+  --qk-script-editor-height: 260px;
+  --qk-script-icon-cell: 32px;
+  --qk-script-number-width: 90px;
+  --qk-script-runtime-width: 240px;
+  --qk-script-vars-height: 360px;
   --qk-setup-width: 640px;
   --qk-setup-content-height: 480px;
   --qk-setup-dot-width: 28px;

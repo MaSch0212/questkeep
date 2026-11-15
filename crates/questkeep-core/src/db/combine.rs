@@ -86,6 +86,12 @@ fn move_user_data(tx: &Transaction<'_>, from: &str, to: &str) -> Result<()> {
         "UPDATE OR IGNORE metadata_sources SET game_id = ?2 WHERE game_id = ?1 AND source = 'user'",
         [from, to],
     )?;
+    // Own scripts; the entry's opt-out of global scripts wins.
+    tx.execute(
+        "UPDATE scripts SET game_id = ?2 WHERE game_id = ?1",
+        [from, to],
+    )?;
+    tx.execute("DELETE FROM script_opt_outs WHERE game_id = ?1", [from])?;
     Ok(())
 }
 

@@ -1,5 +1,6 @@
 import { For, Show } from "solid-js";
 import type { StartupPage } from "../../bindings/StartupPage";
+import type { WindowOnGameStart } from "../../bindings/WindowOnGameStart";
 import { LOCALE_NAMES, LOCALES, resolveLocale, translator } from "../../i18n";
 import { settingsGeneral } from "../../i18n/settingsGeneral";
 import { allViews, shownName } from "../../lib/views";
@@ -14,6 +15,20 @@ const tr = translator(settingsGeneral);
 
 /** The automatic sync's choices, in minutes (0: off). */
 const AUTO_SYNC_MINUTES = [0, 15, 60] as const;
+
+/** What happens to Questkeep's window when a game starts. */
+const ON_GAME_START: readonly [
+  WindowOnGameStart,
+  "onStartNothing" | "onStartMinimize" | "onStartHideToTray",
+][] = [
+  ["nothing", "onStartNothing"],
+  ["minimize", "onStartMinimize"],
+  ["hideToTray", "onStartHideToTray"],
+];
+
+/** The most a launcher is kept open after a game, and the longest session that never closes one. */
+const MAX_CLOSE_DELAY_SECONDS = 3600;
+const MAX_CLOSE_MIN_MINUTES = 600;
 
 /** Check boxes saved as they are; the label is the message with the setting's name. */
 type CheckSetting =
@@ -35,6 +50,19 @@ function startupValue(page: StartupPage): string {
 function startupPage(value: string): StartupPage {
   if (value.startsWith("view:")) return { kind: "view", id: value.slice("view:".length) };
   return value === "last" ? { kind: "last" } : { kind: "start" };
+}
+
+/** Saves a whole number in 0..max from a number input; anything else puts the old value back. */
+function saveWhole(
+  input: HTMLInputElement,
+  previous: number,
+  max: number,
+  save: (value: number) => void,
+) {
+  const value = Math.round(Number(input.value));
+  if (input.value.trim() !== "" && Number.isFinite(value) && value >= 0 && value <= max) {
+    save(value);
+  } else input.value = String(previous);
 }
 
 function CheckOption(props: { model: SettingsModel; option: CheckSetting; checked: boolean }) {
@@ -225,6 +253,121 @@ export function GeneralSection(props: { model: SettingsModel }) {
               option="minimizeToTray"
               checked={current().minimizeToTray}
             />
+          </fieldset>
+          <fieldset class="fieldset settings-group">
+            <legend class="fieldset__legend">{tr("gameStartsGroup")}</legend>
+            <div class="settings-row">
+              <div
+                class="segmented"
+                role="radiogroup"
+                aria-label={tr("gameStartsGroup")}
+                aria-describedby="game-starts-hint"
+              >
+                <For each={ON_GAME_START}>
+                  {([value, label]) => (
+                    <button
+                      type="button"
+                      role="radio"
+                      class="segmented__option"
+                      aria-checked={current().windowOnGameStart === value}
+                      onClick={() => void props.model.update({ windowOnGameStart: value })}
+                    >
+                      {tr(label)}
+                    </button>
+                  )}
+                </For>
+              </div>
+            </div>
+            <label
+              class="check"
+              classList={{ "check--disabled": current().windowOnGameStart === "nothing" }}
+            >
+              <input
+                type="checkbox"
+                checked={current().restoreWindowAfterGame}
+                disabled={current().windowOnGameStart === "nothing"}
+                aria-describedby="restore-window-hint"
+                onChange={(e) =>
+                  void props.model.toggle("restoreWindowAfterGame", e.currentTarget.checked)
+                }
+              />
+              <span>{tr("restoreAfterGame")}</span>
+            </label>
+            <p class="field__hint" id="restore-window-hint">
+              {tr("restoreHint")}
+            </p>
+            <p class="field__hint" id="game-starts-hint">
+              {tr("gameStartsHint")}
+            </p>
+          </fieldset>
+          <fieldset class="fieldset settings-group">
+            <legend class="fieldset__legend">{tr("afterPlayingGroup")}</legend>
+            <div class="settings-row">
+              <label for="close-delay">{tr("closeDelay")}</label>
+              <input
+                id="close-delay"
+                class="input settings-row__number"
+                type="number"
+                min="0"
+                max={MAX_CLOSE_DELAY_SECONDS}
+                aria-describedby="close-delay-hint"
+                value={current().launcherCloseDelaySeconds}
+                onChange={(e) =>
+                  saveWhole(
+                    e.currentTarget,
+                    current().launcherCloseDelaySeconds,
+                    MAX_CLOSE_DELAY_SECONDS,
+                    (launcherCloseDelaySeconds) =>
+                      void props.model.update({ launcherCloseDelaySeconds }),
+                  )
+                }
+              />
+              <span class="field__hint" id="close-delay-hint">
+                {tr("closeDelayUnit")} · {tr("closeDelayHint")}
+              </span>
+            </div>
+            <div class="settings-row">
+              <label for="close-min">{tr("closeMinMinutes")}</label>
+              <input
+                id="close-min"
+                class="input settings-row__number"
+                type="number"
+                min="0"
+                max={MAX_CLOSE_MIN_MINUTES}
+                aria-describedby="close-min-unit"
+                value={current().launcherCloseMinMinutes}
+                onChange={(e) =>
+                  saveWhole(
+                    e.currentTarget,
+                    current().launcherCloseMinMinutes,
+                    MAX_CLOSE_MIN_MINUTES,
+                    (launcherCloseMinMinutes) =>
+                      void props.model.update({ launcherCloseMinMinutes }),
+                  )
+                }
+              />
+              <span class="field__hint" id="close-min-unit">
+                {tr("closeMinUnit")}
+              </span>
+            </div>
+            <p class="field__hint">{tr("afterPlayingHint")}</p>
+          </fieldset>
+          <fieldset class="fieldset settings-group">
+            <legend class="fieldset__legend">{tr("notificationsGroup")}</legend>
+            <label class="check">
+              <input
+                type="checkbox"
+                checked={current().systemNotifications}
+                aria-describedby="system-notifications-hint"
+                onChange={(e) =>
+                  void props.model.toggle("systemNotifications", e.currentTarget.checked)
+                }
+              />
+              <span>{tr("systemNotifications")}</span>
+            </label>
+            <p class="field__hint" id="system-notifications-hint">
+              {tr("systemNotificationsHint")}
+            </p>
           </fieldset>
         </>
       )}

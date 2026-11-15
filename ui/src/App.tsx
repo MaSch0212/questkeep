@@ -16,6 +16,7 @@ import { DuplicatesDialog } from "./components/DuplicatesDialog";
 import { GroupMergeDialog } from "./components/GroupMergeDialog";
 import { GroupMergesDialog } from "./components/GroupMergesDialog";
 import { ExtensionDialogs } from "./components/ExtensionDialogs";
+import { ScriptEditorHost } from "./components/ScriptEditorHost";
 import { FirstRunDialog } from "./components/FirstRunDialog";
 import { CombineDialog } from "./components/CombineDialog";
 import { GameContextMenu } from "./components/GameContextMenu";
@@ -143,6 +144,11 @@ export function App() {
 
   function onKeyDown(event: KeyboardEvent) {
     if (adding()) return;
+    if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === "n") {
+      event.preventDefault();
+      store.showNotifications();
+      return;
+    }
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
       event.preventDefault();
       commandBar?.focus();
@@ -356,6 +362,7 @@ export function App() {
       <Show when={store.setup()?.showSetup}>
         <FirstRunDialog />
       </Show>
+      <Show when={store.scriptEditorId()}>{(id) => <ScriptEditorHost id={id()} />}</Show>
       <ExtensionDialogs />
       <Show when={themeEditor.isOpen()}>
         <ThemeEditor />

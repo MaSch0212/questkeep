@@ -29,6 +29,7 @@ async function loadProviders(canUninstall: boolean, launcherPages = false) {
       canScanOwned: true,
       canUninstall,
       launcherPages,
+      launcherClose: null,
       shopUrl: null,
       installed: true,
       syncable: true,

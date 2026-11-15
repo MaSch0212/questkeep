@@ -1,5 +1,6 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { openPath as openerOpenPath } from "@tauri-apps/plugin-opener";
 import type { AccountStatus } from "../bindings/AccountStatus";
 import type { AccountWarning } from "../bindings/AccountWarning";
 import type { Achievements } from "../bindings/Achievements";
@@ -17,6 +18,9 @@ import type { PlaytimeChart } from "../bindings/PlaytimeChart";
 import type { Statistics } from "../bindings/Statistics";
 import type { CompletionSettings } from "../bindings/CompletionSettings";
 import type { Game } from "../bindings/Game";
+import type { Notification } from "../bindings/Notification";
+import type { NotificationLevel } from "../bindings/NotificationLevel";
+import type { NotificationSource } from "../bindings/NotificationSource";
 import type { GameActivity } from "../bindings/GameActivity";
 import type { GameEditInfo } from "../bindings/GameEditInfo";
 import type { GameEdits } from "../bindings/GameEdits";
@@ -51,6 +55,14 @@ import type { ViewUiState } from "../bindings/ViewUiState";
 import type { ExportedTheme } from "../bindings/ExportedTheme";
 import type { UserTheme } from "../bindings/UserTheme";
 import type { ValueCount } from "../bindings/ValueCount";
+import type { GameScripts } from "../bindings/GameScripts";
+import type { GlobalScripts } from "../bindings/GlobalScripts";
+import type { RuntimeInfo } from "../bindings/RuntimeInfo";
+import type { Script } from "../bindings/Script";
+import type { ScriptInput } from "../bindings/ScriptInput";
+import type { ScriptKind } from "../bindings/ScriptKind";
+import type { ScriptSlot } from "../bindings/ScriptSlot";
+import type { ScriptVariable } from "../bindings/ScriptVariable";
 import type { ViewUpdate } from "../bindings/ViewUpdate";
 
 /** The only module that talks to the Rust core. Every command may reject with a string. */
@@ -351,3 +363,53 @@ export const deleteUserTheme = (id: string) => invoke<void>("delete_user_theme",
 /** Writes a saved user theme as a plugin folder into `targetDir`; resolves to that folder. */
 export const exportUserTheme = (id: string, targetDir: string, exported: ExportedTheme) =>
   invoke<string>("export_user_theme", { id, targetDir, exported });
+
+/** Opens a file or folder with the system's default program. */
+export const openPath = (path: string) => openerOpenPath(path);
+
+// Notifications (the bell). The core records game and sync errors itself.
+/** Newest first. */
+export const notifications = () => invoke<Notification[]>("notifications");
+export const addNotification = (entry: {
+  level: NotificationLevel;
+  source: NotificationSource;
+  title: string;
+  message: string;
+  gameId: string | null;
+}) => invoke<void>("add_notification", entry);
+export const markNotificationsRead = () => invoke<void>("mark_notifications_read");
+export const dismissNotification = (id: string) => invoke<void>("dismiss_notification", { id });
+export const clearNotifications = () => invoke<void>("clear_notifications");
+/** `true` once when a system notification was shown while the window was in the background. */
+export const takeOpenNotifications = () => invoke<boolean>("take_open_notifications");
+
+// Game scripts (pre, post and action scripts). `scriptsChanged` fires after any change.
+export const globalScripts = () => invoke<GlobalScripts>("global_scripts");
+export const gameScripts = (id: string) => invoke<GameScripts>("game_scripts", { id });
+export const getScript = (id: string) => invoke<Script>("get_script", { id });
+/** Creates (`id` null) or replaces a script; an inline script's text is written to its file. */
+export const saveScript = (script: ScriptInput) => invoke<Script>("save_script", { script });
+export const deleteScript = (id: string) => invoke<void>("delete_script", { id });
+export const setScriptEnabled = (id: string, enabled: boolean) =>
+  invoke<void>("set_script_enabled", { id, enabled });
+/** The global pre or post order, with the place of the games' own scripts. */
+export const setScriptOrder = (kind: ScriptKind, order: ScriptSlot[]) =>
+  invoke<void>("set_script_order", { kind, order });
+export const setOwnScriptOrder = (ids: string[]) => invoke<void>("set_own_script_order", { ids });
+export const setRunGlobalScripts = (id: string, run: boolean) =>
+  invoke<void>("set_run_global_scripts", { id, run });
+/** The runtimes installed on this PC (`refresh` looks again). */
+export const scriptRuntimes = (refresh = false) =>
+  invoke<RuntimeInfo[]>("script_runtimes", { refresh });
+/** The variables a script of `kind` gets, with their values for a game. */
+export const scriptVariables = (gameId: string, kind: ScriptKind) =>
+  invoke<ScriptVariable[]>("script_variables", { id: gameId, kind });
+export const readScriptFile = (path: string) => invoke<string>("read_script_file", { path });
+/** Runs a saved script for a game now (an action's button, "Run now"). */
+export const runScript = (id: string, gameId: string) => invoke<void>("run_script", { id, gameId });
+/** Runs a script as edited, before it is saved. */
+/** Runs a script from the script dialog; its output and end arrive as core events tagged `run`. */
+export const runScriptDraft = (script: ScriptInput, gameId: string, run: string) =>
+  invoke<void>("run_script_draft", { script, gameId, run });
+/** Stops a run from the script dialog; false when it already ended. */
+export const stopScriptRun = (run: string) => invoke<boolean>("stop_script_run", { run });

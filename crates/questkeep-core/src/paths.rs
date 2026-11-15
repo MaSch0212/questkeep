@@ -110,6 +110,21 @@ impl DataPaths {
         self.root.join("resume.json")
     }
 
+    /// Errors and warnings kept for the notification bell (see [`crate::notifications`]).
+    pub fn notifications_file(&self) -> PathBuf {
+        self.root.join("notifications.json")
+    }
+
+    /// Script files of game scripts written in Questkeep or imported (see [`crate::scripts`]).
+    pub fn scripts_dir(&self) -> PathBuf {
+        self.root.join("scripts")
+    }
+
+    /// Output of script runs, one file per run, the newest kept.
+    pub fn script_logs_dir(&self) -> PathBuf {
+        self.logs_dir().join("scripts")
+    }
+
     /// Turns a path stored relative to the data root into an absolute path.
     pub fn absolute(&self, relative: &str) -> PathBuf {
         self.root.join(relative)

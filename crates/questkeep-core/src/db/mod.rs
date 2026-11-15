@@ -11,6 +11,7 @@ pub mod migrations;
 mod playtime;
 pub use migrations::LATEST_VERSION;
 mod profiles;
+mod scripts;
 mod sessions;
 mod setup;
 mod start;

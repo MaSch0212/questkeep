@@ -27,7 +27,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::model::{AddGameOption, PlayAction};
+use crate::model::{AddGameOption, LauncherProcess, PlayAction};
 use crate::settings::StoreSettings;
 
 /// The provider methods that reach the plugin through `call`. Everything else is answered by the
@@ -157,6 +157,7 @@ pub struct ProviderDescriptor {
     pub has_launcher_pages: bool,
     pub shop_url: Option<String>,
     pub launcher: Option<PlayAction>,
+    pub launcher_process: Option<LauncherProcess>,
     pub installed: bool,
     pub settings: StoreSettings,
     pub add_game_options: Vec<AddGameOption>,

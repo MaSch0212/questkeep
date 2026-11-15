@@ -1348,3 +1348,228 @@ pub async fn export_user_theme(
     })
     .await
 }
+
+/// The notification bell's entries, newest first.
+#[tauri::command]
+pub fn notifications(
+    state: State<'_, Arc<AppState>>,
+) -> Vec<questkeep_core::notifications::Notification> {
+    state.library.notifications().list()
+}
+
+/// Records an error or warning the UI showed (an error toast), so the bell keeps it.
+#[tauri::command]
+pub fn add_notification(
+    state: State<'_, Arc<AppState>>,
+    level: questkeep_core::notifications::NotificationLevel,
+    source: questkeep_core::notifications::NotificationSource,
+    title: String,
+    message: String,
+    game_id: Option<String>,
+) -> CmdResult<()> {
+    let game_id = game_id
+        .as_deref()
+        .map(parse_id)
+        .transpose()
+        .map_err(|e| e.to_string())?;
+    state
+        .library
+        .notifications()
+        .post(questkeep_core::notifications::NewNotification {
+            level,
+            source,
+            title,
+            message,
+            game_id,
+            action: None,
+        });
+    Ok(())
+}
+
+#[tauri::command]
+pub fn mark_notifications_read(state: State<'_, Arc<AppState>>) {
+    state.library.notifications().mark_all_read();
+}
+
+#[tauri::command]
+pub fn dismiss_notification(state: State<'_, Arc<AppState>>, id: String) -> CmdResult<()> {
+    state
+        .library
+        .notifications()
+        .dismiss(parse_id(&id).map_err(|e| e.to_string())?);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn clear_notifications(state: State<'_, Arc<AppState>>) {
+    state.library.notifications().clear();
+}
+
+/// Whether the UI should open the notification bell now (a system notification was shown while
+/// the window was in the background); answered once.
+#[tauri::command]
+pub fn take_open_notifications(games: State<'_, crate::game_window::GameWindow>) -> bool {
+    games.take_open_bell()
+}
+
+// ----- game scripts -----
+
+use questkeep_core::model::{
+    GameScripts, GlobalScripts, RuntimeInfo, Script, ScriptInput, ScriptKind, ScriptSlot,
+    ScriptVariable,
+};
+
+fn id_arg(id: &str) -> CmdResult<Uuid> {
+    parse_id(id).map_err(|e| e.to_string())
+}
+
+/// Global and filtered scripts with their pre and post order (Settings › Scripts).
+#[tauri::command]
+pub async fn global_scripts(state: State<'_, Arc<AppState>>) -> CmdResult<GlobalScripts> {
+    blocking(state, |s| s.library.scripts().global()).await
+}
+
+/// A game's own scripts and every script that applies to it.
+#[tauri::command]
+pub async fn game_scripts(state: State<'_, Arc<AppState>>, id: String) -> CmdResult<GameScripts> {
+    blocking(state, move |s| s.library.scripts().for_game(parse_id(&id)?)).await
+}
+
+#[tauri::command]
+pub async fn get_script(state: State<'_, Arc<AppState>>, id: String) -> CmdResult<Script> {
+    blocking(state, move |s| s.library.scripts().get(parse_id(&id)?)).await
+}
+
+#[tauri::command]
+pub async fn save_script(
+    state: State<'_, Arc<AppState>>,
+    script: ScriptInput,
+) -> CmdResult<Script> {
+    blocking(state, move |s| s.library.scripts().save(&script)).await
+}
+
+#[tauri::command]
+pub async fn delete_script(state: State<'_, Arc<AppState>>, id: String) -> CmdResult<()> {
+    blocking(state, move |s| s.library.scripts().delete(parse_id(&id)?)).await
+}
+
+#[tauri::command]
+pub async fn set_script_enabled(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    enabled: bool,
+) -> CmdResult<()> {
+    blocking(state, move |s| {
+        s.library.scripts().set_enabled(parse_id(&id)?, enabled)
+    })
+    .await
+}
+
+/// The global pre or post order (with the place of the games' own scripts).
+#[tauri::command]
+pub async fn set_script_order(
+    state: State<'_, Arc<AppState>>,
+    kind: ScriptKind,
+    order: Vec<ScriptSlot>,
+) -> CmdResult<()> {
+    blocking(state, move |s| {
+        s.library.scripts().set_global_order(kind, &order)
+    })
+    .await
+}
+
+/// The order of a game's own scripts.
+#[tauri::command]
+pub async fn set_own_script_order(
+    state: State<'_, Arc<AppState>>,
+    ids: Vec<String>,
+) -> CmdResult<()> {
+    let ids = ids
+        .iter()
+        .map(|i| id_arg(i))
+        .collect::<CmdResult<Vec<_>>>()?;
+    blocking(state, move |s| s.library.scripts().set_own_order(&ids)).await
+}
+
+/// Whether global and filtered scripts run for a game.
+#[tauri::command]
+pub async fn set_run_global_scripts(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    run: bool,
+) -> CmdResult<()> {
+    blocking(state, move |s| {
+        s.library.scripts().set_run_global(parse_id(&id)?, run)
+    })
+    .await
+}
+
+/// The scripting runtimes installed on this PC (`refresh` looks again).
+#[tauri::command]
+pub async fn script_runtimes(
+    state: State<'_, Arc<AppState>>,
+    refresh: bool,
+) -> CmdResult<Vec<RuntimeInfo>> {
+    blocking(state, move |s| Ok(s.library.scripts().runtimes(refresh))).await
+}
+
+/// The variables a script of `kind` gets for a game, with their values now.
+#[tauri::command]
+pub async fn script_variables(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    kind: ScriptKind,
+) -> CmdResult<Vec<ScriptVariable>> {
+    blocking(state, move |s| {
+        s.library.scripts().variables(parse_id(&id)?, kind)
+    })
+    .await
+}
+
+/// The text of a script file, to import it into the editor.
+#[tauri::command]
+pub async fn read_script_file(state: State<'_, Arc<AppState>>, path: String) -> CmdResult<String> {
+    blocking(state, move |s| {
+        s.library.scripts().read_file(std::path::Path::new(&path))
+    })
+    .await
+}
+
+/// Runs a saved script for a game now (an action, or "Run now").
+#[tauri::command]
+pub async fn run_script(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    game_id: String,
+) -> CmdResult<()> {
+    blocking(state, move |s| {
+        s.library
+            .scripts()
+            .run_action(parse_id(&id)?, parse_id(&game_id)?)
+    })
+    .await
+}
+
+/// Runs a script as edited, before it is saved ("Run now" in the script dialog).
+#[tauri::command]
+pub async fn run_script_draft(
+    state: State<'_, Arc<AppState>>,
+    script: ScriptInput,
+    game_id: String,
+    run: String,
+) -> CmdResult<()> {
+    blocking(state, move |s| {
+        s.library
+            .scripts()
+            .run_draft(&script, parse_id(&game_id)?, parse_id(&run)?)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn stop_script_run(state: State<'_, Arc<AppState>>, run: String) -> CmdResult<bool> {
+    blocking(state, move |s| {
+        Ok(s.library.scripts().stop_run(parse_id(&run)?))
+    })
+    .await
+}

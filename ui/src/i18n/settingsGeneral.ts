@@ -32,6 +32,25 @@ const en = {
   ignorePrefixes: "Ignore words at the start of names when sorting",
   wordsToIgnore: "Words to ignore",
   prefixesHint: "“The Witcher” sorts under W. Your own sorting names (Edit game) stay as they are.",
+  gameStartsGroup: "When a game starts",
+  onStartNothing: "Do nothing",
+  onStartMinimize: "Minimize Questkeep",
+  onStartHideToTray: "Hide Questkeep to the tray",
+  restoreAfterGame: "Bring Questkeep back when the game closes",
+  restoreHint: "Without taking focus. With several games running, after the last one closes.",
+  gameStartsHint:
+    "Happens when Questkeep sees the game running, not when you press Play, so a store's sign-in or update prompt isn't hidden behind nothing. Only for games started from Questkeep.",
+  afterPlayingGroup: "After playing",
+  closeDelay: "Wait before closing store launchers",
+  closeDelayUnit: "seconds",
+  closeDelayHint: "Gives cloud saves time to finish.",
+  closeMinMinutes: "Don't close launchers after sessions shorter than",
+  closeMinUnit: "minutes",
+  afterPlayingHint: "Which launchers are closed is set per store in Stores and accounts.",
+  notificationsGroup: "Notifications",
+  systemNotifications: "Show system notifications while Questkeep is in the background",
+  systemNotificationsHint:
+    "Errors and warnings, when the window is minimized or in the tray. They are always kept in the bell.",
 };
 
 /** Settings → General (GeneralSection). */
@@ -72,6 +91,27 @@ export const settingsGeneral: Translations<typeof en> = {
     wordsToIgnore: "Ignorierte Wörter",
     prefixesHint:
       "„The Witcher“ wird unter W einsortiert. Eigene Sortiernamen (Spiel bearbeiten) bleiben, wie sie sind.",
+    gameStartsGroup: "Wenn ein Spiel startet",
+    onStartNothing: "Nichts tun",
+    onStartMinimize: "Questkeep minimieren",
+    onStartHideToTray: "Questkeep im Infobereich verstecken",
+    restoreAfterGame: "Questkeep zurückholen, wenn das Spiel endet",
+    restoreHint:
+      "Ohne den Fokus zu übernehmen. Laufen mehrere Spiele, nachdem das letzte beendet ist.",
+    gameStartsHint:
+      "Geschieht, sobald Questkeep das Spiel laufen sieht, nicht beim Klick auf Spielen, damit eine Anmeldung oder ein Update-Hinweis des Stores nicht verdeckt wird. Nur für Spiele, die aus Questkeep gestartet werden.",
+    afterPlayingGroup: "Nach dem Spielen",
+    closeDelay: "Wartezeit, bevor Store-Launcher geschlossen werden",
+    closeDelayUnit: "Sekunden",
+    closeDelayHint: "Gibt Cloud-Spielständen Zeit zum Abschließen.",
+    closeMinMinutes: "Launcher nicht schließen nach Sitzungen, die kürzer sind als",
+    closeMinUnit: "Minuten",
+    afterPlayingHint:
+      "Welche Launcher geschlossen werden, legst du pro Store unter Stores und Konten fest.",
+    notificationsGroup: "Benachrichtigungen",
+    systemNotifications: "Systembenachrichtigungen zeigen, solange Questkeep im Hintergrund ist",
+    systemNotificationsHint:
+      "Fehler und Warnungen, wenn das Fenster minimiert oder im Infobereich ist. In der Glocke bleiben sie immer erhalten.",
   },
   fr: {
     loading: "Chargement…",
@@ -108,6 +148,27 @@ export const settingsGeneral: Translations<typeof en> = {
     wordsToIgnore: "Mots à ignorer",
     prefixesHint:
       "« The Witcher » est classé sous W. Vos propres noms de tri (Modifier le jeu) restent inchangés.",
+    gameStartsGroup: "Au lancement d'un jeu",
+    onStartNothing: "Ne rien faire",
+    onStartMinimize: "Réduire Questkeep",
+    onStartHideToTray: "Masquer Questkeep dans la zone de notification",
+    restoreAfterGame: "Ramener Questkeep quand le jeu se ferme",
+    restoreHint:
+      "Sans prendre le focus. Avec plusieurs jeux ouverts, après la fermeture du dernier.",
+    gameStartsHint:
+      "Cela se produit quand Questkeep voit le jeu en cours d'exécution, pas au clic sur Jouer, afin que la connexion ou la mise à jour d'une boutique ne soit pas masquée. Uniquement pour les jeux lancés depuis Questkeep.",
+    afterPlayingGroup: "Après la partie",
+    closeDelay: "Attendre avant de fermer les lanceurs de boutiques",
+    closeDelayUnit: "secondes",
+    closeDelayHint: "Laisse le temps aux sauvegardes dans le cloud de se terminer.",
+    closeMinMinutes: "Ne pas fermer les lanceurs après des sessions plus courtes que",
+    closeMinUnit: "minutes",
+    afterPlayingHint:
+      "Les lanceurs à fermer se choisissent par boutique dans Boutiques et comptes.",
+    notificationsGroup: "Notifications",
+    systemNotifications: "Afficher les notifications système quand Questkeep est en arrière-plan",
+    systemNotificationsHint:
+      "Erreurs et avertissements, quand la fenêtre est réduite ou dans la zone de notification. Ils restent toujours dans la cloche.",
   },
   it: {
     loading: "Caricamento…",
@@ -143,6 +204,26 @@ export const settingsGeneral: Translations<typeof en> = {
     wordsToIgnore: "Parole da ignorare",
     prefixesHint:
       "“The Witcher” viene ordinato sotto la W. I tuoi nomi di ordinamento (Modifica gioco) restano invariati.",
+    gameStartsGroup: "Quando un gioco si avvia",
+    onStartNothing: "Non fare nulla",
+    onStartMinimize: "Riduci a icona Questkeep",
+    onStartHideToTray: "Nascondi Questkeep nell'area di notifica",
+    restoreAfterGame: "Riporta Questkeep quando il gioco si chiude",
+    restoreHint:
+      "Senza prendere il focus. Con più giochi in esecuzione, dopo la chiusura dell'ultimo.",
+    gameStartsHint:
+      "Avviene quando Questkeep vede il gioco in esecuzione, non quando premi Gioca, così l'accesso o l'aggiornamento di uno store non resta nascosto. Solo per i giochi avviati da Questkeep.",
+    afterPlayingGroup: "Dopo aver giocato",
+    closeDelay: "Attesa prima di chiudere i launcher degli store",
+    closeDelayUnit: "secondi",
+    closeDelayHint: "Dà tempo ai salvataggi nel cloud di terminare.",
+    closeMinMinutes: "Non chiudere i launcher dopo sessioni più brevi di",
+    closeMinUnit: "minuti",
+    afterPlayingHint: "I launcher da chiudere si scelgono per ogni store in Store e account.",
+    notificationsGroup: "Notifiche",
+    systemNotifications: "Mostra le notifiche di sistema quando Questkeep è in background",
+    systemNotificationsHint:
+      "Errori e avvisi, quando la finestra è ridotta a icona o nell'area di notifica. Restano sempre nella campanella.",
   },
   es: {
     loading: "Cargando…",
@@ -181,6 +262,26 @@ export const settingsGeneral: Translations<typeof en> = {
     wordsToIgnore: "Palabras que se ignoran",
     prefixesHint:
       "«The Witcher» se ordena por la W. Tus propios nombres de ordenación (Editar juego) no cambian.",
+    gameStartsGroup: "Cuando se inicia un juego",
+    onStartNothing: "No hacer nada",
+    onStartMinimize: "Minimizar Questkeep",
+    onStartHideToTray: "Ocultar Questkeep en la bandeja",
+    restoreAfterGame: "Traer Questkeep de vuelta al cerrarse el juego",
+    restoreHint: "Sin tomar el foco. Con varios juegos en marcha, cuando se cierra el último.",
+    gameStartsHint:
+      "Ocurre cuando Questkeep ve el juego en ejecución, no al pulsar Jugar, para que el inicio de sesión o la actualización de una tienda no quede oculto. Solo para juegos iniciados desde Questkeep.",
+    afterPlayingGroup: "Después de jugar",
+    closeDelay: "Esperar antes de cerrar los lanzadores de tiendas",
+    closeDelayUnit: "segundos",
+    closeDelayHint: "Da tiempo a que terminen las partidas guardadas en la nube.",
+    closeMinMinutes: "No cerrar los lanzadores tras sesiones más cortas de",
+    closeMinUnit: "minutos",
+    afterPlayingHint: "Qué lanzadores se cierran se elige por tienda en Tiendas y cuentas.",
+    notificationsGroup: "Notificaciones",
+    systemNotifications:
+      "Mostrar notificaciones del sistema mientras Questkeep está en segundo plano",
+    systemNotificationsHint:
+      "Errores y avisos, cuando la ventana está minimizada o en la bandeja. Siempre se conservan en la campana.",
   },
   pt: {
     loading: "Carregando…",
@@ -217,5 +318,25 @@ export const settingsGeneral: Translations<typeof en> = {
     wordsToIgnore: "Palavras a ignorar",
     prefixesHint:
       "“The Witcher” é ordenado na letra W. Seus próprios nomes de ordenação (Editar jogo) continuam como estão.",
+    gameStartsGroup: "Quando um jogo inicia",
+    onStartNothing: "Não fazer nada",
+    onStartMinimize: "Minimizar o Questkeep",
+    onStartHideToTray: "Ocultar o Questkeep na bandeja",
+    restoreAfterGame: "Trazer o Questkeep de volta quando o jogo fechar",
+    restoreHint: "Sem tirar o foco. Com vários jogos abertos, depois de o último fechar.",
+    gameStartsHint:
+      "Acontece quando o Questkeep vê o jogo a correr, não ao premir Jogar, para que o início de sessão ou a atualização de uma loja não fique escondido. Só para jogos iniciados a partir do Questkeep.",
+    afterPlayingGroup: "Depois de jogar",
+    closeDelay: "Esperar antes de fechar os lançadores das lojas",
+    closeDelayUnit: "segundos",
+    closeDelayHint: "Dá tempo para os jogos guardados na nuvem terminarem.",
+    closeMinMinutes: "Não fechar os lançadores após sessões mais curtas do que",
+    closeMinUnit: "minutos",
+    afterPlayingHint: "Que lançadores são fechados define-se por loja em Lojas e contas.",
+    notificationsGroup: "Notificações",
+    systemNotifications:
+      "Mostrar notificações do sistema enquanto o Questkeep está em segundo plano",
+    systemNotificationsHint:
+      "Erros e avisos, quando a janela está minimizada ou na bandeja. Ficam sempre guardados no sino.",
   },
 };

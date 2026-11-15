@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use questkeep_plugin_sdk::wire::{self, CallArgs, Method, ProviderDescriptor};
 use questkeep_store_api::model::{
-    Achievements, AddGameOption, GameMetadata, GameNews, ImportedGame, PlayAction,
+    Achievements, AddGameOption, GameMetadata, GameNews, ImportedGame, LauncherProcess, PlayAction,
 };
 use questkeep_store_api::settings::StoreSettings;
 use questkeep_store_api::{ImageCandidate, LibraryProvider, ProviderError};
@@ -814,6 +814,10 @@ impl LibraryProvider for WasmProvider {
 
     fn launcher(&self) -> Option<PlayAction> {
         self.described().launcher.clone()
+    }
+
+    fn launcher_process(&self) -> Option<LauncherProcess> {
+        self.described().launcher_process.clone()
     }
 
     fn is_installed(&self) -> bool {

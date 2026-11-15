@@ -157,6 +157,33 @@ impl PlayAction {
     }
 }
 
+/// The store's own launcher as a running program, so the app can close it after a game (the
+/// "Close launcher after playing" store setting).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct LauncherProcess {
+    /// Executable file names (e.g. `steam.exe`, matched case-insensitively) whose running
+    /// process means the launcher is open.
+    pub process_names: Vec<String>,
+    pub close: LauncherClose,
+}
+
+/// How the launcher is closed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[ts(export)]
+pub enum LauncherClose {
+    /// The launcher's own clean exit (e.g. `steam.exe -shutdown`). Never followed by force.
+    Command(PlayAction),
+    /// Ask the processes' windows to close (Linux: SIGTERM), then end them by force if they
+    /// still run after a grace period. `process_names` empty means all of
+    /// [`LauncherProcess::process_names`].
+    CloseWindows { process_names: Vec<String> },
+    /// End the processes right away; for launchers with no clean way to quit.
+    ForceQuit,
+}
+
 /// A game as reported by a library provider scan. Plain data so providers can later run as
 /// sandboxed plugins.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]

@@ -80,6 +80,7 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { Cover } from "./Cover";
 import { EditGameDialog } from "./EditGameDialog";
 import { extensionEntries } from "./ExtensionIcon";
+import { GameActionButtons } from "./GameActionButtons";
 import { Menu, type MenuEntry } from "./Menu";
 import type { PopoverAnchor } from "./Popover";
 import { SourceIcon, SourceIcons, sourceName, storeNames } from "./SourceIcon";
@@ -556,6 +557,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
                   </button>
                 </Show>
               </div>
+              <GameActionButtons game={props.game} />
 
               <dl class="details__stats">
                 <Show when={players()}>

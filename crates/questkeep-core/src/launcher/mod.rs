@@ -58,6 +58,67 @@ impl Default for LauncherConfig {
     }
 }
 
+/// Lists the ids of running games (launched and noticed ones).
+pub type RunningGames = Arc<dyn Fn() -> Vec<Uuid> + Send + Sync>;
+
+/// What runs around every launch from Questkeep (game scripts, closing the store's launcher).
+pub trait LaunchHooks: Send + Sync {
+    /// A session for one launch; `game` is the launched copy with its launch profile applied.
+    /// Called on the thread that asked for the launch: keep it quick.
+    fn begin(&self, game: &Game) -> Box<dyn LaunchSession>;
+}
+
+/// One launch's hooks, called on its tracker thread.
+pub trait LaunchSession: Send {
+    /// Whether [`before_start`](Self::before_start) may take a while; the game is then started on
+    /// the tracker thread instead of the launching one.
+    fn has_work_before_start(&self) -> bool {
+        false
+    }
+    /// Right before the game is started. `Err(message)`: the launch stops.
+    fn before_start(&mut self) -> std::result::Result<(), String> {
+        Ok(())
+    }
+    /// The game was seen running.
+    fn started(&mut self) {}
+    /// The launch is over: the game closed, never ran, or can't be tracked. Not called when the
+    /// app shuts down.
+    fn ended(&mut self, _outcome: &LaunchOutcome) {}
+}
+
+/// How a launch ended.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LaunchOutcome {
+    /// The game was seen running.
+    pub ran: bool,
+    /// Whether Questkeep could follow the game (`false`: started, but it can't tell when it ends).
+    pub tracked: bool,
+    pub seconds: u64,
+    pub started_at: Option<chrono::DateTime<Utc>>,
+    pub ended_at: chrono::DateTime<Utc>,
+}
+
+impl LaunchOutcome {
+    /// The game never ran (didn't start, stopped before the start, only helpers ran).
+    pub fn not_run() -> Self {
+        Self {
+            ran: false,
+            tracked: true,
+            seconds: 0,
+            started_at: None,
+            ended_at: Utc::now(),
+        }
+    }
+
+    /// Started without a way to follow it.
+    pub fn untracked() -> Self {
+        Self {
+            tracked: false,
+            ..Self::not_run()
+        }
+    }
+}
+
 struct ActiveSession {
     stop: mpsc::Sender<()>,
     handle: JoinHandle<()>,
@@ -73,6 +134,7 @@ pub struct Launcher {
     /// Games the watcher saw started outside Questkeep and is recording.
     outside: Arc<Mutex<HashSet<Uuid>>>,
     watcher: Mutex<Option<watcher::WatcherHandle>>,
+    hooks: Mutex<Option<Arc<dyn LaunchHooks>>>,
 }
 
 impl Launcher {
@@ -99,6 +161,7 @@ impl Launcher {
             active: Arc::new(Mutex::new(HashMap::new())),
             outside: Arc::new(Mutex::new(HashSet::new())),
             watcher: Mutex::new(None),
+            hooks: Mutex::new(None),
         }
     }
 
@@ -183,7 +246,53 @@ impl Launcher {
         }
     }
 
-    /// Starts `game` and begins tracking it.
+    /// Sets what runs around every launch from Questkeep (scripts, closing launchers).
+    pub fn set_hooks(&self, hooks: Arc<dyn LaunchHooks>) {
+        *self.hooks.lock().unwrap_or_else(PoisonError::into_inner) = Some(hooks);
+    }
+
+    fn hooks(&self) -> Option<Arc<dyn LaunchHooks>> {
+        self.hooks
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
+    /// Whether `id` was started from Questkeep and is tracked (starting or running), as opposed
+    /// to a game the watcher noticed.
+    pub fn is_launched(&self, id: Uuid) -> bool {
+        self.active()
+            .get(&id)
+            .is_some_and(|s| !s.handle.is_finished())
+    }
+
+    /// A function that lists the running games (for hooks that check later, e.g. before closing
+    /// a store's launcher).
+    pub fn running_games(&self) -> RunningGames {
+        let active = self.active.clone();
+        let outside = self.outside.clone();
+        Arc::new(move || {
+            let mut ids: HashSet<Uuid> = active
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .iter()
+                .filter(|(_, s)| !s.handle.is_finished())
+                .map(|(id, _)| *id)
+                .collect();
+            ids.extend(
+                outside
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .iter()
+                    .copied(),
+            );
+            ids.into_iter().collect()
+        })
+    }
+
+    /// Starts `game` and begins tracking it. With work to do before the start (pre scripts), the
+    /// game is started on its tracker thread and start errors arrive as [`CoreEvent::GameError`];
+    /// otherwise they are returned here.
     pub fn launch(&self, game: &Game) -> Result<()> {
         if self.running().contains(&game.id) {
             return Err(CoreError::Launch(format!(
@@ -194,86 +303,70 @@ impl Launcher {
         let action = game.play_action.as_ref().ok_or_else(|| {
             CoreError::Launch(format!("{} has no launch action configured.", game.name))
         })?;
-        let target = action.target.trim();
-        if target.is_empty() {
+        if action.target.trim().is_empty() {
             return Err(CoreError::Launch("The launch target is empty.".into()));
         }
+        let session = self.hooks().map(|hooks| hooks.begin(game));
 
-        let tracking_dir = action
-            .tracking_path
-            .as_deref()
-            .filter(|p| !p.trim().is_empty())
-            .or(game.install_dir.as_deref())
-            .map(str::to_string);
+        if session.as_ref().is_some_and(|s| s.has_work_before_start()) {
+            self.spawn_tracker(TrackerStart {
+                game_id: game.id,
+                name: game.name.clone(),
+                matcher: None,
+                start: Some(game.clone()),
+                ignored: IgnoredPrograms::new(&game.ignored_processes),
+                child: None,
+                session,
+            });
+            return Ok(());
+        }
 
-        let (matcher, child) = match action.kind {
-            ActionKind::File => {
-                let exe = Path::new(target);
-                let exe_dir = exe.parent().map(|p| p.display().to_string());
-                let mut command = Command::new(exe);
-                command
-                    .stdin(Stdio::null())
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null());
-                let working_dir = action
-                    .working_dir
-                    .as_deref()
-                    .filter(|w| !w.trim().is_empty())
-                    .map(str::to_string)
-                    .or_else(|| exe_dir.clone());
-                if let Some(dir) = &working_dir {
-                    command.current_dir(dir);
+        let (matcher, child) = match start_game(game) {
+            Ok(started) => started,
+            Err(err) => {
+                if let Some(mut session) = session {
+                    session.ended(&LaunchOutcome::not_run());
                 }
-                if let Some(args) = action.args.as_deref() {
-                    platform::add_raw_args(&mut command, args);
-                }
-                let child = command
-                    .spawn()
-                    .map_err(|e| CoreError::Launch(format!("Could not start '{target}': {e}")))?;
-                let pid = child.id();
-                let dir = tracking_dir.clone().or(exe_dir);
-                let matcher = match action.tracking {
-                    // Playnite's default too. Directory matching is opt-in: executables in shared
-                    // folders would otherwise match unrelated processes.
-                    TrackingMode::Default | TrackingMode::Process => Some(Matcher::tree(pid)),
-                    TrackingMode::OriginalProcess => Some(Matcher::Original { pid }),
-                    TrackingMode::Directory => dir.as_deref().map(Matcher::directory),
-                    TrackingMode::Name => Some(Matcher::name(
-                        action.tracking_path.as_deref().unwrap_or(target),
-                    )),
-                };
-                (matcher, Some(child))
-            }
-            ActionKind::Uri => {
-                platform::open_uri(target)
-                    .map_err(|e| CoreError::Launch(format!("Could not open '{target}': {e}")))?;
-                let matcher = match action.tracking {
-                    TrackingMode::Name => action.tracking_path.as_deref().map(Matcher::name),
-                    // No process of our own to follow; the install dir is the best signal.
-                    _ => tracking_dir.as_deref().map(Matcher::directory),
-                };
-                (matcher, None)
+                return Err(err);
             }
         };
-
         let Some(matcher) = matcher else {
-            tracing::warn!(game = %game.id, "launched without a way to track playtime");
-            self.events.publish(CoreEvent::GameError {
-                id: game.id,
-                message: format!(
-                    "{} was started, but playtime can't be tracked: no install folder is known.",
-                    game.name
-                ),
-            });
+            self.untracked(game, session);
             return Ok(());
         };
         tracing::info!(game = %game.id, name = %game.name, ?matcher, "game launched");
-        let ignored = IgnoredPrograms::new(&game.ignored_processes);
-        self.start_tracking(game.id, game.name.clone(), matcher, ignored, child);
+        self.spawn_tracker(TrackerStart {
+            game_id: game.id,
+            name: game.name.clone(),
+            matcher: Some(matcher),
+            start: None,
+            ignored: IgnoredPrograms::new(&game.ignored_processes),
+            child,
+            session,
+        });
         Ok(())
     }
 
-    /// Spawns the tracker thread. Public within the crate for tests with fake probes.
+    /// A game was started that can't be tracked: says so, and ends its session (post scripts
+    /// run right away) on a thread of its own.
+    fn untracked(&self, game: &Game, session: Option<Box<dyn LaunchSession>>) {
+        tracing::warn!(game = %game.id, "launched without a way to track playtime");
+        self.events.publish(CoreEvent::GameError {
+            id: game.id,
+            message: untracked_message(&game.name),
+        });
+        if let Some(mut session) = session {
+            let spawned = std::thread::Builder::new()
+                .name(format!("untracked-{}", game.id))
+                .spawn(move || session.ended(&LaunchOutcome::untracked()));
+            if let Err(err) = spawned {
+                tracing::warn!(%err, "could not end the session of an untracked game");
+            }
+        }
+    }
+
+    /// Spawns the tracker thread for a game started elsewhere (tests with fake probes).
+    #[cfg(test)]
     pub(crate) fn start_tracking(
         &self,
         game_id: Uuid,
@@ -282,25 +375,42 @@ impl Launcher {
         ignored: IgnoredPrograms,
         child: Option<Child>,
     ) {
+        self.spawn_tracker(TrackerStart {
+            game_id,
+            name,
+            matcher: Some(matcher),
+            start: None,
+            ignored,
+            child,
+            session: None,
+        });
+    }
+
+    fn spawn_tracker(&self, init: TrackerStart) {
+        let game_id = init.game_id;
         let (stop_tx, stop_rx) = mpsc::channel();
         let tracker = Tracker {
             game_id,
-            name,
-            matcher,
-            ignored,
-            child,
+            name: init.name,
+            matcher: init.matcher,
+            start: init.start,
+            ignored: init.ignored,
+            child: init.child,
+            session: init.session,
             db: self.db.clone(),
             events: self.events.clone(),
             probe: self.probe.clone(),
             config: self.config,
             stop: stop_rx,
         };
+        // Registered before the thread runs so a second Play is refused at once.
+        let mut active = self.active();
         let spawn = std::thread::Builder::new()
             .name(format!("tracker-{game_id}"))
             .spawn(move || tracker.run());
         match spawn {
             Ok(handle) => {
-                self.active().insert(
+                active.insert(
                     game_id,
                     ActiveSession {
                         stop: stop_tx,
@@ -309,6 +419,7 @@ impl Launcher {
                 );
             }
             Err(err) => {
+                drop(active);
                 tracing::error!(%err, "could not spawn tracker thread");
                 self.events.publish(CoreEvent::GameError {
                     id: game_id,
@@ -349,12 +460,94 @@ impl Drop for Launcher {
     }
 }
 
+fn untracked_message(name: &str) -> String {
+    format!("{name} was started, but playtime can't be tracked: no install folder is known.")
+}
+
+/// Starts the game's process (or opens its URI) and works out how to follow it. `None` as the
+/// matcher: the game runs but can't be tracked.
+fn start_game(game: &Game) -> Result<(Option<Matcher>, Option<Child>)> {
+    let action = game.play_action.as_ref().ok_or_else(|| {
+        CoreError::Launch(format!("{} has no launch action configured.", game.name))
+    })?;
+    let target = action.target.trim();
+    let tracking_dir = action
+        .tracking_path
+        .as_deref()
+        .filter(|p| !p.trim().is_empty())
+        .or(game.install_dir.as_deref())
+        .map(str::to_string);
+
+    match action.kind {
+        ActionKind::File => {
+            let exe = Path::new(target);
+            let exe_dir = exe.parent().map(|p| p.display().to_string());
+            let mut command = Command::new(exe);
+            command
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null());
+            let working_dir = action
+                .working_dir
+                .as_deref()
+                .filter(|w| !w.trim().is_empty())
+                .map(str::to_string)
+                .or_else(|| exe_dir.clone());
+            if let Some(dir) = &working_dir {
+                command.current_dir(dir);
+            }
+            if let Some(args) = action.args.as_deref() {
+                platform::add_raw_args(&mut command, args);
+            }
+            let child = command
+                .spawn()
+                .map_err(|e| CoreError::Launch(format!("Could not start '{target}': {e}")))?;
+            let pid = child.id();
+            let dir = tracking_dir.or(exe_dir);
+            let matcher = match action.tracking {
+                // Playnite's default too. Directory matching is opt-in: executables in shared
+                // folders would otherwise match unrelated processes.
+                TrackingMode::Default | TrackingMode::Process => Some(Matcher::tree(pid)),
+                TrackingMode::OriginalProcess => Some(Matcher::Original { pid }),
+                TrackingMode::Directory => dir.as_deref().map(Matcher::directory),
+                TrackingMode::Name => Some(Matcher::name(
+                    action.tracking_path.as_deref().unwrap_or(target),
+                )),
+            };
+            Ok((matcher, Some(child)))
+        }
+        ActionKind::Uri => {
+            platform::open_uri(target)
+                .map_err(|e| CoreError::Launch(format!("Could not open '{target}': {e}")))?;
+            let matcher = match action.tracking {
+                TrackingMode::Name => action.tracking_path.as_deref().map(Matcher::name),
+                // No process of our own to follow; the install dir is the best signal.
+                _ => tracking_dir.as_deref().map(Matcher::directory),
+            };
+            Ok((matcher, None))
+        }
+    }
+}
+
+struct TrackerStart {
+    game_id: Uuid,
+    name: String,
+    matcher: Option<Matcher>,
+    /// The game to start on the tracker thread (after the session's work before the start).
+    start: Option<Game>,
+    ignored: IgnoredPrograms,
+    child: Option<Child>,
+    session: Option<Box<dyn LaunchSession>>,
+}
+
 struct Tracker {
     game_id: Uuid,
     name: String,
-    matcher: Matcher,
+    matcher: Option<Matcher>,
+    start: Option<Game>,
     ignored: IgnoredPrograms,
     child: Option<Child>,
+    session: Option<Box<dyn LaunchSession>>,
     db: Arc<Database>,
     events: EventBus,
     probe: Arc<dyn ProcessProbe>,
@@ -384,10 +577,64 @@ impl Tracker {
             self.child = None;
         }
         let snapshot = self.probe.snapshot();
-        self.matcher.presence(&snapshot, &self.ignored)
+        let Some(matcher) = self.matcher.as_mut() else {
+            return Presence::None;
+        };
+        matcher.presence(&snapshot, &self.ignored)
+    }
+
+    fn error(&self, message: String) {
+        self.events.publish(CoreEvent::GameError {
+            id: self.game_id,
+            message,
+        });
+    }
+
+    /// Ends the launch's session (scripts after the game, closing the launcher).
+    fn end(&mut self, outcome: &LaunchOutcome) {
+        if let Some(session) = self.session.as_mut() {
+            session.ended(outcome);
+        }
+    }
+
+    /// The work before the start, then the start itself. `false`: the launch ended here.
+    fn start(&mut self, game: &Game) -> bool {
+        if let Some(session) = self.session.as_mut()
+            && let Err(message) = session.before_start()
+        {
+            tracing::info!(game = %self.game_id, %message, "launch stopped before the start");
+            self.error(message);
+            self.end(&LaunchOutcome::not_run());
+            return false;
+        }
+        match start_game(game) {
+            Ok((Some(matcher), child)) => {
+                tracing::info!(game = %self.game_id, name = %self.name, ?matcher, "game launched");
+                self.matcher = Some(matcher);
+                self.child = child;
+                true
+            }
+            Ok((None, _)) => {
+                tracing::warn!(game = %self.game_id, "launched without a way to track playtime");
+                self.error(untracked_message(&self.name));
+                self.end(&LaunchOutcome::untracked());
+                false
+            }
+            Err(err) => {
+                self.error(err.to_string());
+                self.end(&LaunchOutcome::not_run());
+                false
+            }
+        }
     }
 
     fn run(mut self) {
+        if let Some(game) = self.start.take()
+            && !self.start(&game)
+        {
+            return;
+        }
+
         // Phase 1: wait for the game to show up. File launches usually match immediately. While
         // only its launcher runs, the user may sit in it for any time: keep waiting.
         let mut startup_started = Instant::now();
@@ -401,28 +648,26 @@ impl Tracker {
                     startup_started = Instant::now();
                 }
                 // A process tree that ended can't come back.
-                Presence::None if saw_ignored && matches!(self.matcher, Matcher::Tree { .. }) => {
+                Presence::None
+                    if saw_ignored && matches!(self.matcher, Some(Matcher::Tree { .. })) =>
+                {
                     tracing::info!(game = %self.game_id, "only ignored programs ran");
-                    self.events.publish(CoreEvent::GameError {
-                        id: self.game_id,
-                        message: format!(
-                            "{} only ran programs it ignores, so no playtime was recorded.",
-                            self.name
-                        ),
-                    });
+                    self.error(format!(
+                        "{} only ran programs it ignores, so no playtime was recorded.",
+                        self.name
+                    ));
+                    self.end(&LaunchOutcome::not_run());
                     return;
                 }
                 Presence::None => {}
             }
             if startup_started.elapsed() >= self.config.startup_timeout {
                 tracing::warn!(game = %self.game_id, "game process never appeared");
-                self.events.publish(CoreEvent::GameError {
-                    id: self.game_id,
-                    message: format!(
-                        "{} didn't start or its process couldn't be found, so no playtime was recorded.",
-                        self.name
-                    ),
-                });
+                self.error(format!(
+                    "{} didn't start or its process couldn't be found, so no playtime was recorded.",
+                    self.name
+                ));
+                self.end(&LaunchOutcome::not_run());
                 return;
             }
             if let Wait::Stop = self.wait(startup_poll) {
@@ -430,24 +675,26 @@ impl Tracker {
             }
         }
 
-        let session_id = match self.db.begin_session(self.game_id, Utc::now()) {
+        let started_at = Utc::now();
+        let session_id = match self.db.begin_session(self.game_id, started_at) {
             Ok(id) => id,
             Err(err) => {
                 tracing::error!(%err, "could not start play session");
-                self.events.publish(CoreEvent::GameError {
-                    id: self.game_id,
-                    message: format!("Playtime can't be recorded: {err}"),
-                });
+                self.error(format!("Playtime can't be recorded: {err}"));
                 return;
             }
         };
         self.events
             .publish(CoreEvent::GameStarted { id: self.game_id });
+        if let Some(session) = self.session.as_mut() {
+            session.started();
+        }
 
         // Phase 2: poll until the game stops or the app shuts down.
         let max_interval = self.config.poll_interval + self.config.sleep_gap;
         let mut played = Duration::ZERO;
         let mut last_tick = Instant::now();
+        let mut shutting_down = false;
         loop {
             let wait = self.wait(self.config.poll_interval);
             let now = Instant::now();
@@ -460,6 +707,7 @@ impl Tracker {
             }
             if let Wait::Stop = wait {
                 tracing::info!(game = %self.game_id, "app shutting down, saving running session");
+                shutting_down = true;
                 break;
             }
             if self.check() != Presence::Game {
@@ -471,7 +719,8 @@ impl Tracker {
         }
 
         let seconds = played.as_secs();
-        match self.db.finish_session(session_id, Utc::now(), seconds) {
+        let ended_at = Utc::now();
+        match self.db.finish_session(session_id, ended_at, seconds) {
             Ok(_) => {
                 tracing::info!(game = %self.game_id, seconds, "play session finished");
                 self.events.publish(CoreEvent::GameStopped {
@@ -481,11 +730,17 @@ impl Tracker {
             }
             Err(err) => {
                 tracing::error!(%err, "could not save play session");
-                self.events.publish(CoreEvent::GameError {
-                    id: self.game_id,
-                    message: format!("Playtime could not be saved: {err}"),
-                });
+                self.error(format!("Playtime could not be saved: {err}"));
             }
+        }
+        if !shutting_down {
+            self.end(&LaunchOutcome {
+                ran: true,
+                tracked: true,
+                seconds,
+                started_at: Some(started_at),
+                ended_at,
+            });
         }
     }
 }

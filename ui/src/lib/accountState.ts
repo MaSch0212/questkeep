@@ -1,4 +1,5 @@
 import type { AccountStatus } from "../bindings/AccountStatus";
+import type { LauncherClose } from "../bindings/LauncherClose";
 import type { ProviderInfo } from "../bindings/ProviderInfo";
 import type { StoreCredentials } from "../bindings/StoreCredentials";
 import type { StoreSettings } from "../bindings/StoreSettings";
@@ -54,6 +55,8 @@ export interface StoreRow {
   account: AccountStatus | null;
   /** The store's own settings. */
   settings: StoreSettings;
+  /** How the store's launcher is closed after playing; null: it has no closable launcher. */
+  launcherClose: LauncherClose | null;
 }
 
 /**
@@ -71,6 +74,7 @@ export function storeRows(providers: readonly ProviderInfo[], accounts: readonly
       syncable: p.syncable,
       account: accounts.find((a) => a.provider === p.id) ?? null,
       settings: p.settings,
+      launcherClose: p.launcherClose,
     }))
     .filter((row) => row.canScan || row.account !== null);
   for (const account of accounts) {
@@ -83,6 +87,7 @@ export function storeRows(providers: readonly ProviderInfo[], accounts: readonly
         syncable: false,
         account,
         settings: { options: [], credentials: null, notice: null },
+        launcherClose: null,
       });
     }
   }

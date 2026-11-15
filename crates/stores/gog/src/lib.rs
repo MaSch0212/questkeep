@@ -323,6 +323,20 @@ impl LibraryProvider for GogProvider {
             .then(|| PlayAction::file(client.to_string_lossy()))
     }
 
+    /// The client as a running program and how to close it (only when it is installed).
+    fn launcher_process(&self) -> Option<questkeep_store_api::model::LauncherProcess> {
+        use questkeep_store_api::model::{ActionKind, LauncherClose, LauncherProcess};
+        let launcher = self.launcher().filter(|a| a.kind == ActionKind::File)?;
+        Some(LauncherProcess {
+            process_names: vec!["GalaxyClient.exe".into()],
+            close: {
+                let mut action = launcher;
+                action.args = Some("/command=shutdown".into());
+                LauncherClose::Command(action)
+            },
+        })
+    }
+
     /// Opens GOG Galaxy's install dialog for the game (`installationScreen`, one of the protocol
     /// commands GalaxyClient.exe handles next to `openGameView`, `installGame` and `launchGame`).
     fn install_action(&self, source_game_id: &str) -> Option<PlayAction> {
@@ -468,6 +482,33 @@ mod tests {
         assert_eq!(action.kind, ActionKind::File);
         assert_eq!(action.target, client.to_string_lossy());
         assert!(GogProvider::with_records(vec![], None).launcher().is_none());
+    }
+
+    #[test]
+    fn launcher_process_shuts_galaxy_down_with_its_client() {
+        use questkeep_store_api::model::LauncherClose;
+        let tmp = tempfile::tempdir().unwrap();
+        let client = tmp.path().join("GalaxyClient.exe");
+        assert!(
+            GogProvider::with_records(vec![], Some(client.clone()))
+                .launcher_process()
+                .is_none()
+        );
+        fs::write(&client, "x").unwrap();
+        let process = GogProvider::with_records(vec![], Some(client.clone()))
+            .launcher_process()
+            .unwrap();
+        assert_eq!(process.process_names, vec!["GalaxyClient.exe"]);
+        let LauncherClose::Command(action) = process.close else {
+            panic!("expected a command");
+        };
+        assert_eq!(action.target, client.to_string_lossy());
+        assert_eq!(action.args.as_deref(), Some("/command=shutdown"));
+        assert!(
+            GogProvider::with_records(vec![], None)
+                .launcher_process()
+                .is_none()
+        );
     }
 
     #[test]

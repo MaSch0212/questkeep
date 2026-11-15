@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Launch automation mockup</title>
+<style>
+  :root {
+    --bg:#111317; --surface:#171a20; --raised:#1e222a; --hover:#262b35; --active:#343a47; --border:#2a2f3a;
+    --text:#e6e8ec; --muted:#9aa1ae; --faint:#6c7381; --accent:#7c9cff; --accent-soft:#232c4a; --warn:#e8b45a; --err:#f07178; --ok:#7fd18b;
+    --mono:"Cascadia Code","Consolas",monospace;
+  }
+  * { box-sizing:border-box; }
+  html, body { margin:0; }
+  body { background:#0c0e12; color:var(--text); font-family:"Segoe UI Variable","Segoe UI",system-ui,sans-serif; font-size:13px; padding:16px 20px 140px; }
+  .tabs { display:flex; gap:4px; margin:0 auto 18px; width:980px; max-width:100%; flex-wrap:wrap; }
+  .tabs button { background:var(--raised); border:1px solid var(--border); color:var(--muted); border-radius:7px; padding:6px 12px; font:inherit; cursor:pointer; }
+  .tabs button.on { background:var(--accent-soft); color:var(--text); border-color:#7c9cff66; }
+  .screen { display:none; } .screen.on { display:block; }
+  .note { width:980px; max-width:100%; margin:14px auto 0; background:#0b0d12; border:1px solid var(--border); border-radius:10px; padding:10px 12px; color:var(--muted); line-height:1.5; }
+  .note b { color:var(--text); } .note ol { margin:4px 0 0; padding-left:18px; }
+  .btn { height:30px; padding:0 12px; border-radius:7px; background:var(--raised); border:1px solid var(--border); color:var(--text); font:inherit; display:inline-flex; align-items:center; gap:6px; cursor:pointer; }
+  .btn.primary { background:var(--accent); color:#0e1220; border:none; font-weight:600; }
+  .btn.ghost { background:none; border-color:transparent; color:var(--muted); }
+  .btn.sm { height:24px; padding:0 8px; font-size:12px; }
+  .btn.danger { color:var(--err); }
+  .icon-btn { width:26px; height:26px; border-radius:6px; display:inline-flex; align-items:center; justify-content:center; color:var(--muted); background:none; border:none; font:inherit; cursor:pointer; }
+  .icon-btn:hover { background:var(--hover); color:var(--text); }
+  .in { min-height:30px; border-radius:7px; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:5px 9px; font:inherit; display:flex; gap:6px; align-items:center; }
+  .in .ph { color:var(--faint); } .in code, code { font-family:var(--mono); font-size:12px; }
+  .in.grow { flex:1; }
+  .f { display:flex; flex-direction:column; gap:5px; } .lab { color:var(--muted); font-size:12px; }
+  .row { display:flex; gap:10px; align-items:center; } .row.end { justify-content:flex-end; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:12px 16px; }
+  .hint { color:var(--faint); font-size:12px; line-height:1.4; }
+  .seg { display:inline-flex; background:var(--raised); border:1px solid var(--border); border-radius:7px; padding:2px; flex-wrap:wrap; }
+  .seg span { padding:3px 10px; border-radius:5px; color:var(--muted); font-size:12px; cursor:pointer; }
+  .seg span.on { background:var(--accent-soft); color:var(--text); }
+  .select { min-height:30px; border-radius:7px; background:var(--raised); border:1px solid var(--border); padding:5px 9px; display:inline-flex; justify-content:space-between; gap:12px; min-width:220px; }
+  .select::after { content:"▾"; color:var(--faint); }
+  .check { display:flex; gap:8px; align-items:flex-start; } .check i { width:15px; height:15px; border:1px solid var(--border); border-radius:4px; background:var(--bg); flex:none; margin-top:1px; font-style:normal; font-size:11px; display:flex; align-items:center; justify-content:center; }
+  .check i.on { background:var(--accent); border-color:var(--accent); color:#0e1220; }
+  .check.dis { opacity:.5; }
+  .badge { font-size:11px; border-radius:99px; padding:1px 8px; background:var(--raised); border:1px solid var(--border); color:var(--muted); white-space:nowrap; }
+  .badge.acc { background:var(--accent-soft); border-color:#7c9cff55; color:var(--text); }
+  .badge.warn { color:var(--warn); border-color:#e8b45a55; }
+  h3 { margin:0; font-size:14px; } h4 { margin:0; font-size:12px; color:var(--faint); letter-spacing:.06em; text-transform:uppercase; font-weight:600; }
+
+  /* ---------- settings page frame ---------- */
+  .page { width:980px; max-width:100%; margin:0 auto; background:var(--surface); border:1px solid var(--border); border-radius:12px; display:flex; min-height:560px; }
+  .page nav { width:190px; border-right:1px solid var(--border); padding:12px 8px; display:flex; flex-direction:column; gap:2px; }
+  .page nav a { padding:7px 10px; border-radius:7px; color:var(--muted); }
+  .page nav a.on { background:var(--accent-soft); color:var(--text); }
+  .page main { flex:1; padding:18px 22px; display:flex; flex-direction:column; gap:18px; }
+  .card { background:var(--raised); border:1px solid var(--border); border-radius:10px; }
+  .card-head { display:flex; align-items:center; gap:10px; padding:10px 12px; border-bottom:1px solid var(--border); }
+  .card-head h3 { flex:1; }
+  .item { display:flex; align-items:center; gap:10px; padding:8px 10px; border-bottom:1px solid var(--border); }
+  .item:last-child { border-bottom:none; }
+  .grip { color:var(--faint); cursor:grab; letter-spacing:-2px; width:14px; }
+  .item .main { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+  .item .main small { color:var(--faint); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .item.placeholder { background:repeating-linear-gradient(135deg,#1b1f27,#1b1f27 8px,#1e222a 8px,#1e222a 16px); }
+  .item.placeholder .main b { color:var(--muted); font-weight:600; }
+  .item.off .main { opacity:.5; }
+  .item.dragging { outline:1px dashed var(--accent); background:var(--accent-soft); }
+  .toggle { width:30px; height:17px; border-radius:99px; background:var(--active); position:relative; flex:none; }
+  .toggle::after { content:""; position:absolute; top:2px; left:2px; width:13px; height:13px; border-radius:50%; background:var(--muted); }
+  .toggle.on { background:var(--accent); } .toggle.on::after { left:15px; background:#0e1220; }
+  .store { display:flex; gap:12px; align-items:center; padding:12px; border-bottom:1px solid var(--border); }
+  .store .logo { width:30px; height:30px; border-radius:7px; background:var(--active); display:flex; align-items:center; justify-content:center; font-weight:700; }
+  .store .main { flex:1; } .store .main small { display:block; color:var(--faint); }
+  .store-opts { padding:10px 12px 14px 54px; display:flex; flex-direction:column; gap:10px; border-bottom:1px solid var(--border); background:#1a1d24; }
+
+  /* ---------- modal ---------- */
+  .modal { width:980px; max-width:100%; margin:0 auto; background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:0 24px 60px #000c; display:flex; flex-direction:column; }
+  .mhead { display:flex; align-items:center; gap:12px; padding:12px 16px; border-bottom:1px solid var(--border); }
+  .mhead h2 { margin:0; font-size:15px; flex:1; }
+  .mbody { display:flex; min-height:560px; }
+  .mform { flex:1; padding:14px 16px; display:flex; flex-direction:column; gap:14px; min-width:0; }
+  .vars { width:290px; border-left:1px solid var(--border); padding:12px; display:flex; flex-direction:column; gap:8px; }
+  .vars .list { overflow:auto; max-height:470px; display:flex; flex-direction:column; }
+  .var { padding:5px 6px; border-radius:6px; display:flex; flex-direction:column; gap:1px; cursor:pointer; }
+  .var:hover { background:var(--hover); }
+  .var code { color:var(--accent); } .var small { color:var(--faint); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-family:var(--mono); font-size:11px; }
+  .var-group { color:var(--faint); font-size:11px; margin:8px 6px 2px; letter-spacing:.05em; text-transform:uppercase; }
+  .mfoot { display:flex; justify-content:space-between; align-items:center; padding:10px 16px; border-top:1px solid var(--border); }
+  .editor { border:1px solid var(--border); border-radius:8px; background:#0e1014; font-family:var(--mono); font-size:12.5px; line-height:1.6; position:relative; }
+  .editor .bar { display:flex; gap:8px; align-items:center; padding:6px 8px; border-bottom:1px solid var(--border); font-family:inherit; }
+  .editor pre { margin:0; padding:8px 0; counter-reset:ln; }
+  .editor .l { display:block; padding:0 12px 0 0; }
+  .editor .l::before { counter-increment:ln; content:counter(ln); display:inline-block; width:34px; text-align:right; padding-right:12px; color:#4a505c; }
+  .kw { color:#c792ea; } .str { color:#c3e88d; } .cm { color:#636b7a; font-style:italic; } .vr { color:#82aaff; } .fn { color:#ffcb6b; } .op { color:#89ddff; }
+  .ac { position:absolute; left:250px; top:132px; width:300px; background:var(--raised); border:1px solid var(--border); border-radius:8px; box-shadow:0 12px 30px #000a; font-family:var(--mono); font-size:12px; overflow:hidden; }
+  .ac div { padding:4px 10px; display:flex; justify-content:space-between; gap:10px; } .ac div small { color:var(--faint); font-family:"Segoe UI",sans-serif; }
+  .ac div.on { background:var(--accent-soft); }
+  .preview { border:1px solid var(--border); border-radius:8px; background:#0e1014; padding:8px 10px; display:flex; flex-direction:column; gap:6px; }
+  .preview code { font-family:var(--mono); font-size:12px; color:#cfd3da; word-break:break-all; }
+  .preview .pv-exe { color:var(--accent); }
+  .adv { border:1px solid var(--border); border-radius:8px; }
+  .adv summary { padding:8px 10px; cursor:pointer; color:var(--muted); }
+  .adv .body { padding:4px 12px 12px; display:grid; grid-template-columns:1fr 1fr; gap:10px 16px; }
+
+  /* ---------- edit game section ---------- */
+  .egame nav { width:170px; border-right:1px solid var(--border); padding:10px 8px; display:flex; flex-direction:column; gap:2px; }
+  .egame nav a { padding:7px 10px; border-radius:7px; color:var(--muted); display:flex; justify-content:space-between; }
+  .egame nav a.on { background:var(--accent-soft); color:var(--text); }
+  .egame nav a small { color:var(--accent); font-size:11px; }
+  .applies { display:flex; flex-direction:column; gap:4px; padding:8px 10px; }
+  .applies div { display:flex; gap:8px; align-items:center; color:var(--muted); }
+
+  /* ---------- title bar + bell ---------- */
+  .app { width:980px; max-width:100%; margin:0 auto; background:var(--bg); border:1px solid var(--border); border-radius:12px; overflow:visible; min-height:520px; position:relative; }
+  .titlebar { height:40px; display:flex; align-items:center; gap:8px; padding:0 0 0 12px; border-bottom:1px solid var(--border); background:var(--surface); border-radius:12px 12px 0 0; }
+  .titlebar .brand { font-weight:700; } .titlebar .grow { flex:1; }
+  .titlebar .search { width:320px; height:26px; border-radius:6px; background:var(--bg); border:1px solid var(--border); color:var(--faint); padding:3px 9px; font-size:12px; }
+  .bell { position:relative; }
+  .bell.open { background:var(--hover); color:var(--text); }
+  .bell .count { position:absolute; top:1px; right:0; min-width:15px; height:15px; border-radius:99px; background:var(--err); color:#1a0d0f; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; padding:0 4px; }
+  .winbtn { width:44px; height:40px; display:flex; align-items:center; justify-content:center; color:var(--muted); }
+  .pop { position:absolute; right:140px; top:44px; width:400px; background:var(--surface); border:1px solid var(--border); border-radius:10px; box-shadow:0 18px 44px #000c; z-index:5; }
+  .pop-head { display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:1px solid var(--border); }
+  .pop-head h3 { flex:1; }
+  .notif { display:flex; gap:10px; padding:10px 12px; border-bottom:1px solid var(--border); }
+  .notif.unread { background:#1b1f28; }
+  .notif .dot { width:8px; height:8px; border-radius:50%; margin-top:5px; flex:none; }
+  .notif .dot.err { background:var(--err); } .notif .dot.warn { background:var(--warn); }
+  .notif .main { flex:1; display:flex; flex-direction:column; gap:4px; }
+  .notif .main small { color:var(--faint); }
+  .notif .acts { display:flex; gap:6px; }
+  .os { position:absolute; left:16px; bottom:16px; width:360px; background:#202020; border:1px solid #3a3a3a; border-radius:8px; padding:12px; box-shadow:0 10px 30px #000c; font-family:"Segoe UI",sans-serif; }
+  .os .top { display:flex; gap:8px; align-items:center; color:#bbb; font-size:12px; margin-bottom:6px; }
+  .os .logo { width:16px; height:16px; border-radius:4px; background:var(--accent); }
+  .lib { padding:16px; display:grid; grid-template-columns:repeat(6,1fr); gap:12px; opacity:.35; }
+  .lib div { aspect-ratio:2/3; border-radius:8px; background:var(--raised); }
+</style>
+</head>
+<body>
+
+<div class="tabs" id="tabs">
+  <button data-s="bell" class="on">0 · Bell + notifications</button>
+  <button data-s="stores">1 · Store row: close launcher</button>
+  <button data-s="general">2 · General: launch &amp; window</button>
+  <button data-s="scripts">3a · Settings › Scripts</button>
+  <button data-s="dialog">3b · Script dialog</button>
+  <button data-s="dialog-prog">3c · Script dialog (program)</button>
+  <button data-s="edit">3d · Edit game › Scripts</button>
+  <button data-s="page">3e · Game page + context menu</button>
+</div>
+
+<!-- ================= 0. BELL ================= -->
+<section class="screen on" id="bell">
+  <div class="app">
+    <div class="titlebar">
+      <span class="brand">Questkeep</span>
+      <span class="grow"></span>
+      <div class="search">Search or run a command…  Ctrl+K</div>
+      <span class="grow"></span>
+      <button class="icon-btn">＋</button>
+      <button class="icon-btn">⟳</button>
+      <button class="icon-btn bell open" data-tooltip="Notifications (Ctrl+Shift+N)">🔔<span class="count">3</span></button>
+      <span class="winbtn">—</span><span class="winbtn">▢</span><span class="winbtn">✕</span>
+    </div>
+    <div class="lib"><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
+
+    <div class="pop">
+      <div class="pop-head"><h3>Notifications</h3><button class="btn ghost sm">Clear all</button></div>
+      <div class="notif unread">
+        <span class="dot err"></span>
+        <div class="main">
+          <span>Pre script <b>“EQ: Gaming profile”</b> failed for Cyberpunk 2077 (exit code 1). The game was started anyway.</span>
+          <small>Today, 20:14 · Scripts</small>
+          <div class="acts"><button class="btn sm">Open log</button><button class="btn sm ghost">Edit script</button></div>
+        </div>
+        <button class="icon-btn" aria-label="Dismiss">✕</button>
+      </div>
+      <div class="notif unread">
+        <span class="dot warn"></span>
+        <div class="main">
+          <span>Ubisoft Connect did not close after Anno 1800. It was closed by force after 2 minutes.</span>
+          <small>Today, 18:02 · Launchers</small>
+          <div class="acts"><button class="btn sm ghost">Store settings</button></div>
+        </div>
+        <button class="icon-btn" aria-label="Dismiss">✕</button>
+      </div>
+      <div class="notif unread">
+        <span class="dot err"></span>
+        <div class="main">
+          <span>Epic sync failed: the sign-in has expired.</span>
+          <small>Today, 09:30 · Sync</small>
+          <div class="acts"><button class="btn sm">Sign in</button></div>
+        </div>
+        <button class="icon-btn" aria-label="Dismiss">✕</button>
+      </div>
+      <div class="notif">
+        <span class="dot warn"></span>
+        <div class="main">
+          <span>Python is no longer installed; the script “LED wall” was skipped.</span>
+          <small>Yesterday, 22:41 · Scripts</small>
+        </div>
+        <button class="icon-btn" aria-label="Dismiss">✕</button>
+      </div>
+    </div>
+
+    <div class="os">
+      <div class="top"><span class="logo"></span>Questkeep</div>
+      <b>Pre script failed</b>
+      <div style="color:#ccc;margin-top:3px">“EQ: Gaming profile” failed for Cyberpunk 2077. The game was started anyway.</div>
+    </div>
+  </div>
+  <div class="note">
+    <b>Bell</b> next to the window buttons; the badge counts unread entries (red when one is an error, otherwise neutral). Opening the popover marks them read.
+    Only errors and warnings land here; info toasts stay transient. <b>Bottom right:</b> the system notification shown while Questkeep is minimized or in the tray; clicking it opens Questkeep with this popover open.
+  </div>
+</section>
+
+<!-- ================= 1. STORES ================= -->
+<section class="screen" id="stores">
+  <div class="page">
+    <nav><a>General</a><a class="on">Stores and accounts</a><a>Library</a><a>Scripts</a><a>Metadata</a><a>Appearance</a><a>Plugins</a></nav>
+    <main>
+      <h3>Stores and accounts</h3>
+      <div class="card">
+        <div class="store"><span class="logo">S</span><div class="main"><b>Steam</b><small>Signed in · 412 games</small></div><span class="badge acc">Account</span><button class="btn sm ghost">▾</button></div>
+        <div class="store-opts">
+          <div class="check"><i class="on">✓</i><div>Import games I own but haven't installed<div class="hint">Needs the account or a Web API key.</div></div></div>
+          <div class="f">
+            <span class="lab">Close Steam after playing</span>
+            <div class="seg"><span>Never</span><span>Always</span><span class="on">Only if it wasn't running when the game started</span></div>
+            <span class="hint">Steam is asked to shut down cleanly 60 s after the game closes (General › After playing). Never closed while another Steam game runs.</span>
+          </div>
+        </div>
+        <div class="store"><span class="logo">E</span><div class="main"><b>Epic Games</b><small>Signed in · 168 games</small></div><span class="badge acc">Account</span><button class="btn sm ghost">▾</button></div>
+        <div class="store-opts">
+          <div class="f">
+            <span class="lab">Close the Epic Games Launcher after playing</span>
+            <div class="seg"><span>Never</span><span class="on">Always</span><span>Only if it wasn't running when the game started</span></div>
+            <span class="hint">The Epic Games Launcher has no clean way to quit, so it is closed by force. Cloud saves have finished by then in most cases.</span>
+          </div>
+        </div>
+        <div class="store"><span class="logo">P</span><div class="main"><b>Prism Launcher</b><small>12 instances</small></div><button class="btn sm ghost">▾</button></div>
+        <div class="store-opts"><span class="hint">No “Close after playing” option: Prism Launcher closes itself as configured there.</span></div>
+      </div>
+    </main>
+  </div>
+  <div class="note"><b>Per store</b>, inside the store's expanded row, only for stores that declare how their launcher is closed. Three-way segmented choice, default <b>Never</b>. The hint says how this store is closed (clean / window / force).</div>
+</section>
+
+<!-- ================= 2. GENERAL ================= -->
+<section class="screen" id="general">
+  <div class="page">
+    <nav><a class="on">General</a><a>Stores and accounts</a><a>Library</a><a>Scripts</a><a>Metadata</a><a>Appearance</a><a>Plugins</a></nav>
+    <main>
+      <div class="f" style="gap:10px">
+        <h4>When a game starts</h4>
+        <div class="seg"><span>Do nothing</span><span>Minimize Questkeep</span><span class="on">Hide Questkeep to the tray</span></div>
+        <div class="check"><i class="on">✓</i><div>Bring Questkeep back when the game closes<div class="hint">Without taking focus. With several games running, after the last one closes.</div></div></div>
+        <span class="hint">Happens when Questkeep sees the game running, not when you press Play, so a store's sign-in or update prompt isn't hidden behind nothing. Only for games started from Questkeep.</span>
+      </div>
+      <div class="f" style="gap:10px">
+        <h4>After playing</h4>
+        <div class="row"><span style="width:280px">Wait before closing store launchers</span><div class="in" style="width:90px">60</div><span class="hint">seconds · gives cloud saves time</span></div>
+        <div class="row"><span style="width:280px">Don't close launchers after sessions shorter than</span><div class="in" style="width:90px">2</div><span class="hint">minutes</span></div>
+        <span class="hint">Which launchers are closed is set per store in Stores and accounts.</span>
+      </div>
+      <div class="f" style="gap:10px">
+        <h4>Notifications</h4>
+        <div class="check"><i class="on">✓</i><div>Show system notifications while Questkeep is in the background<div class="hint">Errors and warnings, when the window is minimized or in the tray. They are always kept in the bell.</div></div></div>
+      </div>
+    </main>
+  </div>
+  <div class="note">Two new groups and one checkbox in <b>General</b>. The restore checkbox is disabled while “Do nothing” is chosen.</div>
+</section>
+
+<!-- ================= 3a. SETTINGS › SCRIPTS ================= -->
+<section class="screen" id="scripts">
+  <div class="page">
+    <nav><a>General</a><a>Stores and accounts</a><a>Library</a><a class="on">Scripts</a><a>Metadata</a><a>Appearance</a><a>Plugins</a></nav>
+    <main>
+      <div class="hint">Scripts run around games started from Questkeep (pre and post) or from a game's page (actions). Drag to change the order; games' own scripts run where the striped row is.</div>
+
+      <div class="card">
+        <div class="card-head"><h3>Before a game starts</h3><button class="btn sm">＋ Add pre script</button></div>
+        <div class="item"><span class="grip">⋮⋮</span><span class="toggle on"></span>
+          <div class="main"><b>EQ: Gaming profile</b><small>All games · Windows PowerShell 5.1 · inline script · before start</small></div>
+          <span class="badge">Global</span><button class="icon-btn" data-tooltip="Edit">✎</button><button class="icon-btn" data-tooltip="More">⋯</button></div>
+        <div class="item dragging"><span class="grip">⋮⋮</span><span class="toggle on"></span>
+          <div class="main"><b>LED wall: show game</b><small>Python · C:\Tools\ledwall\show.py (linked) · once running</small></div>
+          <span class="badge acc">Filter: Installed, Genre is Racing +1</span><button class="icon-btn">✎</button><button class="icon-btn">⋯</button></div>
+        <div class="item placeholder"><span class="grip">⋮⋮</span>
+          <div class="main"><b>Game's own pre scripts</b><small>Set in each game's Edit dialog · 3 games have some</small></div></div>
+        <div class="item off"><span class="grip">⋮⋮</span><span class="toggle"></span>
+          <div class="main"><b>Pause OneDrive sync</b><small>All games · C:\Program Files\Microsoft OneDrive\OneDrive.exe /shutdown</small></div>
+          <span class="badge">Global</span><button class="icon-btn">✎</button><button class="icon-btn">⋯</button></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>After a game closes</h3><button class="btn sm">＋ Add post script</button></div>
+        <div class="item placeholder"><span class="grip">⋮⋮</span>
+          <div class="main"><b>Game's own post scripts</b><small>Set in each game's Edit dialog</small></div></div>
+        <div class="item"><span class="grip">⋮⋮</span><span class="toggle on"></span>
+          <div class="main"><b>EQ: Default profile</b><small>All games · Windows PowerShell 5.1 · inline script</small></div>
+          <span class="badge">Global</span><button class="icon-btn">✎</button><button class="icon-btn">⋯</button></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Actions</h3><button class="btn sm">＋ Add action</button></div>
+        <div class="item"><span class="grip">⋮⋮</span><span class="toggle on"></span>
+          <div class="main"><b>Open save folder</b><small>Filter: Store is Steam · explorer.exe "{InstallDir}"</small></div>
+          <span class="badge acc">Filter</span><button class="icon-btn">✎</button><button class="icon-btn">⋯</button></div>
+        <div class="item"><span class="grip">⋮⋮</span><span class="toggle on"></span>
+          <div class="main"><b>Back up saves</b><small>All games · PowerShell 7 · C:\Scripts\backup-saves.ps1 (imported)</small></div>
+          <span class="badge">Global</span><button class="icon-btn">✎</button><button class="icon-btn">⋯</button></div>
+      </div>
+      <div class="hint">⋯ menu: Duplicate, Run now for a game…, Move up/down (keyboard: Alt+↑/↓ on a focused row), Delete.</div>
+    </main>
+  </div>
+  <div class="note">One card per kind. <b>Pre</b> and <b>post</b> are ordered separately; the striped row is the fixed placeholder for games' own scripts (draggable, not removable). Each row is a one-line summary: scope badge, runtime, what it runs, timing. The second pre row is shown mid-drag.</div>
+</section>
+
+<!-- ================= 3b. SCRIPT DIALOG (inline) ================= -->
+<section class="screen" id="dialog">
+  <div class="modal">
+    <div class="mhead"><h2>Edit script</h2><button class="icon-btn">✕</button></div>
+    <div class="mbody">
+      <div class="mform">
+        <div class="grid2">
+          <div class="f"><span class="lab">Name</span><div class="in">EQ: Gaming profile</div></div>
+          <div class="f"><span class="lab">Runs</span><div class="seg"><span class="on">Before the game starts</span><span>After it closes</span><span>As an action</span></div></div>
+          <div class="f"><span class="lab">For</span>
+            <div class="row"><div class="seg"><span>All games</span><span class="on">Matching games</span></div><button class="btn sm">Filter… <span class="badge acc">2</span></button></div>
+            <span class="hint">Installed, Category is “Shooter” · 37 games match</span></div>
+          <div class="f"><span class="lab">When</span><div class="seg"><span class="on">Before the game starts</span><span>Once the game is running</span></div>
+            <span class="hint">“Once running” suits games with their own launcher; set their tracking to the game's executable.</span></div>
+        </div>
+
+        <div class="f"><span class="lab">What it runs</span>
+          <div class="seg"><span>Program</span><span class="on">Script</span><span>Linked script file</span></div></div>
+
+        <div class="editor">
+          <div class="bar">
+            <span class="select" style="min-width:200px">Windows PowerShell 5.1</span>
+            <span class="hint">Saved in the library as <code>scripts/3f2a….ps1</code></span>
+            <span style="flex:1"></span>
+            <button class="btn sm ghost">Import file…</button>
+          </div>
+<pre><span class="l"><span class="cm"># Switch the EQ to the gaming profile for shooters</span></span><span class="l"><span class="vr">$profile</span> <span class="op">=</span> <span class="kw">if</span> (<span class="vr">$env:QK_GENRES</span> <span class="op">-match</span> <span class="str">'Shooter'</span>) { <span class="str">'FPS'</span> } <span class="kw">else</span> { <span class="str">'Game'</span> }</span><span class="l"></span><span class="l"><span class="fn">Write-Output</span> <span class="str">"Starting </span><span class="vr">$env:QK_GAME_NAME</span><span class="str"> with profile </span><span class="vr">$profile</span><span class="str">"</span></span><span class="l"><span class="op">&amp;</span> <span class="str">'C:\Program Files\EqualizerAPO\Editor.exe'</span> <span class="op">-</span>profile <span class="vr">$profile</span></span><span class="l"><span class="kw">if</span> (<span class="vr">$env:QK_</span>▏</span><span class="l"></span><span class="l"></span></pre>
+          <div class="ac">
+            <div class="on"><span>$env:QK_GAME_NAME</span><small>Cyberpunk 2077</small></div>
+            <div><span>$env:QK_GAME_ID</span><small>9c1e…</small></div>
+            <div><span>$env:QK_GENRES</span><small>RPG;Shooter</small></div>
+            <div><span>$env:QK_INSTALL_DIR</span><small>D:\Games\Cyberpunk…</small></div>
+            <div><span>$env:QK_PHASE</span><small>pre</small></div>
+          </div>
+        </div>
+
+        <div class="f"><span class="lab">Arguments for the script (optional)</span><div class="in"><span class="ph">e.g. -Verbose "{GameName}"</span></div></div>
+
+        <details class="adv" open>
+          <summary>Advanced</summary>
+          <div class="body">
+            <div class="check"><i></i><div>Show the window</div></div>
+            <div class="check"><i class="on">✓</i><div>Wait until it finishes</div></div>
+            <div class="row"><span>Timeout</span><div class="in" style="width:70px">60</div><span class="hint">seconds; then the game starts anyway</span></div>
+            <div class="check"><i></i><div>Don't start the game if this script fails</div></div>
+            <div class="f"><span class="lab">Working folder</span><div class="row"><div class="in grow"><span class="ph">The game's install folder</span></div><button class="btn">Browse…</button></div></div>
+          </div>
+        </details>
+      </div>
+
+      <aside class="vars">
+        <div class="row"><b style="flex:1">Variables</b><span class="seg"><span class="on">Env</span><span>{ }</span></span></div>
+        <div class="in"><span class="ph">Filter variables…</span></div>
+        <div class="row"><span class="lab">Values for</span><span class="select" style="min-width:0;flex:1">Cyberpunk 2077</span></div>
+        <div class="list">
+          <div class="var-group">Game</div>
+          <div class="var"><code>QK_GAME_NAME</code><small>Cyberpunk 2077</small></div>
+          <div class="var"><code>QK_GAME_ID</code><small>9c1e5a0e-41b2-4c…</small></div>
+          <div class="var"><code>QK_STORE</code><small>gog</small></div>
+          <div class="var"><code>QK_STORE_GAME_ID</code><small>1423049311</small></div>
+          <div class="var"><code>QK_INSTALL_DIR</code><small>D:\Games\Cyberpunk 2077</small></div>
+          <div class="var"><code>QK_GENRES</code><small>RPG;Shooter</small></div>
+          <div class="var"><code>QK_PLAYTIME_SECONDS</code><small>412380</small></div>
+          <div class="var-group">Images</div>
+          <div class="var"><code>QK_COVER_PATH</code><small>…\covers\9c1e5a0e.jpg</small></div>
+          <div class="var"><code>QK_BACKGROUND_PATH</code><small>…\backgrounds\9c1e5a0e.jpg</small></div>
+          <div class="var-group">Launch</div>
+          <div class="var"><code>QK_PHASE</code><small>pre</small></div>
+          <div class="var"><code>QK_LAUNCH_TARGET</code><small>D:\Games\…\REDprelauncher.exe</small></div>
+          <div class="var"><code>QK_LAUNCH_PROFILE</code><small>Default</small></div>
+          <div class="var-group">Everything</div>
+          <div class="var"><code>QK_GAME_JSON</code><small>path to the full game record as JSON</small></div>
+        </div>
+        <span class="hint">Click to insert at the cursor. Lists are joined with “;”. The { } tab shows the same values as placeholders for arguments.</span>
+      </aside>
+    </div>
+    <div class="mfoot">
+      <div class="row"><button class="btn ghost danger">Delete</button><button class="btn">▶ Run now…</button></div>
+      <div class="row"><button class="btn">Cancel</button><button class="btn primary">Save</button></div>
+    </div>
+  </div>
+  <div class="note">
+    <b>Script dialog</b>, opened from Settings › Scripts or the Edit game dialog (there, “For” is fixed to the game and hidden).
+    Left: what and when; the editor with the runtime picker (only installed runtimes), “Import file…” loads a file into the editor (it becomes a library copy). Autocomplete shown mid-typing.
+    Right: the variables panel with live values for a chosen game, switchable between env syntax and <code>{Placeholder}</code> syntax.
+  </div>
+</section>
+
+<!-- ================= 3c. SCRIPT DIALOG (program / linked) ================= -->
+<section class="screen" id="dialog-prog">
+  <div class="modal">
+    <div class="mhead"><h2>New action</h2><button class="icon-btn">✕</button></div>
+    <div class="mbody">
+      <div class="mform">
+        <div class="grid2">
+          <div class="f"><span class="lab">Name</span><div class="in">Open save folder</div></div>
+          <div class="f"><span class="lab">Runs</span><div class="seg"><span>Before the game starts</span><span>After it closes</span><span class="on">As an action</span></div></div>
+          <div class="f"><span class="lab">For</span><div class="row"><div class="seg"><span>All games</span><span class="on">Matching games</span></div><button class="btn sm">Filter… <span class="badge acc">1</span></button></div><span class="hint">Store is Steam · 412 games match</span></div>
+          <div class="f"><span class="lab">Icon</span><div class="row"><button class="btn sm">📁 Folder</button><span class="hint">Shown on the game page button</span></div></div>
+        </div>
+
+        <div class="f"><span class="lab">What it runs</span><div class="seg"><span class="on">Program</span><span>Script</span><span>Linked script file</span></div></div>
+
+        <div class="f"><span class="lab">Program</span><div class="row"><div class="in grow"><code>C:\Windows\explorer.exe</code></div><button class="btn">Browse…</button></div></div>
+        <div class="f"><span class="lab">Arguments</span><div class="in"><code>"{InstallDir}\saves"</code></div>
+          <span class="hint">Placeholders are inserted as they are; put quotes around values that can contain spaces.</span></div>
+        <div class="preview">
+          <div class="row"><span class="lab" style="flex:1">Preview for Portal 2</span><button class="icon-btn" data-tooltip="Copy command line">⧉</button></div>
+          <code><span class="pv-exe">C:\Windows\explorer.exe</span> "D:\Steam\steamapps\common\Portal 2\saves"</code>
+          <span class="hint">Working folder: D:\Steam\steamapps\common\Portal 2</span>
+        </div>
+        <div class="f"><span class="lab">Working folder</span><div class="row"><div class="in grow"><span class="ph">The game's install folder</span></div><button class="btn">Browse…</button></div></div>
+
+        <div style="height:1px;background:var(--border)"></div>
+        <div class="hint" style="color:var(--muted)"><b>Linked script file</b> instead shows:</div>
+        <div class="f"><span class="lab">Script file</span><div class="row"><div class="in grow"><code>C:\Tools\ledwall\show.py</code></div><button class="btn">Browse…</button><button class="btn ghost">Import a copy</button></div>
+          <div class="row"><span class="lab">Run with</span><span class="select">Python 3.12 (py.exe)</span><span class="hint">picked from .py; PowerShell 7 · Windows PowerShell 5.1 · Bash (Git) · Command Prompt</span></div></div>
+
+        <details class="adv"><summary>Advanced</summary></details>
+      </div>
+      <aside class="vars">
+        <div class="row"><b style="flex:1">Variables</b><span class="seg"><span>Env</span><span class="on">{ }</span></span></div>
+        <div class="in"><span class="ph">Filter variables…</span></div>
+        <div class="row"><span class="lab">Values for</span><span class="select" style="min-width:0;flex:1">Portal 2</span></div>
+        <div class="list">
+          <div class="var-group">Game</div>
+          <div class="var"><code>{GameName}</code><small>Portal 2</small></div>
+          <div class="var"><code>{InstallDir}</code><small>D:\Steam\steamapps\common\Portal 2</small></div>
+          <div class="var"><code>{StoreGameId}</code><small>620</small></div>
+          <div class="var"><code>{CoverPath}</code><small>…\covers\aa31.jpg</small></div>
+          <div class="var"><code>{GameJson}</code><small>path to the full game record</small></div>
+        </div>
+        <span class="hint">Free text such as names is safer through the environment variables.</span>
+      </aside>
+    </div>
+    <div class="mfoot"><div class="row"><button class="btn">▶ Run now…</button></div><div class="row"><button class="btn">Cancel</button><button class="btn primary">Add</button></div></div>
+  </div>
+  <div class="note">Same dialog with <b>Program</b> chosen (and, below the line, how <b>Linked script file</b> looks). Actions get an icon for their button. Below the arguments, a <b>preview box</b> shows the full command line and working folder with the chosen game's values (copyable). Working folder fields have a <b>Browse…</b> button that opens the OS folder picker (also in Advanced on 3b).</div>
+</section>
+
+<!-- ================= 3d. EDIT GAME ================= -->
+<section class="screen" id="edit">
+  <div class="modal egame">
+    <div class="mhead"><h2>Edit · Cyberpunk 2077</h2><button class="icon-btn">✕</button></div>
+    <div class="mbody">
+      <nav><a>Details</a><a>Metadata</a><a>Images</a><a>Launch</a><a class="on">Scripts <small>2</small></a><a>Links</a></nav>
+      <div class="mform">
+        <div class="card">
+          <div class="card-head"><h3>This game's scripts</h3><button class="btn sm">＋ Add script</button></div>
+          <div class="item"><span class="grip">⋮⋮</span><span class="toggle on"></span><div class="main"><b>Disable mods launcher overlay</b><small>Pre · once running · Command Prompt · inline script</small></div><button class="icon-btn">✎</button><button class="icon-btn">⋯</button></div>
+          <div class="item"><span class="grip">⋮⋮</span><span class="toggle on"></span><div class="main"><b>Open Cyber Engine Tweaks folder</b><small>Action · explorer.exe "{InstallDir}\bin\x64\plugins"</small></div><button class="icon-btn">✎</button><button class="icon-btn">⋯</button></div>
+        </div>
+        <div class="check"><i class="on">✓</i><div>Run global scripts for this game</div></div>
+        <div class="card">
+          <div class="card-head"><h3>Global scripts that apply</h3><button class="btn sm ghost">Open in Settings</button></div>
+          <div class="applies">
+            <div><span class="badge">Pre</span>EQ: Gaming profile <span class="hint">· filter matches</span></div>
+            <div><span class="badge">Pre</span><i style="font-style:normal;color:var(--faint)">this game's pre scripts</i></div>
+            <div><span class="badge">Post</span><i style="font-style:normal;color:var(--faint)">this game's post scripts</i></div>
+            <div><span class="badge">Post</span>EQ: Default profile</div>
+            <div><span class="badge">Action</span>Back up saves</div>
+          </div>
+        </div>
+        <span class="hint">The list shows the order scripts run in when this game is started from Questkeep.</span>
+      </div>
+    </div>
+    <div class="mfoot"><span></span><div class="row"><button class="btn">Cancel</button><button class="btn primary">Save</button></div></div>
+  </div>
+  <div class="note">New <b>Scripts</b> tab in the Edit dialog: the game's own scripts as summaries (pre, post, actions mixed, kind shown in the summary), the opt-out, and the resolved run order including global and filtered scripts. Changes are drafts until Save, like the rest of the dialog.</div>
+</section>
+
+<!-- ================= 3e. GAME PAGE ================= -->
+<section class="screen" id="page">
+  <div class="modal" style="padding:18px;gap:16px">
+    <div class="row" style="align-items:flex-start;gap:16px">
+      <div style="width:120px;height:160px;border-radius:8px;background:linear-gradient(160deg,#5b3d2a,#1d2a3a)"></div>
+      <div class="f" style="gap:10px;flex:1">
+        <h2 style="margin:0">Cyberpunk 2077</h2>
+        <div class="row">
+          <button class="btn primary">▶ Play</button>
+          <button class="btn">📁 Open save folder</button>
+          <button class="btn">💾 Back up saves</button>
+          <button class="btn">⋯ More actions</button>
+          <span style="flex:1"></span>
+          <button class="icon-btn">✎</button><button class="icon-btn">♡</button>
+        </div>
+        <span class="hint">Up to 2 action buttons are shown; the rest (and all of them, with names) are under “More actions”.</span>
+      </div>
+      <div class="card" style="width:240px">
+        <div class="item"><span>▶</span><div class="main">Play</div></div>
+        <div class="item"><span>✎</span><div class="main">Edit…</div></div>
+        <div class="item" style="background:var(--hover)"><span>⚡</span><div class="main">Actions</div><span>›</span></div>
+        <div class="item"><span>♡</span><div class="main">Add to favorites</div></div>
+        <div class="item"><span>⋯</span><div class="main">…</div></div>
+      </div>
+      <div class="card" style="width:200px;margin-top:66px;margin-left:-8px">
+        <div class="item"><div class="main">Open save folder</div></div>
+        <div class="item"><div class="main">Back up saves</div></div>
+        <div class="item"><div class="main">Open Cyber Engine Tweaks folder</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="note"><b>Action scripts</b> as buttons in the game page's action row (with their icon) and as an “Actions” submenu in the game's context menu. Ctrl+K also finds them (“Run: Back up saves”). Not in the multi-select menu.</div>
+</section>
+
+<script>
+  const tabs = document.getElementById("tabs");
+  tabs.addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    tabs.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+    document.querySelectorAll(".screen").forEach((s) => s.classList.toggle("on", s.id === b.dataset.s));
+  });
+</script>
+</body>
+</html>

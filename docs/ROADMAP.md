@@ -65,6 +65,13 @@ and launch profiles included, waits for Save, and Add game creates nothing befor
 groups… lists the grouping's combined groups to edit or split up, and Settings lists all of them and
 combines groups of any grouping.
 
+Launch automation: game scripts (pre, post and action scripts; global, filtered or per game; inline
+scripts for the installed PowerShell, Bash, Command Prompt or Python with highlighting and
+autocomplete, game details as variables and placeholders); closing store launchers after playing
+(never, always, or only when the game started them); minimizing or hiding Questkeep while a game
+runs; the notification bell with system notifications for errors in the background; the Edit
+dialog asks before Escape or a click outside discard changes.
+
 ## Next
 
 - **Verify on Linux**: Heroic Amazon (Nile) and sideloaded games, owned games from Heroic/Lutris.
@@ -97,6 +104,5 @@ combines groups of any grouping.
     are drawn outside the page), `@import` of relative files in theme CSS, translated theme
     texts for plugin themes.
 - Fullscreen / controller mode (the grid keyboard navigation is the groundwork).
-- Multiple play actions per game, emulator profiles, pre/post scripts.
-- Minimize while playing.
+- Multiple play actions per game, emulator profiles.
 - Cloud sync of the library database.

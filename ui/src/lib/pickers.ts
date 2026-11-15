@@ -1,8 +1,10 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { translator } from "../i18n";
+import { scriptsText } from "../i18n/scripts";
 import { shellCommon } from "../i18n/shellCommon";
 
 const tr = translator(shellCommon);
+const trScripts = translator(scriptsText);
 
 async function pickFile(title: string, filters: { name: string; extensions: string[] }[]) {
   const result = await open({ multiple: false, directory: false, title, filters });
@@ -33,5 +35,13 @@ export function pickGameImage(icon: boolean): Promise<string | null> {
     icon
       ? { name: tr("filterIconOrImage"), extensions: ["png", "jpg", "jpeg", "ico", "exe", "dll"] }
       : { name: tr("filterImage"), extensions: ["png", "jpg", "jpeg", "webp"] },
+  ]);
+}
+
+/** A script file to link or import. */
+export function pickScriptFile(): Promise<string | null> {
+  return pickFile(trScripts("chooseScriptFile"), [
+    { name: trScripts("filterScripts"), extensions: ["ps1", "sh", "cmd", "bat", "py"] },
+    { name: trScripts("filterAllFiles"), extensions: ["*"] },
   ]);
 }

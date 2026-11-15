@@ -5,9 +5,12 @@ import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import type { Game } from "../bindings/Game";
 import { translator } from "../i18n";
 import { shellCommandBar } from "../i18n/shellCommandBar";
+import { scriptsText } from "../i18n/scripts";
+import { shellNotifications } from "../i18n/shellNotifications";
 import { installWithToast, launchWithToast } from "../lib/actions";
+import { createGameActions, runAction } from "../lib/gameActions";
 import * as api from "../lib/api";
-import { rankMatches, splitMatch } from "../lib/commandBar";
+import { matchCommands, rankMatches, splitMatch, type AppCommand } from "../lib/commandBar";
 import { primaryAction } from "../lib/primaryAction";
 import { defaultQuery } from "../lib/query";
 import { store } from "../lib/store";
@@ -15,6 +18,8 @@ import { GameIcon } from "./GameIcon";
 import { sourceName, SourceIcon } from "./SourceIcon";
 
 const tr = translator(shellCommandBar);
+const trNotes = translator(shellNotifications);
+const trScripts = translator(scriptsText);
 
 const DEBOUNCE_MS = 80;
 const RECENT_COUNT = 5;
@@ -41,6 +46,25 @@ export function CommandBar(props: {
   const [text, setText] = createSignal("");
   const [results, setResults] = createSignal<Game[]>([]);
   const [selected, setSelected] = createSignal(0);
+  // "Run: …" for the action scripts of the selected game.
+  const actions = createGameActions(() => store.selectedGame()?.id ?? null);
+  const allCommands = (): AppCommand[] => {
+    const game = store.selectedGame();
+    return [
+      { id: "notifications", label: trNotes("showNotifications") },
+      ...(game
+        ? actions().map((script): AppCommand => ({
+            id: "script",
+            label: trScripts("runAction", { name: script.name }),
+            scriptId: script.id,
+            gameId: game.id,
+          }))
+        : []),
+    ];
+  };
+  const commands = () => matchCommands(allCommands(), text());
+  /** Games first, then commands: one list for the arrow keys. */
+  const total = () => results().length + commands().length;
   let input: HTMLInputElement | undefined;
   let root: HTMLDivElement | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -124,8 +148,17 @@ export function CommandBar(props: {
     else store.openGamePage(game);
   }
 
+  function runCommand(command: AppCommand) {
+    close();
+    if (command.id === "notifications") store.showNotifications();
+    else {
+      const script = actions().find((s) => s.id === command.scriptId);
+      if (script) void runAction(script, command.gameId);
+    }
+  }
+
   function onKeyDown(event: KeyboardEvent) {
-    const count = results().length;
+    const count = total();
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
       if (count === 0) return;
@@ -133,7 +166,9 @@ export function CommandBar(props: {
       setSelected((i) => (i + step + count) % count);
     } else if (event.key === "Enter") {
       event.preventDefault();
-      run(results()[selected()], event.ctrlKey || event.metaKey);
+      const command = commands()[selected() - results().length];
+      if (command) runCommand(command);
+      else run(results()[selected()], event.ctrlKey || event.metaKey);
     } else if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
@@ -153,7 +188,7 @@ export function CommandBar(props: {
           aria-label={tr("findGame")}
           aria-expanded={open()}
           aria-controls="command-results"
-          aria-activedescendant={open() && results().length > 0 ? optionId(selected()) : undefined}
+          aria-activedescendant={open() && total() > 0 ? optionId(selected()) : undefined}
           aria-autocomplete="list"
           placeholder={tr("findGameEllipsis")}
           spellcheck={false}
@@ -238,7 +273,31 @@ export function CommandBar(props: {
               }}
             </For>
           </ul>
-          <Show when={results().length === 0 && text().trim() !== ""}>
+          <Show when={commands().length > 0}>
+            <div class="command__heading">{tr("commands")}</div>
+            <ul class="command__results" role="listbox" aria-label={tr("commands")}>
+              <For each={commands()}>
+                {(command, index) => {
+                  const at = () => results().length + index();
+                  return (
+                    <li
+                      id={optionId(at())}
+                      role="option"
+                      aria-selected={at() === selected()}
+                      class="command__result"
+                      classList={{ "command__result--selected": at() === selected() }}
+                      onPointerMove={() => setSelected(at())}
+                      onPointerDown={(event) => event.preventDefault()}
+                      onClick={() => runCommand(command)}
+                    >
+                      <span class="command__name">{command.label}</span>
+                    </li>
+                  );
+                }}
+              </For>
+            </ul>
+          </Show>
+          <Show when={total() === 0 && text().trim() !== ""}>
             <p class="command__empty">{tr("noMatch", { text: text().trim() })}</p>
           </Show>
           <div class="command__hints" aria-hidden="true">

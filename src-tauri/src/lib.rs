@@ -3,6 +3,7 @@
 mod autostart;
 mod backups;
 mod commands;
+mod game_window;
 mod i18n;
 mod install_kind;
 mod plugin_files;
@@ -160,6 +161,7 @@ fn build_state(app: &tauri::AppHandle) -> Result<(AppState, Option<WorkerGuard>)
             tracing::debug!(%err, "could not forward event to the UI");
         }
     });
+    game_window::watch(app, &events);
 
     // Every copy shares the keyring, but a copy with its own data folder (portable, or the
     // development build) has its own browser profiles, where a website sign-in may look signed
@@ -198,6 +200,14 @@ fn build_state(app: &tauri::AppHandle) -> Result<(AppState, Option<WorkerGuard>)
         Err(err) => tracing::error!(%err, "could not recover play sessions"),
     }
     let launcher = Launcher::new(library.database().clone(), events.clone());
+    launcher.set_hooks(Arc::new(questkeep_core::automation::Automation::new(
+        library.database().clone(),
+        library.providers().clone(),
+        library.settings_store().clone(),
+        library.notifications().clone(),
+        Some(library.scripts().clone()),
+        launcher.running_games(),
+    )));
     launcher.start_watching(library.settings().detect_external_launches);
     let covers = CoverFetcher::new(
         library.database().clone(),
@@ -373,6 +383,7 @@ pub fn run() {
             Some(vec![MINIMIZED_ARG]),
         ))
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .register_uri_scheme_protocol(plugin_files::SCHEME, plugin_files::serve)
@@ -385,6 +396,7 @@ pub fn run() {
                 app.manage(guard);
             }
             app.manage(window::Lifecycle::default());
+            app.manage(game_window::GameWindow::default());
             app.manage(updates::Updates::default());
             app.manage(backups::QuitGuard::default());
             let lifecycle = app.state::<window::Lifecycle>();
@@ -414,6 +426,27 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(main_window_only(tauri::generate_handler![
+            commands::notifications,
+            commands::add_notification,
+            commands::mark_notifications_read,
+            commands::dismiss_notification,
+            commands::clear_notifications,
+            commands::take_open_notifications,
+            commands::global_scripts,
+            commands::game_scripts,
+            commands::get_script,
+            commands::save_script,
+            commands::delete_script,
+            commands::set_script_enabled,
+            commands::set_script_order,
+            commands::set_own_script_order,
+            commands::set_run_global_scripts,
+            commands::script_runtimes,
+            commands::script_variables,
+            commands::read_script_file,
+            commands::run_script,
+            commands::run_script_draft,
+            commands::stop_script_run,
             commands::list_games,
             commands::account_warnings,
             commands::dismiss_account_warning,

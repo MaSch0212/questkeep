@@ -4,7 +4,9 @@ use std::collections::HashMap;
 
 use crate::auth::AccountAuth;
 pub use crate::model::AddGameOption;
-use crate::model::{Achievements, CatalogHit, GameMetadata, GameNews, ImportedGame, PlayAction};
+use crate::model::{
+    Achievements, CatalogHit, GameMetadata, GameNews, ImportedGame, LauncherProcess, PlayAction,
+};
 use crate::settings::StoreSettings;
 
 /// Errors a provider can report. Messages are shown to users.
@@ -179,6 +181,11 @@ pub trait LibraryProvider: Send + Sync {
     /// or `None` when the launcher isn't installed on this PC or the provider has none. Must be
     /// cheap: the UI asks every time it shows the "Open launcher" menu.
     fn launcher(&self) -> Option<PlayAction> {
+        None
+    }
+    /// The launcher as a running program and how to close it, for the "Close launcher after
+    /// playing" setting; `None` (the default) hides the setting. Must be cheap.
+    fn launcher_process(&self) -> Option<LauncherProcess> {
         None
     }
     /// Whether the store's client is on this PC. Stores that aren't installed are not synced

@@ -1,3 +1,6 @@
+import type { RuntimeInfo } from "./bindings/RuntimeInfo";
+import type { Script } from "./bindings/Script";
+import type { ScriptVariable } from "./bindings/ScriptVariable";
 import type { Game } from "./bindings/Game";
 import type { PluginInfo } from "./bindings/PluginInfo";
 import type { ProviderInfo } from "./bindings/ProviderInfo";
@@ -122,6 +125,7 @@ export function makeProvider(overrides: Partial<ProviderInfo> & { id: string }):
     canScanOwned: false,
     canUninstall: false,
     launcherPages: false,
+    launcherClose: null,
     shopUrl: null,
     installed: true,
     syncable: true,
@@ -171,3 +175,45 @@ export function makePlugin(overrides: Partial<PluginInfo> = {}): PluginInfo {
     ...overrides,
   };
 }
+
+/** A saved script (global, all games, a hidden PowerShell script) unless overridden. */
+export function makeScript(overrides: Partial<Script> = {}): Script {
+  return {
+    id: "s1",
+    name: "EQ: Gaming profile",
+    kind: "pre",
+    enabled: true,
+    gameId: null,
+    filter: null,
+    position: 0n,
+    timing: "beforeStart",
+    source: "inline",
+    program: "",
+    runtime: "windowsPowershell",
+    args: "",
+    workingDir: null,
+    options: { showWindow: false, wait: true, timeoutSeconds: 60, stopLaunchOnFailure: false },
+    icon: null,
+    content: "Write-Output hi",
+    ...overrides,
+  };
+}
+
+export const RUNTIMES: RuntimeInfo[] = [
+  {
+    id: "windowsPowershell",
+    name: "Windows PowerShell 5.1",
+    path: "powershell.exe",
+    extension: "ps1",
+  },
+  { id: "bash", name: "Bash", path: "bash.exe", extension: "sh" },
+  { id: "python", name: "Python 3.12", path: "py.exe", extension: "py" },
+];
+
+/** Variables as the core reports them for a game. */
+export const SCRIPT_VARIABLES: ScriptVariable[] = [
+  { env: "QK_GAME_NAME", placeholder: "GameName", group: "game", value: "Hades" },
+  { env: "QK_INSTALL_DIR", placeholder: "InstallDir", group: "game", value: "C:\\Games\\Hades" },
+  { env: "QK_GENRES", placeholder: "Genres", group: "lists", value: "Action;Roguelike" },
+  { env: "QK_PHASE", placeholder: "Phase", group: "context", value: "pre" },
+];

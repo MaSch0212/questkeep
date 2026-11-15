@@ -97,7 +97,14 @@ crates/questkeep-core/src/     all app logic; sees stores only through the store
                                (n:m game categories, store imports), combine.rs (one entry for a
                                game in several stores, duplicate detection)
   providers/                   ProviderRegistry (+ ProviderInfo for the UI) and the manual provider
-  launcher/                    launch + tracker threads (mod.rs), process matching (process.rs)
+  launcher/                    launch + tracker threads (mod.rs), process matching (process.rs);
+                               LaunchHooks/LaunchSession: what runs around a launch from Questkeep
+  automation/                  the launcher's hooks: game scripts around launches, closing store
+                               launchers after playing (launcher_close.rs)
+  scripts/                     game scripts: saving (files in <data>/scripts), run order, running
+                               (mod.rs), installed runtimes (runtimes.rs), QK_* variables
+                               and {Placeholders} (variables.rs)
+  notifications.rs             the notification bell's entries (notifications.json, last 100)
   images/                      cover/background cache (mod.rs) + cover and metadata fetchers (fetcher.rs)
   events.rs                    EventBus + CoreEvent
   platform/                    executable icons, URI opening, processes, argument handling (cfg-gated)
@@ -109,6 +116,8 @@ src-tauri/src/                 thin shell: commands.rs (one wrapper per command)
   signin.rs                    store login windows and the hidden store-session window, both
                                driven by the store's LoginWindow description
   tray.rs                      tray icon and native menu; hands the popup its data
+  game_window.rs               minimizing/hiding the window while a game runs, bringing it back,
+                               system notifications while the window is in the background
   updates.rs                   update check after start, the found update, installing it
                                (debug builds: QUESTKEEP_FAKE_UPDATE=<version> pretends one exists)
 ui/src/

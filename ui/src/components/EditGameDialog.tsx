@@ -1,6 +1,7 @@
 import { translator } from "../i18n";
 import { gameEdit } from "../i18n/gameEdit";
 import { gameSetup } from "../i18n/gameSetup";
+import { scriptsText } from "../i18n/scripts";
 import { shellAddGame } from "../i18n/shellAddGame";
 import {
   createEffect,
@@ -62,14 +63,24 @@ import { EditLaunchSection } from "./EditLaunchSection";
 import { ImagePicker, imageSrc } from "./ImagePicker";
 import { MetadataLinkPicker } from "./MetadataLinkPicker";
 import { Modal } from "./Modal";
+import { ScriptsTab } from "./ScriptsTab";
 import { ProgramPicker } from "./ProgramPicker";
 import { sourceName as storeName } from "./SourceIcon";
 
 const tr = translator(gameEdit);
 const trSetup = translator(gameSetup);
 const trAdd = translator(shellAddGame);
+const trScripts = translator(scriptsText);
 
-export type Section = "setup" | "general" | "details" | "links" | "launch" | "tracking" | "images";
+export type Section =
+  | "setup"
+  | "general"
+  | "details"
+  | "links"
+  | "launch"
+  | "tracking"
+  | "scripts"
+  | "images";
 
 const KINDS: readonly (readonly [GameKind, "kindGame" | "kindApp"])[] = [
   ["game", "kindGame"],
@@ -86,6 +97,7 @@ export const SECTIONS: {
     | "secLinks"
     | "secLaunch"
     | "secTracking"
+    | "secScripts"
     | "secImages";
 }[] = [
   { id: "setup", label: "secSetup" },
@@ -94,6 +106,7 @@ export const SECTIONS: {
   { id: "links", label: "secLinks" },
   { id: "launch", label: "secLaunch" },
   { id: "tracking", label: "secTracking" },
+  { id: "scripts", label: "secScripts" },
   { id: "images", label: "secImages" },
 ];
 
@@ -249,8 +262,12 @@ export function EditGameDialog(props: {
   const game = () => props.game;
   const id = props.game.id;
   const [section, setSection] = createSignal<Section>(props.section ?? "general");
+  // Setup only for games added by hand; scripts belong to a game that exists in the library.
   const sections = () =>
-    SECTIONS.filter((entry) => entry.id !== "setup" || game().source === "manual");
+    SECTIONS.filter(
+      (entry) =>
+        (entry.id !== "setup" || game().source === "manual") && (entry.id !== "scripts" || !isNew),
+    );
   // Asked again when the shown metadata changes (e.g. a linked game's details arrive).
   const [loadedInfo] = createResource(
     () =>
@@ -263,6 +280,14 @@ export function EditGameDialog(props: {
             game().releaseDate,
           ]),
     () => api.gameEditInfo(id),
+  );
+  // The game's scripts (own and applying), for the Scripts tab and its count.
+  const [gameScripts, { refetch: reloadScripts }] = createResource(
+    () => (isNew ? false : store.scriptsRevision()),
+    () =>
+      Promise.resolve()
+        .then(() => api.gameScripts(id))
+        .catch(() => null),
   );
   const blankInfo = newGameInfo();
   const info = (): GameEditInfo | undefined => (isNew ? blankInfo : loadedInfo());
@@ -353,6 +378,7 @@ export function EditGameDialog(props: {
       .map((cid) => store.categories().find((c) => c.id === cid)?.name)
       .filter((n): n is string => n !== undefined),
   );
+  const startCategories = categoryNames().join("\n");
   const [detectLaunches, setDetectLaunches] = createSignal(props.game.detectLaunches);
   const [ignored, setIgnored] = createSignal(props.game.ignoredProcesses.join("\n"));
   // Number fields as typed.
@@ -381,6 +407,32 @@ export function EditGameDialog(props: {
   });
   const ready = () => info() !== undefined && values() !== null;
 
+  // The metadata fields and number texts as the drafts started with them.
+  let startSnapshot = "";
+  const snapshot = () => JSON.stringify([values(), numbers()]);
+
+  /** Whether anything differs from what the dialog opened with (asked before Esc discards it). */
+  const dirty = (): boolean => {
+    if (saving()) return false;
+    const g = props.game;
+    return (
+      name() !== g.name ||
+      kind() !== g.kind ||
+      completion() !== g.completionStatus ||
+      score() !== g.userScore ||
+      notes() !== (g.notes ?? "") ||
+      detectLaunches() !== g.detectLaunches ||
+      ignored() !== g.ignoredProcesses.join("\n") ||
+      categoryNames().join("\n") !== startCategories ||
+      actions().size > 0 ||
+      linkChanged() ||
+      profilesChanged() ||
+      imageDrafts().size > 0 ||
+      (base !== undefined && !untouched(base)) ||
+      (startSnapshot !== "" && snapshot() !== startSnapshot)
+    );
+  };
+
   function startDrafts(loaded: GameEditInfo) {
     {
       const start = startValues(loaded);
@@ -397,6 +449,7 @@ export function EditGameDialog(props: {
         ttbComplete: hoursText(start.timeToBeat?.complete),
         installSize: gigabytesText(start.installSize),
       });
+      startSnapshot = snapshot();
       for (const f of LIST_FIELDS) void store.loadValues(f.values);
     }
   }
@@ -492,6 +545,9 @@ export function EditGameDialog(props: {
     });
     return created.id;
   }
+
+  /** Set by "Save and open": Settings › Scripts opens once the save went through. */
+  let openSettingsAfter = false;
 
   async function save() {
     const trimmed = name().trim();
@@ -592,7 +648,9 @@ export function EditGameDialog(props: {
       store.upsertGame(saved);
       props.onSaved?.(saved);
       props.onClose();
+      if (openSettingsAfter) store.showSettingsSection("scripts");
     } catch (failure) {
+      openSettingsAfter = false;
       setError(errorMessage(failure));
     } finally {
       setSaving(false);
@@ -631,10 +689,25 @@ export function EditGameDialog(props: {
     return info()?.userImages[slot] ?? false;
   };
 
+  const [askOpen, setAskOpen] = createSignal(false);
+  /** Open in Settings: closes the dialog first, asking when there are unsaved changes. */
+  function openSettings() {
+    if (dirty()) {
+      setAskOpen(true);
+      return;
+    }
+    props.onClose();
+    store.showSettingsSection("scripts");
+  }
+
   const sectionCount = (s: Section): string | null => {
     if (s === "general" || s === "details") {
       const count = editedCount(SECTION_FIELDS[s], edited());
       return count > 0 ? tr("edited", { count }) : null;
+    }
+    if (s === "scripts") {
+      const count = gameScripts()?.own.length ?? 0;
+      return count > 0 ? String(count) : null;
     }
     if (s === "launch") {
       const count = profiles()?.profiles.length ?? 0;
@@ -687,7 +760,13 @@ export function EditGameDialog(props: {
   }
 
   return (
-    <Modal title={props.title ?? tr("editGame")} wide onClose={() => props.onClose()}>
+    <Modal
+      title={props.title ?? tr("editGame")}
+      wide
+      onClose={() => props.onClose()}
+      dirty={dirty}
+      onSave={() => void save()}
+    >
       <div class="edit-game">
         <div class="edit-game__main">
           <nav class="edit-game__nav" aria-label={tr("sections")}>
@@ -823,6 +902,14 @@ export function EditGameDialog(props: {
                     {tr("ignoredHint")}
                   </p>
                 </div>
+              </Match>
+              <Match when={section() === "scripts"}>
+                <ScriptsTab
+                  game={game()}
+                  scripts={gameScripts()}
+                  reload={() => void reloadScripts()}
+                  onOpenSettings={openSettings}
+                />
               </Match>
               <Match when={section() === "images"}>
                 <div class="edit-section">
@@ -1242,6 +1329,42 @@ export function EditGameDialog(props: {
             />
           </Portal>
         )}
+      </Show>
+      <Show when={askOpen()}>
+        <Portal>
+          {/* Outside the dialog, so its focus trap doesn't fight the prompt's. */}
+          <Modal title={trScripts("openUnsavedTitle")} narrow onClose={() => setAskOpen(false)}>
+            <p class="confirm__message">{trScripts("openUnsavedMessage")}</p>
+            <div class="form__actions">
+              <button type="button" class="btn" onClick={() => setAskOpen(false)}>
+                {trScripts("cancel")}
+              </button>
+              <button
+                type="button"
+                class="btn btn--danger"
+                onClick={() => {
+                  setAskOpen(false);
+                  props.onClose();
+                  store.showSettingsSection("scripts");
+                }}
+              >
+                {trScripts("discardAndOpen")}
+              </button>
+              <button
+                type="button"
+                class="btn btn--primary"
+                data-autofocus
+                onClick={() => {
+                  setAskOpen(false);
+                  openSettingsAfter = true;
+                  void save();
+                }}
+              >
+                {trScripts("saveAndOpen")}
+              </button>
+            </div>
+          </Modal>
+        </Portal>
       </Show>
       <Show when={programs()}>
         <Portal>

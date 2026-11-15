@@ -80,6 +80,7 @@ function expandable(entry: StoreRow): boolean {
   return (
     (entry.settings.notice ?? null) !== null ||
     entry.settings.options.length > 0 ||
+    entry.launcherClose !== null ||
     (entry.account !== null &&
       (entry.account.signedIn ||
         entry.account.supportsCodeSignIn ||
@@ -527,7 +528,9 @@ export function AccountsSection(props: { model: SettingsModel }) {
                         </Show>
                         <StoreOptions
                           providerId={entry.id}
+                          storeName={entry.name}
                           options={entry.settings.options}
+                          launcherClose={entry.launcherClose}
                           model={props.model}
                         />
                         {/* Ending the account comes last, away from the head. */}
