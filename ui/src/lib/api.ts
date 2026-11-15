@@ -320,6 +320,9 @@ export const searchWebImages = (query: string, large: boolean, transparent: bool
   invoke<ImageOption[]>("search_web_images", { query, large, transparent });
 /** Programs on this PC that are not in the library (Add game). */
 export const installedPrograms = () => invoke<InstalledProgram[]>("installed_programs");
+/** Icons of executables as PNG data URLs, in order (`null` without one). */
+export const executableIcons = (paths: string[]) =>
+  invoke<(string | null)[]>("executable_icons", { paths });
 /** IGDB and the stores whose catalog can be searched, for linking a game added by hand. */
 export const metadataSearchSources = () => invoke<MetadataSourceInfo[]>("metadata_search_sources");
 export const searchMetadata = (source: string, query: string) =>

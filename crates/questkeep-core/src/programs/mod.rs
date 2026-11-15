@@ -315,6 +315,34 @@ pub fn not_in_library(
         .collect()
 }
 
+/// Size of the icons shown in the program list.
+const LIST_ICON_SIZE: u32 = 32;
+
+/// The icons of executables as `data:image/png` URLs, in order (`None` for a file without a
+/// usable icon, and everywhere off Windows). Only `.exe` files are read.
+pub fn executable_icons(paths: &[String]) -> Vec<Option<String>> {
+    use base64::Engine as _;
+    paths
+        .iter()
+        .map(|path| {
+            let path = Path::new(path);
+            if !path
+                .extension()
+                .is_some_and(|e| e.eq_ignore_ascii_case("exe"))
+            {
+                return None;
+            }
+            let icon = crate::platform::executable_icon(path, LIST_ICON_SIZE)?;
+            let png =
+                questkeep_imaging::icon_png_from_rgba(&icon, questkeep_imaging::SquareFrom::Icon)?;
+            Some(format!(
+                "data:image/png;base64,{}",
+                base64::engine::general_purpose::STANDARD.encode(png)
+            ))
+        })
+        .collect()
+}
+
 /// The programs on this PC (Windows only; empty elsewhere).
 pub fn installed_programs() -> Vec<InstalledProgram> {
     if !cfg!(windows) {

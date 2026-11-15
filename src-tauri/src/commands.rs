@@ -397,6 +397,18 @@ pub async fn installed_programs(
     blocking(state, |s| s.library.installed_programs()).await
 }
 
+/// Icons of executables as PNG data URLs (the installed programs list), in order.
+#[tauri::command]
+pub async fn executable_icons(
+    state: State<'_, Arc<AppState>>,
+    paths: Vec<String>,
+) -> CmdResult<Vec<Option<String>>> {
+    blocking(state, move |_| {
+        Ok(questkeep_core::programs::executable_icons(&paths))
+    })
+    .await
+}
+
 /// Where a game added by hand can find its metadata: IGDB and searchable store catalogs.
 #[tauri::command]
 pub async fn metadata_search_sources(

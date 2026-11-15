@@ -478,6 +478,7 @@ pub fn run() {
             commands::refresh_metadata,
             commands::metadata_search_sources,
             commands::installed_programs,
+            commands::executable_icons,
             commands::search_metadata,
             commands::set_metadata_link,
             commands::refetch_artwork,

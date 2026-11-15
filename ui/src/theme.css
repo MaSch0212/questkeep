@@ -400,7 +400,7 @@
   /* Add game: catalog hits (cover thumbnails) and the installed programs list. */
   --qk-link-hit-thumb-width: 36px;
   --qk-link-hits-max-height: 260px;
-  --qk-program-list-height: 420px;
+  --qk-program-icon-size: 32px;
   --qk-icon-size-xs: 12px;
   --qk-popover-width: 340px;
   --qk-popover-gap: 6px;
