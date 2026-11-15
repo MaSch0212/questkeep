@@ -24,6 +24,14 @@ todo = "warn"
 print_stdout = "warn"
 print_stderr = "warn"
 
+# Debug builds: file/line backtraces for our crates, no debug info for dependencies. Full debug
+# info made target/ grow by hundreds of GB on Windows (PDBs, incremental caches).
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
 [profile.release]
 codegen-units = 1
 lto = true

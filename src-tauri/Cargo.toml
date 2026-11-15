@@ -8,7 +8,9 @@ repository.workspace = true
 
 [lib]
 name = "questkeep_app"
-crate-type = ["staticlib", "cdylib", "rlib"]
+# Desktop only: Tauri's template adds staticlib (iOS) and cdylib (Android), which wrote a 744 MB
+# unused library on every build.
+crate-type = ["rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2.7.3", features = [] }
