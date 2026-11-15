@@ -19,11 +19,19 @@ env:
   NODE_VERSION: "24"
 
 jobs:
+  # Windows runners are slow mostly on disk I/O: target/ is a Dev Drive (ReFS) mounted in place,
+  # and the gates and the release build run as two parallel jobs.
   windows:
-    name: Windows (gates + build)
+    name: Windows (gates)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
+
+      - uses: samypr100/setup-dev-drive@v4
+        with:
+          drive-size: 25GB
+          mount-path: target
+          trusted-dev-drive: true
 
       - uses: pnpm/action-setup@v6
 
@@ -69,6 +77,32 @@ jobs:
 
       - name: vitest
         run: pnpm --dir ui test
+
+  windows-build:
+    name: Windows (build)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: samypr100/setup-dev-drive@v4
+        with:
+          drive-size: 15GB
+          mount-path: target
+          trusted-dev-drive: true
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install JS dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Build app
         run: pnpm tauri build
