@@ -12,6 +12,7 @@ Guide for humans and coding agents working on Questkeep.
 | **All quality gates** | `pnpm check` |
 | Auto-format, then check | `pnpm fix` |
 | Update the Rust lockfile (2-day min age) | `pnpm deps:rust` |
+| Remove stale build output from `target/` (needs `cargo install cargo-sweep`) | `pnpm clean:stale` |
 | Add a changeset (every user-visible PR) | `pnpm changeset add <major\|minor\|patch> "summary"` |
 | Show version, pending changesets, next version | `pnpm changeset status` |
 | List installed Steam games (dev tool) | `cargo run -p questkeep-store-steam --example scan_steam` |
@@ -22,6 +23,9 @@ Guide for humans and coding agents working on Questkeep.
 `pnpm check` runs, in order: rustfmt check, clippy (`-D warnings`), `cargo test --workspace`,
 oxfmt check, oxlint (`--deny-warnings`), `tsc --noEmit`, vitest. In CI (`CI` env set) it also
 fails if `ui/src/bindings` differs from what `cargo test` generated. Run it before every commit. It also runs the release-script tests (`node --test scripts/release/*.test.mjs`).
+Outside CI it ends with `pnpm clean:stale` (artifacts of uninstalled toolchains and anything no
+build used for 7 days, in `target/`, `target/agent` and the example store); without cargo-sweep
+installed that step is skipped, and its failure never fails the checks.
 CI (`.github/workflows/ci.yml`) runs the same steps on Windows and Ubuntu, then builds the app.
 
 UI-only commands run from `ui/`: `pnpm lint`, `pnpm format`, `pnpm format:check`, `pnpm test`,

@@ -46,6 +46,13 @@ for (const [label, cmd, args, cwd] of steps) {
   }
 }
 
+// Housekeeping, not a check: drop stale build output (see scripts/sweep.mjs). CI starts clean.
+if (!process.env.CI) {
+  console.log("\n▶ cleanup: node scripts/sweep.mjs");
+  const sweep = spawnSync("node scripts/sweep.mjs", { cwd: root, stdio: "inherit", shell: true });
+  if (sweep.status !== 0) console.log("⚠ cleanup of stale build output failed (not a check)");
+}
+
 if (failed.length > 0) {
   console.error(`\n${failed.length} check(s) failed: ${failed.join(", ")}`);
   process.exit(1);
