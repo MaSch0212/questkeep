@@ -2,14 +2,18 @@
 //! again, the copies' play order, and finding likely duplicates.
 
 use std::collections::{HashMap, HashSet};
+use std::sync::LazyLock;
 
+use regex::Regex;
 use rusqlite::{OptionalExtension, Transaction, params};
 use uuid::Uuid;
 
 use super::Database;
 use super::categories::{game_categories, set_categories};
 use crate::error::{CoreError, Result};
-use crate::model::{CombinePlan, Game, GameQuery, HiddenFilter, KindFilter, UserEdits};
+use crate::model::{
+    CombinePlan, Game, GameQuery, HiddenFilter, KindFilter, UserEdits, numbers_as_digits,
+};
 
 /// The entry a game row belongs to: itself, or the entry it was combined into.
 fn entry_of(tx: &Transaction<'_>, id: Uuid) -> Result<String> {
@@ -94,10 +98,31 @@ fn dismiss(tx: &Transaction<'_>, a: &str, b: &str) -> Result<()> {
     Ok(())
 }
 
-/// Name key for finding the same game in several stores: case, symbols and spacing ignored,
-/// so "Rocket League®" and "rocket league" match.
+/// A trailing edition that stores add to the same game: "- Game of the Year Edition", " GOTY",
+/// " (Definitive Edition)", ": Director's Cut". Remasters and remakes are other games and stay.
+static EDITION: LazyLock<Option<Regex>> = LazyLock::new(|| {
+    Regex::new(
+        r"(?i)(?:\s*[-:\u{2013}(]\s*|\s+)(?:goty|game of the year|director'?s cut|(?:game of the year|goty|definitive|digital deluxe|deluxe|complete|gold|ultimate|enhanced|standard|special|anniversary|premium|collector'?s|legendary|platinum|steam|gog|epic)\s+edition)\)?\s*$",
+    )
+    .ok()
+});
+
+/// Name key for finding the same game in several stores: case, symbols and spacing ignored, a
+/// trailing edition dropped and numbers written alike, so "Rocket League®" and "rocket league",
+/// "Borderlands 2 GOTY" and "Borderlands 2", "Final Fantasy VII" and "Final Fantasy 7" match.
 pub fn duplicate_key(name: &str) -> String {
-    name.replace('&', " and ")
+    let mut base = name.replace(['\u{2122}', '\u{00ae}', '\u{00a9}'], " ");
+    if let Some(edition) = EDITION.as_ref() {
+        // "Deluxe Edition - GOTY": several editions in a row.
+        while let Some(found) = edition.find(&base) {
+            if found.start() == 0 {
+                break;
+            }
+            base.truncate(found.start());
+        }
+    }
+    numbers_as_digits(base.trim())
+        .replace('&', " and ")
         .to_lowercase()
         .chars()
         .filter(|c| c.is_alphanumeric())
@@ -511,6 +536,40 @@ mod tests {
         );
         assert_ne!(duplicate_key("Doom"), duplicate_key("Doom II"));
         assert_eq!(duplicate_key("™"), "");
+    }
+
+    #[test]
+    fn keys_ignore_editions_and_numeral_styles() {
+        let same = [
+            ("Borderlands 2", "Borderlands 2 Game of the Year Edition"),
+            ("Borderlands 2", "Borderlands 2: GOTY"),
+            (
+                "Divinity: Original Sin 2",
+                "Divinity: Original Sin 2 - Definitive Edition",
+            ),
+            ("Death Stranding", "Death Stranding Director's Cut"),
+            ("Final Fantasy VII", "Final Fantasy 7"),
+            ("Doom II", "DOOM 2"),
+            ("Tomb Raider", "Tomb Raider: Deluxe Edition - GOTY"),
+            ("Fallout™ 4", "Fallout 4"),
+        ];
+        for (a, b) in same {
+            assert_eq!(duplicate_key(a), duplicate_key(b), "{a} / {b}");
+        }
+        let different = [
+            // Subtitles are not ignored.
+            ("The Witcher 3", "The Witcher 3: Wild Hunt Complete Edition"),
+            ("Disco Elysium", "Disco Elysium (The Final Cut)"),
+            ("Mega Man X", "Mega Man 10"),
+            ("Batman", "Batman: Arkham City"),
+            ("Resident Evil 2", "Resident Evil 2 Remake"),
+            ("Edition", "Gold Edition"),
+        ];
+        for (a, b) in different {
+            assert_ne!(duplicate_key(a), duplicate_key(b), "{a} / {b}");
+        }
+        // A name that is only an edition keeps it.
+        assert_eq!(duplicate_key("Gold Edition"), "goldedition");
     }
 
     #[test]

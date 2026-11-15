@@ -213,6 +213,7 @@ impl LibraryProvider for GogProvider {
                 hint: "Galaxy adds cloud saves, its overlay and playtime tracking. Games Galaxy doesn't know (offline installers) and PCs without Galaxy still start the game directly.".into(),
             }],
             credentials: None,
+            notice: None,
         }
     }
 

@@ -437,6 +437,17 @@ impl LibraryProvider for BattleNetProvider {
         "Battle.net"
     }
 
+    /// Battle.net ends web sessions on its own after a while (Playnite's Battle.net library has
+    /// the same issue), so the owned games may need a fresh sign-in now and then.
+    fn settings(&self) -> questkeep_store_api::settings::StoreSettings {
+        questkeep_store_api::settings::StoreSettings {
+            notice: Some(
+                "Battle.net signs you out after a while. Sign in again when newly bought games are missing.".into(),
+            ),
+            ..Default::default()
+        }
+    }
+
     fn shop_url(&self) -> Option<&'static str> {
         Some("https://shop.battle.net/")
     }

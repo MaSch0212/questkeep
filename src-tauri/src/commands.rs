@@ -10,10 +10,10 @@ use questkeep_core::backup::BackupInfo;
 use questkeep_core::library::{AccountWarning, MetadataSourceInfo};
 use questkeep_core::model::{
     Achievements, BulkChange, Category, CombinePlan, CompletionSettings, Game, GameActivity,
-    GameEditInfo, GameEdits, GameNews, GameQuery, GameUpdate, ImageOption, ImageSlot, ImageSource,
-    LaunchProfiles, LibraryView, ListField, NewManualGame, NewView, ProfileInput, ScanSummary,
-    SectionOrder, SetupState, StartPage, SyncTimes, ValueCount, ViewSection, ViewUiState,
-    ViewUpdate,
+    GameEditInfo, GameEdits, GameNews, GameQuery, GameUpdate, GroupBy, GroupMerge, ImageOption,
+    ImageSlot, ImageSource, LaunchProfiles, LibraryView, ListField, NewManualGame, NewView,
+    ProfileInput, ScanSummary, SectionOrder, SetupState, StartPage, SyncTimes, ValueCount,
+    ViewSection, ViewUiState, ViewUpdate,
 };
 use questkeep_core::providers::ProviderInfo;
 use questkeep_core::settings::Settings;
@@ -485,6 +485,15 @@ pub async fn app_info(state: State<'_, Arc<AppState>>) -> CmdResult<AppInfo> {
 #[tauri::command]
 pub async fn get_settings(state: State<'_, Arc<AppState>>) -> CmdResult<Settings> {
     blocking(state, |s| Ok(s.library.settings())).await
+}
+
+#[tauri::command]
+pub async fn set_group_merges(
+    state: State<'_, Arc<AppState>>,
+    field: GroupBy,
+    merges: Vec<GroupMerge>,
+) -> CmdResult<BTreeMap<String, Vec<GroupMerge>>> {
+    blocking(state, move |s| s.library.set_group_merges(field, merges)).await
 }
 
 #[tauri::command]

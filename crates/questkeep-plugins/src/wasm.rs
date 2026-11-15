@@ -829,6 +829,7 @@ impl LibraryProvider for WasmProvider {
         StoreSettings {
             options: self.described().settings.options.clone(),
             credentials: None,
+            notice: self.described().settings.notice.clone(),
         }
     }
 

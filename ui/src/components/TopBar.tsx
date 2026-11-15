@@ -13,6 +13,7 @@ import { createEffect, createSignal, For, on, onCleanup, onMount, Show } from "s
 import type { GroupBy } from "../bindings/GroupBy";
 import type { SortField } from "../bindings/SortField";
 import { translator } from "../i18n";
+import { libraryGroupMerge } from "../i18n/libraryGroupMerge";
 import { libraryCommon } from "../i18n/libraryCommon";
 import { libraryTopBar } from "../i18n/libraryTopBar";
 import { store } from "../lib/store";
@@ -38,6 +39,7 @@ import { SaveViewDialog } from "./SaveViewDialog";
 import { SearchPicker } from "./SearchPicker";
 
 const tr = translator(libraryTopBar);
+const trMerge = translator(libraryGroupMerge);
 const trCommon = translator(libraryCommon);
 
 const LAYOUTS: {
@@ -121,6 +123,11 @@ const groupEntries = (): MenuEntry[] => [
     checked: store.groupList(),
     disabled: store.groupBy() === "none",
     onSelect: () => store.setGroupList(!store.groupList()),
+  },
+  {
+    label: trMerge("combineGroups"),
+    disabled: store.groupBy() === "none",
+    onSelect: () => store.setMergeDialog({ keys: [], mergeId: null }),
   },
 ];
 

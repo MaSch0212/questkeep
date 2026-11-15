@@ -79,6 +79,9 @@ pub struct Settings {
     pub store_order: Vec<String>,
     /// Light or dark mode, the theme and its parameters.
     pub appearance: Appearance,
+    /// Groups shown as one, per grouping field (the `GroupBy` value, e.g. `genre`): every view
+    /// grouped by that field shows them combined.
+    pub group_merges: BTreeMap<String, Vec<crate::model::GroupMerge>>,
 }
 
 /// How the UI looks: the color scheme, the theme and the values of theme parameters.
@@ -218,6 +221,7 @@ impl Default for Settings {
             price_sites: Vec::new(),
             store_order: Vec::new(),
             appearance: Appearance::default(),
+            group_merges: BTreeMap::new(),
         }
     }
 }
@@ -561,6 +565,17 @@ mod tests {
                     ]),
                 )]),
             },
+            group_merges: BTreeMap::from([(
+                "genre".to_string(),
+                vec![crate::model::GroupMerge {
+                    id: "m1".into(),
+                    name: "Shooters".into(),
+                    members: vec![crate::model::GroupMergeMember {
+                        key: "fps".into(),
+                        label: "FPS".into(),
+                    }],
+                }],
+            )]),
         };
         store.save(&custom).unwrap();
         let raw = std::fs::read_to_string(&path).unwrap();

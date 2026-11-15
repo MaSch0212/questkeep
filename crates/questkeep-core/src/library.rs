@@ -22,10 +22,11 @@ use crate::live::LiveData;
 use crate::metadata::MetadataResolver;
 use crate::model::{
     Achievements, ActionKind, BulkChange, Category, CombinePlan, CompletionSettings, Game,
-    GameActivity, GameNews, GameQuery, GameUpdate, HLTB_SOURCE, HiddenFilter, IGDB_SOURCE,
-    ImportedGame, KindFilter, LibraryView, ListField, MANUAL_SOURCE, NewManualGame, NewView,
-    PlayAction, ScanSummary, SectionOrder, SetupState, StartPage, SyncTimes, TriState, ValueCount,
-    ViewSection, ViewUiState, ViewUpdate, display_name_from_path, set_ignored_prefixes,
+    GameActivity, GameNews, GameQuery, GameUpdate, GroupBy, GroupMerge, GroupMergeMember,
+    HLTB_SOURCE, HiddenFilter, IGDB_SOURCE, ImportedGame, KindFilter, LibraryView, ListField,
+    MANUAL_SOURCE, NewManualGame, NewView, PlayAction, ScanSummary, SectionOrder, SetupState,
+    StartPage, SyncTimes, TriState, ValueCount, ViewSection, ViewUiState, ViewUpdate,
+    display_name_from_path, set_ignored_prefixes,
 };
 use crate::paths::DataPaths;
 use crate::providers::{LibraryProvider, ProviderError, ProviderInfo, ProviderRegistry};
@@ -127,11 +128,11 @@ impl Library {
         let settings =
             SettingsStore::new(paths.settings_file(), secrets, providers.secret_settings());
         let loaded = settings.load();
-        // Sorting names follow the ignored prefixes; catch up if they changed outside the app.
+        // Sorting names follow the ignored prefixes and the rules of `sorting_name`; catch up if
+        // either changed since the last start (only names that differ are written).
         let prefixes = loaded.sort_prefixes.active();
-        if set_ignored_prefixes(prefixes.clone())
-            && let Err(err) = db.recompute_sorting_names(&prefixes)
-        {
+        set_ignored_prefixes(prefixes.clone());
+        if let Err(err) = db.recompute_sorting_names(&prefixes) {
             tracing::warn!(%err, "could not recompute sorting names");
         }
         crate::auto_categories::watch(db.clone(), &events);
@@ -342,6 +343,45 @@ impl Library {
             self.events.publish(CoreEvent::GamesChanged { ids });
         }
         Ok(())
+    }
+
+    /// Replaces the combined groups of one grouping field (they apply to every view grouped by
+    /// it) and returns them all. Names are trimmed; nameless merges, members repeated within a
+    /// field and merges left with no member are dropped.
+    pub fn set_group_merges(
+        &self,
+        field: GroupBy,
+        merges: Vec<GroupMerge>,
+    ) -> Result<BTreeMap<String, Vec<GroupMerge>>> {
+        let key = serde_json::to_value(field)?
+            .as_str()
+            .map(str::to_string)
+            .ok_or_else(|| CoreError::Invalid("unknown grouping".into()))?;
+        let mut seen = std::collections::HashSet::new();
+        let cleaned: Vec<GroupMerge> = merges
+            .into_iter()
+            .filter_map(|merge| {
+                let name = merge.name.trim().to_string();
+                let members: Vec<GroupMergeMember> = merge
+                    .members
+                    .into_iter()
+                    .filter(|m| seen.insert(m.key.clone()))
+                    .collect();
+                (!name.is_empty() && !members.is_empty()).then_some(GroupMerge {
+                    id: merge.id,
+                    name,
+                    members,
+                })
+            })
+            .collect();
+        let mut settings = self.settings.load();
+        if cleaned.is_empty() {
+            settings.group_merges.remove(&key);
+        } else {
+            settings.group_merges.insert(key, cleaned);
+        }
+        self.settings.save(&settings)?;
+        Ok(settings.group_merges)
     }
 
     /// Computes shown metadata from its sources; handed to the metadata fetcher.
@@ -1851,7 +1891,19 @@ fn run_store_action(action: &PlayAction) -> std::io::Result<()> {
             if let Some(dir) = &action.working_dir {
                 command.current_dir(dir);
             }
-            command.spawn().map(|_| ())
+            match command.spawn() {
+                Ok(_) => Ok(()),
+                // Uninstallers like EA's Cleanup.exe insist on administrator rights: ask for
+                // them through the usual UAC prompt.
+                Err(err) if crate::platform::needs_elevation(&err) => {
+                    crate::platform::run_elevated(
+                        &action.target,
+                        action.args.as_deref().filter(|a| !a.trim().is_empty()),
+                        action.working_dir.as_deref(),
+                    )
+                }
+                Err(err) => Err(err),
+            }
         }
     }
 }
@@ -2321,6 +2373,40 @@ mod tests {
         settings.store_order = vec!["dialog".into()];
         lib.save_settings(&settings).unwrap();
         assert_eq!(ids(&lib), ["dialog", "acct"], "ordered stores first");
+    }
+
+    #[test]
+    fn group_merges_are_kept_per_grouping_field() {
+        let (_tmp, lib) = test_library();
+        let member = |key: &str| GroupMergeMember {
+            key: key.into(),
+            label: key.to_uppercase(),
+        };
+        let merge = |id: &str, name: &str, keys: &[&str]| GroupMerge {
+            id: id.into(),
+            name: name.into(),
+            members: keys.iter().map(|k| member(k)).collect(),
+        };
+        let all = lib
+            .set_group_merges(
+                GroupBy::Genre,
+                vec![
+                    merge("1", " Shooters ", &["fps", "tps"]),
+                    // A key already in another merge, and a nameless merge, are dropped.
+                    merge("2", "Again", &["fps"]),
+                    merge("3", "  ", &["rpg"]),
+                ],
+            )
+            .unwrap();
+        assert_eq!(all["genre"], vec![merge("1", "Shooters", &["fps", "tps"])]);
+        lib.set_group_merges(GroupBy::Tag, vec![merge("4", "Co-op", &["coop", "online"])])
+            .unwrap();
+        let saved = lib.settings().group_merges;
+        assert_eq!(saved.len(), 2);
+        assert_eq!(saved["tag"][0].name, "Co-op");
+        // No merges left: the field is gone.
+        let all = lib.set_group_merges(GroupBy::Genre, Vec::new()).unwrap();
+        assert!(!all.contains_key("genre") && all.contains_key("tag"));
     }
 
     #[test]

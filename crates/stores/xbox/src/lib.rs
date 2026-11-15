@@ -135,6 +135,7 @@ impl LibraryProvider for XboxProvider {
                 hint: "Games in PC Game Pass are only listed while installed. Xbox can't tell a bought game from a Game Pass one, so games you bought that are also in Game Pass are left out too. Games already in your library stay; hide or remove them there.".into(),
             }],
             credentials: None,
+            notice: None,
         }
     }
 

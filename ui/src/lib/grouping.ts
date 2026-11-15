@@ -2,6 +2,7 @@ import type { Category } from "../bindings/Category";
 import type { CompletionStatus } from "../bindings/CompletionStatus";
 import type { Game } from "../bindings/Game";
 import type { GroupBy } from "../bindings/GroupBy";
+import type { GroupMerge } from "../bindings/GroupMerge";
 import { intlLocale, translator } from "../i18n";
 import { libraryGrouping } from "../i18n/libraryGrouping";
 import { storesOf } from "./copies";
@@ -40,6 +41,19 @@ export interface GroupContext {
   statuses: readonly CompletionStatus[];
   /** For the "last played" buckets; defaults to the current time. */
   now?: number;
+  /** Groups of this grouping field shown as one (see `GroupMerge`). */
+  merges?: readonly GroupMerge[];
+}
+
+/** The key of a combined group: it never collides with a value's key. */
+export const mergeKey = (id: string) => `merge:${id}`;
+
+/** The merge a combined group's key stands for. */
+export function mergeOf(
+  key: string,
+  merges: readonly GroupMerge[] | undefined,
+): GroupMerge | undefined {
+  return key.startsWith("merge:") ? merges?.find((m) => mergeKey(m.id) === key) : undefined;
 }
 
 interface Bucket {
@@ -217,15 +231,34 @@ function placements(game: Game, by: GroupBy, ctx: GroupContext): Placement[] {
  * statuses follow their list order, buckets their natural order, years go newest first, other
  * values by name; the group of games without a value comes last. Without grouping there is one
  * group, key "".
+ *
+ * Combined groups (`ctx.merges`) take the place of their members under the merge's name, ranked
+ * like their first member in the order; a game in several members is listed there once.
  */
 export function groupGames(games: readonly Game[], by: GroupBy, ctx: GroupContext): GameGroup[] {
   if (by === "none") return [{ key: "", label: "", source: null, games: [...games] }];
   const collator = new Intl.Collator(intlLocale(), { sensitivity: "base", numeric: true });
   const groups = new Map<string, GameGroup & { rank: number }>();
+  const mergedInto = new Map<string, GroupMerge>();
+  for (const merge of ctx.merges ?? []) {
+    for (const member of merge.members) mergedInto.set(member.key, merge);
+  }
   for (const game of games) {
-    const places = placements(game, by, ctx);
+    let places = placements(game, by, ctx);
     if (places.length === 0) {
       places.push({ key: NO_CATEGORY, label: noValueLabel(by), source: null, rank: Infinity });
+    }
+    if (mergedInto.size > 0) {
+      const seen = new Set<string>();
+      places = places.flatMap((place) => {
+        const merge = mergedInto.get(place.key);
+        const combined = merge
+          ? { key: mergeKey(merge.id), label: merge.name, source: null, rank: place.rank }
+          : place;
+        if (seen.has(combined.key)) return [];
+        seen.add(combined.key);
+        return [combined];
+      });
     }
     for (const place of places) {
       let group = groups.get(place.key);
@@ -239,6 +272,8 @@ export function groupGames(games: readonly Game[], by: GroupBy, ctx: GroupContex
         };
         groups.set(place.key, group);
       }
+      // A combined group sits where its first member would.
+      group.rank = Math.min(group.rank, place.rank);
       group.games.push(game);
     }
   }

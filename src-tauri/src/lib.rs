@@ -481,6 +481,7 @@ pub fn run() {
             commands::app_info,
             commands::get_settings,
             commands::save_settings,
+            commands::set_group_merges,
             commands::open_app_folder,
             commands::open_install_folder,
             commands::take_notices,

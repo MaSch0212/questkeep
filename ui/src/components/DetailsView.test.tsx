@@ -96,7 +96,7 @@ describe("DetailsView", () => {
         installed: true,
         syncable: true,
         addGameOptions: [],
-        settings: { options: [], credentials: null },
+        settings: { options: [], credentials: null, notice: null },
       },
     ]);
     render(() => <DetailsView listWidth={320} minListWidth={240} maxListWidth={600} />);

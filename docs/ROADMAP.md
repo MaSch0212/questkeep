@@ -51,26 +51,25 @@ Plugins: sandboxed WASM stores, JavaScript extensions and themes; appearance set
 and dark mode, new themes and theme parameters; the theme editor; auto categories; text filters,
 "Not" and drag and drop for filters; back and forward navigation; the user and developer wiki.
 
+Also: Amazon, Ubisoft, Battle.net and EA verified live (owned and installed games, install,
+uninstall, launch, Open launcher); group combining (e.g. "Shooters" for FPS and TPS, per
+grouping field); duplicates found across editions ("GOTY", "Definitive Edition") and numeral
+styles ("VII" / "7"); sorting names read roman numerals and number words like Playnite; Amazon
+uninstalls through the game's own remover, EA's uninstaller gets the UAC prompt it needs; Epic
+installs found through the launcher's newer install records; the Battle.net sign-out notice;
+uninstall and remove from the game's right-click menu work again.
+
 ## Next
 
 - **Verify on Linux**: Heroic Amazon (Nile) and sideloaded games, owned games from Heroic/Lutris.
 - **GOG playtime without Galaxy** (Linux/Heroic): no web endpoint accepts the Galaxy token.
-- **Ubisoft and Amazon follow-ups**: try launch/install/uninstall live. Verify the Amazon and Steam sign-ins with real accounts (built from Playnite's flows,
-  not yet signed in live); Ubisoft owned games would need an account API Ubisoft doesn't offer.
-- **Battle.net and EA sign-ins**: verify with real accounts (built from Playnite's and Lutris'
-  flows, not signed in live). Check the product codes of rarer Battle.net titles (only
-  `WTCG`/`Fen`/`VIPR` are mapped specially) and EA installs through `origin2://`.
-- **EA app**: try the `origin2://` / `link2ea://` launch path for games the plain executable does
-  not start.
-
-- **Launchers**: verify "Open launcher" on real installs for EA (registry command), Ubisoft
-  (InstallDir), Battle.net and the Xbox app.
+- **Verify live**: the Steam sign-in with a real account; Amazon uninstall through
+  `Amazon Game Remover.exe`; EA uninstall with the UAC prompt; Epic games known only from the
+  install helper's `*.egi` records. Check the product codes of rarer Battle.net titles (only
+  `WTCG`/`Fen`/`VIPR` are mapped specially).
 - **Categories follow-ups**: Heroic categories; map a single store category onto an existing
   category without merging whole categories; check `sharedconfig.vdf` tags on an older Steam
   install.
-- **Combined games follow-ups**: smarter duplicate matching (editions, "GOTY", subtitles);
-  edit launch options per copy.
-- **Group combining**: merge several groups of a grouped view into one (e.g. "Shooters" for FPS and TPS), in the headers and the group list alike.
 - **Command bar commands**: run app actions (sync a store, open settings, switch views) from
   Ctrl+K, not only games.
 
@@ -93,6 +92,5 @@ and dark mode, new themes and theme parameters; the theme editor; auto categorie
     texts for plugin themes.
 - Fullscreen / controller mode (the grid keyboard navigation is the groundwork).
 - Multiple play actions per game, emulator profiles, pre/post scripts.
-- Roman numeral support in sorting names (Playnite's converter handles many edge cases).
 - Minimize while playing.
 - Cloud sync of the library database.

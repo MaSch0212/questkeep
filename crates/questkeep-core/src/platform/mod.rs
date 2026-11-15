@@ -89,6 +89,64 @@ fn uri_command(uri: &str) -> Command {
     c
 }
 
+/// Whether starting a program failed because it must run as administrator (Windows error 740,
+/// e.g. EA's `Cleanup.exe` uninstaller).
+pub fn needs_elevation(err: &io::Error) -> bool {
+    const ERROR_ELEVATION_REQUIRED: i32 = 740;
+    cfg!(windows) && err.raw_os_error() == Some(ERROR_ELEVATION_REQUIRED)
+}
+
+/// Starts `program` as administrator through the shell, which shows the usual UAC prompt. Does
+/// not wait. `args` is passed through verbatim. Windows only; elsewhere it fails.
+#[cfg_attr(windows, allow(unsafe_code))]
+pub fn run_elevated(program: &str, args: Option<&str>, dir: Option<&str>) -> io::Result<()> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        use windows_sys::Win32::UI::Shell::ShellExecuteW;
+        use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+        let wide = |text: &str| -> Vec<u16> {
+            std::ffi::OsStr::new(text)
+                .encode_wide()
+                .chain(std::iter::once(0))
+                .collect()
+        };
+        let verb = wide("runas");
+        let file = wide(program);
+        let params = args.map(wide);
+        let directory = dir.map(wide);
+        // SAFETY: every pointer is a NUL-terminated UTF-16 buffer that outlives the call, or null.
+        let result = unsafe {
+            ShellExecuteW(
+                std::ptr::null_mut(),
+                verb.as_ptr(),
+                file.as_ptr(),
+                params.as_ref().map_or(std::ptr::null(), |p| p.as_ptr()),
+                directory.as_ref().map_or(std::ptr::null(), |d| d.as_ptr()),
+                SW_SHOWNORMAL,
+            )
+        };
+        // Values above 32 mean success; anything else is an error code (a declined UAC prompt
+        // is SE_ERR_ACCESSDENIED).
+        if result as isize > 32 {
+            Ok(())
+        } else {
+            Err(io::Error::other(format!(
+                "Windows did not start it as administrator (code {})",
+                result as isize
+            )))
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (program, args, dir);
+        Err(io::Error::other(
+            "starting as administrator is only possible on Windows",
+        ))
+    }
+}
+
 /// Prevents a console window from flashing up for helper processes on Windows.
 pub fn hide_console(command: &mut Command) {
     #[cfg(windows)]

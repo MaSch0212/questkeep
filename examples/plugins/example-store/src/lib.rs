@@ -101,6 +101,7 @@ impl Provider for ExampleStore {
                 hint: "Also add the games marked as demo in games.json.".into(),
             }],
             credentials: None,
+            notice: None,
         }
     }
 

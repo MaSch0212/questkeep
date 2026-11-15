@@ -13,6 +13,7 @@ import { syncPluginThemes } from "./lib/pluginThemes";
 import { findPage, isPluginPage, pluginOfPage } from "./lib/extensions/registry";
 import { AddGameDialog } from "./components/AddGameDialog";
 import { DuplicatesDialog } from "./components/DuplicatesDialog";
+import { GroupMergeDialog } from "./components/GroupMergeDialog";
 import { ExtensionDialogs } from "./components/ExtensionDialogs";
 import { FirstRunDialog } from "./components/FirstRunDialog";
 import { CombineDialog } from "./components/CombineDialog";
@@ -311,6 +312,15 @@ export function App() {
       </Show>
       <Show when={store.duplicatesOpen()}>
         <DuplicatesDialog onClose={() => store.setDuplicatesOpen(false)} />
+      </Show>
+      <Show when={store.mergeDialog()}>
+        {(open) => (
+          <GroupMergeDialog
+            keys={open().keys}
+            mergeId={open().mergeId}
+            onClose={() => store.setMergeDialog(null)}
+          />
+        )}
       </Show>
       <Show when={store.contextMenu()}>
         {(open) => (

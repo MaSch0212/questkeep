@@ -106,6 +106,7 @@ impl LibraryProvider for SteamProvider {
                     },
                 ],
             }),
+            notice: None,
         }
     }
 

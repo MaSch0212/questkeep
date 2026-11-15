@@ -36,6 +36,7 @@ function settings(appearance: Partial<Appearance> = {}): Settings {
     showStatistics: true,
     priceSites: [],
     appearance: { ...DEFAULT_APPEARANCE, ...appearance },
+    groupMerges: {},
   } as Partial<Settings> as Settings;
 }
 

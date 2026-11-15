@@ -13,11 +13,15 @@ interface ConfirmDialogProps {
   onClose: () => void;
 }
 
-/** Asks before a destructive action; Cancel has the focus, so Enter does not confirm by accident. */
+/**
+ * Asks before a destructive action; Cancel has the focus, so Enter does not confirm by accident.
+ * Confirming runs `onConfirm` before `onClose`: closing may unmount the owner (a context menu),
+ * after which its props can no longer be read.
+ */
 export function ConfirmDialog(props: ConfirmDialogProps) {
   return (
     <Modal title={props.title} onClose={props.onClose}>
-      <p>{props.message}</p>
+      <p class="confirm__message">{props.message}</p>
       <div class="form__actions">
         <button type="button" class="btn" data-autofocus onClick={props.onClose}>
           {tr("cancel")}
@@ -26,8 +30,8 @@ export function ConfirmDialog(props: ConfirmDialogProps) {
           type="button"
           class="btn btn--danger-solid"
           onClick={() => {
-            props.onClose();
             props.onConfirm();
+            props.onClose();
           }}
         >
           {props.confirmLabel}

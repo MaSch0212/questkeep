@@ -20,7 +20,7 @@ const store = (id: string, installed: boolean, syncable: boolean): ProviderInfo 
   installed,
   syncable,
   addGameOptions: [],
-  settings: { options: [], credentials: null },
+  settings: { options: [], credentials: null, notice: null },
 });
 
 describe("helpers", () => {
@@ -50,7 +50,7 @@ describe("helpers", () => {
         installed: true,
         syncable: false,
         addGameOptions: [],
-        settings: { options: [], credentials: null },
+        settings: { options: [], credentials: null, notice: null },
       },
       {
         id: "steam",
@@ -64,7 +64,7 @@ describe("helpers", () => {
         installed: true,
         syncable: true,
         addGameOptions: [],
-        settings: { options: [], credentials: null },
+        settings: { options: [], credentials: null, notice: null },
       },
     ];
     expect(mergeSources(providers, new Set(["steam", "fake"]))).toEqual([

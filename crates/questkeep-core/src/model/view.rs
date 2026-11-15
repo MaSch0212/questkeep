@@ -49,6 +49,28 @@ pub enum GroupBy {
     CriticScore,
 }
 
+/// Several groups of one grouping field shown as one group under a name of the user's, e.g.
+/// "Shooters" for the genres FPS and TPS. A game in more than one of them is listed once.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct GroupMerge {
+    pub id: String,
+    pub name: String,
+    pub members: Vec<GroupMergeMember>,
+}
+
+/// One group inside a [`GroupMerge`]: the group's key as the UI computes it (a category id,
+/// store id, value key, year, bucket) and its name when it was added, for showing it while the
+/// open view has no such group.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct GroupMergeMember {
+    pub key: String,
+    pub label: String,
+}
+
 /// A column of the table layout. The UI owns the list of columns; an id it no longer knows is
 /// skipped there.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]

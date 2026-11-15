@@ -94,7 +94,7 @@ const info = (id: string, name: string, installed: boolean, syncable: boolean) =
   installed,
   syncable,
   addGameOptions: [],
-  settings: { options: [], credentials: null },
+  settings: { options: [], credentials: null, notice: null },
 });
 
 describe("AccountsSection", () => {
@@ -342,6 +342,7 @@ function makeSettings(overrides: Partial<Settings> = {}): Settings {
     priceSites: [],
     storeOrder: [],
     appearance: { theme: "questkeep", scheme: "system", params: {} },
+    groupMerges: {},
     metadataPriority: { order: [], fields: {} },
     providers: { epic: { token: "keep-me" }, steam: { apiKey: "K" } },
     ...overrides,

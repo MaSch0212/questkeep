@@ -59,7 +59,7 @@ beforeEach(() => {
       installed: true,
       syncable: false,
       addGameOptions: [],
-      settings: { options: [], credentials: null },
+      settings: { options: [], credentials: null, notice: null },
     },
     {
       id: "steam",
@@ -73,7 +73,7 @@ beforeEach(() => {
       installed: true,
       syncable: true,
       addGameOptions: [],
-      settings: { options: [], credentials: null },
+      settings: { options: [], credentials: null, notice: null },
     },
   ]);
   vi.mocked(api.appInfo).mockResolvedValue({
@@ -117,6 +117,7 @@ const SETTINGS: Settings = {
   priceSites: [],
   storeOrder: [],
   appearance: { theme: "questkeep", scheme: "system", params: {} },
+  groupMerges: {},
   metadataPriority: { order: [], fields: {} },
 };
 

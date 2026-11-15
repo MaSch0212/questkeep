@@ -82,7 +82,7 @@ export function storeRows(providers: readonly ProviderInfo[], accounts: readonly
         installed: false,
         syncable: false,
         account,
-        settings: { options: [], credentials: null },
+        settings: { options: [], credentials: null, notice: null },
       });
     }
   }

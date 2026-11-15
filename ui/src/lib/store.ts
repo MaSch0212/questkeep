@@ -19,6 +19,7 @@ import type { ListField } from "../bindings/ListField";
 import type { PluginInfo } from "../bindings/PluginInfo";
 import type { ProviderInfo } from "../bindings/ProviderInfo";
 import type { Settings } from "../bindings/Settings";
+import type { GroupMerge } from "../bindings/GroupMerge";
 import type { PriceSite } from "../bindings/PriceSite";
 import type { SetupState } from "../bindings/SetupState";
 import type { SortField } from "../bindings/SortField";
@@ -161,6 +162,11 @@ function createAppStore() {
   const [seenSources, setSeenSources] = createSignal<ReadonlySet<string>>(new Set());
   const [toasts, setToasts] = createSignal<Toast[]>([]);
   const [duplicatesOpen, setDuplicatesOpen] = createSignal(false);
+  /** The Combine groups dialog: the groups to start with and the merge being edited, if any. */
+  const [mergeDialog, setMergeDialog] = createSignal<{
+    keys: string[];
+    mergeId: string | null;
+  } | null>(null);
   /** A newer app version (checked after start); the title bar offers it. */
   const [update, setUpdate] = createSignal<api.UpdateInfo | null>(null);
   const [updateOpen, setUpdateOpen] = createSignal(false);
@@ -176,6 +182,10 @@ function createAppStore() {
   const [showStatisticsPage, setShowStatisticsPage] = createSignal(true);
   /** Price comparison sites offered in the + menu. */
   const [priceSites, setPriceSites] = createSignal<PriceSite[]>([]);
+  /** Combined groups per grouping field (settings). */
+  const [groupMerges, setGroupMergesState] = createSignal<Partial<Record<string, GroupMerge[]>>>(
+    {},
+  );
   const [startData, setStartData] = createSignal<StartPage | null>(null);
   // Set once the startup page was chosen; from then on the open page is remembered.
   const [started, setStarted] = createSignal(false);
@@ -243,16 +253,23 @@ function createAppStore() {
     return previous?.id === id ? previous : undefined;
   });
   const sources = createMemo(() => mergeSources(providers(), seenSources()));
-  /** Every group of the open view (the group list shows them all). */
-  const allGroups = createMemo(() => {
+  const groupContext = () => {
     const names = new Map(sources().map((s) => [s.id, s.name]));
-    return groupGames(games(), groupBy(), {
+    return {
       categories: categories(),
-      sourceName: (id) => names.get(id) ?? id,
+      sourceName: (id: string) => names.get(id) ?? id,
       storeOrder: providers().map((p) => p.id),
       statuses: completion().statuses,
-    });
-  });
+    };
+  };
+  /** The combined groups of the open view's grouping field. */
+  const activeMerges = () => groupMerges()[groupBy()] ?? [];
+  /** Every group of the open view (the group list shows them all). */
+  const allGroups = createMemo(() =>
+    groupGames(games(), groupBy(), { ...groupContext(), merges: activeMerges() }),
+  );
+  /** The open view's groups as they are without combining (to pick what to combine). */
+  const plainGroups = createMemo(() => groupGames(games(), groupBy(), groupContext()));
   /** The group picked in the group list, while it still exists; null: all groups. */
   const pickedGroup = createMemo<string | null>(() => {
     if (!groupList()) return null;
@@ -566,12 +583,26 @@ function createAppStore() {
   }
 
   /** Applies saved settings the app shell depends on (the start and statistics page switches). */
+  /**
+   * Replaces the combined groups of one grouping field; every view grouped by it follows.
+   * Resolves to an error message, or null.
+   */
+  async function saveGroupMerges(field: GroupBy, merges: GroupMerge[]): Promise<string | null> {
+    try {
+      setGroupMergesState(await api.setGroupMerges(field, merges));
+      return null;
+    } catch (error) {
+      return errorMessage(error);
+    }
+  }
+
   function applySettings(settings: Settings) {
     setLanguage(settings.language);
     applyAppearance(settings.appearance);
     setShowStartPage(settings.showStartPage);
     setShowStatisticsPage(settings.showStatistics);
     setPriceSites(settings.priceSites);
+    setGroupMergesState(settings.groupMerges ?? {});
     if (
       (!settings.showStartPage && page() === "home") ||
       (!settings.showStatistics && page() === "statistics")
@@ -1207,6 +1238,7 @@ function createAppStore() {
           setShowStartPage(settings.showStartPage);
           setShowStatisticsPage(settings.showStatistics);
           setPriceSites(settings.priceSites);
+          setGroupMergesState(settings.groupMerges ?? {});
         }
         // After an update the window opens where it was; otherwise on the startup page.
         const resumed = parseLocation(resume);
@@ -1315,6 +1347,10 @@ function createAppStore() {
     toasts,
     duplicatesOpen,
     setDuplicatesOpen,
+    mergeDialog,
+    setMergeDialog,
+    activeMerges,
+    plainGroups,
     loadProviders,
     loadPlugins,
     update,
@@ -1337,6 +1373,8 @@ function createAppStore() {
     groupList,
     setGroupList,
     allGroups,
+    groupMerges,
+    saveGroupMerges,
     pickedGroup,
     pickGroup,
     showGroupHeaders,

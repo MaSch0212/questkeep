@@ -33,7 +33,7 @@ async function loadProviders(canUninstall: boolean, launcherPages = false) {
       installed: true,
       syncable: true,
       addGameOptions: [],
-      settings: { options: [], credentials: null },
+      settings: { options: [], credentials: null, notice: null },
     },
   ]);
   vi.mocked(api.appInfo).mockResolvedValue({

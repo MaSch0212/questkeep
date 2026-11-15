@@ -40,6 +40,7 @@ const SETTINGS: Settings = {
   priceSites: [],
   storeOrder: [],
   appearance: { theme: "questkeep", scheme: "system", params: {} },
+  groupMerges: {},
   metadataPriority: { order: [], fields: {} },
   providers: {},
 };

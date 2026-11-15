@@ -69,7 +69,7 @@ const provider = (id: string, canScan = true, installed = true) => ({
   installed,
   syncable: canScan && installed,
   addGameOptions: [],
-  settings: { options: [], credentials: null },
+  settings: { options: [], credentials: null, notice: null },
 });
 
 describe("storeRows", () => {

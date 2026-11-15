@@ -154,9 +154,10 @@ impl LibraryProvider for AmazonProvider {
         self.app.as_ref().is_some_and(AmazonAppPaths::has_client)
     }
 
-    /// Opens the Amazon Games app, where the game is uninstalled (it has no uninstall URI).
-    fn uninstall_action(&self, _source_game_id: &str) -> Option<PlayAction> {
-        self.app.as_ref()?.uninstall_action()
+    /// Runs the game's Amazon Game Remover entry (it asks to confirm); without one, opens the
+    /// Amazon Games app, where the game is uninstalled (the app has no uninstall URI).
+    fn uninstall_action(&self, source_game_id: &str) -> Option<PlayAction> {
+        self.app.as_ref()?.uninstall_action(source_game_id)
     }
 
     /// Heroic's Amazon `art_cover` is a store background or icon, not 2:3 box art, and the Amazon

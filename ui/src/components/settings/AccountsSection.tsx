@@ -72,9 +72,13 @@ function storeDetail(entry: StoreRow, accountDetail: string | null): string {
 /** Where a dragged store would land. */
 const dropLine = () => <div class="account-list__drop" aria-hidden="true" />;
 
-/** Whether the row has anything below its head: options, sign-out, credentials or code sign-in. */
+/**
+ * Whether the row has anything below its head: a notice, options, sign-out, credentials or code
+ * sign-in.
+ */
 function expandable(entry: StoreRow): boolean {
   return (
+    (entry.settings.notice ?? null) !== null ||
     entry.settings.options.length > 0 ||
     (entry.account !== null &&
       (entry.account.signedIn ||
@@ -361,6 +365,9 @@ export function AccountsSection(props: { model: SettingsModel }) {
                     </Show>
                     <Show when={expandable(entry) && row(entry.id).open}>
                       <div class="account__body" id={`store-${entry.id}-details`}>
+                        <Show when={entry.settings.notice}>
+                          {(notice) => <p class="field__hint account__notice">{notice()}</p>}
+                        </Show>
                         <Show when={entry.account}>
                           {(account) => (
                             <>

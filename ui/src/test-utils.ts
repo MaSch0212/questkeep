@@ -74,10 +74,11 @@ function makeRawGame(overrides: Partial<Game>): Game {
 }
 
 /** Store settings as the stores declare them (see `fn settings` in `crates/stores/*`). */
-export const NO_STORE_SETTINGS: StoreSettings = { options: [], credentials: null };
+export const NO_STORE_SETTINGS: StoreSettings = { options: [], credentials: null, notice: null };
 
 export const STEAM_SETTINGS: StoreSettings = {
   options: [],
+  notice: null,
   credentials: {
     noun: "Steam key",
     offer: "Use a Steam Web API key instead",
@@ -109,7 +110,7 @@ export const STEAM_SETTINGS: StoreSettings = {
 
 /** A store with one switch. */
 export function optionSettings(key: string, label: string): StoreSettings {
-  return { options: [{ key, label, hint: "" }], credentials: null };
+  return { options: [{ key, label, hint: "" }], credentials: null, notice: null };
 }
 
 /** A registered store as `listProviders` reports it. */

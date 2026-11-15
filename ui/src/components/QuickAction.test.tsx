@@ -125,7 +125,7 @@ describe("store banner and icon", () => {
         installed: true,
         syncable: true,
         addGameOptions: [],
-        settings: { options: [], credentials: null },
+        settings: { options: [], credentials: null, notice: null },
       },
     ]);
     const { listen } = await import("@tauri-apps/api/event");

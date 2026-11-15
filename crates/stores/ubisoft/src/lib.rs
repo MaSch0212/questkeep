@@ -165,6 +165,7 @@ impl LibraryProvider for UbisoftProvider {
                 hint: "Ubisoft has no sign-in for other apps, so these come from the list of games Ubisoft Connect keeps on this PC (DLC and games sold through other stores are left out). It can include games you only looked at or played in a free weekend, and test versions. Turning this off again keeps the games in your library; hide or remove them there.".into(),
             }],
             credentials: None,
+            notice: None,
         }
     }
 

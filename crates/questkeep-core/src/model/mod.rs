@@ -19,6 +19,7 @@ pub use edit::*;
 pub use game::*;
 pub use metadata::*;
 pub use query::*;
+pub(crate) use sorting::numbers_as_digits;
 pub use sorting::{
     DEFAULT_PREFIXES, display_name_from_path, set_ignored_prefixes, sorting_name, sorting_name_with,
 };

@@ -8,6 +8,8 @@ import {
   groupStart,
   groupSummary,
   layoutGroups,
+  mergeKey,
+  mergeOf,
   navigateSlots,
   scrollTopForRow,
   slotKey,
@@ -16,6 +18,7 @@ import {
   type GameGroup,
   type GroupContext,
 } from "./grouping";
+import { valueKey } from "./filters";
 import { NO_CATEGORY } from "./views";
 
 const category = (id: string, name: string): Category => ({
@@ -95,6 +98,41 @@ describe("groupGames", () => {
     const none = groupGames(games, "none", ctx(categories));
     expect(none).toHaveLength(1);
     expect(none[0]?.key).toBe("");
+  });
+
+  it("shows combined groups as one, each game once, where their first member would be", () => {
+    const a = makeGame({ id: "a", name: "A", genres: ["FPS", "TPS"] });
+    const b = makeGame({ id: "b", name: "B", genres: ["TPS", "Racing"] });
+    const c = makeGame({ id: "c", name: "C", genres: ["Adventure"] });
+    const merge = {
+      id: "m1",
+      name: "Shooters",
+      members: [
+        { key: valueKey("FPS"), label: "FPS" },
+        { key: valueKey("TPS"), label: "TPS" },
+      ],
+    };
+    const groups = groupGames([a, b, c], "genre", { ...ctx([]), merges: [merge] });
+    expect(names(groups)).toEqual(["Adventure: C", "Racing: B", "Shooters: A, B"]);
+    const shooters = groups.at(-1);
+    expect(shooters?.key).toBe(mergeKey("m1"));
+    expect(mergeOf(shooters?.key ?? "", [merge])).toBe(merge);
+    expect(mergeOf(valueKey("FPS"), [merge])).toBeUndefined();
+    // Buckets keep their order: the combined bucket takes its earliest member's place.
+    const quick = makeGame({ id: "q", name: "Q", playtimeSeconds: 600 });
+    const long = makeGame({ id: "l", name: "L", playtimeSeconds: 200 * 3600 });
+    const never = makeGame({ id: "n", name: "N", playtimeSeconds: 0 });
+    const played = {
+      id: "m2",
+      name: "Played",
+      members: [
+        { key: "b5", label: "100+ hours" },
+        { key: "b1", label: "Under 1 hour" },
+      ],
+    };
+    expect(
+      names(groupGames([long, never, quick], "playtime", { ...ctx([]), merges: [played] })),
+    ).toEqual(["Never played: N", "Played: L, Q"]);
   });
 });
 

@@ -38,6 +38,8 @@ import type { SectionOrder } from "../bindings/SectionOrder";
 import type { SetupState } from "../bindings/SetupState";
 import type { StartPage } from "../bindings/StartPage";
 import type { Settings } from "../bindings/Settings";
+import type { GroupBy } from "../bindings/GroupBy";
+import type { GroupMerge } from "../bindings/GroupMerge";
 import type { PriceSiteSuggestions } from "../bindings/PriceSiteSuggestions";
 import type { SyncTimes } from "../bindings/SyncTimes";
 import type { ViewSection } from "../bindings/ViewSection";
@@ -241,6 +243,9 @@ export const appInfo = () => invoke<AppInfo>("app_info");
 /** Messages the app queued for the UI (each returned once), e.g. after a second start. */
 export const takeNotices = () => invoke<string[]>("take_notices");
 export const getSettings = () => invoke<Settings>("get_settings");
+/** Replaces the combined groups of one grouping field; resolves to those of every field. */
+export const setGroupMerges = (field: GroupBy, merges: GroupMerge[]) =>
+  invoke<Partial<Record<string, GroupMerge[]>>>("set_group_merges", { field, merges });
 /** Price comparison sites for the user's region. */
 export const priceSiteSuggestions = () => invoke<PriceSiteSuggestions>("price_site_suggestions");
 export const saveSettings = (settings: Settings) => invoke<void>("save_settings", { settings });

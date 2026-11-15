@@ -10,4 +10,9 @@ options: Array<StoreOption>,
 /**
  * Credentials typed into a form and saved together, as an alternative to signing in.
  */
-credentials: StoreCredentials | null, };
+credentials: StoreCredentials | null, 
+/**
+ * Something the user should know about the store, shown in its row (e.g. that its sign-in
+ * does not last).
+ */
+notice: string | null, };

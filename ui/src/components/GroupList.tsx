@@ -3,6 +3,7 @@ import { createMemo, For, Show } from "solid-js";
 import { translator } from "../i18n";
 import { libraryTopBar } from "../i18n/libraryTopBar";
 import { store } from "../lib/store";
+import { createGroupMenu } from "./GroupMenu";
 import { SourceIcon } from "./SourceIcon";
 
 const tr = translator(libraryTopBar);
@@ -20,6 +21,16 @@ export function GroupList() {
   const keys = createMemo(() => [ALL, ...store.allGroups().map((g) => g.key)]);
   const current = () => store.pickedGroup() ?? ALL;
   let list: HTMLUListElement | undefined;
+  /** The menu of the picked group (right-click picks the group first). */
+  const menu = createGroupMenu(
+    () =>
+      store.allGroups().find((g) => g.key === current()) ?? {
+        key: ALL,
+        label: tr("allGroups"),
+        source: null,
+        games: [],
+      },
+  );
 
   function pick(key: string) {
     store.pickGroup(key === ALL ? null : key);
@@ -38,7 +49,12 @@ export function GroupList() {
             : event.key === "End"
               ? all.length - 1
               : null;
-    if (next === null) return;
+    if (next === null) {
+      // The Menu key / Shift+F10 open the picked group's menu at its entry.
+      const item = list?.querySelector<HTMLElement>(`[data-group-index="${index}"]`);
+      menu.onKeyDown(event, item ?? undefined);
+      return;
+    }
     event.preventDefault();
     const key = all[next];
     if (key === undefined) return;
@@ -83,6 +99,10 @@ export function GroupList() {
               classList={{ "nav-item--active": current() === group.key }}
               data-tooltip={group.label}
               onClick={() => pick(group.key)}
+              onContextMenu={(event) => {
+                pick(group.key);
+                menu.onContextMenu(event);
+              }}
             >
               <Show when={group.source}>{(source) => <SourceIcon source={source()} />}</Show>
               <span class="nav-item__text">{group.label}</span>
@@ -91,6 +111,7 @@ export function GroupList() {
           )}
         </For>
       </ul>
+      {menu.menu()}
     </nav>
   );
 }

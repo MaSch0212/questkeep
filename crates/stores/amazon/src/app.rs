@@ -14,8 +14,9 @@
 //!   owned library cannot be read from it, so there is no owned scan here.
 //!
 //! The app is started through the `amazon-games://` URI scheme it registers (`play/<id>`,
-//! `install/<id>`). Questkeep never deletes anything itself: Uninstall opens the app, where the
-//! user removes the game (the app has no uninstall URI).
+//! `install/<id>`). Questkeep never deletes anything itself: Uninstall runs the game's
+//! `Amazon Game Remover.exe` entry from the Windows "Apps" list, which asks to confirm; without
+//! one it opens the app, where the user removes the game (the app has no uninstall URI).
 
 // Logic derived from Playnite (MIT), see THIRD_PARTY_NOTICES.md
 
@@ -26,6 +27,7 @@ use rusqlite::types::Value;
 
 use questkeep_store_api::ProviderError;
 use questkeep_store_api::model::{ImportedGame, PlayAction, TrackingMode};
+use questkeep_store_api::platform::UninstallEntry;
 use questkeep_store_api::sqlite::read_foreign;
 
 const INSTALL_DB: &str = "GameInstallInfo.sqlite";
@@ -86,9 +88,12 @@ impl AmazonAppPaths {
             .then(|| PlayAction::file(self.client.to_string_lossy().into_owned()))
     }
 
-    /// Opens the app; the game is removed there by the user.
-    pub fn uninstall_action(&self) -> Option<PlayAction> {
-        self.launcher_action()
+    /// The game's own uninstaller (see [`remover_action`]), else the app, where the user removes
+    /// the game.
+    pub fn uninstall_action(&self, id: &str) -> Option<PlayAction> {
+        self.has_client().then_some(())?;
+        remover_action(&questkeep_store_api::platform::uninstall_entries(), id)
+            .or_else(|| self.launcher_action())
     }
 
     /// Installed games from `GameInstallInfo.sqlite`, sorted by name. Rows whose install folder
@@ -236,6 +241,45 @@ fn uri(verb: &str, id: &str) -> Option<String> {
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'));
     plain.then(|| format!("amazon-games://{verb}/{id}"))
+}
+
+/// The game's own uninstaller: the app registers every install in the Windows "Apps" list as
+/// `AmazonGames/<title>` with `"...\Amazon Game Remover.exe" -m Game -p <product id>`, which asks
+/// the user to confirm. The path is stored with doubled backslashes; they are collapsed.
+pub(super) fn remover_action(entries: &[UninstallEntry], id: &str) -> Option<PlayAction> {
+    entries
+        .iter()
+        .filter(|e| e.key.starts_with("AmazonGames/"))
+        .find_map(|entry| {
+            let (program, args) = questkeep_store_api::platform::split_command_line(
+                entry.uninstall_string.as_deref()?,
+            )?;
+            let words: Vec<&str> = args.split_whitespace().collect();
+            let names_game = words
+                .windows(2)
+                .any(|w| w[0].eq_ignore_ascii_case("-p") && w[1].eq_ignore_ascii_case(id));
+            names_game.then(|| {
+                let mut action = PlayAction::file(collapse_backslashes(&program));
+                action.args = Some(args);
+                action
+            })
+        })
+}
+
+/// `F:\\Amazon Games\\x.exe` → `F:\Amazon Games\x.exe`; a leading `\\` (network path) stays.
+fn collapse_backslashes(path: &str) -> String {
+    let (lead, rest) = if path.starts_with(r"\\") {
+        path.split_at(2)
+    } else {
+        ("", path)
+    };
+    let mut out = String::from(lead);
+    for c in rest.chars() {
+        if !(c == '\\' && out.ends_with('\\') && out.len() > lead.len()) {
+            out.push(c);
+        }
+    }
+    out
 }
 
 /// Strips trademark signs and surplus whitespace from a title.
@@ -417,17 +461,48 @@ mod tests {
     fn actions_need_the_client_and_plain_ids() {
         let tmp = tempfile::tempdir().unwrap();
         let app = app(tmp.path());
-        assert!(app.install_action("x").is_none() && app.uninstall_action().is_none());
+        assert!(app.install_action("x").is_none() && app.uninstall_action("x").is_none());
         fs::create_dir_all(app.client.parent().unwrap()).unwrap();
         fs::write(&app.client, b"").unwrap();
         let install = app.install_action(SUPERHOT).unwrap();
         assert_eq!(install.kind, ActionKind::Uri);
         assert_eq!(install.target, format!("amazon-games://install/{SUPERHOT}"));
-        let remove = app.uninstall_action().unwrap();
+        // Without an uninstall entry for the id: the app.
+        let remove = app.uninstall_action("not-installed-anywhere").unwrap();
         assert_eq!(remove.kind, ActionKind::File);
         assert!(remove.target.ends_with(CLIENT_EXE));
         assert!(app.install_action("a/b").is_none() && app.install_action("").is_none());
         assert!(AmazonAppPaths::play_action("x y", "C:/g").is_none());
+    }
+
+    #[test]
+    fn uninstalls_through_the_games_remover_entry() {
+        let entry = |key: &str, command: &str| UninstallEntry {
+            key: key.into(),
+            display_name: None,
+            publisher: None,
+            install_location: None,
+            uninstall_string: Some(command.into()),
+            display_icon: None,
+        };
+        let entries = [
+            entry("Other", r#""C:\x.exe" -m Game -p abc"#),
+            entry(
+                "AmazonGames/The Bridge",
+                r#""F:\\Amazon Games\\Library\\__InstallData__\\Amazon Game Remover.exe" -m Game -p f4725ac2-ed63"#,
+            ),
+        ];
+        let action = remover_action(&entries, "F4725AC2-ED63").unwrap();
+        assert_eq!(action.kind, ActionKind::File);
+        assert_eq!(
+            action.target,
+            r"F:\Amazon Games\Library\__InstallData__\Amazon Game Remover.exe"
+        );
+        assert_eq!(action.args.as_deref(), Some("-m Game -p f4725ac2-ed63"));
+        // Another store's entry with the same arguments, and an unknown id, are not used.
+        assert!(remover_action(&entries, "abc").is_none());
+        assert!(remover_action(&entries, "f4725ac2").is_none());
+        assert_eq!(collapse_backslashes(r"\\server\\share"), r"\\server\share");
     }
 
     #[test]

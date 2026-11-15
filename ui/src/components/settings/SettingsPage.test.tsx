@@ -42,6 +42,7 @@ function makeSettings(overrides: Partial<Settings> = {}): Settings {
     priceSites: [],
     storeOrder: [],
     appearance: { theme: "questkeep", scheme: "system", params: {} },
+    groupMerges: {},
     metadataPriority: { order: [], fields: {} },
     providers: {
       epic: { token: "keep-me" },
@@ -284,6 +285,7 @@ describe("SettingsPage", () => {
         priceSites: [],
         storeOrder: [],
         appearance: { theme: "questkeep", scheme: "system", params: {} },
+        groupMerges: {},
         metadataPriority: { order: [], fields: {} },
         providers: {
           epic: { token: "keep-me" },

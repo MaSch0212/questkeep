@@ -1,5 +1,6 @@
 //! Epic Games Store provider: finds installed games from the Epic Games Launcher's local data
-//! (`LauncherInstalled.dat` and the `*.item` manifests). No network access and no Epic login.
+//! (`LauncherInstalled.dat` and the `*.item` manifests, plus the newer install helper's `*.egi`
+//! records, named from the launcher's catalog cache). No network access and no Epic login.
 //!
 //! Signing in to an Epic account (`account`, optional) adds the owned-but-not-installed games,
 //! playtime and metadata from Epic's library and catalog services. Covers, backgrounds and icons
@@ -183,6 +184,127 @@ struct Manifest {
     technical_type: Option<String>,
 }
 
+/// An install record of the newer Epic install helper
+/// (`EpicOnlineServicesShared\InstallHelper\InstalledItems\<id>.egi`): `{"v4": {...}}`. The
+/// launcher writes it next to (and sometimes instead of, when it cannot write `Manifests`) the
+/// `*.item` manifest. It has no title; that comes from the launcher's catalog cache.
+#[derive(Debug, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct InstallRecord {
+    #[serde(default)]
+    state: Option<String>,
+    #[serde(default)]
+    dir: Option<String>,
+    /// The catalog namespace.
+    #[serde(default)]
+    sandbox_id: Option<String>,
+    #[serde(default)]
+    item_id: Option<String>,
+    /// The appName.
+    #[serde(default)]
+    artifact_id: Option<String>,
+}
+
+/// What the launcher's catalog cache (`Data\Catalog\catcache.bin`, base64 JSON) says about an
+/// item.
+#[derive(Debug, Deserialize, Default, Clone)]
+struct CachedItem {
+    #[serde(default)]
+    id: String,
+    #[serde(default)]
+    title: Option<String>,
+    #[serde(default)]
+    categories: Vec<CachedCategory>,
+}
+
+#[derive(Debug, Deserialize, Default, Clone)]
+struct CachedCategory {
+    #[serde(default)]
+    path: String,
+}
+
+/// The catalog cache by lowercase item id; empty when it is missing or unreadable.
+fn catalog_cache(root: &Path) -> HashMap<String, CachedItem> {
+    use base64::Engine as _;
+    let path = root
+        .join("EpicGamesLauncher")
+        .join("Data")
+        .join("Catalog")
+        .join("catcache.bin");
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return HashMap::new();
+    };
+    let items = base64::engine::general_purpose::STANDARD
+        .decode(text.trim())
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<Vec<CachedItem>>(&bytes).ok());
+    match items {
+        Some(items) => items
+            .into_iter()
+            .map(|item| (item.id.to_lowercase(), item))
+            .collect(),
+        None => {
+            tracing::debug!("could not read the Epic catalog cache {}", path.display());
+            HashMap::new()
+        }
+    }
+}
+
+fn install_records_dir(root: &Path) -> PathBuf {
+    root.join("EpicOnlineServicesShared")
+        .join("InstallHelper")
+        .join("InstalledItems")
+}
+
+/// The installed games of the install helper's `*.egi` records, as manifests: title and
+/// categories from the catalog cache, else the folder name.
+fn install_record_manifests(root: &Path) -> Vec<Manifest> {
+    let Ok(entries) = std::fs::read_dir(install_records_dir(root)) else {
+        return Vec::new();
+    };
+    let mut paths: Vec<PathBuf> = entries
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|x| x.eq_ignore_ascii_case("egi")))
+        .collect();
+    if paths.is_empty() {
+        return Vec::new();
+    }
+    paths.sort();
+    let catalog = catalog_cache(root);
+    let mut out = Vec::new();
+    for path in paths {
+        let record = match read_json::<serde_json::Value>(&path) {
+            // One versioned object (`v4` today); the newest shape is read, whatever its key.
+            Ok(serde_json::Value::Object(map)) => map
+                .into_iter()
+                .filter(|(key, _)| key.starts_with('v'))
+                .max_by_key(|(key, _)| key[1..].parse::<u32>().unwrap_or(0))
+                .and_then(|(_, value)| serde_json::from_value::<InstallRecord>(value).ok()),
+            Ok(_) => None,
+            Err(e) => {
+                tracing::warn!("skipping Epic install record {}: {e}", path.display());
+                None
+            }
+        };
+        let Some(record) = record else { continue };
+        if !non_empty(&record.state).is_some_and(|s| s.eq_ignore_ascii_case("installed")) {
+            continue;
+        }
+        let cached = non_empty(&record.item_id).and_then(|id| catalog.get(&id.to_lowercase()));
+        out.push(Manifest {
+            app_name: record.artifact_id,
+            catalog_namespace: record.sandbox_id,
+            catalog_item_id: record.item_id,
+            display_name: cached.and_then(|c| c.title.clone()),
+            install_location: record.dir,
+            app_categories: cached.map(|c| c.categories.iter().map(|c| c.path.clone()).collect()),
+            ..Manifest::default()
+        });
+    }
+    out
+}
+
 fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T, String> {
     let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
     serde_json::from_str(text.trim_start_matches('\u{feff}')).map_err(|e| e.to_string())
@@ -205,7 +327,8 @@ fn is_not_a_game(m: &Manifest, app_name: &str) -> bool {
     {
         return true;
     }
-    cats.iter().any(|c| c == "plugins" || c == "plugins/engine")
+    cats.iter()
+        .any(|c| c == "plugins" || c == "plugins/engine" || c.starts_with("engines"))
         || m.compatible_apps
             .as_deref()
             .unwrap_or(&[])
@@ -326,19 +449,17 @@ fn manifest_ids(root: &Path) -> HashMap<String, CatalogIds> {
         .join("Data")
         .join("Manifests");
     let mut out = HashMap::new();
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return out;
-    };
-    for path in entries.flatten().map(|e| e.path()) {
-        if !path
-            .extension()
-            .is_some_and(|x| x.eq_ignore_ascii_case("item"))
-        {
-            continue;
-        }
-        let Ok(manifest) = read_json::<Manifest>(&path) else {
-            continue;
-        };
+    let items = std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|path| {
+            path.extension()
+                .is_some_and(|x| x.eq_ignore_ascii_case("item"))
+        })
+        .filter_map(|path| read_json::<Manifest>(&path).ok());
+    for manifest in install_record_manifests(root).into_iter().chain(items) {
         if let (Some(app), Some(ns), Some(item)) = (
             non_empty(&manifest.app_name),
             non_empty(&manifest.catalog_namespace),
@@ -425,7 +546,8 @@ impl LibraryProvider for EpicProvider {
             .join("EpicGamesLauncher")
             .join("Data")
             .join("Manifests");
-        if !root.is_dir() || !manifests_dir.is_dir() {
+        let records_dir = install_records_dir(root);
+        if !root.is_dir() || (!manifests_dir.is_dir() && !records_dir.is_dir()) {
             return Err(ProviderError::NotFound(
                 "Epic Games Launcher data not found (is the launcher installed?)".into(),
             ));
@@ -444,31 +566,51 @@ impl LibraryProvider for EpicProvider {
             LauncherInstalled::default()
         };
 
-        let entries = std::fs::read_dir(&manifests_dir).map_err(|source| ProviderError::Io {
-            path: manifests_dir.display().to_string(),
-            source,
-        })?;
-        let mut paths: Vec<PathBuf> = entries
-            .flatten()
-            .map(|e| e.path())
-            .filter(|p| {
-                p.extension()
-                    .is_some_and(|x| x.eq_ignore_ascii_case("item"))
-            })
-            .collect();
+        let mut paths: Vec<PathBuf> = match std::fs::read_dir(&manifests_dir) {
+            Ok(entries) => entries
+                .flatten()
+                .map(|e| e.path())
+                .filter(|p| {
+                    p.extension()
+                        .is_some_and(|x| x.eq_ignore_ascii_case("item"))
+                })
+                .collect(),
+            // The launcher may fail to create the folder; the install records still list games.
+            Err(err) if !records_dir.is_dir() => {
+                return Err(ProviderError::Io {
+                    path: manifests_dir.display().to_string(),
+                    source: err,
+                });
+            }
+            Err(_) => Vec::new(),
+        };
         paths.sort();
+        let mut manifests: Vec<Manifest> = Vec::new();
+        for path in paths {
+            match read_json::<Manifest>(&path) {
+                Ok(m) if non_empty(&m.app_name).is_some() => manifests.push(m),
+                Ok(_) => {
+                    tracing::warn!("skipping Epic manifest without AppName: {}", path.display())
+                }
+                Err(e) => tracing::warn!("skipping Epic manifest {}: {e}", path.display()),
+            }
+        }
+        // Install records fill in games without an `*.item` manifest.
+        for record in install_record_manifests(root) {
+            let Some(app) = non_empty(&record.app_name) else {
+                continue;
+            };
+            let known = manifests
+                .iter()
+                .any(|m| non_empty(&m.app_name).is_some_and(|a| a.eq_ignore_ascii_case(app)));
+            if !known {
+                manifests.push(record);
+            }
+        }
 
         let mut games: Vec<ImportedGame> = Vec::new();
-        for path in paths {
-            let manifest: Manifest = match read_json(&path) {
-                Ok(m) => m,
-                Err(e) => {
-                    tracing::warn!("skipping Epic manifest {}: {e}", path.display());
-                    continue;
-                }
-            };
+        for manifest in manifests {
             let Some(app_name) = non_empty(&manifest.app_name) else {
-                tracing::warn!("skipping Epic manifest without AppName: {}", path.display());
                 continue;
             };
             if is_not_a_game(&manifest, app_name) {
@@ -762,6 +904,69 @@ mod tests {
         assert_eq!(
             action.target,
             "com.epicgames.launcher://apps/ns1%3Aitem1%3ASugar?action=launch&silent=true"
+        );
+    }
+
+    /// The install helper's records, with titles from the catalog cache; seen with a launcher
+    /// that could not write its `Manifests` folder.
+    #[test]
+    fn reads_install_helper_records() {
+        use base64::Engine as _;
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let records = root.join("EpicOnlineServicesShared/InstallHelper/InstalledItems");
+        fs::create_dir_all(&records).unwrap();
+        let dir = root.join("games/GNOG");
+        let engine = root.join("games/UE");
+        fs::create_dir_all(&dir).unwrap();
+        fs::create_dir_all(&engine).unwrap();
+        let record = |app: &str, item: &str, dir: &Path, state: &str| {
+            serde_json::json!({"v4": {
+                "installationId": "X", "state": state, "dir": dir, "sandboxId": "ns",
+                "itemId": item, "artifactId": app, "manifestData": {"launchExe": "GNOG.exe"}
+            }})
+            .to_string()
+        };
+        fs::write(
+            records.join("a.egi"),
+            record("Penguin", "f1e0", &dir, "Installed"),
+        )
+        .unwrap();
+        fs::write(
+            records.join("b.egi"),
+            record("Half", "half", &dir, "Installing"),
+        )
+        .unwrap();
+        fs::write(
+            records.join("c.egi"),
+            record("UE_5", "ue", &engine, "Installed"),
+        )
+        .unwrap();
+        fs::write(records.join("Revision.json"), "{}").unwrap();
+        let catalog = serde_json::json!([
+            {"id": "F1E0", "title": "GNOG", "categories": [{"path": "games"}]},
+            {"id": "ue", "title": "Unreal Engine", "categories": [{"path": "engines/ue5"}]}
+        ]);
+        let cache = root.join("EpicGamesLauncher/Data/Catalog");
+        fs::create_dir_all(&cache).unwrap();
+        fs::write(
+            cache.join("catcache.bin"),
+            base64::engine::general_purpose::STANDARD.encode(catalog.to_string()),
+        )
+        .unwrap();
+
+        let provider = EpicProvider::with_data_root(root);
+        let games = provider.scan_installed().unwrap();
+        assert_eq!(games.len(), 1, "{games:?}");
+        assert_eq!(games[0].source_game_id, "Penguin");
+        assert_eq!(games[0].name, "GNOG");
+        assert_eq!(
+            games[0].play_action.as_ref().unwrap().target,
+            "com.epicgames.launcher://apps/ns%3Af1e0%3APenguin?action=launch&silent=true"
+        );
+        assert_eq!(
+            provider.catalog_ids("penguin"),
+            Some(("ns".to_string(), "f1e0".to_string()))
         );
     }
 
