@@ -19,18 +19,19 @@ env:
   NODE_VERSION: "24"
 
 jobs:
-  # Windows runners are slow mostly on disk I/O: target/ is a Dev Drive (ReFS) mounted in place,
-  # and the gates and the release build run as two parallel jobs.
+  # The Windows gates and the Windows release build run as two parallel jobs.
   windows:
     name: Windows (gates)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
 
+      # Windows runners are slow mostly on disk I/O: the checkout is copied onto a Dev Drive (ReFS)
+      # and everything runs there.
       - uses: samypr100/setup-dev-drive@v4
         with:
           drive-size: 25GB
-          mount-path: target
+          workspace-copy: true
           trusted-dev-drive: true
 
       - uses: pnpm/action-setup@v6
@@ -47,35 +48,48 @@ jobs:
           targets: wasm32-wasip2
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ${{ env.DEV_DRIVE_WORKSPACE }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install JS dependencies
+        working-directory: ${{ env.DEV_DRIVE_WORKSPACE }}
         run: pnpm install --frozen-lockfile
 
       - name: Release scripts
+        working-directory: ${{ env.DEV_DRIVE_WORKSPACE }}
         run: node --test scripts/release/*.test.mjs
 
       - name: rustfmt
+        working-directory: ${{ env.DEV_DRIVE_WORKSPACE }}
         run: cargo fmt --all --check
 
       - name: clippy
+        working-directory: ${{ env.DEV_DRIVE_WORKSPACE }}
         run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: cargo test
+        working-directory: ${{ env.DEV_DRIVE_WORKSPACE }}
         run: cargo test --workspace
 
       - name: Generated TS bindings are up to date
+        working-directory: ${{ env.DEV_DRIVE_WORKSPACE }}
         run: git diff --exit-code -- ui/src/bindings
 
       - name: oxfmt
+        working-directory: ${{ env.DEV_DRIVE_WORKSPACE }}
         run: pnpm --dir ui format:check
 
       - name: oxlint
+        working-directory: ${{ env.DEV_DRIVE_WORKSPACE }}
         run: pnpm --dir ui lint --deny-warnings
 
       - name: tsc
+        working-directory: ${{ env.DEV_DRIVE_WORKSPACE }}
         run: pnpm --dir ui typecheck
 
       - name: vitest
+        working-directory: ${{ env.DEV_DRIVE_WORKSPACE }}
         run: pnpm --dir ui test
 
   windows-build:
@@ -84,10 +98,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Windows runners are slow mostly on disk I/O: the checkout is copied onto a Dev Drive (ReFS)
+      # and everything runs there.
       - uses: samypr100/setup-dev-drive@v4
         with:
           drive-size: 15GB
-          mount-path: target
+          workspace-copy: true
           trusted-dev-drive: true
 
       - uses: pnpm/action-setup@v6
@@ -103,11 +119,15 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: release-windows
+          workspaces: ${{ env.DEV_DRIVE_WORKSPACE }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install JS dependencies
+        working-directory: ${{ env.DEV_DRIVE_WORKSPACE }}
         run: pnpm install --frozen-lockfile
 
       - name: Build app
+        working-directory: ${{ env.DEV_DRIVE_WORKSPACE }}
         run: pnpm tauri build
 
       - name: Upload build output
@@ -115,9 +135,9 @@ jobs:
         with:
           name: questkeep-windows
           path: |
-            target/release/questkeep.exe
-            target/release/bundle/msi/*.msi
-            target/release/bundle/nsis/*.exe
+            ${{ env.DEV_DRIVE_WORKSPACE }}/target/release/questkeep.exe
+            ${{ env.DEV_DRIVE_WORKSPACE }}/target/release/bundle/msi/*.msi
+            ${{ env.DEV_DRIVE_WORKSPACE }}/target/release/bundle/nsis/*.exe
           retention-days: 7
           if-no-files-found: error
 
@@ -149,6 +169,8 @@ jobs:
           targets: wasm32-wasip2
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install JS dependencies
         run: pnpm install --frozen-lockfile
@@ -169,8 +191,10 @@ jobs:
           pnpm --dir ui typecheck
           pnpm --dir ui test
 
-      - name: Build app (no bundle)
-        run: pnpm tauri build --no-bundle
+      # Debug build: reuses cargo test's artifacts and keeps a release profile (LTO) out of this
+      # job's cache. Release builds are checked by the Windows build and the release workflow.
+      - name: Build app (debug, no bundle)
+        run: pnpm tauri build --debug --no-bundle
 
   changeset:
     name: Changeset reminder

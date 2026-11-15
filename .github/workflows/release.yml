@@ -118,12 +118,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # Windows runners are slow mostly on disk I/O: target/ is a Dev Drive (ReFS) mounted in place.
+      # Windows runners are slow mostly on disk I/O: the checkout is copied onto a Dev Drive (ReFS)
+      # and the build runs there (DEV_DRIVE_WORKSPACE; unset on Linux, which builds in place).
       - uses: samypr100/setup-dev-drive@v4
         if: runner.os == 'Windows'
         with:
           drive-size: 15GB
-          mount-path: target
+          workspace-copy: true
           trusted-dev-drive: true
 
       - name: Install Tauri system dependencies
@@ -148,20 +149,25 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: release-${{ matrix.name }}
+          workspaces: ${{ env.DEV_DRIVE_WORKSPACE || github.workspace }}
 
       - name: Write version ${{ env.VERSION }} into the project files
+        working-directory: ${{ env.DEV_DRIVE_WORKSPACE || github.workspace }}
         run: node scripts/release/changeset.mjs version --write "$env:VERSION"
 
       - name: Install JS dependencies
+        working-directory: ${{ env.DEV_DRIVE_WORKSPACE || github.workspace }}
         run: pnpm install --frozen-lockfile
 
       - name: Updater signing is not configured
         if: env.TAURI_SIGNING_PRIVATE_KEY == ''
+        working-directory: ${{ env.DEV_DRIVE_WORKSPACE || github.workspace }}
         run: |
           Write-Host "::warning::TAURI_SIGNING_PRIVATE_KEY is not set: building without updater artifacts. This release will not auto-update existing installs. See docs/RELEASING.md."
 
       - name: Check the updater public key is configured
         if: env.TAURI_SIGNING_PRIVATE_KEY != ''
+        working-directory: ${{ env.DEV_DRIVE_WORKSPACE || github.workspace }}
         run: |
           if ((Get-Content src-tauri/tauri.conf.json -Raw) -match 'REPLACE_WITH_PUBLIC_KEY') {
             Write-Host "::error::plugins.updater.pubkey in src-tauri/tauri.conf.json is still the placeholder. Paste the public key from 'pnpm tauri signer generate' (docs/RELEASING.md)."
@@ -170,19 +176,28 @@ jobs:
 
       - name: Build (signed, with updater artifacts)
         if: env.TAURI_SIGNING_PRIVATE_KEY != ''
+        working-directory: ${{ env.DEV_DRIVE_WORKSPACE || github.workspace }}
         run: pnpm tauri build --bundles "${{ matrix.bundles }}" --config src-tauri/tauri.updater.conf.json
 
       - name: Build (unsigned, no updater artifacts)
         if: env.TAURI_SIGNING_PRIVATE_KEY == ''
+        working-directory: ${{ env.DEV_DRIVE_WORKSPACE || github.workspace }}
         run: pnpm tauri build --bundles "${{ matrix.bundles }}"
 
       # The app is one self-contained exe: shipped as is for portable use (no updater entry; the
       # app notices it isn't installed and links to the release page instead).
       - name: Add the portable exe
         if: matrix.name == 'windows'
+        working-directory: ${{ env.DEV_DRIVE_WORKSPACE || github.workspace }}
         run: |
           New-Item -ItemType Directory -Force target/release/bundle/portable | Out-Null
           Copy-Item target/release/questkeep.exe "target/release/bundle/portable/Questkeep_${env:VERSION}_x64_portable.exe"
+
+      - name: Copy the bundles back for upload
+        if: env.DEV_DRIVE_WORKSPACE != ''
+        run: |
+          New-Item -ItemType Directory -Force target/release | Out-Null
+          Copy-Item -Recurse "$env:DEV_DRIVE_WORKSPACE/target/release/bundle" target/release/
 
       - name: Upload bundles
         uses: actions/upload-artifact@v7
