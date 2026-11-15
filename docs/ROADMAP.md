@@ -45,7 +45,7 @@ Groups as a list beside the games; the Statistics page; store order; background 
 minutes; installs watched until done; portable exe and rpm package; store websites and price
 comparison sites in the + menu.
 
-## Done in the next release
+## Done in v0.6
 
 Plugins: sandboxed WASM stores, JavaScript extensions and themes; appearance settings with light
 and dark mode, new themes and theme parameters; the theme editor; auto categories; text filters,
