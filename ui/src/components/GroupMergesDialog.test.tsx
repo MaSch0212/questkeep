@@ -66,4 +66,18 @@ describe("GroupMergesSection", () => {
     expect(screen.queryByRole("heading", { name: "Series" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Edit Shooters" })).toBeInTheDocument();
   });
+
+  it("combines groups of a chosen grouping from the whole library", async () => {
+    render(() => <GroupMergesSection />);
+    await fireEvent.change(screen.getByRole("combobox", { name: "Grouping" }), {
+      target: { value: "series" },
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "Combine groups…" }));
+    expect(store.mergeDialog()).toEqual({
+      field: "series",
+      keys: [],
+      mergeId: null,
+      wholeLibrary: true,
+    });
+  });
 });

@@ -62,8 +62,8 @@ with a Setup section: installed programs to pick from (Apps list and Start menu)
 match from IGDB, the Steam store or the GOG catalog that later refreshes keep using; the game page
 scrolls sideways instead of squeezing in narrow windows. Every change in the Edit dialog, images
 and launch profiles included, waits for Save, and Add game creates nothing before it; Combine
-groups… lists the grouping's combined groups to edit or split up, and Settings has an overview of
-all of them.
+groups… lists the grouping's combined groups to edit or split up, and Settings lists all of them and
+combines groups of any grouping.
 
 ## Next
 

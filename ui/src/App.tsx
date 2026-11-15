@@ -323,6 +323,7 @@ export function App() {
         {(open) => (
           <GroupMergeDialog
             field={open().field}
+            wholeLibrary={open().wholeLibrary}
             keys={open().keys}
             mergeId={open().mergeId}
             onClose={() => store.setMergeDialog(null)}

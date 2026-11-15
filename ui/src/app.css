@@ -2219,6 +2219,11 @@ ul {
   flex-shrink: 0;
   gap: var(--qk-space-2);
 }
+.merge-add__field {
+  flex: 0 1 auto;
+  width: auto;
+  min-width: 0;
+}
 .merge-fields__title {
   margin: var(--qk-space-3) 0 var(--qk-space-2);
   font-size: var(--qk-font-size-md);

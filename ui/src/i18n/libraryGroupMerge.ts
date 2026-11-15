@@ -25,8 +25,10 @@ const en = {
   editNamed: "Edit {name}",
   splitNamed: "Split up {name}",
   close: "Close",
+  groupingField: "Grouping",
+  noGames: "no games",
   settingsIntro:
-    "Groups shown as one in grouped views, per grouping field. To combine groups, group a view and choose Combine groups… in its group menu, or right-click a group header.",
+    "Groups shown as one in grouped views, per grouping. Pick a grouping and choose Combine groups… to combine some of its groups; in a grouped view you can also right-click a group header.",
 };
 
 /** Combining groups of a grouped view (GroupMergeDialog, group header and group list menus). */
@@ -58,8 +60,10 @@ export const libraryGroupMerge: Translations<typeof en> = {
     editNamed: "{name} bearbeiten",
     splitNamed: "{name} wieder aufteilen",
     close: "Schließen",
+    groupingField: "Gruppierung",
+    noGames: "keine Spiele",
     settingsIntro:
-      "Gruppen, die in gruppierten Ansichten als eine gezeigt werden, je Gruppierung. Zum Zusammenfassen gruppiere eine Ansicht und wähle „Gruppen zusammenfassen…“ im Gruppierungsmenü oder klicke mit rechts auf einen Gruppenkopf.",
+      "Gruppen, die in gruppierten Ansichten als eine gezeigt werden, je Gruppierung. Wähle eine Gruppierung und dann „Gruppen zusammenfassen…“, um Gruppen davon zusammenzufassen; in einer gruppierten Ansicht geht das auch per Rechtsklick auf einen Gruppenkopf.",
   },
   fr: {
     combineGroups: "Regrouper des groupes…",
@@ -87,8 +91,10 @@ export const libraryGroupMerge: Translations<typeof en> = {
     editNamed: "Modifier {name}",
     splitNamed: "Séparer {name}",
     close: "Fermer",
+    groupingField: "Regroupement",
+    noGames: "aucun jeu",
     settingsIntro:
-      "Les groupes affichés comme un seul dans les vues groupées, par champ de regroupement. Pour combiner des groupes, groupez une vue et choisissez « Combiner des groupes… » dans son menu de regroupement, ou faites un clic droit sur un en-tête de groupe.",
+      "Les groupes affichés comme un seul dans les vues groupées, par regroupement. Choisissez un regroupement puis « Combiner des groupes… » pour en combiner ; dans une vue groupée, un clic droit sur un en-tête de groupe le permet aussi.",
   },
   it: {
     combineGroups: "Unisci gruppi…",
@@ -116,8 +122,10 @@ export const libraryGroupMerge: Translations<typeof en> = {
     editNamed: "Modifica {name}",
     splitNamed: "Separa {name}",
     close: "Chiudi",
+    groupingField: "Raggruppamento",
+    noGames: "nessun gioco",
     settingsIntro:
-      "I gruppi mostrati come uno solo nelle viste raggruppate, per campo di raggruppamento. Per combinare gruppi, raggruppa una vista e scegli «Combina gruppi…» nel suo menu di raggruppamento, oppure fai clic destro sull'intestazione di un gruppo.",
+      "I gruppi mostrati come uno solo nelle viste raggruppate, per raggruppamento. Scegli un raggruppamento e poi «Combina gruppi…» per combinarne alcuni; in una vista raggruppata puoi anche fare clic destro sull'intestazione di un gruppo.",
   },
   es: {
     combineGroups: "Combinar grupos…",
@@ -145,8 +153,10 @@ export const libraryGroupMerge: Translations<typeof en> = {
     editNamed: "Editar {name}",
     splitNamed: "Separar {name}",
     close: "Cerrar",
+    groupingField: "Agrupación",
+    noGames: "sin juegos",
     settingsIntro:
-      "Los grupos que se muestran como uno solo en las vistas agrupadas, por campo de agrupación. Para combinar grupos, agrupa una vista y elige «Combinar grupos…» en su menú de agrupación, o haz clic derecho en el encabezado de un grupo.",
+      "Los grupos que se muestran como uno solo en las vistas agrupadas, por agrupación. Elige una agrupación y luego «Combinar grupos…» para combinar algunos; en una vista agrupada también puedes hacer clic derecho en el encabezado de un grupo.",
   },
   pt: {
     combineGroups: "Combinar grupos…",
@@ -174,7 +184,9 @@ export const libraryGroupMerge: Translations<typeof en> = {
     editNamed: "Editar {name}",
     splitNamed: "Separar {name}",
     close: "Fechar",
+    groupingField: "Agrupamento",
+    noGames: "nenhum jogo",
     settingsIntro:
-      "Os grupos mostrados como um só nas visualizações agrupadas, por campo de agrupamento. Para combinar grupos, agrupe uma visualização e escolha “Combinar grupos…” no menu de agrupamento, ou clique com o botão direito no cabeçalho de um grupo.",
+      "Os grupos mostrados como um só nas visualizações agrupadas, por agrupamento. Escolha um agrupamento e depois “Combinar grupos…” para combinar alguns; numa visualização agrupada também dá para clicar com o botão direito no cabeçalho de um grupo.",
   },
 };

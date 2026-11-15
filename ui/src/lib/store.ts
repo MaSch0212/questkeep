@@ -170,6 +170,8 @@ function createAppStore() {
     field: GroupBy;
     keys: string[];
     mergeId: string | null;
+    /** Offer the whole library's groups, not the open view's (opened from Settings). */
+    wholeLibrary?: boolean;
   } | null>(null);
   /** The list of a grouping field's combined groups (Combine groups… in the group menu). */
   const [mergeManager, setMergeManager] = createSignal<GroupBy | null>(null);
@@ -276,9 +278,11 @@ function createAppStore() {
   );
   /** The open view's groups as they are without combining (to pick what to combine). */
   const plainGroups = createMemo(() => groupGames(games(), groupBy(), groupContext()));
-  /** The open view's groups by any field, without combining. */
-  const plainGroupsBy = (field: GroupBy) =>
-    field === groupBy() ? plainGroups() : groupGames(games(), field, groupContext());
+  /** The open view's (or the given games') groups by any field, without combining. */
+  const plainGroupsBy = (field: GroupBy, of?: Game[]) =>
+    of === undefined && field === groupBy()
+      ? plainGroups()
+      : groupGames(of ?? games(), field, groupContext());
   /** The group picked in the group list, while it still exists; null: all groups. */
   const pickedGroup = createMemo<string | null>(() => {
     if (!groupList()) return null;

@@ -12,7 +12,11 @@ const tr = translator(libraryGroupMerge);
  * The combined groups of one grouping field, each with Edit (opens the Combine groups dialog)
  * and Split up. Used by the Combined groups dialog and the settings overview.
  */
-export function GroupMergeList(props: { field: GroupBy }) {
+export function GroupMergeList(props: {
+  field: GroupBy;
+  /** Edit with the whole library's groups (Settings), not the open view's. */
+  wholeLibrary?: boolean;
+}) {
   const merges = () => store.groupMerges()[props.field] ?? [];
 
   function splitUp(id: string) {
@@ -42,7 +46,12 @@ export function GroupMergeList(props: { field: GroupBy }) {
                   class="btn"
                   aria-label={tr("editNamed", { name: merge.name })}
                   onClick={() =>
-                    store.setMergeDialog({ field: props.field, keys: [], mergeId: merge.id })
+                    store.setMergeDialog({
+                      field: props.field,
+                      keys: [],
+                      mergeId: merge.id,
+                      wholeLibrary: props.wholeLibrary,
+                    })
                   }
                 >
                   <Pencil class="icon" aria-hidden="true" />

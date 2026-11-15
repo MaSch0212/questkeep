@@ -1,8 +1,10 @@
-import { createSignal, For, Show } from "solid-js";
+import { createMemo, createResource, createSignal, For, Show } from "solid-js";
 import type { GroupBy } from "../bindings/GroupBy";
 import type { GroupMerge } from "../bindings/GroupMerge";
 import type { GroupMergeMember } from "../bindings/GroupMergeMember";
 import { translator } from "../i18n";
+import * as api from "../lib/api";
+import { defaultQuery } from "../lib/query";
 import { libraryGroupMerge } from "../i18n/libraryGroupMerge";
 import { shellCommon } from "../i18n/shellCommon";
 import { NO_CATEGORY } from "../lib/views";
@@ -36,6 +38,8 @@ export function GroupMergeDialog(props: {
   keys: string[];
   /** The combined group being edited; null for a new one. */
   mergeId: string | null;
+  /** Offer the groups of the whole library instead of the open view (opened from Settings). */
+  wholeLibrary?: boolean;
   onClose: () => void;
 }) {
   const field = props.field;
@@ -46,20 +50,31 @@ export function GroupMergeDialog(props: {
     if (merge.id === editing?.id) continue;
     for (const member of merge.members) takenBy.set(member.key, merge.name);
   }
-  const plain = store.plainGroupsBy(field).filter((g) => g.key !== NO_CATEGORY && g.key !== "");
-  const choices: Choice[] = [
-    ...plain.map((g) => ({
-      key: g.key,
-      label: g.label,
-      source: g.source,
-      count: g.games.length,
-      takenBy: takenBy.get(g.key) ?? null,
-    })),
-    // Members of this merge that the open view has no games for.
-    ...(editing?.members ?? [])
-      .filter((m) => !plain.some((g) => g.key === m.key))
-      .map((m) => ({ key: m.key, label: m.label, source: null, count: null, takenBy: null })),
-  ];
+  // Every game, hidden ones and apps included, when not picking from the open view.
+  const [library] = createResource(
+    () => props.wholeLibrary === true,
+    () => api.listGames({ ...defaultQuery(), hidden: "all", kind: "both" }),
+  );
+  const choices = createMemo((): Choice[] => {
+    const games = props.wholeLibrary ? library() : undefined;
+    if (props.wholeLibrary && games === undefined) return [];
+    const plain = store
+      .plainGroupsBy(field, games)
+      .filter((g) => g.key !== NO_CATEGORY && g.key !== "");
+    return [
+      ...plain.map((g) => ({
+        key: g.key,
+        label: g.label,
+        source: g.source,
+        count: g.games.length,
+        takenBy: takenBy.get(g.key) ?? null,
+      })),
+      // Members of this merge that the open view has no games for.
+      ...(editing?.members ?? [])
+        .filter((m) => !plain.some((g) => g.key === m.key))
+        .map((m) => ({ key: m.key, label: m.label, source: null, count: null, takenBy: null })),
+    ];
+  });
   const [name, setName] = createSignal(editing?.name ?? "");
   const [picked, setPicked] = createSignal<ReadonlySet<string>>(
     new Set(editing ? editing.members.map((m) => m.key) : props.keys),
@@ -89,7 +104,7 @@ export function GroupMergeDialog(props: {
   function submit(event: Event) {
     event.preventDefault();
     if (!valid() || busy()) return;
-    const members: GroupMergeMember[] = choices
+    const members: GroupMergeMember[] = choices()
       .filter((c) => picked().has(c.key))
       .map((c) => ({ key: c.key, label: c.label }));
     const merge: GroupMerge = {
@@ -111,7 +126,11 @@ export function GroupMergeDialog(props: {
   return (
     <Modal title={editing ? tr("editTitle") : tr("title")} onClose={props.onClose}>
       <form class="form group-merge" onSubmit={submit}>
-        <p class="field__hint">{tr("notice", { field: inSentence(groupLabel(field)) })}</p>
+        <p class="field__hint">
+          {tr(props.wholeLibrary ? "managerHint" : "notice", {
+            field: inSentence(groupLabel(field)),
+          })}
+        </p>
         <label class="field">
           <span class="field__label">{tr("name")}</span>
           <input
@@ -125,7 +144,7 @@ export function GroupMergeDialog(props: {
         <fieldset class="field group-merge__groups">
           <legend class="field__label">{tr("groups")}</legend>
           <ul class="group-merge__list">
-            <For each={choices}>
+            <For each={choices()}>
               {(choice) => (
                 <li>
                   <label class="check" classList={{ "check--disabled": busy() }}>
@@ -139,7 +158,7 @@ export function GroupMergeDialog(props: {
                     <span class="group-merge__label">{choice.label}</span>
                     <span class="group-merge__meta">
                       {choice.count === null
-                        ? tr("notInView")
+                        ? tr(props.wholeLibrary ? "noGames" : "notInView")
                         : choice.takenBy
                           ? `${choice.count} · ${tr("inOther", { name: choice.takenBy })}`
                           : choice.count}
