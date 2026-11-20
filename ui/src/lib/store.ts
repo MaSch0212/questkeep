@@ -18,6 +18,7 @@ import type { GroupBy } from "../bindings/GroupBy";
 import type { LibraryView } from "../bindings/LibraryView";
 import type { ListField } from "../bindings/ListField";
 import type { PluginInfo } from "../bindings/PluginInfo";
+import type { PluginUpdate } from "../bindings/PluginUpdate";
 import type { ProviderInfo } from "../bindings/ProviderInfo";
 import type { Settings } from "../bindings/Settings";
 import type { GroupMerge } from "../bindings/GroupMerge";
@@ -184,6 +185,10 @@ function createAppStore() {
   const [running, setRunning] = createSignal<ReadonlySet<string>>(new Set());
   const [providers, setProviders] = createSignal<ProviderInfo[]>([]);
   const [plugins, setPlugins] = createSignal<PluginInfo[]>([]);
+  /** Installed registry plugins with a newer version (from the last registry fetch). */
+  const [pluginUpdates, setPluginUpdates] = createSignal<PluginUpdate[]>([]);
+  /** The Plugin updates dialog is open (the bell entry, the Updates button in Settings > Plugins). */
+  const [pluginUpdatesOpen, setPluginUpdatesOpen] = createSignal(false);
   const [appInfo, setAppInfo] = createSignal<AppInfo | null>(null);
   const [seenSources, setSeenSources] = createSignal<ReadonlySet<string>>(new Set());
   const [toasts, setToasts] = createSignal<Toast[]>([]);
@@ -847,6 +852,11 @@ function createAppStore() {
     setPlugins((await api.listPlugins()) ?? []);
   }
 
+  /** The update count for plugins from the registry; reads the cache, never the network. */
+  async function loadPluginUpdates() {
+    setPluginUpdates((await api.pluginUpdates()) ?? []);
+  }
+
   async function loadProviders() {
     setProviders(await api.listProviders());
   }
@@ -1220,8 +1230,13 @@ function createAppStore() {
       case "pluginsChanged":
         // Plugin stores come and go: the store list and what games can do follow.
         void loadPlugins().catch(() => undefined);
+        void loadPluginUpdates().catch(() => undefined);
         void loadProviders().catch(() => undefined);
         scheduleRefresh();
+        break;
+      case "pluginUpdatesChanged":
+        // The update check (at start, every 12 hours, or "Check now") found something different.
+        void loadPluginUpdates().catch(() => undefined);
         break;
       case "backgroundWork":
         setBackgroundWork((work) => ({ ...work, [event.queue]: event.pending }));
@@ -1332,6 +1347,7 @@ function createAppStore() {
     const loads = Promise.allSettled([
       loadProviders(),
       loadPlugins().catch(() => undefined),
+      loadPluginUpdates().catch(() => undefined),
       loadCompletion(),
       api.appInfo().then(setAppInfo),
       api.runningGames().then((ids) => setRunning(new Set(ids))),
@@ -1446,6 +1462,8 @@ function createAppStore() {
       setRunning(new Set<string>());
       setProviders([]);
       setPlugins([]);
+      setPluginUpdates([]);
+      setPluginUpdatesOpen(false);
       setAppInfo(null);
       setUpdate(null);
       setUpdateOpen(false);
@@ -1472,6 +1490,10 @@ function createAppStore() {
     running,
     providers,
     plugins,
+    pluginUpdates,
+    pluginUpdatesOpen,
+    openPluginUpdates: () => setPluginUpdatesOpen(true),
+    closePluginUpdates: () => setPluginUpdatesOpen(false),
     appInfo,
     sources,
     toasts,
@@ -1486,6 +1508,7 @@ function createAppStore() {
     plainGroupsBy,
     loadProviders,
     loadPlugins,
+    loadPluginUpdates,
     update,
     setUpdate,
     updateOpen,

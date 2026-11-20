@@ -322,6 +322,7 @@ describe("AccountsSection", () => {
 function makeSettings(overrides: Partial<Settings> = {}): Settings {
   return {
     scanOnStartup: true,
+    checkPluginUpdates: true,
     autoSyncMinutes: 15,
     watchInstallFolders: true,
     downloadCovers: true,

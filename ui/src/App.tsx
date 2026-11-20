@@ -46,6 +46,7 @@ import type { CommandBarHandle } from "./components/CommandBar";
 import type { KeywordFilterHandle } from "./components/KeywordFilter";
 import { store } from "./lib/store";
 import { themeEditor } from "./lib/themeEditor";
+import { PluginUpdatesDialog } from "./components/settings/PluginUpdatesDialog";
 import { ThemeEditor } from "./components/ThemeEditor";
 
 const tr = translator(shellCommon);
@@ -363,6 +364,9 @@ export function App() {
         <FirstRunDialog />
       </Show>
       <Show when={store.scriptEditorId()}>{(id) => <ScriptEditorHost id={id()} />}</Show>
+      <Show when={store.pluginUpdatesOpen()}>
+        <PluginUpdatesDialog onClose={() => store.closePluginUpdates()} />
+      </Show>
       <ExtensionDialogs />
       <Show when={themeEditor.isOpen()}>
         <ThemeEditor />

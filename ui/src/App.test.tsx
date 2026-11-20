@@ -96,6 +96,7 @@ beforeEach(() => {
 
 const SETTINGS: Settings = {
   scanOnStartup: true,
+  checkPluginUpdates: true,
   autoSyncMinutes: 15,
   watchInstallFolders: true,
   downloadCovers: true,

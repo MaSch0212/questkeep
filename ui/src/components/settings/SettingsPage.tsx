@@ -17,6 +17,7 @@ import { GroupMergesSection } from "./GroupMergesSection";
 import { MetadataSection } from "./MetadataSection";
 import { PluginSettings, pluginsWithSettings } from "./PluginSettings";
 import { PluginsSection } from "./PluginsSection";
+import { PluginUpdateCheck } from "./PluginUpdateCheck";
 import { PriceSitesSection } from "./PriceSitesSection";
 import { ScriptsSection } from "./ScriptsSection";
 import { UpdatesSection } from "./UpdatesSection";
@@ -61,7 +62,11 @@ const SECTIONS: SectionDef[] = [
   { id: "metadata", title: "metadata", component: MetadataSection },
   { id: "priceSites", title: "priceSites", component: PriceSitesSection },
   { id: "scripts", title: "scripts", component: ScriptsSection },
-  { id: "plugins", title: "plugins", component: PluginsSection },
+  {
+    id: "plugins",
+    title: "plugins",
+    component: (p) => <PluginsSection updateCheck={<PluginUpdateCheck model={p.model} />} />,
+  },
   {
     id: "developer",
     title: "developer",

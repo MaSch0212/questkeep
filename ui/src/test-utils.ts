@@ -2,8 +2,15 @@ import type { RuntimeInfo } from "./bindings/RuntimeInfo";
 import type { Script } from "./bindings/Script";
 import type { ScriptVariable } from "./bindings/ScriptVariable";
 import type { Game } from "./bindings/Game";
+import type { PluginFolder } from "./bindings/PluginFolder";
 import type { PluginInfo } from "./bindings/PluginInfo";
+import type { PluginChanges } from "./bindings/PluginChanges";
+import type { PluginPreview } from "./bindings/PluginPreview";
+import type { PluginUpdate } from "./bindings/PluginUpdate";
 import type { ProviderInfo } from "./bindings/ProviderInfo";
+import type { RegistryPluginPreview } from "./bindings/RegistryPluginPreview";
+import type { RegistryPluginView } from "./bindings/RegistryPluginView";
+import type { RegistryVersionView } from "./bindings/RegistryVersionView";
 import type { StoreSettings } from "./bindings/StoreSettings";
 
 /** A game; unless `copies` is given, its only copy is itself (as the core reports it). */
@@ -151,6 +158,42 @@ export function byTooltip(text: string): HTMLElement {
   return found[0] as HTMLElement;
 }
 
+/** A folder a plugin asks for: no choice, a default that is not there. */
+export function makeFolder(overrides: Partial<PluginFolder> = {}): PluginFolder {
+  return {
+    key: "instances",
+    label: "BSManager instances folder",
+    hint: "The folder that contains your Beat Saber instances.",
+    mount: "/instances",
+    default: "~/BSManager/BSInstances",
+    defaultPath: "C:\\Users\\me\\BSManager\\BSInstances",
+    defaultExists: false,
+    path: null,
+    effectivePath: "C:\\Users\\me\\BSManager\\BSInstances",
+    exists: false,
+    ...overrides,
+  };
+}
+
+/** What the install dialog shows for a store plugin that is not installed yet. */
+export function makePreview(overrides: Partial<PluginPreview> = {}): PluginPreview {
+  return {
+    id: "new",
+    name: "New Store",
+    version: "1.2.0",
+    description: "Games from the New Store.",
+    author: "Someone",
+    icon: null,
+    stores: 1,
+    hasExtension: false,
+    themes: [],
+    permissions: { read: [], http: [], folders: [] },
+    folders: [],
+    installedVersion: null,
+    ...overrides,
+  };
+}
+
 /** A loaded store plugin; override what a test cares about. */
 export function makePlugin(overrides: Partial<PluginInfo> = {}): PluginInfo {
   return {
@@ -159,10 +202,12 @@ export function makePlugin(overrides: Partial<PluginInfo> = {}): PluginInfo {
     version: "0.1.0",
     description: null,
     author: null,
+    icon: null,
     source: "C:/Plugins/example-store",
     sourceExists: true,
     enabled: true,
     watch: false,
+    registry: null,
     loaded: true,
     error: null,
     providers: ["example-store"],
@@ -171,7 +216,8 @@ export function makePlugin(overrides: Partial<PluginInfo> = {}): PluginInfo {
     revision: 1,
     themes: 0,
     themeDefs: [],
-    permissions: { read: [], http: [] },
+    permissions: { read: [], http: [], folders: [] },
+    folders: [],
     ...overrides,
   };
 }
@@ -217,3 +263,92 @@ export const SCRIPT_VARIABLES: ScriptVariable[] = [
   { env: "QK_GENRES", placeholder: "Genres", group: "lists", value: "Action;Roguelike" },
   { env: "QK_PHASE", placeholder: "Phase", group: "context", value: "pre" },
 ];
+
+/** One registry version (installable unless overridden). */
+export const makeVersion = (
+  version: string,
+  overrides: Partial<RegistryVersionView> = {},
+): RegistryVersionView => ({
+  version,
+  size: 2048,
+  released: "2026-11-20",
+  notes: null,
+  apiVersion: 1,
+  minApp: "0.7.0",
+  yanked: false,
+  compatible: true,
+  ...overrides,
+});
+
+/** An update that asks for nothing beyond the installed version. */
+export const NO_CHANGES: PluginChanges = {
+  newHttp: [],
+  newRead: [],
+  newFolders: [],
+  addsExtension: false,
+  addsStore: false,
+  needsReview: false,
+};
+
+/** An installed registry plugin with a newer version. */
+export const makePluginUpdate = (overrides: Partial<PluginUpdate> = {}): PluginUpdate => ({
+  id: "ember",
+  name: "Ember Pack",
+  installedVersion: "1.0.0",
+  latestVersion: "1.1.0",
+  notes: null,
+  ...overrides,
+});
+
+/** The registry's preview of a version (nothing new asked, no notes) unless overridden. */
+export const makeRegistryPreview = (
+  preview: Partial<PluginPreview> = {},
+  overrides: Partial<RegistryPluginPreview> = {},
+): RegistryPluginPreview => ({
+  preview: {
+    id: "ember",
+    name: "Ember Pack",
+    version: "1.1.0",
+    description: null,
+    author: null,
+    icon: null,
+    stores: 0,
+    hasExtension: false,
+    themes: [],
+    permissions: { read: [], http: [], folders: [] },
+    folders: [],
+    installedVersion: "1.0.0",
+    ...preview,
+  },
+  released: null,
+  notes: null,
+  size: 1024,
+  pinned: false,
+  downgrade: false,
+  changes: NO_CHANGES,
+  ...overrides,
+});
+
+export const makeRegistryPlugin = (
+  overrides: Partial<RegistryPluginView> = {},
+): RegistryPluginView => ({
+  id: "ember-pack",
+  name: "Ember Pack",
+  summary: "Warm themes.",
+  description: "A set of warm themes.",
+  author: "Ada",
+  repository: "https://github.com/ada/ember-pack",
+  homepage: null,
+  license: "MIT",
+  tags: ["theme", "warm"],
+  kinds: ["theme"],
+  iconUrl: null,
+  iconData: null,
+  compatibleVersions: ["1.0.0", "1.1.0"],
+  latest: "1.1.0",
+  installed: null,
+  updateAvailable: false,
+  incompatibleReason: null,
+  versions: [makeVersion("1.0.0"), makeVersion("1.1.0")],
+  ...overrides,
+});

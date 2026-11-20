@@ -21,6 +21,7 @@ vi.mock("@tauri-apps/plugin-opener", () => ({
 function makeSettings(overrides: Partial<Settings> = {}): Settings {
   return {
     scanOnStartup: true,
+    checkPluginUpdates: true,
     autoSyncMinutes: 15,
     watchInstallFolders: true,
     downloadCovers: true,
@@ -271,6 +272,7 @@ describe("SettingsPage", () => {
     await waitFor(() =>
       expect(api.saveSettings).toHaveBeenCalledWith({
         scanOnStartup: true,
+        checkPluginUpdates: true,
         autoSyncMinutes: 15,
         watchInstallFolders: true,
         downloadCovers: true,

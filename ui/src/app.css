@@ -6426,6 +6426,54 @@ ul {
   margin-top: var(--qk-space-2);
 }
 
+/* Folders a plugin asks the user for */
+.plugin-folders {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-2);
+}
+.plugin-folders__intro {
+  margin: 0;
+}
+.plugin-folder {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--qk-space-2) var(--qk-space-3);
+  padding: var(--qk-space-2) var(--qk-space-3);
+  border: 1px solid var(--qk-color-border);
+  border-radius: var(--qk-radius-sm);
+}
+.plugin-folder--missing {
+  border-color: var(--qk-color-danger);
+}
+.plugin-folder__text {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+.plugin-folder__label {
+  font-weight: 600;
+}
+.plugin-folder__hint {
+  font-size: var(--qk-font-size-sm);
+}
+.plugin-folder__path {
+  font-family: var(--qk-font-mono);
+  font-size: var(--qk-font-size-sm);
+  overflow-wrap: anywhere;
+}
+.plugin-folder__note {
+  font-size: var(--qk-font-size-sm);
+}
+.plugin-folder__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--qk-space-2);
+}
+
 /* Extension plugins: icons, title bar buttons, pages, settings */
 .ext-icon {
   display: inline-grid;
@@ -6945,6 +6993,309 @@ ul {
   font-size: var(--qk-font-size-sm);
 }
 
+/* Plugin updates dialog (the bell, Settings > Plugins > Updates) */
+.plugin-updates {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-3);
+}
+.plugin-updates > p {
+  margin: 0;
+}
+.plugin-updates__heading {
+  margin: 0;
+  font-size: var(--qk-font-size-lg);
+}
+.plugin-updates__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--qk-space-2);
+}
+.plugin-updates__progress {
+  margin: 0;
+  color: var(--qk-color-text-muted);
+}
+.plugin-updates__all {
+  margin-left: auto;
+}
+.plugin-updates__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.plugin-update {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--qk-space-3);
+  padding: var(--qk-space-3);
+  border: 1px solid var(--qk-color-border);
+  border-radius: var(--qk-radius-md);
+}
+.plugin-update__text {
+  display: flex;
+  flex: 1 1 12rem;
+  flex-direction: column;
+  gap: var(--qk-space-1);
+  min-width: 0;
+}
+.plugin-update > .btn {
+  margin-left: auto;
+}
+.plugin-update__notes {
+  margin: 0;
+  font-size: var(--qk-font-size-sm);
+  white-space: pre-wrap;
+}
+.plugin-update__result--failed {
+  color: var(--qk-color-danger);
+}
+.plugin-update__result--review {
+  color: var(--qk-color-warn);
+}
+
+/* Plugin browser (Settings > Plugins > Browse plugins…) */
+.modal__body:has(> .plugin-browser) {
+  display: flex;
+  overflow: hidden;
+}
+.plugin-browser {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--qk-space-3);
+  min-width: 0;
+  min-height: 0;
+}
+.plugin-browser__page {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--qk-space-3);
+  min-width: 0;
+  min-height: 0;
+  /* Room for the focus rings at the edges of the scrolling area. */
+  padding: calc(var(--qk-focus-ring-width) + var(--qk-focus-ring-offset));
+  overflow-y: auto;
+}
+.plugin-browser__page[hidden] {
+  display: none;
+}
+.plugin-browser__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--qk-space-3);
+  margin: 0;
+}
+.plugin-browser__notice {
+  margin: 0;
+  padding: var(--qk-space-2) var(--qk-space-3);
+  background: var(--qk-color-warn-soft);
+  border: 1px solid var(--qk-color-warn-border);
+  border-radius: var(--qk-radius-md);
+  color: var(--qk-color-warn);
+}
+.plugin-browser__toolbar {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--qk-space-2) var(--qk-space-3);
+}
+.plugin-browser__search {
+  display: flex;
+  flex: 1 1 var(--qk-keyword-width);
+  align-items: center;
+  gap: var(--qk-space-2);
+  min-width: 0;
+}
+.plugin-browser__search .input {
+  flex: 1;
+  min-width: 0;
+}
+.plugin-browser__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--qk-space-2);
+}
+.plugin-browser__chip {
+  padding: var(--qk-space-1) var(--qk-space-3);
+  background: transparent;
+  border: 1px solid var(--qk-color-border);
+  border-radius: var(--qk-radius-pill);
+  color: var(--qk-color-text-muted);
+  font: inherit;
+  font-size: var(--qk-font-size-sm);
+  cursor: pointer;
+}
+.plugin-browser__chip:hover {
+  background: var(--qk-color-surface-hover);
+}
+.plugin-browser__chip[aria-pressed="true"] {
+  background: var(--qk-color-accent-soft);
+  border-color: var(--qk-color-accent);
+  color: var(--qk-color-text);
+}
+.plugin-browser__list,
+.plugin-versions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.plugin-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--qk-plugin-icon-size);
+  height: var(--qk-plugin-icon-size);
+  overflow: hidden;
+  background: var(--qk-color-surface-raised);
+  border-radius: var(--qk-radius-md);
+  color: var(--qk-color-text-muted);
+}
+.plugin-icon--large {
+  width: var(--qk-plugin-icon-size-large);
+  height: var(--qk-plugin-icon-size-large);
+}
+.plugin-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.plugin-card {
+  display: flex;
+  align-items: center;
+  gap: var(--qk-space-3);
+  width: 100%;
+  padding: var(--qk-space-3);
+  background: transparent;
+  border: 1px solid var(--qk-color-border);
+  border-radius: var(--qk-radius-md);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.plugin-card:hover {
+  background: var(--qk-color-surface-hover);
+}
+.plugin-card--blocked .plugin-icon,
+.plugin-card--blocked .plugin-card__text > :not(.plugin-card__note) {
+  opacity: var(--qk-dimmed-opacity);
+}
+.plugin-card__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.plugin-card__title {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--qk-space-2);
+}
+.plugin-prose {
+  user-select: text;
+  overflow-wrap: anywhere;
+}
+.plugin-card__summary {
+  overflow-wrap: anywhere;
+}
+.plugin-card__note {
+  color: var(--qk-color-danger);
+  font-size: var(--qk-font-size-sm);
+  overflow-wrap: anywhere;
+}
+.plugin-card__badges {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--qk-space-1);
+  max-width: 40%;
+}
+.plugin-card__update {
+  background: var(--qk-color-accent-soft);
+  border-color: var(--qk-color-accent);
+  color: var(--qk-color-text);
+}
+.plugin-detail {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--qk-space-3);
+  min-width: 0;
+}
+.plugin-detail__back {
+  align-self: flex-start;
+}
+.plugin-detail__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--qk-space-3);
+}
+.plugin-detail__title {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.plugin-detail__name,
+.plugin-detail__heading {
+  margin: 0;
+  font-size: var(--qk-font-size-lg);
+}
+.plugin-detail__versions-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--qk-space-2);
+}
+.plugin-version {
+  display: flex;
+  align-items: center;
+  gap: var(--qk-space-3);
+  padding: var(--qk-space-2) var(--qk-space-3);
+  border: 1px solid var(--qk-color-border);
+  border-radius: var(--qk-radius-md);
+}
+.plugin-version--blocked .plugin-version__info > :not(.plugin-card__note) {
+  opacity: var(--qk-dimmed-opacity);
+}
+.plugin-version .btn {
+  flex: none;
+}
+.plugin-version__info {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.plugin-version__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--qk-space-2);
+}
+.plugin-version__meta {
+  font-size: var(--qk-font-size-sm);
+}
+.plugin-version__notes {
+  overflow-wrap: anywhere;
+}
+
 /* Notification bell (title bar) and its popover */
 .titlebar__bell {
   position: relative;
@@ -7023,6 +7374,9 @@ ul {
 }
 .notif__dot--error {
   background: var(--qk-color-danger);
+}
+.notif__dot--info {
+  background: var(--qk-color-accent);
 }
 .notif__main {
   display: flex;

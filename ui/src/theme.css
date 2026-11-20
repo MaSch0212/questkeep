@@ -554,6 +554,9 @@
   --qk-dialog-narrow-width: 380px;
   --qk-swatch-width: 40px;
   --qk-hex-field-width: 90px;
+  /* Plugin browser: icons of registry plugins. */
+  --qk-plugin-icon-size: 40px;
+  --qk-plugin-icon-size-large: 64px;
 }
 
 @media (prefers-reduced-motion: reduce) {

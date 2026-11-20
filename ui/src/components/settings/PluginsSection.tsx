@@ -1,23 +1,37 @@
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import ChevronRight from "lucide-solid/icons/chevron-right";
-import { createSignal, For, Show } from "solid-js";
+import { createSignal, For, type JSX, Show } from "solid-js";
+import type { PluginFolder } from "../../bindings/PluginFolder";
 import type { PluginInfo } from "../../bindings/PluginInfo";
 import type { PluginPreview } from "../../bindings/PluginPreview";
 import { translator } from "../../i18n";
 import { extensions } from "../../i18n/extensions";
+import { pluginBrowser } from "../../i18n/pluginBrowser";
 import { settingsPlugins } from "../../i18n/settingsPlugins";
 import * as api from "../../lib/api";
 import { errorMessage } from "../../lib/errors";
 import { extensionStates } from "../../lib/extensions/host";
 import { pluginThemeProblems } from "../../lib/pluginThemes";
-import { hasPermissions, pluginKinds, pluginStatus, sortPlugins } from "../../lib/plugins";
-import { scanSummaryText } from "../../lib/query";
+import {
+  hasPermissions,
+  pluginIconPath,
+  pluginKinds,
+  pluginStatus,
+  sortPlugins,
+} from "../../lib/plugins";
 import { store } from "../../lib/store";
 import { ConfirmDialog } from "../ConfirmDialog";
+import { createRegistryInstall } from "../RegistryInstall";
+import { PluginBrowser } from "./PluginBrowser";
+import { PluginFolders } from "./PluginFolders";
+import { PluginIcon } from "./PluginIcon";
 import { PluginInstallDialog } from "./PluginInstallDialog";
+import { pickPluginFolder } from "./pluginFolderPicker";
+import { scanAfterInstall, scanPluginStores } from "./scanPluginStores";
 
 const tr = translator(settingsPlugins);
 const trExtensions = translator(extensions);
+const trRegistry = translator(pluginBrowser);
 
 const KIND_LABEL = {
   store: "kindStore",
@@ -29,22 +43,6 @@ const STATUS_LABEL = {
   disabled: "statusDisabled",
   failed: "statusFailed",
 } as const;
-
-/** Scans the plugin's stores, so their games show up (or change) right away. */
-async function scanStores(plugin: PluginInfo) {
-  await Promise.all(
-    plugin.providers.map(async (id) => {
-      try {
-        const summary = await api.scanLibrary(id);
-        const name = store.providers().find((p) => p.id === id)?.name ?? id;
-        store.pushToast("info", tr("scanned", { name, summary: scanSummaryText(summary) }));
-        store.scheduleRefresh();
-      } catch (error) {
-        store.pushToast("error", errorMessage(error));
-      }
-    }),
-  );
-}
 
 /** A plugin folder or .zip file from the system dialog; null when cancelled. */
 async function pickPlugin(kind: "folder" | "file"): Promise<string | null> {
@@ -63,7 +61,7 @@ async function pickPlugin(kind: "folder" | "file"): Promise<string | null> {
 const plugins = () => sortPlugins(store.plugins());
 
 /** Install, reload, disable and remove plugins. The list follows the `pluginsChanged` event. */
-export function PluginsSection() {
+export function PluginsSection(props: { updateCheck?: JSX.Element }) {
   /** A chosen plugin, read and checked, waiting for the go-ahead. */
   const [pending, setPending] = createSignal<{ path: string; plugin: PluginPreview } | null>(null);
   const [installing, setInstalling] = createSignal(false);
@@ -74,6 +72,9 @@ export function PluginsSection() {
   /** The last failure per plugin, shown in its row until the next successful action. */
   const [errors, setErrors] = createSignal<Record<string, string>>({});
   const [open, setOpen] = createSignal<ReadonlySet<string>>(new Set());
+  const [browsing, setBrowsing] = createSignal(false);
+  /** Updating a registry plugin from its row: the same download, check and confirm as the browser. */
+  const registryInstall = createRegistryInstall();
 
   function setError(id: string, message: string | null) {
     setErrors(({ [id]: _old, ...rest }) => (message === null ? rest : { ...rest, [id]: message }));
@@ -97,13 +98,13 @@ export function PluginsSection() {
     }
   }
 
-  async function install(path: string) {
+  async function install(path: string, folders?: Record<string, string>) {
     setInstalling(true);
     try {
-      const plugin = await api.installPlugin(path);
+      const plugin = await (folders ? api.installPlugin(path, folders) : api.installPlugin(path));
       store.pushToast("info", tr("installed", { name: plugin.name }));
       setError(plugin.id, null);
-      await scanStores(plugin);
+      await scanAfterInstall(plugin);
     } catch (error) {
       store.pushToast("error", errorMessage(error));
     } finally {
@@ -125,7 +126,7 @@ export function PluginsSection() {
       setError(plugin.id, null);
       const message = done(updated);
       if (message !== null) store.pushToast("info", message);
-      if (rescan) await scanStores(updated);
+      if (rescan) await scanPluginStores(updated);
     } catch (error) {
       const message = errorMessage(error);
       setError(plugin.id, message);
@@ -153,6 +154,38 @@ export function PluginsSection() {
       () => api.setPluginEnabled(plugin.id, enabled),
       (updated) => tr(enabled ? "enabledToast" : "disabledToast", { name: updated.name }),
       enabled,
+    );
+
+  /** The user picks a folder for one the plugin asks for; its stores load again and scan. */
+  async function chooseFolder(plugin: PluginInfo, folder: PluginFolder) {
+    let path: string | null;
+    try {
+      path = await pickPluginFolder(folder.label, folder.exists ? folder.effectivePath : null);
+    } catch (error) {
+      store.pushToast("error", errorMessage(error));
+      return;
+    }
+    if (path === null) return;
+    const chosen = path;
+    await act(
+      plugin,
+      () => api.setPluginFolder(plugin.id, folder.key, chosen),
+      (updated) =>
+        tr("folderSet", {
+          name: updated.name,
+          label: folder.label,
+          path: updated.folders.find((f) => f.key === folder.key)?.path ?? chosen,
+        }),
+      true,
+    );
+  }
+
+  const useDefaultFolder = (plugin: PluginInfo, folder: PluginFolder) =>
+    act(
+      plugin,
+      () => api.setPluginFolder(plugin.id, folder.key, null),
+      (updated) => tr("folderReset", { name: updated.name, label: folder.label }),
+      true,
     );
 
   const setWatch = (plugin: PluginInfo, watch: boolean) =>
@@ -196,6 +229,7 @@ export function PluginsSection() {
           {tr("openAppearance")}
         </button>
       </p>
+      {props.updateCheck}
       <div class="plugin-install">
         <button
           type="button"
@@ -213,6 +247,19 @@ export function PluginsSection() {
         >
           {tr("installFile")}
         </button>
+        <button type="button" class="btn" data-plugin-browse onClick={() => setBrowsing(true)}>
+          {trRegistry("browse")}
+          <Show when={store.pluginUpdates().length > 0}>
+            <span
+              class="account__badge plugin-card__update"
+              role="status"
+              aria-label={trRegistry("browseUpdates", { count: store.pluginUpdates().length })}
+              data-tooltip={trRegistry("browseUpdates", { count: store.pluginUpdates().length })}
+            >
+              {store.pluginUpdates().length}
+            </span>
+          </Show>
+        </button>
       </div>
       <Show when={plugins().length > 0} fallback={<p class="muted">{tr("empty")}</p>}>
         <div class="account-list" role="list" aria-label={tr("list")}>
@@ -222,6 +269,11 @@ export function PluginsSection() {
               const working = () => busy().has(plugin.id);
               const expanded = () => open().has(plugin.id);
               const error = () => errors()[plugin.id] ?? null;
+              const update = () => store.pluginUpdates().find((u) => u.id === plugin.id);
+              const iconUrl = () => {
+                const path = pluginIconPath(plugin);
+                return path === null ? null : api.pluginFileUrl(plugin.id, path);
+              };
               /** Why the plugin's extension did not start, if it did not. */
               const extensionError = () => {
                 const state = extensionStates()[plugin.id];
@@ -233,13 +285,20 @@ export function PluginsSection() {
                   classList={{ "plugin--failed": status() === "failed" }}
                   role="group"
                   aria-label={plugin.name}
-                  data-plugin-row={plugin.id}
                 >
                   <div class="account__head">
+                    <PluginIcon src={iconUrl()} />
                     <div class="account__info">
                       <span class="account__name">
                         {plugin.name} <span class="muted plugin__version">{plugin.version}</span>
                       </span>
+                      <Show when={plugin.registry}>
+                        {(registry) => (
+                          <span class="muted account__detail">
+                            {trRegistry("fromRegistry", { version: registry().version })}
+                          </span>
+                        )}
+                      </Show>
                       <Show when={plugin.author}>
                         {(author) => (
                           <span class="muted account__detail">
@@ -251,6 +310,9 @@ export function PluginsSection() {
                     <For each={pluginKinds(plugin)}>
                       {(kind) => <span class="account__badge">{tr(KIND_LABEL[kind])}</span>}
                     </For>
+                    <Show when={plugin.registry?.pinned}>
+                      <span class="account__badge">{trRegistry("pinned")}</span>
+                    </Show>
                     <span
                       class="account__badge"
                       classList={{
@@ -284,6 +346,14 @@ export function PluginsSection() {
                     <p class="plugin__error selectable" role="alert">
                       {error()}
                     </p>
+                  </Show>
+                  <Show when={plugin.folders.length > 0}>
+                    <PluginFolders
+                      plugin={plugin}
+                      disabled={working()}
+                      onChoose={(folder) => void chooseFolder(plugin, folder)}
+                      onUseDefault={(folder) => void useDefaultFolder(plugin, folder)}
+                    />
                   </Show>
                   <button
                     type="button"
@@ -325,6 +395,15 @@ export function PluginsSection() {
                               <For each={plugin.permissions.read}>{(path) => <li>{path}</li>}</For>
                             </ul>
                           </Show>
+                          <Show when={plugin.permissions.folders.length > 0}>
+                            <ul class="plugin__perms selectable">
+                              <For each={plugin.permissions.folders}>
+                                {(folder) => (
+                                  <li>{tr("folderRequest", { label: folder.label })}</li>
+                                )}
+                              </For>
+                            </ul>
+                          </Show>
                           <Show when={plugin.permissions.http.length > 0}>
                             <span class="plugin__perm-title">{tr("httpHosts")}</span>
                             <ul class="plugin__perms selectable">
@@ -336,6 +415,26 @@ export function PluginsSection() {
                     </dl>
                   </Show>
                   <div class="plugin__actions">
+                    <Show when={update()}>
+                      {(found) => (
+                        <button
+                          type="button"
+                          class="btn btn--primary"
+                          data-plugin-update={plugin.id}
+                          disabled={working() || registryInstall.busy()}
+                          aria-busy={
+                            registryInstall.preparing() === `${plugin.id}@${found().latestVersion}`
+                          }
+                          onClick={() =>
+                            void registryInstall.begin(plugin.id, found().latestVersion)
+                          }
+                        >
+                          {registryInstall.preparing() === `${plugin.id}@${found().latestVersion}`
+                            ? trRegistry("downloading")
+                            : trRegistry("updateTo", { version: found().latestVersion })}
+                        </button>
+                      )}
+                    </Show>
                     <label
                       class="check"
                       classList={{ "check--disabled": !plugin.sourceExists }}
@@ -392,12 +491,16 @@ export function PluginsSection() {
             <PluginInstallDialog
               path={path}
               plugin={plugin}
-              onInstall={() => void install(path)}
+              onInstall={(folders) => void install(path, folders)}
               onClose={() => setPending(null)}
             />
           );
         }}
       </Show>
+      <Show when={browsing()}>
+        <PluginBrowser onClose={() => setBrowsing(false)} />
+      </Show>
+      {registryInstall.dialog()}
       <Show when={removing()}>
         {(plugin) => {
           const target = plugin();
