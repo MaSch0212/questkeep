@@ -366,21 +366,12 @@ impl LibraryProvider for EaProvider {
             account.set_display_name(&name);
         }
         let installs = self.installs();
-        let mut games: Vec<ImportedGame> = Vec::new();
-        for offer in account::fetch_owned(self.http.as_ref(), token)? {
-            let id = offer.content_id.clone().unwrap_or(offer.offer_id);
-            let id = installs
-                .iter()
-                .find(|i| i.content_ids.contains(&id))
-                .map_or(id, |i| i.id.clone());
-            if games.iter().any(|g| g.source_game_id == id) {
-                continue;
-            }
-            let mut game = ImportedGame::installed(id, clean_name(&offer.title));
-            game.installed = false;
-            games.push(game);
-        }
-        Ok(games)
+        let offers = account::fetch_owned(self.http.as_ref(), token)?;
+        let mut slugs: Vec<String> = offers.iter().filter_map(|o| o.slug.clone()).collect();
+        slugs.sort();
+        slugs.dedup();
+        let times = account::fetch_play_times(self.http.as_ref(), token, &slugs);
+        Ok(owned_games(offers, &installs, &times))
     }
 
     fn account(&self) -> Option<&dyn AccountAuth> {
@@ -439,9 +430,99 @@ impl LibraryProvider for EaProvider {
     }
 }
 
+/// The owned games: one per game, even when EA lists several offers of it (editions, regional
+/// versions), which share the game slug or the title. An offer of an installed game wins and
+/// takes the install's id.
+fn owned_games(
+    mut offers: Vec<account::OwnedOffer>,
+    installs: &[Install],
+    times: &std::collections::HashMap<String, account::PlayTime>,
+) -> Vec<ImportedGame> {
+    let install_of = |offer: &account::OwnedOffer| {
+        let id = offer.content_id.as_ref().unwrap_or(&offer.offer_id);
+        installs.iter().find(|i| i.content_ids.contains(id))
+    };
+    let key = |offer: &account::OwnedOffer| {
+        offer
+            .slug
+            .clone()
+            .unwrap_or_else(|| clean_name(&offer.title).to_lowercase())
+    };
+    // Installed offers first (a stable sort keeps EA's order otherwise).
+    offers.sort_by_key(|o| install_of(o).is_none());
+    let mut seen: Vec<String> = Vec::new();
+    let mut games: Vec<ImportedGame> = Vec::new();
+    for offer in &offers {
+        let game_key = key(offer);
+        let id = install_of(offer).map_or_else(
+            || {
+                offer
+                    .content_id
+                    .clone()
+                    .unwrap_or_else(|| offer.offer_id.clone())
+            },
+            |i| i.id.clone(),
+        );
+        if seen.contains(&game_key) || games.iter().any(|g| g.source_game_id == id) {
+            continue;
+        }
+        seen.push(game_key);
+        let mut game = ImportedGame::installed(id, clean_name(&offer.title));
+        game.installed = false;
+        if let Some(time) = offer.slug.as_ref().and_then(|s| times.get(s)) {
+            game.playtime_seconds = time.seconds.filter(|s| *s > 0);
+            game.last_played = time.last_played;
+        }
+        games.push(game);
+    }
+    games
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn offer(id: &str, content: &str, title: &str, slug: Option<&str>) -> account::OwnedOffer {
+        account::OwnedOffer {
+            offer_id: id.into(),
+            content_id: Some(content.into()),
+            title: title.into(),
+            slug: slug.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn owned_editions_of_one_game_import_once_with_playtime() {
+        let installs = vec![Install {
+            id: "1019025".into(),
+            content_ids: vec!["1019025".into(), "1019026".into()],
+            name: "Mass Effect: Andromeda".into(),
+            dir: PathBuf::from(r"C:\Games\MEA"),
+            exe: None,
+            uninstall: None,
+        }];
+        let offers = vec![
+            offer("o1", "71183", "Mass Effect 3 (2012)", Some("mass-effect-3")),
+            offer("o2", "71073", "Mass Effect 3 (2012)", Some("mass-effect-3")),
+            offer("o3", "1005288", "Mass Effect 2 (2010)", None),
+            offer("o4", "1003291", "Mass Effect™ 2 (2010)", None),
+            offer("o5", "999", "Mass Effect: Andromeda Deluxe", Some("mea")),
+            offer("o6", "1019026", "Mass Effect: Andromeda", Some("mea")),
+        ];
+        let times = std::collections::HashMap::from([(
+            "mass-effect-3".to_string(),
+            account::PlayTime {
+                seconds: Some(3600),
+                last_played: None,
+            },
+        )]);
+        let games = owned_games(offers, &installs, &times);
+        let ids: Vec<&str> = games.iter().map(|g| g.source_game_id.as_str()).collect();
+        // The installed edition wins and takes the install's id.
+        assert_eq!(ids, ["1019025", "71183", "1005288"]);
+        assert_eq!(games[1].playtime_seconds, Some(3600));
+        assert_eq!(games[0].playtime_seconds, None);
+    }
 
     #[test]
     fn finds_the_client_in_a_protocol_command() {

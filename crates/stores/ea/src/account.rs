@@ -9,12 +9,18 @@
 //! through [`CAPTURE_PREFIX`] (`?token=...`, or `?signedout=1`). Lutris reads EA libraries the
 //! same way. The token is only kept in memory.
 //!
+//! Playtime and the last session come from `me.recentGames`, keyed by the products' game slug
+//! (the EA app's own "time played"); the Playnite EA library extension reads them the same way.
+//!
 //! That page needs EA's `sid` cookie, which lives only as long as the browser: after Questkeep
 //! restarts, only the `remid` cookie of "Remember me" is left. A signed-out answer is therefore
 //! renewed first: the hidden window opens the website login, which signs in from `remid` without
 //! asking and ends on `login_check`; then the token page is read again. A login form that stays
 //! for a few seconds means the account is really signed out.
 
+use std::collections::HashMap;
+
+use chrono::{DateTime, Utc};
 use serde_json::{Value, json};
 
 use questkeep_store_api::ProviderError;
@@ -73,7 +79,7 @@ const OWNED_QUERY: &str = r#"query ownedGames($limit: Int, $next: String) {
       type: [DIGITAL_FULL_GAME, PACKAGED_FULL_GAME], platforms: [PC],
       paging: {limit: $limit, next: $next}) {
       next
-      items { originOfferId product { name baseItem { title gameType } } }
+      items { originOfferId product { name gameSlug baseItem { title gameType } } }
     }
   }
 }"#;
@@ -83,6 +89,12 @@ const OFFERS_QUERY: &str = r#"query offers($offerIds: [String!]!) {
 }"#;
 
 const NAME_QUERY: &str = "query { me { player { displayName } } }";
+
+const PLAY_TIMES_QUERY: &str = r#"query playTimes($gameSlugs: [String!]) {
+  me { recentGames(gameSlugs: $gameSlugs) { items { gameSlug lastSessionEndDate totalPlayTimeSeconds } } }
+}"#;
+/// Game slugs per `recentGames` request.
+const SLUG_BATCH: usize = 50;
 
 /// Accepts only plausible access tokens (EA's are opaque, base64-like strings or JWTs).
 pub fn plausible_token(token: &str) -> bool {
@@ -99,6 +111,15 @@ pub struct OwnedOffer {
     /// The id installed games carry in their manifest (`contentID`).
     pub content_id: Option<String>,
     pub title: String,
+    /// The product's game slug (`mass-effect-2`): editions of one game share it.
+    pub slug: Option<String>,
+}
+
+/// What EA recorded about playing one game.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PlayTime {
+    pub seconds: Option<u64>,
+    pub last_played: Option<DateTime<Utc>>,
 }
 
 fn graphql(
@@ -190,6 +211,7 @@ pub fn fetch_owned(http: &dyn Http, token: &str) -> Result<Vec<OwnedOffer>, Prov
                     offer_id,
                     content_id: None,
                     title,
+                    slug: text(item, "/product/gameSlug"),
                 });
             }
         }
@@ -217,6 +239,50 @@ pub fn fetch_owned(http: &dyn Http, token: &str) -> Result<Vec<OwnedOffer>, Prov
         }
     }
     Ok(offers)
+}
+
+/// Playtime and last session per game slug. A failure only costs the playtime, so it is logged
+/// and the slugs read so far are kept.
+pub fn fetch_play_times(
+    http: &dyn Http,
+    token: &str,
+    slugs: &[String],
+) -> HashMap<String, PlayTime> {
+    let mut times = HashMap::new();
+    for batch in slugs.chunks(SLUG_BATCH) {
+        let result = match graphql(http, token, PLAY_TIMES_QUERY, json!({ "gameSlugs": batch })) {
+            Ok(result) => result,
+            Err(err) => {
+                tracing::debug!(%err, "could not read EA playtimes");
+                break;
+            }
+        };
+        for item in result
+            .pointer("/data/me/recentGames/items")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            let Some(slug) = text(item, "/gameSlug") else {
+                continue;
+            };
+            let seconds = item.get("totalPlayTimeSeconds").and_then(|v| {
+                v.as_u64()
+                    .or_else(|| v.as_str().and_then(|s| s.trim().parse().ok()))
+            });
+            let last_played = text(item, "/lastSessionEndDate")
+                .and_then(|d| DateTime::parse_from_rfc3339(&d).ok())
+                .map(|d| d.with_timezone(&Utc));
+            times.insert(
+                slug,
+                PlayTime {
+                    seconds,
+                    last_played,
+                },
+            );
+        }
+    }
+    times
 }
 
 /// The account's EA ID, for the settings page.
@@ -298,11 +364,13 @@ mod tests {
                     offer_id: "Origin.OFR.50.0000500".into(),
                     content_id: Some("1000659".into()),
                     title: "Dragon Age™: Inquisition".into(),
+                    slug: None,
                 },
                 OwnedOffer {
                     offer_id: "Origin.OFR.50.0000777".into(),
                     content_id: None,
                     title: "Mass Effect".into(),
+                    slug: None,
                 },
             ]
         );
@@ -328,6 +396,39 @@ mod tests {
         assert_eq!(fetch_display_name(&http, "tok").as_deref(), Some("Ann"));
         let http = FakeHttp::new(|_| Err("offline".into()));
         assert_eq!(fetch_display_name(&http, "tok"), None);
+    }
+
+    #[test]
+    fn reads_play_times_by_slug() {
+        let http = FakeHttp::new(|req| {
+            let body: Value = serde_json::from_str(&req.body).unwrap();
+            assert_eq!(
+                body["variables"]["gameSlugs"],
+                json!(["mass-effect-2", "unplayed"])
+            );
+            response(
+                200,
+                &json!({ "data": { "me": { "recentGames": { "items": [
+                    { "gameSlug": "mass-effect-2", "lastSessionEndDate": "2024-05-01T18:30:00.000Z",
+                      "totalPlayTimeSeconds": 7260 },
+                    { "gameSlug": "strings", "totalPlayTimeSeconds": "60", "lastSessionEndDate": null },
+                    { "totalPlayTimeSeconds": 5 }
+                ] } } } })
+                .to_string(),
+            )
+        });
+        let times = fetch_play_times(&http, "tok", &["mass-effect-2".into(), "unplayed".into()]);
+        assert_eq!(times.len(), 2);
+        let me2 = times["mass-effect-2"];
+        assert_eq!(me2.seconds, Some(7260));
+        assert_eq!(
+            me2.last_played.unwrap().to_rfc3339(),
+            "2024-05-01T18:30:00+00:00"
+        );
+        assert_eq!(times["strings"].seconds, Some(60));
+        // A failing service only costs the playtime.
+        let http = FakeHttp::new(|_| response(500, "{}"));
+        assert!(fetch_play_times(&http, "tok", &["x".into()]).is_empty());
     }
 
     #[test]
