@@ -72,6 +72,8 @@ autocomplete, game details as variables and placeholders); closing store launche
 runs; the notification bell with system notifications for errors in the background; the Edit
 dialog asks before Escape or a click outside discard changes.
 
+## Done in the next release
+
 New store: Meta Horizon Link (the Meta Quest PC app): installed PC VR apps from its library
 folders, owned ones from its local cache without a sign-in, store art, details and PC playtime.
 
