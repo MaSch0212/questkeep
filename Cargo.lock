@@ -3785,7 +3785,7 @@ dependencies = [
 name = "questkeep-core"
 version = "0.6.0"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "chrono",
  "dirs 7.0.0",
  "image",
@@ -3830,7 +3830,7 @@ dependencies = [
 name = "questkeep-plugins"
 version = "0.6.0"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "chrono",
  "notify",
  "questkeep-core",
@@ -3855,7 +3855,7 @@ dependencies = [
 name = "questkeep-store-amazon"
 version = "0.6.0"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "dirs 7.0.0",
  "questkeep-store-api",
  "questkeep-store-heroic",
@@ -3916,7 +3916,7 @@ dependencies = [
 name = "questkeep-store-epic"
 version = "0.6.0"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "questkeep-store-api",
  "questkeep-store-heroic",
  "questkeep-store-lutris",
@@ -4005,7 +4005,7 @@ dependencies = [
 name = "questkeep-store-steam"
 version = "0.6.0"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "chrono",
  "dirs 7.0.0",
  "image",

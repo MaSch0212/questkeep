@@ -11,7 +11,7 @@ questkeep-core = { path = "../questkeep-core" }
 questkeep-store-api = { path = "../questkeep-store-api" }
 # The wire format shared with plugins and the WIT file.
 questkeep-plugin-sdk = { path = "../questkeep-plugin-sdk" }
-base64 = "0.22.1"
+base64 = "0.23.1"
 chrono = "0.4.45"
 notify = "8.2.1"
 semver = "1.0.28"
