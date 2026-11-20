@@ -4,11 +4,11 @@
 
 # Questkeep
 
-[![Latest release](https://img.shields.io/github/v/release/MaSch0212/questkeep?label=release)](https://github.com/MaSch0212/questkeep/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/MaSch0212/questkeep/total)](https://github.com/MaSch0212/questkeep/releases)
-[![CI](https://github.com/MaSch0212/questkeep/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/MaSch0212/questkeep/actions/workflows/ci.yml)
-[![Platforms: Windows, Linux](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-informational)](https://github.com/MaSch0212/questkeep/wiki/Installation)
-[![Wiki](https://img.shields.io/badge/docs-wiki-blue)](https://github.com/MaSch0212/questkeep/wiki)
+[![Latest release](https://img.shields.io/github/v/release/questkeep/questkeep?label=release)](https://github.com/questkeep/questkeep/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/questkeep/questkeep/total)](https://github.com/questkeep/questkeep/releases)
+[![CI](https://github.com/questkeep/questkeep/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/questkeep/questkeep/actions/workflows/ci.yml)
+[![Platforms: Windows, Linux](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-informational)](https://github.com/questkeep/questkeep/wiki/Installation)
+[![Wiki](https://img.shields.io/badge/docs-wiki-blue)](https://github.com/questkeep/questkeep/wiki)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 A lightweight, extensible game library manager and launcher for **Windows and Linux**, built with
@@ -16,9 +16,9 @@ Tauri 2, Rust and SolidJS. Inspired by [Playnite](https://github.com/JosefNemec/
 
 > **Status:** v0.\*, early development. Expect rough edges.
 
-**[Read the wiki](https://github.com/MaSch0212/questkeep/wiki)** for the
-[user manual](https://github.com/MaSch0212/questkeep/wiki/User-Manual) and the
-[developer manual](https://github.com/MaSch0212/questkeep/wiki/Developer-Manual), including
+**[Read the wiki](https://github.com/questkeep/questkeep/wiki)** for the
+[user manual](https://github.com/questkeep/questkeep/wiki/User-Manual) and the
+[developer manual](https://github.com/questkeep/questkeep/wiki/Developer-Manual), including
 tutorials for writing theme, extension and store plugins.
 
 ## Features
@@ -78,7 +78,7 @@ See [AGENTS.md](AGENTS.md) for the full command list, module map and conventions
 
 ## Documentation
 
-- [Wiki](https://github.com/MaSch0212/questkeep/wiki): user manual, developer manual and plugin
+- [Wiki](https://github.com/questkeep/questkeep/wiki): user manual, developer manual and plugin
   tutorials
 - [docs/SPEC.md](docs/SPEC.md): v0.1 specification
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): modules, data model, event flow, measurements

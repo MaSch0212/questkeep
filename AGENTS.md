@@ -185,7 +185,7 @@ ui/src/
 ## Wiki
 
 The wiki (user manual, developer manual, plugin tutorials and references) is a separate repo,
-cloned next to this one as `../questkeep.wiki` (https://github.com/MaSch0212/questkeep.wiki.git).
+cloned next to this one as `../questkeep.wiki` (https://github.com/questkeep/questkeep.wiki.git).
 Read it for context on how features are meant to work and how they are explained to users.
 
 - **Keep it current.** A change that alters something the wiki describes (UI labels, settings,
@@ -194,7 +194,7 @@ Read it for context on how features are meant to work and how they are explained
 - **Layout.** `user/` and `developer/` hold the pages; GitHub flattens folders, so links are by
   page name (`[Stores](Stores)`, `[Parameters](Theme-Reference#parameters)`). Every page must
   be listed in `_Sidebar.md` and in its manual's `_Sidebar.md`. Images live in `images/` and are
-  embedded as `https://raw.githubusercontent.com/wiki/MaSch0212/questkeep/images/<name>.png`.
+  embedded as `https://raw.githubusercontent.com/wiki/questkeep/questkeep/images/<name>.png`.
 - **Code in tutorials** must build and run against the current API; test it before changing it.
 - **Screenshots.** Take them yourself from the hidden test instance with the demo library
   (`docs/screenshots.md`), and only when they show no personal data: no account names, real library, local

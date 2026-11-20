@@ -18,7 +18,7 @@ pub const SHOW_EVENT: &str = "show-update";
 pub const PROGRESS_EVENT: &str = "update-progress";
 
 /// Where a downloaded copy sends the user for a new version.
-const RELEASES_URL: &str = "https://github.com/MaSch0212/questkeep/releases";
+const RELEASES_URL: &str = "https://github.com/questkeep/questkeep/releases";
 
 /// Wait after start before checking, so the check doesn't compete with the first scan.
 const STARTUP_DELAY: Duration = Duration::from_secs(5);
@@ -144,7 +144,7 @@ const FAKE_NOTES: &str = "A pretend update for testing (`QUESTKEEP_FAKE_UPDATE`)
 - Fixed EA and Battle.net signing out.\n\
 - Games scrolling under a pinned group header fade out.\n\
 - Details from each site are downloaded once per game.\n\
-- See the [release page](https://github.com/MaSch0212/questkeep/releases) for more.\n";
+- See the [release page](https://github.com/questkeep/questkeep/releases) for more.\n";
 
 /// Debug builds never see real updates; `QUESTKEEP_FAKE_UPDATE=<version>` pretends one exists, to
 /// try the title bar and tray entries (installing it does nothing).

@@ -61,7 +61,7 @@ fails before anything is tagged or published.
 ## Auto-update signing setup (one time)
 
 The app updates itself through `tauri-plugin-updater`: it reads
-`https://github.com/MaSch0212/questkeep/releases/latest/download/latest.json` and verifies the
+`https://github.com/questkeep/questkeep/releases/latest/download/latest.json` and verifies the
 installer signature against the public key in `src-tauri/tauri.conf.json`. You generate the key:
 
 1. Generate a key pair (pick a password or leave it empty):
