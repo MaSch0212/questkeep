@@ -1,0 +1,12 @@
+{
+  "parentCanonicalName": null,
+  "files": {},
+  "packageType": "APP",
+  "isCore": false,
+  "appId": "2000000000000004",
+  "canonicalName": "tiny-forge-sky-loop",
+  "launchFile": "bin/SkyLoop.exe",
+  "launchParameters": null,
+  "thirdParty": false,
+  "manifestVersion": 1
+}

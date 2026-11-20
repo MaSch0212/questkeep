@@ -3900,6 +3900,7 @@ dependencies = [
 name = "questkeep-store-ea"
 version = "0.6.0"
 dependencies = [
+ "chrono",
  "questkeep-store-api",
  "serde_json",
  "tempfile",
@@ -3959,6 +3960,20 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tracing",
+]
+
+[[package]]
+name = "questkeep-store-meta"
+version = "0.5.0"
+dependencies = [
+ "dirs 7.0.0",
+ "questkeep-store-api",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tracing",
+ "winreg",
 ]
 
 [[package]]
@@ -4035,6 +4050,7 @@ dependencies = [
  "questkeep-store-gog",
  "questkeep-store-heroic",
  "questkeep-store-lutris",
+ "questkeep-store-meta",
  "questkeep-store-prism",
  "questkeep-store-steam",
  "questkeep-store-ubisoft",

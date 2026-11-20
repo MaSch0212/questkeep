@@ -1,0 +1,9 @@
+{
+  "parentCanonicalName": "moonlit-studio-moon-garden",
+  "packageType": "APP",
+  "isCore": false,
+  "appId": "2000000000000009",
+  "canonicalName": "moonlit-studio-moon-garden-dlc",
+  "launchFile": "MoonGarden.exe",
+  "thirdParty": false
+}

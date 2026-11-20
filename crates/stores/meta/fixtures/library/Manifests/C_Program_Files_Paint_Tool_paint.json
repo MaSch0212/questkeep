@@ -1,0 +1,8 @@
+{
+  "packageType": "APP",
+  "isCore": false,
+  "appId": null,
+  "canonicalName": "C_Program_Files_Paint_Tool_paint",
+  "launchFile": "paint.exe",
+  "thirdParty": true
+}

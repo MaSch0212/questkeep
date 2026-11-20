@@ -15,6 +15,7 @@ questkeep-store-epic = { path = "../stores/epic" }
 questkeep-store-gog = { path = "../stores/gog" }
 questkeep-store-heroic = { path = "../stores/heroic" }
 questkeep-store-lutris = { path = "../stores/lutris" }
+questkeep-store-meta = { path = "../stores/meta" }
 questkeep-store-prism = { path = "../stores/prism" }
 questkeep-store-steam = { path = "../stores/steam" }
 questkeep-store-ubisoft = { path = "../stores/ubisoft" }

@@ -42,8 +42,8 @@ pub fn builtin(
     ));
     stores.push(Arc::new(ubisoft::UbisoftProvider::detect()));
     stores.push(Arc::new(prism::PrismProvider::detect()));
-    // Battle.net and the EA app only exist on Windows (elsewhere they run under Wine, where Heroic
-    // or Lutris already see them).
+    // Battle.net, the EA app and Meta Horizon Link only exist on Windows (elsewhere the first two
+    // run under Wine, where Heroic or Lutris already see them; PC VR needs Windows).
     #[cfg(windows)]
     {
         use questkeep_store_api::auth::WebAccount;
@@ -57,6 +57,7 @@ pub fn builtin(
         stores.push(Arc::new(
             ea::EaProvider::detect().with_account(web_account(ea::ACCOUNT_SPEC)),
         ));
+        stores.push(Arc::new(questkeep_store_meta::MetaProvider::detect()));
     }
     // Lutris only exists on Linux; leaving it out elsewhere keeps the store list honest.
     #[cfg(not(windows))]

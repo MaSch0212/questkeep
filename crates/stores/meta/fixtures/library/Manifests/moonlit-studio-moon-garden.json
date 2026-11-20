@@ -1,0 +1,17 @@
+{
+  "parentCanonicalName": null,
+  "files": {
+    "MoonGarden.exe": { "sha256": "00", "size": 1024, "segmentSize": 10000000, "segments": [] },
+    "MoonGarden_Data/level0": { "sha256": "01", "size": 2048, "segmentSize": 10000000, "segments": [] }
+  },
+  "dlcs": {},
+  "assetFiles": {},
+  "packageType": "APP",
+  "isCore": false,
+  "appId": "2000000000000002",
+  "canonicalName": "moonlit-studio-moon-garden",
+  "launchFile": "Broken.exe",
+  "launchParameters": null,
+  "thirdParty": false,
+  "manifestVersion": 1
+}

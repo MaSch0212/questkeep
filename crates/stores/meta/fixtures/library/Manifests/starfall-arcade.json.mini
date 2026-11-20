@@ -1,0 +1,9 @@
+{
+  "parentCanonicalName": null,
+  "packageType": "APP",
+  "isCore": false,
+  "appId": "2000000000000003",
+  "canonicalName": "starfall-arcade",
+  "launchFile": "Starfall.exe",
+  "thirdParty": false
+}

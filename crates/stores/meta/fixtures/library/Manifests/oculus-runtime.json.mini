@@ -1,0 +1,12 @@
+{
+  "parentCanonicalName": null,
+  "files": {},
+  "packageType": "CORE_APP",
+  "isCore": true,
+  "appId": "1000000000000001",
+  "canonicalName": "oculus-runtime",
+  "launchFile": "OVRServer_x64.exe",
+  "launchParameters": "",
+  "thirdParty": false,
+  "manifestVersion": 1
+}

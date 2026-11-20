@@ -44,6 +44,16 @@ translated.** Questkeep's implementation is independent.
 - https://github.com/derrod/legendary (`legendary/api/egs.py`)
 - https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher
 
+## Playnite OculusLibrary (facts only)
+
+The Meta Horizon Link store (`crates/stores/meta`) uses file locations described by this
+Playnite extension: the registry key of the library folders, the `Manifests` and
+`Software\<canonicalName>` layout inside them, and the store art folder `CoreData\Software\StoreAssets`.
+**No source code from it was copied or translated** (the repository declares no license); the
+format of the Meta app's local cache was worked out independently from the files the app writes.
+
+- https://github.com/Jeshibu/Playnite-OculusLibrary
+
 ## Lucide
 
 Icons come from the Lucide icon set via the `lucide-solid` package.
@@ -76,6 +86,8 @@ manual provider's is `crates/questkeep-core/src/providers/manual.svg`).
   (https://creativecommons.org/licenses/by-sa/4.0/). Changes: the colored facets were redrawn in
   one color with varying opacity and the inner cube was cut out; the adapted file is under the same
   license.
+- Meta Horizon Link's icon (`crates/stores/meta/icon.svg`) is an original headset glyph drawn for
+  Questkeep, not Meta's logo.
 - Xbox, Amazon and the folder used for manually added games are from Font Awesome Free 6.7.2 by
   Fonticons, Inc. (https://fontawesome.com), licensed under CC BY 4.0
   (https://creativecommons.org/licenses/by/4.0/). The path data is unchanged; only a
