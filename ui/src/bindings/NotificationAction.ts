@@ -3,4 +3,4 @@
 /**
  * A button on the entry.
  */
-export type NotificationAction = { "type": "openFile", path: string, } | { "type": "editScript", id: string, } | { "type": "storeSettings", store: string, };
+export type NotificationAction = { "type": "openFile", path: string, } | { "type": "editScript", id: string, } | { "type": "storeSettings", store: string, } | { "type": "pluginUpdates" };

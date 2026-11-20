@@ -95,6 +95,18 @@ impl DataPaths {
         self.root.join("plugin-data")
     }
 
+    /// Plugin zips downloaded from the plugin registry: `<id>/<version>.zip`. The installed
+    /// registry plugin's `source` points here, so Reload works offline.
+    pub fn plugin_cache_dir(&self) -> PathBuf {
+        self.root.join("plugin-cache")
+    }
+
+    /// Copies of a plugin's data taken before an update or downgrade replaced it:
+    /// `<id>/<old version>/`.
+    pub fn plugin_data_backup_dir(&self) -> PathBuf {
+        self.root.join("plugin-data-backup")
+    }
+
     /// Themes made in the theme editor, one JSON file each (see [`crate::user_themes`]).
     pub fn themes_dir(&self) -> PathBuf {
         self.root.join("themes")

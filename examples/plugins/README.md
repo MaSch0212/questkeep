@@ -21,10 +21,12 @@ run sandboxed by Questkeep.
   "version": "0.1.0",
   "description": "Optional.",
   "author": "Optional.",
+  "icon": "icon.svg",
   "apiVersion": 1,
   "providers": [{ "wasm": "provider.wasm" }],
   "permissions": {
     "read": [{ "path": "%LOCALAPPDATA%/MyStore", "as": "/store" }],
+    "folders": [{ "key": "library", "label": "My Store library folder", "as": "/library" }],
     "http": ["api.example.com", "*.example-cdn.com"]
   }
 }
@@ -32,9 +34,22 @@ run sandboxed by Questkeep.
 
 - `id`: 2 to 64 lowercase letters, digits and dashes. The store's id must be the same, or start
   with it and a dash (`my-store-beta`).
+- `icon` (optional): an `.svg` or `.png` in the plugin folder, at most 200 KB; an SVG may not
+  contain scripts, `on...=` attributes or `javascript:` links. It is shown in Settings > Plugins
+  and the install dialog. Older Questkeep versions ignore the field, so it needs no `minApp`.
 - `providers[].wasm`: the built component, relative to the plugin folder.
 - `permissions.read`: folders the store may read, each mounted read-only at its `as` path.
   `%VAR%` and a leading `~` are expanded; a folder that does not exist is simply not mounted.
+- `permissions.folders`: folders the **user** chooses (Settings > Plugins > Folders). Each has a
+  `key` (1 to 32 lowercase letters, digits, dashes; unique), a `label`, an optional `hint` and
+  `default` (expanded like `read` paths), and an `as` path that is unique across `read` and
+  `folders`. The effective folder (the choice, else the default) is mounted read-only at `as`
+  when it exists. The store can neither choose nor change it. Older Questkeep versions ignore
+  the field: set `minApp` in the plugin registry. Details: [`docs/PLUGINS.md`](../../docs/PLUGINS.md#folders-the-user-chooses).
+- Paths: a path the store returns that starts with the guest path of a `read` or `folders` mount
+  (`/library/Game/game.exe` as `install_dir`, a play action's `target`/`working_dir`, an image
+  `file`) is translated to the real path on the PC; other paths stay as they are, `..` is never
+  resolved, and `/plugin` and `/data` never become launchable paths.
 - `permissions.http`: hosts the store may request over https. `*.example.com` covers every
   subdomain; `http://localhost` also allows plain http for that host. Redirects are not followed.
 

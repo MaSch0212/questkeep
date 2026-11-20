@@ -1,15 +1,17 @@
 //! Installing a plugin: its folder (or zip) is copied into `<data>/plugins/<id>/`, and
 //! `<data>/plugins/plugins.json` remembers where it came from.
 
+use std::collections::BTreeMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 use crate::error::{PluginError, Result};
-use crate::manifest::{MANIFEST_FILE, PluginManifest};
+use crate::manifest::{MANIFEST_FILE, PluginManifest, read_icon};
 
 /// Name of the state file in the plugins folder.
 pub const STATE_FILE: &str = "plugins.json";
@@ -28,6 +30,25 @@ pub struct StateEntry {
     /// Reload whenever the source folder changes.
     #[serde(default)]
     pub watch: bool,
+    /// Set when the plugin came from the plugin registry (then `source` is the cached zip).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub registry: Option<RegistryState>,
+    /// The folders the user chose for the plugin's `permissions.folders` (key to absolute path).
+    /// They live here, in a file only Questkeep writes, and never in the plugin's own data
+    /// folder: a plugin could otherwise grant itself folders.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub folders: BTreeMap<String, String>,
+}
+
+/// What `plugins.json` remembers about a plugin installed from the plugin registry.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct RegistryState {
+    /// The registry version that was installed.
+    pub version: String,
+    /// The user picked a version that is not the newest compatible one: no updates are offered.
+    pub pinned: bool,
 }
 
 /// Reads `plugins.json`; a missing file is an empty list, a broken one is logged and empty.
@@ -73,6 +94,19 @@ pub struct Staged {
 impl Staged {
     pub fn manifest(&self) -> &PluginManifest {
         &self.manifest
+    }
+
+    /// The plugin's icon as a `data:` URL, for the install dialog (the copy is not installed
+    /// yet, so the UI has no URL for it). `None` without an icon.
+    pub fn icon_data_url(&self) -> Result<Option<String>> {
+        let icon = read_icon(&self.staging.path.join(STAGED_PLUGIN), &self.manifest)?;
+        Ok(icon.map(|(kind, bytes)| {
+            use base64::Engine;
+            format!(
+                "data:{kind};base64,{}",
+                base64::engine::general_purpose::STANDARD.encode(bytes)
+            )
+        }))
     }
 
     /// Puts the copy at `<plugins_dir>/<id>/`, replacing an installed copy with the same id:
@@ -143,6 +177,8 @@ pub fn stage(source: &Path, plugins_dir: &Path, expect_id: Option<&str>) -> Resu
             )));
         }
     }
+    // Checked here, so a plugin with a bad icon never gets installed.
+    read_icon(&staged, &manifest)?;
     let target = plugins_dir.join(&manifest.id);
     Ok(Staged {
         staging,
@@ -206,13 +242,15 @@ pub fn clean_leftovers(plugins_dir: &Path) {
         let name = name.to_string_lossy();
         if name.starts_with(".staging-") {
             let _ = std::fs::remove_dir_all(entry.path());
-        } else if name.starts_with(STATE_FILE) && name.ends_with(".tmp") {
+        } else if (name.starts_with(STATE_FILE) || name.starts_with("registry-"))
+            && name.ends_with(".tmp")
+        {
             let _ = std::fs::remove_file(entry.path());
         }
     }
 }
 
-fn unique() -> String {
+pub(crate) fn unique() -> String {
     static COUNTER: AtomicU32 = AtomicU32::new(0);
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -227,7 +265,7 @@ fn unique() -> String {
 
 /// Windows refuses to rename or delete what a virus scanner or indexer is looking at: try a few
 /// times before giving up.
-fn retry<T>(mut action: impl FnMut() -> std::io::Result<T>) -> std::io::Result<T> {
+pub(crate) fn retry<T>(mut action: impl FnMut() -> std::io::Result<T>) -> std::io::Result<T> {
     let mut attempt = 0;
     loop {
         match action() {
@@ -253,7 +291,7 @@ fn is_sharing_violation(err: &std::io::Error) -> bool {
     cfg!(windows) && err.raw_os_error() == Some(32)
 }
 
-fn rename(from: &Path, to: &Path) -> Result<()> {
+pub(crate) fn rename(from: &Path, to: &Path) -> Result<()> {
     retry(|| std::fs::rename(from, to)).map_err(|e| PluginError::io(to, e))
 }
 
@@ -513,6 +551,58 @@ mod tests {
     }
 
     #[test]
+    fn the_icon_is_checked_when_staging_and_offered_as_a_data_url() {
+        let tmp = tempfile::tempdir().unwrap();
+        let source = tmp.path().join("src");
+        let plugins = tmp.path().join("plugins");
+        write_plugin(&source, "iconic", "1.0.0");
+        let set_icon = |icon: &str| {
+            let mut manifest: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(source.join("plugin.json")).unwrap())
+                    .unwrap();
+            manifest["icon"] = icon.into();
+            std::fs::write(source.join("plugin.json"), manifest.to_string()).unwrap();
+        };
+        // Without an icon there is no data URL.
+        let staged = stage(&source, &plugins, None).unwrap();
+        assert_eq!(staged.icon_data_url().unwrap(), None);
+        drop(staged);
+
+        set_icon("logo.svg");
+        let err = stage(&source, &plugins, None).err().unwrap().to_string();
+        assert!(
+            err.contains("logo.svg") && err.contains("is missing"),
+            "{err}"
+        );
+        assert!(!plugins.join("iconic").exists());
+
+        std::fs::write(source.join("logo.svg"), "<svg onload=\"x()\"/>").unwrap();
+        let err = stage(&source, &plugins, None).err().unwrap().to_string();
+        assert!(err.contains("not allowed"), "{err}");
+
+        std::fs::write(source.join("logo.svg"), "<svg/>").unwrap();
+        let staged = stage(&source, &plugins, None).unwrap();
+        assert_eq!(
+            staged.icon_data_url().unwrap().as_deref(),
+            Some("data:image/svg+xml;base64,PHN2Zy8+")
+        );
+        staged.commit().unwrap();
+        assert!(plugins.join("iconic/logo.svg").is_file());
+
+        // The same checks apply to a zip.
+        let zip = tmp.path().join("p.zip");
+        write_zip(
+            &zip,
+            &[(
+                "plugin.json",
+                br#"{"id":"zipped","name":"Z","version":"1","apiVersion":1,"icon":"i.png"}"#,
+            )],
+        );
+        let err = stage(&zip, &plugins, None).err().unwrap().to_string();
+        assert!(err.contains("i.png") && err.contains("is missing"), "{err}");
+    }
+
+    #[test]
     fn rejects_what_is_not_a_plugin() {
         let tmp = tempfile::tempdir().unwrap();
         let plugins = tmp.path().join("plugins");
@@ -606,12 +696,19 @@ mod tests {
                 source: "C:\\src\\a".into(),
                 enabled: true,
                 watch: true,
+                registry: None,
+                folders: BTreeMap::from([("games".to_string(), "/mnt/games".to_string())]),
             },
             StateEntry {
                 id: "b".into(),
                 source: "/src/b.zip".into(),
                 enabled: false,
                 watch: false,
+                registry: Some(RegistryState {
+                    version: "1.2.3".into(),
+                    pinned: true,
+                }),
+                folders: BTreeMap::new(),
             },
         ];
         save_state(&plugins, &entries).unwrap();
@@ -626,6 +723,37 @@ mod tests {
         )
         .unwrap();
         assert!(!load_state(&plugins)[0].watch);
+        assert_eq!(load_state(&plugins)[0].registry, None);
+        // Older files have no `folders`; they are written only when there are some.
+        assert!(load_state(&plugins)[0].folders.is_empty());
+        save_state(&plugins, &load_state(&plugins)).unwrap();
+        assert!(
+            !std::fs::read_to_string(plugins.join(STATE_FILE))
+                .unwrap()
+                .contains("folders")
+        );
+        save_state(&plugins, &entries[..1]).unwrap();
+        assert_eq!(load_state(&plugins)[0].folders["games"], "/mnt/games");
+        // A registry entry is read back, and written only when there is one.
+        std::fs::write(
+            plugins.join(STATE_FILE),
+            r#"[{"id":"a","source":"x","enabled":true,"registry":{"version":"1.0.0","pinned":false}}]"#,
+        )
+        .unwrap();
+        let loaded = load_state(&plugins);
+        assert_eq!(loaded[0].registry.as_ref().unwrap().version, "1.0.0");
+        save_state(&plugins, &loaded).unwrap();
+        assert!(
+            std::fs::read_to_string(plugins.join(STATE_FILE))
+                .unwrap()
+                .contains("\"registry\"")
+        );
+        save_state(&plugins, &entries[..1]).unwrap();
+        assert!(
+            !std::fs::read_to_string(plugins.join(STATE_FILE))
+                .unwrap()
+                .contains("registry")
+        );
         std::fs::write(plugins.join(STATE_FILE), "not json").unwrap();
         assert!(load_state(&plugins).is_empty());
     }

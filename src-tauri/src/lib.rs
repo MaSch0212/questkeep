@@ -245,10 +245,27 @@ fn build_state(app: &tauri::AppHandle) -> Result<(AppState, Option<WorkerGuard>)
 
 /// Startup work that must not delay the window: provider scans and image/metadata downloads.
 fn spawn_startup_tasks(state: Arc<AppState>) {
+    // Looks for plugin updates a little later (and every 12 hours), never blocking startup.
+    {
+        let settings_state = state.clone();
+        questkeep_plugins::spawn_scheduler(
+            state.plugins.clone(),
+            state.library.notifications().clone(),
+            || questkeep_plugins::RegistryConfig::new(env!("CARGO_PKG_VERSION")),
+            move || settings_state.library.settings().check_plugin_updates,
+        );
+    }
     let watcher = state.clone();
     tauri::async_runtime::spawn_blocking(move || {
         // Before the first sync, so the stores of plugins are synced too.
         state.plugins.load_enabled();
+        // The bell entry for plugin updates, from the cached index (no network, no waiting for
+        // the check): created when updates are pending and the user has not dismissed them.
+        state.plugins.sync_update_notice(
+            &questkeep_plugins::RegistryConfig::new(env!("CARGO_PKG_VERSION")),
+            state.library.notifications(),
+            state.library.settings().check_plugin_updates,
+        );
         if state.library.settings().scan_on_startup {
             state.library.scan_all();
         } else {
@@ -494,7 +511,13 @@ pub fn run() {
             commands::list_plugins,
             commands::preview_plugin,
             commands::install_plugin,
+            commands::fetch_plugin_registry,
+            commands::preview_registry_plugin,
+            commands::install_registry_plugin,
+            commands::plugin_updates,
+            commands::check_plugin_updates_now,
             commands::reload_plugin,
+            commands::set_plugin_folder,
             commands::set_plugin_enabled,
             commands::set_plugin_watch,
             commands::remove_plugin,

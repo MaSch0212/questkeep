@@ -32,6 +32,8 @@ pub enum CoreEvent {
     /// A plugin was installed, loaded, unloaded, reloaded or removed: the lists of plugins and
     /// stores changed.
     PluginsChanged,
+    /// The plugin update check found a different set of updates (read them with `plugin_updates`).
+    PluginUpdatesChanged,
     /// A full sync is about to scan these providers, one after another.
     ScansQueued {
         providers: Vec<String>,

@@ -3,4 +3,4 @@
 /**
  * What the entry is about (shown next to its time).
  */
-export type NotificationSource = "launch" | "scripts" | "launchers" | "sync" | "app";
+export type NotificationSource = "launch" | "scripts" | "launchers" | "sync" | "plugins" | "app";

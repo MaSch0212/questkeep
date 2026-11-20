@@ -26,6 +26,11 @@ autoSyncMinutes: number,
  */
 watchInstallFolders: boolean, 
 /**
+ * Look for plugin updates a little after start and every 12 hours (only when a plugin was
+ * installed from the plugin registry). The "Check now" button works either way.
+ */
+checkPluginUpdates: boolean, 
+/**
  * Download missing covers from store CDNs.
  */
 downloadCovers: boolean, 

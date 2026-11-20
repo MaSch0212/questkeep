@@ -12,15 +12,43 @@ those commands and events.
 ## Plugins (`crates/questkeep-plugins`, `crates/questkeep-plugin-sdk`)
 
 A plugin is a folder (or zip) with a `plugin.json`: id, name, version, `apiVersion`, its stores
-(`providers: [{ wasm }]`), what they may reach (`permissions.read`, `permissions.http`) and,
+(`providers: [{ wasm }]`), what they may reach (`permissions.read`, `permissions.http`, `permissions.folders`: folders the user chooses) and,
 for the UI, `extension` and `themes` (carried along untouched). Installing copies it to
 `<data>/plugins/<id>/` (staged next to it, then swapped, so a copy is whole or absent) and
-`<data>/plugins/plugins.json` remembers `{ id, source, enabled, watch }`. `PluginManager`
+`<data>/plugins/plugins.json` remembers `{ id, source, enabled, watch, registry?, folders? }` (`folders`: the user's choice per declared folder key, host-side so a plugin can't grant itself folders; kept across updates). Paths a store returns below a `read`/`folders` mount (`/instances/...`) are translated to real paths in `wasm.rs` (never `/plugin` or `/data`). `PluginManager`
 (created by the shell with the library's `ProviderRegistry`) loads the enabled plugins at
 startup, before the first sync, and installs, reloads (copies the source again), enables,
 disables, watches (reload when the source folder changes, 500 ms after the last change) and
 removes them while the app runs. Every change publishes `PluginsChanged`. A plugin that fails
 to load is listed with its error.
+
+Plugin registry (`registry.rs`, contract in `docs/PLUGIN_REGISTRY.md`): the plugin browser's
+backend. `fetch_index` reads the registry's `index.json` (https, 15 s, 5 MB; debug builds take
+`QUESTKEEP_REGISTRY_URL`, `http://localhost` allowed) and keeps the last good copy in
+`<data>/plugins/registry-cache.json` (shown as offline when the fetch fails); icons are cached as
+`data:` URLs next to it. `download` streams a version's zip (100 MB cap, redirects followed)
+into `<data>/plugin-cache/<id>/<version>.zip` and keeps it only when its sha256 matches the
+index. `install_registry` on the manager installs from that zip, checks `plugin.json` id and
+version against the request, sets `source` to the zip and `registry: { version, pinned }`
+(pinned = not the newest compatible version: no update offers), and first copies
+`<data>/plugin-data/<id>/` to `<data>/plugin-data-backup/<id>/<old version>/` (newest 3 kept; a
+failed backup aborts the install). Registry downloads and installs run one at a time. Plugins
+installed from a folder or file have no `registry` and are never touched by this.
+
+Update check (`update_check.rs`): `spawn_scheduler` starts a thread that waits 20 s, then checks
+every 12 h (looking every 5 minutes whether one is due and the setting `checkPluginUpdates` is on).
+`PluginManager::check_for_updates` refreshes the registry cache (`refresh_cache`) only when
+`has_registry_plugins()` and, for the automatic kind, only when the setting is on; a network failure
+is logged and silent there and an error for the manual kind (`run_manual_check`). It publishes
+`CoreEvent::PluginUpdatesChanged` when the update set changed. `sync_notice` /
+`PluginManager::sync_update_notice` keep one bell entry (`NotificationLevel::Info`, source
+`Plugins`, action `PluginUpdates`, no system notification) in line with the pending updates from
+the cached index: created, updated in place (unread only for new pairs) or removed; it runs after
+every check (`run_scheduled_check`, `run_manual_check`), on `PluginsChanged` /
+`PluginUpdatesChanged` (a worker thread started by `spawn_scheduler`) and once after the plugins
+loaded at start. `<data>/plugins/plugin-update-notices.json` holds the shown entry and the pairs
+the user dismissed (an entry missing from the bell counts as dismissed). `preview_registry_plugin` adds `changes` (`PluginChanges::between` the installed shape and
+the preview) that the UI uses to keep updates that ask for more out of "Update all".
 
 A plugin's store is a WebAssembly component built with `questkeep-plugin-sdk` for
 `wasm32-wasip2`. The interface (`wit/plugin.wit`) is two exports, `describe()` and
@@ -53,7 +81,9 @@ A plugin's `extension` (`{ main, styles, settings }`) is JavaScript for the app'
 guide for authors is `docs/PLUGINS.md`, the API is `examples/plugins/questkeep-plugin.d.ts`
 (the host is type-checked against that file). The shell serves installed plugin files through
 the `qkplugin` URI scheme (`src-tauri/src/plugin_files.rs`); `PluginInfo` carries the
-`extension` object and a `revision` that grows with every load.
+`extension` object, the manifest's `icon` path (shown through the same scheme, with the `revision`
+in the URL) and a `revision` that grows with every load. `PluginPreview.icon` is the icon as a
+`data:` URL, read from the staged copy with the same size and SVG checks (`manifest::read_icon`).
 
 | Module | Responsibility |
 |---|---|
@@ -260,7 +290,13 @@ when it is queued again (the cover arriving emits `GamesChanged`, the tray reque
 | `remove_game(id)` | Delete game (and its cached images). |
 | `list_providers()` | Registered providers. |
 | `list_plugins()` | `PluginInfo[]`: every installed plugin with its state, error, stores and permissions. Ask again on the `pluginsChanged` event (and re-read the providers). |
-| `install_plugin(path)` | Installs a plugin folder or zip, enables and loads it; the same id again is an update. Returns its `PluginInfo`. |
+| `install_plugin(path, folders?)` | Installs a plugin folder or zip, enables and loads it; the same id again is an update. `folders` (key to absolute path, blank = default) are the user's choices for `permissions.folders`: validated like `set_plugin_folder` before anything changes (one bad entry fails the install, the old copy stays), saved with the install and mounted by the first load. `preview_plugin`'s `PluginPreview.folders` (`PluginFolder[]`: default, expanded `defaultPath`, `defaultExists`, and the current choice `path` of an installed plugin) feeds the dialog. Returns its `PluginInfo`. |
+| `fetch_plugin_registry()` | `RegistryListing` `{ offline, fetchedAt, plugins }`: the registry's plugins with `compatibleVersions`, `latest`, `installed`, `updateAvailable`, `incompatibleReason`, icon (`iconData` data URL) and every version. Fetches the index (cache when unreachable, `offline: true`; an error only without a cache or when the registry format is too new). |
+| `preview_registry_plugin(id, version)` | Downloads and verifies the version into the plugin cache; returns `RegistryPluginPreview` (`preview`: the normal install preview, plus `notes`, `released`, `size`, `pinned`, `downgrade`, `changes`: what the version asks for beyond the installed one, with `needsReview`). Installs nothing. Refuses withdrawn or incompatible versions (unless already installed). |
+| `install_registry_plugin(id, version, folders?)` | Installs/updates/switches version from the registry (verified again, data backed up when replacing), enables and loads it; returns `PluginInfo` (`registry` set) and emits `pluginsChanged`. |
+| `plugin_updates()` | `PluginUpdate[]` (`id`, `name`, `installedVersion`, `latestVersion`, `notes`) for installed registry plugins that are not pinned, from the cached index only (no network); `fetch_plugin_registry`, the update check and `check_plugin_updates_now` refresh it. |
+| `check_plugin_updates_now()` | The "Check now" button: refreshes the index (even with the automatic check off; no request without a registry plugin) and returns `UpdateCheck` `{ updates, requested, failed }`; an unreachable registry is an error. Emits `pluginUpdatesChanged` when the set changed. The automatic check (20 s after start, every 12 h, setting `checkPluginUpdates`) runs in the shell's startup and posts the bell entry. |
+| `set_plugin_folder(id, key, path?)` | Points a folder the plugin asks for (`permissions.folders`) at `path` (must exist, be an absolute folder, and not be or contain Questkeep's data folder or be the plugin's own folder), or back to its default with `null`; the choice is stored in `plugins.json`, never in the plugin's `/data`. Reloads the plugin's stores, returns `PluginInfo` (`folders`) and emits `pluginsChanged`; the UI then rescans the plugin's stores. |
 | `reload_plugin(id)` / `set_plugin_enabled(id, enabled)` / `set_plugin_watch(id, watch)` | Copy the source again and load it / load or unload / reload on source changes. Each returns the new `PluginInfo`. |
 | `remove_plugin(id, delete_data)` | Unloads the plugin and deletes its copy, optionally also its own data. Its stores' games stay. |
 | `get_plugin_settings(id)` / `save_plugin_settings(id, settings)` | An extension's own settings: a JSON object in `<data>/plugin-data/<id>/settings.json`, read when the extension loads and replaced as a whole on every change. |

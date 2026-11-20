@@ -267,7 +267,7 @@ dependencies = [
 
 [[package]]
 name = "questkeep-plugin-sdk"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "questkeep-store-model",
  "serde",
@@ -277,7 +277,7 @@ dependencies = [
 
 [[package]]
 name = "questkeep-store-model"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "chrono",
  "serde",

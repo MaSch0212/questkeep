@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "description": "Shows what an extension can add: a title bar button, menu entries, a page, a dialog and settings. Use it as a starting point for your own.",
   "author": "Questkeep",
+  "icon": "icon.svg",
   "apiVersion": 1,
   "extension": {
     "main": "main.js",

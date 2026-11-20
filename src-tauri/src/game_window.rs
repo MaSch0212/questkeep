@@ -7,6 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use questkeep_core::events::{CoreEvent, EventBus};
+use questkeep_core::notifications::NotificationSource;
 use questkeep_core::settings::WindowOnGameStart;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_notification::NotificationExt;
@@ -38,7 +39,10 @@ pub fn watch(app: &AppHandle, events: &EventBus) {
     events.subscribe(move |event| match event {
         CoreEvent::GameStarted { id } => game_started(&app, *id),
         CoreEvent::GameStopped { id, .. } => game_stopped(&app, *id),
-        CoreEvent::Notified { notification } => {
+        // Plugin updates wait in the bell: no system notification, which may pop up over a game.
+        CoreEvent::Notified { notification }
+            if notification.source != NotificationSource::Plugins =>
+        {
             notify(&app, &notification.title, &notification.message);
         }
         _ => {}

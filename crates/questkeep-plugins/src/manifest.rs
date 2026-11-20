@@ -27,6 +27,9 @@ pub struct PluginManifest {
     pub description: Option<String>,
     #[serde(default)]
     pub author: Option<String>,
+    /// The plugin's icon: an `.svg` or `.png` inside the plugin folder (see [`read_icon`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
     pub api_version: u32,
     /// The plugin's stores (WASM components).
     #[serde(default)]
@@ -59,6 +62,28 @@ pub struct Permissions {
     /// subdomain) or `http://localhost` (plain http, otherwise only https is allowed).
     #[serde(default)]
     pub http: Vec<String>,
+    /// Folders the user chooses: the plugin declares what it wants, the user decides where each
+    /// points to, the stores see it read-only.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub folders: Vec<FolderPermission>,
+}
+
+/// One entry of `permissions.folders`: a folder the plugin asks the user for.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FolderPermission {
+    /// Names the folder in `plugins.json`: 1 to 32 lowercase letters, digits and `-`.
+    pub key: String,
+    /// What the folder is, shown to the user.
+    pub label: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hint: Option<String>,
+    /// Where the stores see it, e.g. `/instances`.
+    #[serde(rename = "as")]
+    pub mount: String,
+    /// Used until the user chooses a folder; `%VAR%` and a leading `~` are expanded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -122,6 +147,9 @@ impl PluginManifest {
         for provider in &self.providers {
             check_relative(&provider.wasm, "The store file")?;
         }
+        if let Some(icon) = &self.icon {
+            check_icon_path(icon)?;
+        }
         if let Some(main) = self
             .extension
             .as_ref()
@@ -142,14 +170,41 @@ impl PluginManifest {
             if read.path.trim().is_empty() {
                 return Err(invalid("A folder permission has no path."));
             }
-            check_mount(&read.mount)?;
-            if mounts.contains(&read.mount.as_str()) {
+            take_mount(&mut mounts, &read.mount)?;
+        }
+        let mut keys: Vec<&str> = Vec::new();
+        for folder in &self.permissions.folders {
+            if !is_valid_folder_key(&folder.key) {
                 return Err(invalid(format!(
-                    "Two folder permissions use the same name \"{}\".",
-                    read.mount
+                    "The folder key \"{}\" is not valid: use 1 to 32 lowercase letters, digits \
+                     and dashes.",
+                    folder.key
                 )));
             }
-            mounts.push(&read.mount);
+            if keys.contains(&folder.key.as_str()) {
+                return Err(invalid(format!(
+                    "Two folders use the same key \"{}\".",
+                    folder.key
+                )));
+            }
+            keys.push(&folder.key);
+            if folder.label.trim().is_empty() {
+                return Err(invalid(format!(
+                    "The folder \"{}\" has no label.",
+                    folder.key
+                )));
+            }
+            if folder
+                .default
+                .as_deref()
+                .is_some_and(|d| d.trim().is_empty())
+            {
+                return Err(invalid(format!(
+                    "The default of the folder \"{}\" is empty.",
+                    folder.key
+                )));
+            }
+            take_mount(&mut mounts, &folder.mount)?;
         }
         for host in &self.permissions.http {
             if HostRule::parse(host).is_none() {
@@ -186,6 +241,26 @@ pub fn is_valid_id(id: &str) -> bool {
             .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || *b == b'-')
 }
 
+/// Checks a guest path and notes it as used; two folders may not share one.
+fn take_mount<'a>(taken: &mut Vec<&'a str>, mount: &'a str) -> Result<()> {
+    check_mount(mount)?;
+    if taken.contains(&mount) {
+        return Err(invalid(format!(
+            "Two folder permissions use the same name \"{mount}\"."
+        )));
+    }
+    taken.push(mount);
+    Ok(())
+}
+
+/// `^[a-z0-9-]{1,32}$`
+pub fn is_valid_folder_key(key: &str) -> bool {
+    (1..=32).contains(&key.len())
+        && key
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+}
+
 /// A path inside the plugin folder: relative, without `..`, drive or root.
 fn check_relative(path: &str, what: &str) -> Result<()> {
     let inside = !path.trim().is_empty()
@@ -202,6 +277,117 @@ fn check_relative(path: &str, what: &str) -> Result<()> {
             "{what} \"{path}\" must be a path inside the plugin folder."
         )))
     }
+}
+
+/// The largest icon file a plugin may have.
+pub const MAX_ICON_BYTES: u64 = 200 * 1024;
+
+/// The icon's path is inside the plugin folder and names an `.svg` or `.png`.
+fn check_icon_path(icon: &str) -> Result<()> {
+    check_relative(icon, "The icon file")?;
+    let extension = icon_extension(icon);
+    if extension != "svg" && extension != "png" {
+        return Err(invalid(format!(
+            "The icon file \"{icon}\" must be an .svg or .png image."
+        )));
+    }
+    Ok(())
+}
+
+fn icon_extension(icon: &str) -> String {
+    icon.rsplit_once('.')
+        .map(|(_, e)| e.to_ascii_lowercase())
+        .unwrap_or_default()
+}
+
+/// A checked icon file: its media type and bytes.
+pub type IconFile = (&'static str, Vec<u8>);
+
+/// Reads the plugin's icon (`None` when the manifest names none) from the plugin folder `dir`
+/// and checks it: the file exists, is at most [`MAX_ICON_BYTES`], a PNG really is one, and an SVG
+/// is UTF-8 text without scripts, event handler attributes or `javascript:` links. The UI shows
+/// it as an image only (never inlined), so the SVG check is a second line of defence.
+pub fn read_icon(dir: &Path, manifest: &PluginManifest) -> Result<Option<IconFile>> {
+    let Some(icon) = manifest.icon.as_deref() else {
+        return Ok(None);
+    };
+    check_icon_path(icon)?;
+    let file = dir.join(icon);
+    let too_large = || {
+        invalid(format!(
+            "The plugin's icon file \"{icon}\" is larger than {} KB.",
+            MAX_ICON_BYTES / 1024
+        ))
+    };
+    let Some(meta) = std::fs::metadata(&file).ok().filter(|m| m.is_file()) else {
+        return Err(invalid(format!(
+            "The plugin's icon file \"{icon}\" is missing."
+        )));
+    };
+    if meta.len() > MAX_ICON_BYTES {
+        return Err(too_large());
+    }
+    let bytes = std::fs::read(&file).map_err(|e| PluginError::io(&file, e))?;
+    if bytes.len() as u64 > MAX_ICON_BYTES {
+        return Err(too_large());
+    }
+    if icon_extension(icon) == "png" {
+        if !bytes.starts_with(&[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]) {
+            return Err(invalid(format!(
+                "The plugin's icon file \"{icon}\" is not a PNG image."
+            )));
+        }
+        return Ok(Some(("image/png", bytes)));
+    }
+    let Ok(text) = std::str::from_utf8(&bytes) else {
+        return Err(invalid(format!(
+            "The plugin's icon file \"{icon}\" is not UTF-8 text, so it is not a usable SVG."
+        )));
+    };
+    if let Some(found) = unsafe_svg_part(text) {
+        return Err(invalid(format!(
+            "The plugin's icon file \"{icon}\" is not allowed: an SVG icon may not contain \
+             {found}."
+        )));
+    }
+    Ok(Some(("image/svg+xml", bytes)))
+}
+
+/// What in an SVG could run code, if anything: `<script`, `javascript:` or an `on<event>=`
+/// attribute.
+fn unsafe_svg_part(svg: &str) -> Option<&'static str> {
+    let lower = svg.to_ascii_lowercase();
+    if lower.contains("<script") {
+        return Some("a script");
+    }
+    if lower.contains("javascript:") {
+        return Some("a javascript: link");
+    }
+    let bytes = lower.as_bytes();
+    for (i, _) in lower.match_indices("on") {
+        let starts_name = i > 0
+            && matches!(
+                bytes[i - 1],
+                b' ' | b'\t' | b'\r' | b'\n' | b'"' | b'\'' | b'/'
+            );
+        if !starts_name {
+            continue;
+        }
+        let mut end = i + 2;
+        while bytes.get(end).is_some_and(u8::is_ascii_lowercase) {
+            end += 1;
+        }
+        if end == i + 2 {
+            continue;
+        }
+        while bytes.get(end).is_some_and(u8::is_ascii_whitespace) {
+            end += 1;
+        }
+        if bytes.get(end) == Some(&b'=') {
+            return Some("an event handler attribute (on...=)");
+        }
+    }
+    None
 }
 
 /// A guest path for a read mount: absolute, plain, and not one of the plugin's own folders.
@@ -326,6 +512,24 @@ pub fn expand_path(
     Some(PathBuf::from(out))
 }
 
+/// The folder a `permissions.folders` entry points to: the user's `chosen` path, else the
+/// expanded default. `None` when there is neither (or the default can't be expanded).
+pub fn folder_path(
+    folder: &FolderPermission,
+    chosen: Option<&str>,
+    var: impl Fn(&str) -> Option<String>,
+    home: Option<&Path>,
+) -> Option<PathBuf> {
+    match chosen {
+        Some(path) => Some(PathBuf::from(path)),
+        // Rebuilt from its parts so the separators match the platform's (`~/x` becomes
+        // `C:\Users\me\x`, not `C:\Users\me/x`).
+        None => {
+            expand_path(folder.default.as_deref()?, var, home).map(|p| p.components().collect())
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -433,6 +637,118 @@ mod tests {
         assert!(text.contains("theme file"));
     }
 
+    const PNG: &[u8] = &[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0];
+
+    fn with_icon(icon: &str, files: &[(&str, &[u8])]) -> Result<Option<IconFile>> {
+        let tmp = tempfile::tempdir().unwrap();
+        for (name, content) in files {
+            let path = tmp.path().join(name);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, content).unwrap();
+        }
+        let parsed = manifest(|j| j["icon"] = icon.into())?;
+        read_icon(tmp.path(), &parsed)
+    }
+
+    fn icon_error(icon: &str, files: &[(&str, &[u8])]) -> String {
+        with_icon(icon, files).unwrap_err().to_string()
+    }
+
+    #[test]
+    fn icon_is_optional_and_a_path_to_an_svg_or_png() {
+        assert_eq!(manifest(|_| {}).unwrap().icon, None);
+        let parsed = manifest(|j| j["icon"] = "img/Icon.SVG".into()).unwrap();
+        assert_eq!(parsed.icon.as_deref(), Some("img/Icon.SVG"));
+        assert!(manifest(|j| j["icon"] = "logo.png".into()).is_ok());
+        let again = PluginManifest::parse(&serde_json::to_string(&parsed).unwrap()).unwrap();
+        assert_eq!(again, parsed);
+        let plain = serde_json::to_string(&manifest(|_| {}).unwrap()).unwrap();
+        assert!(!plain.contains("icon"));
+        for bad in ["logo.jpg", "logo", "logo.svg.exe", "icon.gif"] {
+            let text = message(manifest(|j| j["icon"] = bad.into()));
+            assert!(text.contains(".svg or .png"), "{bad}: {text}");
+        }
+        for bad in [
+            "../icon.svg",
+            "/icon.svg",
+            "C:/icon.svg",
+            "a/../../i.png",
+            "",
+        ] {
+            let text = message(manifest(|j| j["icon"] = bad.into()));
+            assert!(
+                text.contains("icon file") && text.contains("inside the plugin folder"),
+                "{bad}: {text}"
+            );
+        }
+    }
+
+    #[test]
+    fn reads_and_checks_the_icon_file() {
+        let svg =
+            br#"<svg xmlns="http://www.w3.org/2000/svg"><rect data-one="1" width="1"/></svg>"#;
+        let (kind, bytes) = with_icon("i.svg", &[("i.svg", svg)]).unwrap().unwrap();
+        assert_eq!((kind, bytes.len()), ("image/svg+xml", svg.len()));
+        let (kind, _) = with_icon("img/I.PNG", &[("img/I.PNG", PNG)])
+            .unwrap()
+            .unwrap();
+        assert_eq!(kind, "image/png");
+        // No icon, nothing to read.
+        let tmp = tempfile::tempdir().unwrap();
+        let plain = manifest(|_| {}).unwrap();
+        assert!(read_icon(tmp.path(), &plain).unwrap().is_none());
+
+        for files in [&[][..], &[("sub/i.svg", &svg[..])][..]] {
+            assert!(icon_error("i.svg", files).contains("is missing"));
+        }
+        // A folder is not a file.
+        assert!(icon_error("sub.png", &[("sub.png/x", b"1")]).contains("is missing"));
+        let big = vec![b' '; MAX_ICON_BYTES as usize + 1];
+        assert!(icon_error("i.png", &[("i.png", &big)]).contains("larger than 200 KB"));
+        let mut exact = PNG.to_vec();
+        exact.resize(MAX_ICON_BYTES as usize, 0);
+        assert!(with_icon("i.png", &[("i.png", &exact)]).is_ok());
+        assert!(icon_error("i.png", &[("i.png", b"GIF89a")]).contains("not a PNG"));
+        assert!(icon_error("i.svg", &[("i.svg", &[0xff, 0xfe, b'<'])]).contains("not UTF-8"));
+        assert!(icon_error("i.jpg", &[("i.jpg", b"x")]).contains(".svg or .png"));
+    }
+
+    #[test]
+    fn an_svg_icon_may_not_run_code() {
+        for (svg, what) in [
+            ("<svg><script>alert(1)</script></svg>", "script"),
+            ("<svg><SCRIPT src=x></SCRIPT></svg>", "script"),
+            (
+                "<svg><a href=\"javascript:alert(1)\"/></svg>",
+                "javascript:",
+            ),
+            ("<svg><a href=\"JaVaScRiPt:x\"/></svg>", "javascript:"),
+            ("<svg onload=\"x()\"></svg>", "event handler"),
+            (
+                "<svg><rect width='1' onClick = 'x()'/></svg>",
+                "event handler",
+            ),
+            ("<svg\nonmouseover=\"x()\"></svg>", "event handler"),
+            ("<svg><rect/onerror=x()></svg>", "event handler"),
+        ] {
+            let text = icon_error("i.svg", &[("i.svg", svg.as_bytes())]);
+            assert!(
+                text.contains("not allowed") && text.contains(what),
+                "{svg}: {text}"
+            );
+        }
+        // Words and attributes that only look similar are fine.
+        for svg in [
+            "<svg><text>one two on</text><rect data-one=\"1\" fill=\"none\"/></svg>",
+            "<svg><text>turn on, then off</text></svg>",
+        ] {
+            assert!(
+                with_icon("i.svg", &[("i.svg", svg.as_bytes())]).is_ok(),
+                "{svg}"
+            );
+        }
+    }
+
     #[test]
     fn rejects_bad_mounts() {
         for mount in [
@@ -460,6 +776,103 @@ mod tests {
             ]);
         });
         assert!(message(twice).contains("same name"));
+    }
+
+    fn folders(entries: serde_json::Value) -> Result<PluginManifest> {
+        manifest(|j| j["permissions"]["folders"] = entries.clone())
+    }
+
+    #[test]
+    fn parses_folders_the_user_chooses() {
+        let parsed = folders(serde_json::json!([
+            { "key": "instances", "label": "Instances", "hint": "Where they are",
+              "as": "/instances", "default": "~/BSManager/BSInstances" },
+            { "key": "a-1", "label": "Other", "as": "/other" }
+        ]))
+        .unwrap();
+        let first = &parsed.permissions.folders[0];
+        assert_eq!(first.key, "instances");
+        assert_eq!(first.hint.as_deref(), Some("Where they are"));
+        assert_eq!(first.mount, "/instances");
+        assert_eq!(parsed.permissions.folders[1].default, None);
+        let again = PluginManifest::parse(&serde_json::to_string(&parsed).unwrap()).unwrap();
+        assert_eq!(again, parsed);
+        // Without folders nothing is written.
+        let plain = manifest(|_| {}).unwrap();
+        assert!(plain.permissions.folders.is_empty());
+        assert!(!serde_json::to_string(&plain).unwrap().contains("folders"));
+    }
+
+    #[test]
+    fn rejects_bad_folders() {
+        let one = |patch: serde_json::Value| {
+            let mut base = serde_json::json!({ "key": "k", "label": "L", "as": "/k" });
+            for (name, value) in patch.as_object().unwrap() {
+                base[name] = value.clone();
+            }
+            folders(serde_json::json!([base]))
+        };
+        for key in ["", "Key", "a_b", "a b", "../x", &"a".repeat(33)] {
+            let text = message(one(serde_json::json!({ "key": key })));
+            assert!(text.contains("folder key"), "{key}: {text}");
+        }
+        assert!(one(serde_json::json!({ "key": "-" })).is_ok());
+        assert!(one(serde_json::json!({ "key": "a".repeat(32) })).is_ok());
+        assert!(message(one(serde_json::json!({ "label": " " }))).contains("no label"));
+        assert!(message(one(serde_json::json!({ "default": " " }))).contains("default"));
+        for mount in ["k", "/", "/plugin", "/data/x", "/a/../b"] {
+            assert!(one(serde_json::json!({ "as": mount })).is_err(), "{mount}");
+        }
+        let twice = folders(serde_json::json!([
+            { "key": "k", "label": "A", "as": "/a" },
+            { "key": "k", "label": "B", "as": "/b" }
+        ]));
+        assert!(message(twice).contains("same key"));
+        // The mount names are shared with `read`.
+        let clash = folders(serde_json::json!([{ "key": "k", "label": "A", "as": "/store" }]));
+        assert!(message(clash).contains("same name"));
+        let clash = folders(serde_json::json!([
+            { "key": "k", "label": "A", "as": "/a" },
+            { "key": "j", "label": "B", "as": "/a" }
+        ]));
+        assert!(message(clash).contains("same name"));
+    }
+
+    #[test]
+    fn a_folder_is_the_choice_or_the_expanded_default() {
+        let parsed = folders(serde_json::json!([
+            { "key": "k", "label": "L", "as": "/k", "default": "~/Games" },
+            { "key": "n", "label": "N", "as": "/n" }
+        ]))
+        .unwrap();
+        let var = |_: &str| None;
+        let home = Path::new("/home/me");
+        let [with_default, without] = &parsed.permissions.folders[..] else {
+            panic!("two folders");
+        };
+        assert_eq!(
+            folder_path(with_default, None, var, Some(home)),
+            Some(home.join("Games"))
+        );
+        assert_eq!(
+            folder_path(with_default, Some("/mine"), var, Some(home)),
+            Some(PathBuf::from("/mine"))
+        );
+        // No `/` left in the middle of a Windows path.
+        #[cfg(windows)]
+        assert_eq!(
+            folder_path(with_default, None, var, Some(home))
+                .unwrap()
+                .display()
+                .to_string(),
+            r"\home\me\Games"
+        );
+        assert_eq!(folder_path(with_default, None, var, None), None);
+        assert_eq!(folder_path(without, None, var, Some(home)), None);
+        assert_eq!(
+            folder_path(without, Some("/x"), var, None),
+            Some(PathBuf::from("/x"))
+        );
     }
 
     #[test]

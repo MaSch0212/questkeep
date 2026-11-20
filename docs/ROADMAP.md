@@ -83,6 +83,16 @@ play time and last played from its account, and duplicate editions are imported 
 has a Tray group (tray icon choice) and the tray's Quick launch holds store launchers and picked
 apps in your order; Explore shows games and apps by default.
 
+Plugin browser: install and update community plugins from the registry. Questkeep checks for plugin
+updates at start and every 12 hours (switch and "Check now" in Settings > Plugins), keeps the
+pending updates in one notification bell entry, and the Plugin updates dialog updates one plugin or all of them
+("Update all" leaves out updates that ask for new permissions).
+
+Plugins can have an optional icon (`icon` in `plugin.json`), shown in Settings > Plugins and the install dialog.
+
+Plugins can ask for folders you choose (`permissions.folders`, Settings > Plugins > Folders), mounted
+read-only for their stores, and paths their stores return below such a folder become real paths.
+
 ## Next
 
 - **Verify on Linux**: Heroic Amazon (Nile) and sideloaded games, owned games from Heroic/Lutris.

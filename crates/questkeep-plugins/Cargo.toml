@@ -11,13 +11,18 @@ questkeep-core = { path = "../questkeep-core" }
 questkeep-store-api = { path = "../questkeep-store-api" }
 # The wire format shared with plugins and the WIT file.
 questkeep-plugin-sdk = { path = "../questkeep-plugin-sdk" }
+base64 = "0.22.1"
+chrono = "0.4.45"
 notify = "8.2.1"
+semver = "1.0.28"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
+sha2 = "0.11.1"
 thiserror = "2.0.21"
 tracing = "0.1.44"
 ts-rs = { version = "12.0.1", features = ["serde-json-impl", "no-serde-warnings"] }
 ureq = "3.4.2"
+url = "2.5.8"
 # Only what running components needs: no wat parser, cache, profiling or async support.
 wasmtime = { version = "50.0.1", default-features = false, features = ["cranelift", "component-model", "runtime", "std"] }
 wasmtime-wasi = { version = "50.0.1", default-features = false, features = ["p2"] }

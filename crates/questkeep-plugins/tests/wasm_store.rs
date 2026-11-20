@@ -144,7 +144,7 @@ fn names(games: &[ImportedGame]) -> Vec<&str> {
 fn example_source(dir: &Path, wasm: &Path) {
     let example = repo_root().join("examples/plugins/example-store");
     std::fs::create_dir_all(dir).unwrap();
-    for file in ["plugin.json", "games.json"] {
+    for file in ["plugin.json", "games.json", "icon.svg"] {
         std::fs::copy(example.join(file), dir.join(file)).unwrap();
     }
     std::fs::copy(wasm, dir.join("provider.wasm")).unwrap();
@@ -472,4 +472,138 @@ fn store_ids_must_belong_to_the_plugin_and_be_free() {
     // Removing the plugin must not take someone else's store with it.
     manager.remove("other-plugin", false).unwrap();
     assert!(fx.registry.get("sandbox-probe").is_some());
+}
+
+/// The example plugin with a `games` folder the user chooses; its `games.json` points the
+/// games at `/mygames/...`, the way a store reports paths it saw in a mounted folder.
+fn folder_source(dir: &Path, wasm: &Path) {
+    example_source(dir, wasm);
+    let mut manifest: Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.join("plugin.json")).unwrap()).unwrap();
+    manifest["permissions"]["folders"] = json!([
+        { "key": "games", "label": "Games", "as": "/mygames" }
+    ]);
+    std::fs::write(dir.join("plugin.json"), manifest.to_string()).unwrap();
+    let games = json!([{
+        "id": "bs", "name": "Beat Saber",
+        "exe": "/mygames/My Instance/Beat Saber.exe",
+        "installDir": "/mygames/My Instance/",
+    }]);
+    std::fs::write(dir.join("games.json"), games.to_string()).unwrap();
+}
+
+#[test]
+fn chosen_folders_are_mounted_and_their_paths_translated() {
+    let Some(wasm) = example_wasm() else {
+        return;
+    };
+    let fx = Fixture::new();
+    let manager = fx.manager(CallLimits::default());
+    let source = fx.root.join("dev/example-store");
+    folder_source(&source, &wasm);
+
+    // Before the user chooses, the plugin has no such folder: its paths mean nothing.
+    let info = manager.install(&source).unwrap();
+    assert_eq!(info.error, None);
+    assert_eq!(info.folders[0].effective_path, None);
+    let game = fx
+        .provider("example-store")
+        .scan_installed()
+        .unwrap()
+        .remove(0);
+    assert_eq!(
+        game.play_action.unwrap().target,
+        "/mygames/My Instance/Beat Saber.exe"
+    );
+
+    // After choosing, the stores' paths below the mount are real paths on this PC.
+    let first = fx.root.join("first");
+    std::fs::create_dir_all(&first).unwrap();
+    manager
+        .set_folder("example-store", "games", Some(&first.display().to_string()))
+        .unwrap();
+    let first = PathBuf::from(manager.list()[0].folders[0].path.clone().unwrap());
+    let game = fx
+        .provider("example-store")
+        .scan_installed()
+        .unwrap()
+        .remove(0);
+    assert_eq!(
+        PathBuf::from(game.play_action.unwrap().target),
+        first.join("My Instance").join("Beat Saber.exe")
+    );
+    assert_eq!(
+        PathBuf::from(game.install_dir.unwrap()),
+        first.join("My Instance")
+    );
+
+    // Another folder, the plugin follows.
+    let second = fx.root.join("second");
+    std::fs::create_dir_all(&second).unwrap();
+    manager
+        .set_folder(
+            "example-store",
+            "games",
+            Some(&second.display().to_string()),
+        )
+        .unwrap();
+    let second = PathBuf::from(manager.list()[0].folders[0].path.clone().unwrap());
+    let game = fx
+        .provider("example-store")
+        .scan_installed()
+        .unwrap()
+        .remove(0);
+    assert_eq!(
+        PathBuf::from(game.install_dir.unwrap()),
+        second.join("My Instance")
+    );
+
+    // The choice is host-side state: not in the plugin's /data, which it can write.
+    let state = std::fs::read_to_string(fx.paths.plugins_dir().join("plugins.json")).unwrap();
+    assert!(state.contains("\"games\""), "{state}");
+    let data = fx.paths.plugin_data_dir().join("example-store");
+    if data.exists() {
+        assert_eq!(std::fs::read_dir(&data).unwrap().count(), 0);
+    }
+
+    // An update keeps the choice; removing the plugin forgets it.
+    let info = manager.install(&source).unwrap();
+    assert_eq!(
+        info.folders[0].path.as_deref().map(PathBuf::from),
+        Some(second.clone())
+    );
+    manager.remove("example-store", true).unwrap();
+    let info = manager.install(&source).unwrap();
+    assert_eq!(info.folders[0].path, None);
+}
+
+#[test]
+fn folders_chosen_while_installing_are_mounted_by_the_first_load() {
+    let Some(wasm) = example_wasm() else {
+        return;
+    };
+    let fx = Fixture::new();
+    let manager = fx.manager(CallLimits::default());
+    let source = fx.root.join("dev/example-store");
+    folder_source(&source, &wasm);
+    let chosen = fx.root.join("chosen");
+    std::fs::create_dir_all(&chosen).unwrap();
+
+    let folders =
+        std::collections::BTreeMap::from([("games".to_string(), chosen.display().to_string())]);
+    let info = manager.install_with_folders(&source, &folders).unwrap();
+    assert_eq!(info.error, None);
+    assert!(info.folders[0].exists);
+    let chosen = PathBuf::from(info.folders[0].path.clone().unwrap());
+
+    // The very first scan already sees the real folder, no reload in between.
+    let game = fx
+        .provider("example-store")
+        .scan_installed()
+        .unwrap()
+        .remove(0);
+    assert_eq!(
+        PathBuf::from(game.install_dir.unwrap()),
+        chosen.join("My Instance")
+    );
 }

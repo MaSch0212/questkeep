@@ -13,7 +13,8 @@ use std::time::Duration;
 
 use questkeep_plugin_sdk::wire::{self, CallArgs, Method, ProviderDescriptor};
 use questkeep_store_api::model::{
-    Achievements, AddGameOption, GameMetadata, GameNews, ImportedGame, LauncherProcess, PlayAction,
+    Achievements, ActionKind, AddGameOption, GameMetadata, GameNews, ImportedGame, LauncherClose,
+    LauncherProcess, PlayAction, TrackingMode,
 };
 use questkeep_store_api::settings::StoreSettings;
 use questkeep_store_api::{ImageCandidate, LibraryProvider, ProviderError};
@@ -170,7 +171,8 @@ pub(crate) struct Sandbox {
     pub plugin_dir: PathBuf,
     /// The plugin's own data, mounted read-write at `/data`.
     pub data_dir: PathBuf,
-    /// The declared folders: host path (already expanded) and guest path, read-only.
+    /// The folders the user may let the plugin read (`permissions.read` and the chosen or default
+    /// `permissions.folders`): host path (already expanded) and guest path, read-only.
     pub mounts: Vec<(PathBuf, String)>,
     pub hosts: Vec<HostRule>,
 }
@@ -215,15 +217,57 @@ impl Sandbox {
     }
 
     /// The real file behind a path the plugin sees, or `None` for a path outside its mounts.
+    /// Good for what the host only reads (images).
     fn host_path(&self, guest: &str) -> Option<PathBuf> {
+        self.resolve(guest, true)
+    }
+
+    /// What a path the plugin returns as a file of a game is on this PC: below a folder mount
+    /// (`permissions.read` and `folders`) it is the real path, anything else is returned as it
+    /// is. `/plugin` and `/data` never translate: the plugin writes `/data`, so a path there
+    /// must not become something Questkeep launches.
+    fn translate(&self, path: &str) -> String {
+        match self.resolve(path, false) {
+            Some(host) => host.display().to_string(),
+            None => path.to_string(),
+        }
+    }
+
+    fn translate_action(&self, mut action: PlayAction) -> PlayAction {
+        if action.kind == ActionKind::File {
+            action.target = self.translate(&action.target);
+        }
+        action.working_dir = action.working_dir.map(|dir| self.translate(&dir));
+        if action.tracking == TrackingMode::Directory {
+            action.tracking_path = action.tracking_path.map(|dir| self.translate(&dir));
+        }
+        action
+    }
+
+    fn translate_game(&self, mut game: ImportedGame) -> ImportedGame {
+        game.install_dir = game.install_dir.map(|dir| self.translate(&dir));
+        game.play_action = game.play_action.map(|a| self.translate_action(a));
+        game
+    }
+
+    fn translate_launcher(&self, mut process: LauncherProcess) -> LauncherProcess {
+        if let LauncherClose::Command(action) = process.close {
+            process.close = LauncherClose::Command(self.translate_action(action));
+        }
+        process
+    }
+
+    /// `own`: `/plugin` and `/data` count as mounts too.
+    fn resolve(&self, guest: &str, own: bool) -> Option<PathBuf> {
         let guest = guest.replace('\\', "/");
         if !guest.starts_with('/') || guest.split('/').any(|part| part == "..") {
             return None;
         }
-        let mut roots: Vec<(&str, &Path)> = vec![
-            (PLUGIN_MOUNT, &self.plugin_dir),
-            (DATA_MOUNT, &self.data_dir),
-        ];
+        let mut roots: Vec<(&str, &Path)> = Vec::new();
+        if own {
+            roots.push((PLUGIN_MOUNT, &self.plugin_dir));
+            roots.push((DATA_MOUNT, &self.data_dir));
+        }
         roots.extend(
             self.mounts
                 .iter()
@@ -642,6 +686,12 @@ impl WasmProvider {
         }
     }
 
+    /// A play action of a store call, its file paths translated.
+    fn action(&self, method: Method, args: &CallArgs) -> Option<PlayAction> {
+        let action: Option<PlayAction> = self.call_or_default(method, args);
+        action.map(|a| self.sandbox.translate_action(a))
+    }
+
     fn images(&self, method: Method, source_game_id: &str) -> Vec<ImageCandidate> {
         self.call_or_default::<Vec<wire::ImageCandidate>>(method, &CallArgs::game(source_game_id))
             .into_iter()
@@ -707,7 +757,11 @@ impl LibraryProvider for WasmProvider {
     }
 
     fn scan_installed(&self) -> std::result::Result<Vec<ImportedGame>, ProviderError> {
-        self.call(Method::ScanInstalled, &CallArgs::none())
+        let games: Vec<ImportedGame> = self.call(Method::ScanInstalled, &CallArgs::none())?;
+        Ok(games
+            .into_iter()
+            .map(|g| self.sandbox.translate_game(g))
+            .collect())
     }
 
     fn can_scan_owned(&self) -> bool {
@@ -718,11 +772,15 @@ impl LibraryProvider for WasmProvider {
         &self,
         config: &serde_json::Value,
     ) -> std::result::Result<Vec<ImportedGame>, ProviderError> {
-        self.call(Method::ScanOwned, &CallArgs::config(config))
+        let games: Vec<ImportedGame> = self.call(Method::ScanOwned, &CallArgs::config(config))?;
+        Ok(games
+            .into_iter()
+            .map(|g| self.sandbox.translate_game(g))
+            .collect())
     }
 
     fn install_action(&self, source_game_id: &str) -> Option<PlayAction> {
-        self.call_or_default(Method::InstallAction, &CallArgs::game(source_game_id))
+        self.action(Method::InstallAction, &CallArgs::game(source_game_id))
     }
 
     fn can_uninstall(&self) -> bool {
@@ -730,7 +788,7 @@ impl LibraryProvider for WasmProvider {
     }
 
     fn uninstall_action(&self, source_game_id: &str) -> Option<PlayAction> {
-        self.call_or_default(Method::UninstallAction, &CallArgs::game(source_game_id))
+        self.action(Method::UninstallAction, &CallArgs::game(source_game_id))
     }
 
     fn has_launcher_pages(&self) -> bool {
@@ -742,7 +800,7 @@ impl LibraryProvider for WasmProvider {
     }
 
     fn launcher_page(&self, source_game_id: &str) -> Option<PlayAction> {
-        self.call_or_default(Method::LauncherPage, &CallArgs::game(source_game_id))
+        self.action(Method::LauncherPage, &CallArgs::game(source_game_id))
     }
 
     fn scan_categories(
@@ -809,15 +867,17 @@ impl LibraryProvider for WasmProvider {
             args: args.to_string(),
             ..CallArgs::game(source_game_id)
         };
-        self.call_or_default(Method::LaunchWithArgs, &call)
+        self.action(Method::LaunchWithArgs, &call)
     }
 
     fn launcher(&self) -> Option<PlayAction> {
-        self.described().launcher.clone()
+        let action = self.described().launcher.clone()?;
+        Some(self.sandbox.translate_action(action))
     }
 
     fn launcher_process(&self) -> Option<LauncherProcess> {
-        self.described().launcher_process.clone()
+        let process = self.described().launcher_process.clone()?;
+        Some(self.sandbox.translate_launcher(process))
     }
 
     fn is_installed(&self) -> bool {
@@ -952,6 +1012,113 @@ mod tests {
         ] {
             assert_eq!(path(outside), None, "{outside}");
         }
+    }
+
+    fn folder_sandbox() -> Sandbox {
+        Sandbox {
+            plugin_id: "p".into(),
+            plugin_dir: PathBuf::from("/host/plugins/p"),
+            data_dir: PathBuf::from("/host/plugin-data/p"),
+            mounts: vec![
+                (PathBuf::from("/games/instances"), "/instances".into()),
+                (PathBuf::from("/games/more"), "/instances/more".into()),
+            ],
+            hosts: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn paths_below_a_folder_mount_become_real_paths() {
+        let sandbox = folder_sandbox();
+        let host = |guest: &str| PathBuf::from(sandbox.translate(guest));
+        assert_eq!(
+            host("/instances/My Instance/Beat Saber.exe"),
+            PathBuf::from("/games/instances/My Instance/Beat Saber.exe")
+        );
+        // The mount itself, with trailing slashes and dots, and the longest mount wins.
+        assert_eq!(host("/instances"), PathBuf::from("/games/instances"));
+        assert_eq!(host("/instances/"), PathBuf::from("/games/instances"));
+        assert_eq!(
+            host("/instances//a/./b/"),
+            PathBuf::from("/games/instances/a/b")
+        );
+        assert_eq!(host("/instances/more/x"), PathBuf::from("/games/more/x"));
+        assert_eq!(
+            host("\\instances\\a\\b.exe"),
+            PathBuf::from("/games/instances/a/b.exe")
+        );
+    }
+
+    #[test]
+    fn other_paths_stay_as_they_are() {
+        let sandbox = folder_sandbox();
+        for same in [
+            // Escapes out of the mount are not resolved, not even partly.
+            "/instances/../x",
+            "/instances/a/../../x",
+            "/instances/..",
+            // Not below a mount: the name has to match whole parts, and case.
+            "/instancesx/a.exe",
+            "/Instances/a.exe",
+            "/INSTANCES",
+            "/other/a.exe",
+            "C:/Games/a.exe",
+            "D:\\Games\\a.exe",
+            "relative/a.exe",
+            "",
+            // The plugin's own folders never become launchable: it writes /data.
+            "/data/evil.exe",
+            "/plugin/a.exe",
+        ] {
+            assert_eq!(sandbox.translate(same), same);
+        }
+        // Images may still come from the plugin's own folders.
+        assert_eq!(
+            sandbox.host_path("/data/a.png"),
+            Some(PathBuf::from("/host/plugin-data/p/a.png"))
+        );
+    }
+
+    #[test]
+    fn play_actions_and_games_translate_their_file_paths() {
+        let sandbox = folder_sandbox();
+        let mut action = PlayAction::file("/instances/Game/Game.exe");
+        action.working_dir = Some("/instances/Game".into());
+        action.args = Some("/instances/not-a-path".into());
+        action.tracking = TrackingMode::Directory;
+        action.tracking_path = Some("/instances/Game".into());
+        let done = sandbox.translate_action(action.clone());
+        assert_eq!(
+            PathBuf::from(&done.target),
+            PathBuf::from("/games/instances/Game/Game.exe")
+        );
+        assert_eq!(
+            PathBuf::from(done.working_dir.unwrap()),
+            PathBuf::from("/games/instances/Game")
+        );
+        assert_eq!(
+            PathBuf::from(done.tracking_path.unwrap()),
+            PathBuf::from("/games/instances/Game")
+        );
+        assert_eq!(done.args.as_deref(), Some("/instances/not-a-path"));
+        // A URI is not a path; a tracked name is not either.
+        let mut uri = PlayAction::uri("/instances/x");
+        uri.tracking = TrackingMode::Name;
+        uri.tracking_path = Some("/instances/x".into());
+        assert_eq!(sandbox.translate_action(uri.clone()), uri);
+
+        let mut game = ImportedGame::installed("1", "G");
+        game.install_dir = Some("/instances/Game".into());
+        game.play_action = Some(PlayAction::file("/instances/Game/Game.exe"));
+        let game = sandbox.translate_game(game);
+        assert_eq!(
+            PathBuf::from(game.install_dir.unwrap()),
+            PathBuf::from("/games/instances/Game")
+        );
+        assert_eq!(
+            PathBuf::from(game.play_action.unwrap().target),
+            PathBuf::from("/games/instances/Game/Game.exe")
+        );
     }
 
     #[test]
