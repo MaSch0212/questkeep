@@ -164,7 +164,6 @@ export function GameContextMenu(props: {
           onSelect: () => void activateGame(game().id),
         },
     ...playWith(),
-    { label: tr("openGamePage"), onSelect: () => store.selectAndOpen(game().id) },
     { kind: "separator" },
     {
       label: game().favorite ? tr("removeFromFavorites") : tr("addToFavorites"),

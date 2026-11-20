@@ -7,8 +7,9 @@
 //! [tile] [tile] ...
 //! Favorites
 //! (icon) Name                      rows, scrollable when there are many
-//! Launchers
-//! [logo] [logo] [logo] [logo]      launcher tiles, logo above the name, four per row
+//! Quick launch
+//! [logo] [icon] [logo] [logo]      store launchers and apps, logo or icon above the name,
+//!                                  four per row
 //! ─────────────────────────────
 //! [Open Questkeep] [Update to x.y]   [Exit]
 //! ```
@@ -59,7 +60,7 @@ impl Default for PopupTexts {
         Self {
             recent: "Recently played".into(),
             favorites: "Favorites".into(),
-            launchers: "Launchers".into(),
+            launchers: "Quick launch".into(),
             empty_recent: "No recently played games yet".into(),
             open: "Open Questkeep".into(),
             exit: "Exit".into(),
@@ -133,7 +134,7 @@ pub enum ItemKind {
     Tile(usize),
     /// Favorite `n` as a row.
     Row(usize),
-    /// Store launcher `n` as a logo tile.
+    /// Quick-launch entry `n` (store launcher or app) as a tile.
     Launcher(usize),
     OpenButton,
     /// Shown when an app update is available.
@@ -154,8 +155,8 @@ pub struct Item {
 pub struct Content {
     pub recent: Vec<Uuid>,
     pub favorites: Vec<Uuid>,
-    /// Provider ids of the installed store launchers.
-    pub launchers: Vec<String>,
+    /// What each quick-launch tile does (open a store launcher, start an app).
+    pub launchers: Vec<Action>,
     /// Version of an available app update.
     pub update: Option<String>,
     pub texts: PopupTexts,
@@ -250,11 +251,11 @@ pub fn layout(content: &Content, scroll: f32, measure: impl Fn(&str) -> f32) -> 
         ));
         y += LABEL_HEIGHT;
         let tile_w = (inner - TILE_GAP * (COLUMNS as f32 - 1.0)) / COLUMNS as f32;
-        for (i, id) in content.launchers.iter().enumerate() {
+        for (i, action) in content.launchers.iter().enumerate() {
             let (row, col) = (i / COLUMNS, i % COLUMNS);
             items.push(Item {
                 kind: ItemKind::Launcher(i),
-                action: Action::OpenLauncher(id.clone()),
+                action: action.clone(),
                 rect: Rect::new(
                     PADDING + col as f32 * (tile_w + TILE_GAP),
                     y + row as f32 * (LAUNCHER_HEIGHT + TILE_GAP),
@@ -501,7 +502,9 @@ mod tests {
         Content {
             recent: ids(recent),
             favorites: ids(favorites),
-            launchers: (0..launchers).map(|i| format!("store{i}")).collect(),
+            launchers: (0..launchers)
+                .map(|i| Action::OpenLauncher(format!("store{i}")))
+                .collect(),
             update: None,
             texts: PopupTexts::default(),
         }
@@ -533,7 +536,7 @@ mod tests {
         assert_eq!(k[13], ItemKind::ExitButton);
         assert_eq!(
             l.labels.iter().map(|(t, _)| t.as_str()).collect::<Vec<_>>(),
-            vec!["Recently played", "Favorites", "Launchers"]
+            vec!["Recently played", "Favorites", "Quick launch"]
         );
         // Everything inside the popup, and the footer at the bottom.
         for item in &l.items {

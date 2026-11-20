@@ -22,7 +22,7 @@ pub use questkeep_imaging::{
     load_image_filled, scale_icon,
 };
 pub use steamgriddb::{Lookup, SteamGridDb};
-pub(crate) use steamgriddb::{checked_key, platform_name};
+pub(crate) use steamgriddb::{checked_key, lookup_markers, platform_name};
 
 /// `games.extra` key set when the game's icon was cropped from its cover, so a new cover can
 /// replace the icon too (store and executable icons stay).

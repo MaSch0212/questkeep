@@ -7,6 +7,7 @@ import type { MetadataPriority } from "./MetadataPriority";
 import type { PriceSite } from "./PriceSite";
 import type { SortPrefixes } from "./SortPrefixes";
 import type { StartupPage } from "./StartupPage";
+import type { TraySettings } from "./TraySettings";
 import type { WindowOnGameStart } from "./WindowOnGameStart";
 
 export type Settings = { 
@@ -143,4 +144,8 @@ launcherCloseMinMinutes: number,
  * Errors and warnings also show as system notifications while the window is minimized or
  * hidden in the tray.
  */
-systemNotifications: boolean, };
+systemNotifications: boolean, 
+/**
+ * The tray icon and what its popup's quick-launch strip holds.
+ */
+tray: TraySettings, };

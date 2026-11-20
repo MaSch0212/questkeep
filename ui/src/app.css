@@ -1696,6 +1696,61 @@ ul {
 .chip-input__text::placeholder {
   color: var(--qk-color-text-faint);
 }
+.quick-launch {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-1);
+  margin: 0 0 var(--qk-space-2);
+  padding: 0;
+  list-style: none;
+}
+.quick-launch__item {
+  display: flex;
+  align-items: center;
+  gap: var(--qk-space-2);
+  padding: var(--qk-space-1) var(--qk-space-2);
+  border: 1px solid var(--qk-color-border);
+  border-radius: var(--qk-radius-md);
+}
+.quick-launch__icon {
+  display: grid;
+  place-items: center;
+  width: var(--qk-quick-launch-icon);
+  height: var(--qk-quick-launch-icon);
+  flex: none;
+}
+.quick-launch__icon img,
+.quick-launch__icon svg {
+  max-width: 100%;
+  max-height: 100%;
+}
+.quick-launch__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.quick-launch__add {
+  display: flex;
+  gap: var(--qk-space-2);
+}
+.edit-playtime {
+  display: flex;
+  gap: var(--qk-space-3);
+  min-height: var(--qk-control-height);
+}
+.edit-playtime__part {
+  display: flex;
+  align-items: center;
+  gap: var(--qk-space-2);
+}
+.edit-playtime__part .input {
+  width: var(--qk-playtime-input-width);
+}
+.edit-playtime .input[aria-invalid="true"] {
+  border-color: var(--qk-color-danger);
+}
 .edit-score {
   display: flex;
   align-items: center;

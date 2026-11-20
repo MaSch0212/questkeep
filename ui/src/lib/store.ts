@@ -193,6 +193,8 @@ function createAppStore() {
   const [bellRequests, setBellRequests] = createSignal(0);
   /** Counts `scriptsChanged` events: lists of scripts reload when it changes. */
   const [scriptsRevision, setScriptsRevision] = createSignal(0);
+  /** Counts library changes (games changed, removed, scanned): lists outside the view reload. */
+  const [libraryRevision, setLibraryRevision] = createSignal(0);
   /** The script whose dialog is open outside Settings (the bell's "Edit script"). */
   const [scriptEditorId, setScriptEditorId] = createSignal<string | null>(null);
   const [duplicatesOpen, setDuplicatesOpen] = createSignal(false);
@@ -536,12 +538,17 @@ function createAppStore() {
   /** Opens Explore fresh (nothing kept from before), optionally preset with filters. */
   function openExplore(preset: Partial<GameQuery> = {}) {
     batch(() => {
-      setExplore(exploreView(preset));
-      setDrafts((current) => withoutDraft(current, EXPLORE_ID));
-      setViewUi((current) => ({ ...current, [EXPLORE_ID]: DEFAULT_VIEW_UI }));
+      resetExplore(preset);
       setActiveViewId(null);
       selectView(EXPLORE_ID);
     });
+  }
+
+  /** Explore with `preset` on top of the default filters, without the user's changes. */
+  function resetExplore(preset: Partial<GameQuery> = {}) {
+    setExplore(exploreView(preset));
+    setDrafts((current) => withoutDraft(current, EXPLORE_ID));
+    setViewUi((current) => ({ ...current, [EXPLORE_ID]: DEFAULT_VIEW_UI }));
   }
 
   /** Runs a change to the views in the core, then reloads them (also after a failure). */
@@ -614,7 +621,8 @@ function createAppStore() {
 
   /**
    * Shows a game's details: in the open view when it contains the game, else in the first view
-   * that does. A game no view contains is shown over the first view.
+   * that does. A game no view contains opens in Explore with its filters reset (and is shown
+   * over it when even those leave it out, e.g. a hidden game).
    */
   function openGamePage(game: Game) {
     const target = viewForGame(sections(), drafts(), activeViewId(), game);
@@ -622,7 +630,8 @@ function createAppStore() {
     batch(() => {
       setPage("library");
       setKeyword(null);
-      setActiveViewId(target?.id ?? allViews(sections())[0]?.id ?? null);
+      if (!target) resetExplore();
+      setActiveViewId(target?.id ?? EXPLORE_ID);
       setPinnedGame(target ? null : game);
       setSelectedId(game.id);
       setDetailsOpen(true);
@@ -1141,6 +1150,7 @@ function createAppStore() {
       case "gameStarted":
       case "gameStopped":
         scheduleStartRefresh();
+        setLibraryRevision((n) => n + 1);
         break;
       default:
         break;
@@ -1655,6 +1665,7 @@ function createAppStore() {
     launchers,
     loadLaunchers,
     openGamePage,
+    libraryRevision,
     refresh,
     scheduleRefresh,
     upsertGame,

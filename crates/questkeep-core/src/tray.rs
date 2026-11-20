@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
 use crate::model::{Game, GameKind};
-use crate::settings::Settings;
+use crate::settings::{QuickLaunchItem, Settings};
 
 /// Games in the "recently played" part of the tray menu.
 pub const RECENT_LIMIT: usize = 10;
@@ -36,10 +36,62 @@ pub struct TrayGame {
 /// The game lists of the tray menu. Compared to skip menu rebuilds when nothing changed.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TrayGames {
-    /// Most recently played first.
+    /// Most recently played games (apps are left out, like on the home page), newest first.
     pub recent: Vec<TrayGame>,
     /// By name.
     pub favorites: Vec<TrayGame>,
+    /// The games and apps of the quick-launch strip that can start now, in the strip's order
+    /// (names without the "(App)" mark).
+    pub pinned: Vec<TrayGame>,
+}
+
+/// A store whose own launcher is installed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TrayLauncher {
+    /// Provider id, for [`crate::library::Library::open_launcher`].
+    pub id: String,
+    pub name: String,
+    /// The store's logo as SVG markup (`currentColor` is the drawing color).
+    pub icon: String,
+}
+
+/// One entry of the tray's quick-launch strip.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum QuickEntry {
+    Launcher(TrayLauncher),
+    Game(TrayGame),
+}
+
+/// The quick-launch strip: the user's arrangement (`items`), keeping only installed launchers
+/// and startable pinned games, or every installed launcher (in store order) while the user hasn't
+/// arranged it.
+pub fn quick_launch(
+    items: Option<&[QuickLaunchItem]>,
+    launchers: &[TrayLauncher],
+    pinned: &[TrayGame],
+) -> Vec<QuickEntry> {
+    let Some(items) = items else {
+        return launchers
+            .iter()
+            .cloned()
+            .map(QuickEntry::Launcher)
+            .collect();
+    };
+    items
+        .iter()
+        .filter_map(|item| match item {
+            QuickLaunchItem::Store { id } => launchers
+                .iter()
+                .find(|l| &l.id == id)
+                .cloned()
+                .map(QuickEntry::Launcher),
+            QuickLaunchItem::Game { id } => pinned
+                .iter()
+                .find(|g| &g.id == id)
+                .cloned()
+                .map(QuickEntry::Game),
+        })
+        .collect()
 }
 
 fn listable(game: &Game) -> bool {
@@ -60,12 +112,13 @@ fn entry(game: &Game) -> TrayGame {
 }
 
 /// Picks the games for the tray menu from `games` (any order): recently played installed,
-/// non-hidden games (newest first, at most [`RECENT_LIMIT`]) and favorite installed, non-hidden
-/// games sorted by name (at most [`FAVORITES_LIMIT`]).
-pub fn tray_games(games: &[Game]) -> TrayGames {
+/// non-hidden games (newest first, at most [`RECENT_LIMIT`], no apps), favorite installed,
+/// non-hidden games sorted by name (at most [`FAVORITES_LIMIT`]) and the installed, non-hidden
+/// games of the quick-launch arrangement `quick`.
+pub fn tray_games(games: &[Game], quick: Option<&[QuickLaunchItem]>) -> TrayGames {
     let mut recent: Vec<&Game> = games
         .iter()
-        .filter(|g| listable(g) && g.last_played.is_some())
+        .filter(|g| listable(g) && g.kind == GameKind::Game && g.last_played.is_some())
         .collect();
     recent.sort_by(|a, b| {
         b.last_played
@@ -84,6 +137,18 @@ pub fn tray_games(games: &[Game]) -> TrayGames {
             .cmp(&b.sorting_name.to_lowercase())
             .then_with(|| a.id.cmp(&b.id))
     });
+    let pinned = quick
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|item| match item {
+            QuickLaunchItem::Game { id } => games.iter().find(|g| g.id == *id && listable(g)),
+            QuickLaunchItem::Store { .. } => None,
+        })
+        .map(|game| TrayGame {
+            name: game.name.clone(),
+            ..entry(game)
+        })
+        .collect();
     TrayGames {
         recent: recent.into_iter().take(RECENT_LIMIT).map(entry).collect(),
         favorites: favorites
@@ -91,6 +156,7 @@ pub fn tray_games(games: &[Game]) -> TrayGames {
             .take(FAVORITES_LIMIT)
             .map(entry)
             .collect(),
+        pinned,
     }
 }
 
@@ -98,7 +164,12 @@ impl TrayGames {
     /// Ids of the listed games that have no icon yet (each once), for the icon fetcher.
     pub fn missing_icons(&self) -> Vec<Uuid> {
         let mut ids: Vec<Uuid> = Vec::new();
-        for game in self.recent.iter().chain(&self.favorites) {
+        for game in self
+            .recent
+            .iter()
+            .chain(&self.favorites)
+            .chain(&self.pinned)
+        {
             if game.icon.is_none() && !ids.contains(&game.id) {
                 ids.push(game.id);
             }
@@ -108,7 +179,12 @@ impl TrayGames {
 
     /// Replaces every icon and cover path with `resolve(path)` (`None` drops it).
     pub fn map_images(mut self, resolve: impl Fn(&std::path::Path) -> Option<PathBuf>) -> Self {
-        for game in self.recent.iter_mut().chain(&mut self.favorites) {
+        for game in self
+            .recent
+            .iter_mut()
+            .chain(&mut self.favorites)
+            .chain(&mut self.pinned)
+        {
             game.icon = game.icon.take().and_then(|p| resolve(&p));
             game.cover = game.cover.take().and_then(|p| resolve(&p));
         }
@@ -298,14 +374,14 @@ mod tests {
             hidden,
             played("Mid", 5),
         ];
-        let picked = tray_games(&games);
+        let picked = tray_games(&games, None);
         assert_eq!(names(&picked.recent), ["New", "Mid", "Old"]);
     }
 
     #[test]
     fn recent_is_capped_and_ties_break_by_name() {
         let games: Vec<Game> = (0..15).map(|i| played(&format!("G{i:02}"), 3)).collect();
-        let picked = tray_games(&games);
+        let picked = tray_games(&games, None);
         assert_eq!(picked.recent.len(), RECENT_LIMIT);
         assert_eq!(picked.recent[0].name, "G00");
         assert_eq!(picked.recent[9].name, "G09");
@@ -327,7 +403,7 @@ mod tests {
         uninstalled.installed = false;
         games.extend([hidden, uninstalled, game("Not a favorite")]);
         assert_eq!(
-            names(&tray_games(&games).favorites),
+            names(&tray_games(&games, None).favorites),
             ["Alpha", "beta", "zelda"]
         );
 
@@ -338,7 +414,7 @@ mod tests {
                 g
             })
             .collect();
-        let picked = tray_games(&many);
+        let picked = tray_games(&many, None);
         assert_eq!(picked.favorites.len(), FAVORITES_LIMIT);
         assert_eq!(picked.favorites[0].name, "F00");
     }
@@ -353,7 +429,7 @@ mod tests {
         let mut both = played("Both", 2);
         both.favorite = true;
         let games = vec![with_icon, fav.clone(), both.clone()];
-        let picked = tray_games(&games);
+        let picked = tray_games(&games, None);
         assert_eq!(
             picked.recent[0].icon.as_deref(),
             Some(std::path::Path::new("images/icons/a.png"))
@@ -364,9 +440,9 @@ mod tests {
         // A new icon changes the model, so the shell rebuilds the menu.
         let mut games2 = games.clone();
         games2[2].icon_path = Some("images/icons/b.png".into());
-        assert_ne!(tray_games(&games2), picked);
-        assert_eq!(tray_games(&games), picked);
-        assert_eq!(tray_games(&games2).missing_icons(), vec![fav.id]);
+        assert_ne!(tray_games(&games2, None), picked);
+        assert_eq!(tray_games(&games, None), picked);
+        assert_eq!(tray_games(&games2, None).missing_icons(), vec![fav.id]);
 
         let resolved = picked
             .map_images(|p| (p.file_name()? == "a.png").then(|| PathBuf::from("C:/data").join(p)));
@@ -378,7 +454,61 @@ mod tests {
 
     #[test]
     fn empty_library_gives_empty_menu_lists() {
-        assert_eq!(tray_games(&[]), TrayGames::default());
+        assert_eq!(tray_games(&[], None), TrayGames::default());
+    }
+
+    #[test]
+    fn recent_leaves_out_apps() {
+        let mut app = played("Discord", 0);
+        app.kind = GameKind::App;
+        let games = vec![app, played("Doom", 1)];
+        assert_eq!(names(&tray_games(&games, None).recent), ["Doom"]);
+    }
+
+    fn launcher(id: &str) -> TrayLauncher {
+        TrayLauncher {
+            id: id.into(),
+            name: id.to_uppercase(),
+            icon: "<svg/>".into(),
+        }
+    }
+
+    #[test]
+    fn quick_launch_follows_the_arrangement() {
+        let mut app = game("Discord");
+        app.kind = GameKind::App;
+        let mut hidden = game("Hidden");
+        hidden.hidden = true;
+        let games = vec![app.clone(), hidden.clone(), game("Other")];
+        let items = vec![
+            QuickLaunchItem::Game { id: app.id },
+            QuickLaunchItem::Store { id: "gog".into() },
+            QuickLaunchItem::Game { id: hidden.id },
+            QuickLaunchItem::Store {
+                id: "missing".into(),
+            },
+            QuickLaunchItem::Store { id: "steam".into() },
+            QuickLaunchItem::Game { id: Uuid::new_v4() },
+        ];
+        let picked = tray_games(&games, Some(&items));
+        // Pinned entries keep their plain name.
+        assert_eq!(names(&picked.pinned), ["Discord"]);
+        let launchers = [launcher("steam"), launcher("gog"), launcher("epic")];
+        let quick = quick_launch(Some(&items), &launchers, &picked.pinned);
+        let ids: Vec<String> = quick
+            .iter()
+            .map(|e| match e {
+                QuickEntry::Launcher(l) => l.id.clone(),
+                QuickEntry::Game(g) => g.name.clone(),
+            })
+            .collect();
+        assert_eq!(ids, ["Discord", "gog", "steam"]);
+        // Not arranged yet: every launcher in store order.
+        assert_eq!(
+            quick_launch(None, &launchers, &[]),
+            launchers.clone().map(QuickEntry::Launcher)
+        );
+        assert!(quick_launch(Some(&[]), &launchers, &[]).is_empty());
     }
 
     #[test]

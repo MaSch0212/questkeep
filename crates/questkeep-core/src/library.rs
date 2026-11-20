@@ -316,8 +316,9 @@ impl Library {
             .ok_or_else(|| CoreError::Invalid("The game's install folder is unknown".into()))
     }
 
-    /// The game lists of the tray menu (recently played, favorites). One query over installed,
-    /// non-hidden games; the shell calls this on a background thread when the library changed.
+    /// The game lists of the tray menu (recently played, favorites, the quick-launch strip's
+    /// games). One query over installed games; the shell calls this on a background thread when
+    /// the library or the settings changed.
     pub fn tray_games(&self) -> Result<TrayGames> {
         let games = self.db.list_games(&GameQuery {
             installed: TriState::Yes,
@@ -326,10 +327,13 @@ impl Library {
         })?;
         // Icons are shown from their absolute path; files that are gone count as missing, which
         // makes the shell queue a new icon job.
-        Ok(tray::tray_games(&games).map_images(|relative| {
-            self.images
-                .resolve(&relative.to_string_lossy().replace('\\', "/"))
-        }))
+        let quick = self.settings().tray.quick_launch;
+        Ok(
+            tray::tray_games(&games, quick.as_deref()).map_images(|relative| {
+                self.images
+                    .resolve(&relative.to_string_lossy().replace('\\', "/"))
+            }),
+        )
     }
 
     pub fn settings(&self) -> Settings {

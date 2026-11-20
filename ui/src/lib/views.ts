@@ -52,7 +52,8 @@ export function exploreView(preset: Partial<GameQuery> = {}): LibraryView {
       return tr("explore");
     },
     icon: "compass",
-    query: { ...defaultQuery(), ...preset },
+    // Explore looks through everything: games and apps.
+    query: { ...defaultQuery(), kind: "both", ...preset },
     layout: "list",
     group: "none",
     groupList: false,

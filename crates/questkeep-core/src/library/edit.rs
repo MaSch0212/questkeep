@@ -94,6 +94,12 @@ impl Library {
                 icon: is_user_image(&game, ImageKind::Icon),
             },
             metadata_link: game.metadata_link(),
+            metadata_name: game.metadata_name(),
+            automatic_metadata_name: {
+                let mut plain = game.clone();
+                plain.extra = serde_json::Value::Null;
+                plain.lookup_name()
+            },
         })
     }
 
@@ -124,6 +130,24 @@ impl Library {
             .set_user_sorting_name(entry, edits.sorting_name.as_deref())?;
         self.db
             .set_user_score_and_notes(entry, edits.user_score, edits.notes.as_deref())?;
+        let game = self.db.get_entry(entry)?;
+        if let Some(seconds) = edits.playtime_seconds
+            && seconds != game.playtime_seconds
+        {
+            self.db.set_user_playtime(entry, seconds)?;
+        }
+        let metadata_name = trimmed(edits.metadata_name.as_deref());
+        if metadata_name != game.metadata_name() {
+            self.db.set_extra_value(
+                entry,
+                crate::model::METADATA_NAME_KEY,
+                metadata_name.map(serde_json::Value::String),
+            )?;
+            // Searches by the old name that found nothing are tried again with the new one.
+            for key in crate::images::lookup_markers() {
+                self.db.set_extra_value(entry, key, None)?;
+            }
+        }
         self.events
             .publish(CoreEvent::GamesChanged { ids: vec![entry] });
         self.get_game(entry)
@@ -282,15 +306,12 @@ impl Library {
     ) -> Result<Vec<ImageOption>> {
         let game = self.get_game(id)?;
         let kind = kind_of(slot);
-        let year = game
-            .release_date
-            .as_deref()
-            .and_then(|d| d.get(..4))
-            .and_then(|y| y.parse().ok());
+        let year = game.lookup_year();
+        let name = game.lookup_name();
         match source {
             crate::model::IGDB_SOURCE => self.igdb.image_options(
                 &IgdbLookup {
-                    name: &game.name,
+                    name: &name,
                     year,
                     id: game.linked_igdb_id(),
                 },
@@ -303,7 +324,7 @@ impl Library {
                     .find(|c| crate::images::platform_name(&c.source).is_some());
                 self.artwork.image_options(
                     &Lookup {
-                        name: &game.name,
+                        name: &name,
                         source: copy.map_or(game.source.as_str(), |c| c.source.as_str()),
                         source_game_id: copy.map_or(game.source_game_id.as_deref(), |c| {
                             c.source_game_id.as_deref()
@@ -870,6 +891,8 @@ mod tests {
                     sorting_name: Some("Hades 1".into()),
                     user_score: Some(90),
                     notes: Some(" good ".into()),
+                    metadata_name: Some(" Hades I ".into()),
+                    playtime_seconds: Some(3600),
                 },
             )
             .unwrap();
@@ -880,6 +903,8 @@ mod tests {
         assert_eq!(game.sorting_name, "Hades 1");
         assert_eq!(game.user_score, Some(90));
         assert_eq!(game.notes.as_deref(), Some("good"));
+        assert_eq!(game.metadata_name().as_deref(), Some("Hades I"));
+        assert_eq!(game.playtime_seconds, 3600);
 
         // A refresh of IGDB doesn't touch the edit.
         lib.db
@@ -909,6 +934,9 @@ mod tests {
         assert_eq!(game.tags, ["Roguelike"]);
         assert_eq!(game.sorting_name, "Hades");
         assert_eq!(game.user_score, None);
+        assert_eq!(game.metadata_name(), None);
+        // No playtime sent: it stays.
+        assert_eq!(game.playtime_seconds, 3600);
     }
 
     #[test]

@@ -585,6 +585,9 @@ pub async fn save_settings(
         if before.language != settings.language {
             crate::tray::language_changed();
         }
+        if before.tray != settings.tray {
+            crate::tray::tray_settings_changed(&app, settings.tray.icon);
+        }
         // A newly entered SteamGridDB key can fill in covers for games that had no source.
         if !had_key && s.library.artwork().is_configured() {
             s.queue_missing_covers();

@@ -1,6 +1,6 @@
 //! System tray icon and what it opens: on Windows a custom popup with cover tiles (the
 //! `questkeep-tray-popup` crate), elsewhere a native menu. Both list recently played and favorite
-//! games and open store launchers; their content is refreshed (debounced, off the UI thread) when
+//! games and the quick-launch strip (store launchers and apps the user picked); their content is refreshed (debounced, off the UI thread) when
 //! the library changes.
 //!
 //! The selection logic is in `questkeep_core::tray` and the providers' launchers; this module
@@ -13,10 +13,13 @@ use std::time::Duration;
 
 use questkeep_core::events::CoreEvent;
 use questkeep_core::images::load_icon_rgba;
-use questkeep_core::tray::{TrayGame, TrayGames, menu_label};
+use questkeep_core::settings::TrayIconStyle;
+use questkeep_core::tray::{
+    QuickEntry, TrayGame, TrayGames, TrayLauncher, menu_label, quick_launch,
+};
 use tauri::image::Image;
 use tauri::menu::{IconMenuItem, IsMenuItem, Menu, MenuBuilder, MenuItem, Submenu, SubmenuBuilder};
-use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, Wry};
 use uuid::Uuid;
 
@@ -41,6 +44,8 @@ const USE_POPUP: bool = cfg!(windows);
 static CURRENT: Mutex<Option<MenuModel>> = Mutex::new(None);
 /// Version of an available app update, shown as an "Update" entry.
 static UPDATE: Mutex<Option<String>> = Mutex::new(None);
+/// The glyph the user chose.
+static ICON_STYLE: Mutex<TrayIconStyle> = Mutex::new(TrayIconStyle::Questkeep);
 /// Wakes the refresh thread (set once the tray exists).
 static TRIGGER: Mutex<Option<Sender<Trigger>>> = Mutex::new(None);
 
@@ -48,19 +53,10 @@ static TRIGGER: Mutex<Option<Sender<Trigger>>> = Mutex::new(None);
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 struct MenuModel {
     games: TrayGames,
-    launchers: Vec<TrayLauncher>,
+    /// The quick-launch strip: store launchers and the user's apps, in order.
+    quick: Vec<QuickEntry>,
     update: Option<String>,
     lang: Lang,
-}
-
-/// A store whose own launcher is installed.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TrayLauncher {
-    /// Provider id, for `Library::open_launcher`.
-    pub id: String,
-    pub name: String,
-    /// The store's logo as SVG markup (`currentColor` is the drawing color).
-    pub icon: String,
 }
 
 /// Why the menu is rebuilt.
@@ -76,6 +72,8 @@ enum Trigger {
     Language,
     /// The store order changed: the launchers are listed again in it.
     StoreOrder,
+    /// The tray settings changed (quick-launch strip).
+    Settings,
 }
 
 impl Trigger {
@@ -101,6 +99,28 @@ pub fn store_order_changed() {
     send(Trigger::StoreOrder);
 }
 
+/// The tray settings changed: the icon is swapped and the quick-launch strip rebuilt.
+pub fn tray_settings_changed(app: &AppHandle, icon: TrayIconStyle) {
+    *ICON_STYLE.lock().unwrap_or_else(PoisonError::into_inner) = icon;
+    if let Some(tray) = app.tray_by_id(TRAY_ID) {
+        set_glyph(&tray, crate::tray_theme::light_taskbar());
+    }
+    send(Trigger::Settings);
+}
+
+/// Shows the chosen glyph in the taskbar's colors.
+fn set_glyph(tray: &TrayIcon<Wry>, light_taskbar: bool) {
+    let style = *ICON_STYLE.lock().unwrap_or_else(PoisonError::into_inner);
+    match crate::tray_theme::icon(style, light_taskbar) {
+        Ok(icon) => {
+            if let Err(err) = tray.set_icon(Some(icon)) {
+                tracing::warn!(%err, "could not update the tray icon");
+            }
+        }
+        Err(err) => tracing::warn!(%err, "could not load the tray glyph"),
+    }
+}
+
 fn send(trigger: Trigger) {
     if let Some(tx) = TRIGGER
         .lock()
@@ -121,7 +141,9 @@ pub fn create(app: &AppHandle, state: &Arc<AppState>) -> tauri::Result<()> {
     if !USE_POPUP {
         builder = builder.menu(&build_menu(app, &MenuModel::default())?);
     }
-    match crate::tray_theme::icon(crate::tray_theme::light_taskbar()) {
+    let style = state.library.settings().tray.icon;
+    *ICON_STYLE.lock().unwrap_or_else(PoisonError::into_inner) = style;
+    match crate::tray_theme::icon(style, crate::tray_theme::light_taskbar()) {
         Ok(icon) => builder = builder.icon(icon),
         Err(err) => {
             tracing::warn!(%err, "could not load the tray glyph, using the app icon");
@@ -131,14 +153,7 @@ pub fn create(app: &AppHandle, state: &Arc<AppState>) -> tauri::Result<()> {
         }
     }
     let tray = builder.build(app)?;
-    crate::tray_theme::watch(move |light| match crate::tray_theme::icon(light) {
-        Ok(icon) => {
-            if let Err(err) = tray.set_icon(Some(icon)) {
-                tracing::warn!(%err, "could not update the tray icon");
-            }
-        }
-        Err(err) => tracing::warn!(%err, "could not load the tray glyph"),
-    });
+    crate::tray_theme::watch(move |light| set_glyph(&tray, light));
 
     let (tx, rx) = mpsc::channel();
     *TRIGGER.lock().unwrap_or_else(PoisonError::into_inner) = Some(tx.clone());
@@ -225,9 +240,15 @@ fn refresh_loop(app: &AppHandle, state: &AppState, rx: &Receiver<Trigger>) {
                     .collect(),
             );
         }
+        let arrangement = state.library.settings().tray.quick_launch;
+        let quick = quick_launch(
+            arrangement.as_deref(),
+            launchers.as_deref().unwrap_or_default(),
+            &games.pinned,
+        );
         let model = MenuModel {
             games,
-            launchers: launchers.clone().unwrap_or_default(),
+            quick,
             update: UPDATE
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
@@ -313,11 +334,23 @@ fn favorites_submenu(
 fn launchers_submenu(
     app: &AppHandle,
     texts: &i18n::MenuTexts,
-    launchers: &[TrayLauncher],
+    quick: &[QuickEntry],
 ) -> tauri::Result<Submenu<Wry>> {
     let mut builder = SubmenuBuilder::new(app, texts.launchers);
-    for launcher in launchers {
-        builder = builder.text(format!("{LAUNCHER_PREFIX}{}", launcher.id), &launcher.name);
+    for entry in quick {
+        match entry {
+            QuickEntry::Launcher(launcher) => {
+                builder = builder.text(
+                    format!("{LAUNCHER_PREFIX}{}", launcher.id),
+                    menu_label(&launcher.name),
+                );
+            }
+            QuickEntry::Game(game) => {
+                for item in game_items(app, std::slice::from_ref(game))? {
+                    builder = builder.item(item.as_ref());
+                }
+            }
+        }
     }
     builder.build()
 }
@@ -340,8 +373,8 @@ fn build_menu(app: &AppHandle, model: &MenuModel) -> tauri::Result<Menu<Wry>> {
         builder = builder.text(ID_UPDATE, texts.update.replace("{version}", version));
     }
     builder = builder.text(ID_OPEN, texts.open);
-    if !model.launchers.is_empty() {
-        builder = builder.item(&launchers_submenu(app, &texts, &model.launchers)?);
+    if !model.quick.is_empty() {
+        builder = builder.item(&launchers_submenu(app, &texts, &model.quick)?);
     }
     builder.separator().text(ID_EXIT, texts.exit).build()
 }
@@ -368,7 +401,7 @@ fn on_tray_event(app: &AppHandle, event: &TrayIconEvent) {
 #[cfg(windows)]
 fn show_popup(app: &AppHandle, rect: &tauri::Rect) {
     use questkeep_tray_popup::{
-        Action, PopupData, PopupGame, PopupGames, PopupLauncher, ScreenRect,
+        Action, LauncherTarget, PopupData, PopupGame, PopupGames, PopupLauncher, ScreenRect,
     };
 
     let position = rect.position.to_physical::<i32>(1.0);
@@ -396,12 +429,16 @@ fn show_popup(app: &AppHandle, rect: &tauri::Rect) {
             favorites: model.games.favorites.into_iter().map(game).collect(),
         },
         launchers: model
-            .launchers
+            .quick
             .into_iter()
-            .map(|l| PopupLauncher {
-                id: l.id,
-                name: l.name,
-                icon: l.icon,
+            .map(|entry| match entry {
+                QuickEntry::Launcher(l) => PopupLauncher::store(l.id, l.name, l.icon),
+                QuickEntry::Game(g) => PopupLauncher {
+                    target: LauncherTarget::Game(g.id),
+                    name: g.name,
+                    icon: String::new(),
+                    image: g.icon,
+                },
             })
             .collect(),
         update: model.update,

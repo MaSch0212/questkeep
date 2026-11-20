@@ -86,6 +86,8 @@ function mockEditInfo() {
     sortingName: null,
     userImages: { cover: false, background: false, icon: false },
     metadataLink: null,
+    metadataName: null,
+    automaticMetadataName: "",
   });
   vi.mocked(api.saveGameEdits).mockResolvedValue(makeGame());
   vi.mocked(api.getGame).mockResolvedValue(makeGame());

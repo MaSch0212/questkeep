@@ -42,6 +42,16 @@ pub(crate) fn checked_key(kind: ImageKind) -> &'static str {
     }
 }
 
+/// Every `games.extra` key that records a search finding nothing (SteamGridDB, IGDB): cleared
+/// when the name searches use changes.
+pub(crate) fn lookup_markers() -> [&'static str; 3] {
+    [
+        checked_key(ImageKind::Cover),
+        checked_key(ImageKind::Background),
+        super::igdb::CHECKED_KEY,
+    ]
+}
+
 /// Identifies a game for lookup.
 #[derive(Debug, Clone, Copy)]
 pub struct Lookup<'a> {

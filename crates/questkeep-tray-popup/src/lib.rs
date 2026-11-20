@@ -49,13 +49,43 @@ pub struct PopupGames {
     pub favorites: Vec<PopupGame>,
 }
 
-/// A store whose own launcher is installed.
+/// An entry of the quick-launch strip: a store whose own launcher is installed, or a game or app
+/// the user put there.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PopupLauncher {
-    pub id: String,
+    pub target: LauncherTarget,
     pub name: String,
-    /// The store's logo as SVG markup (`currentColor` is the drawing color).
+    /// The store's logo as SVG markup (`currentColor` is the drawing color); empty for games.
     pub icon: String,
+    /// The game's 32x32 icon file; drawn instead of the logo.
+    pub image: Option<PathBuf>,
+}
+
+/// What a quick-launch entry starts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LauncherTarget {
+    /// A store's launcher (provider id).
+    Store(String),
+    Game(Uuid),
+}
+
+impl PopupLauncher {
+    /// A store launcher with its SVG logo.
+    pub fn store(id: impl Into<String>, name: impl Into<String>, icon: impl Into<String>) -> Self {
+        Self {
+            target: LauncherTarget::Store(id.into()),
+            name: name.into(),
+            icon: icon.into(),
+            image: None,
+        }
+    }
+
+    fn action(&self) -> Action {
+        match &self.target {
+            LauncherTarget::Store(id) => Action::OpenLauncher(id.clone()),
+            LauncherTarget::Game(id) => Action::Launch(*id),
+        }
+    }
 }
 
 /// What the popup shows.
@@ -73,7 +103,7 @@ impl PopupData {
         Content {
             recent: self.games.recent.iter().map(|g| g.id).collect(),
             favorites: self.games.favorites.iter().map(|g| g.id).collect(),
-            launchers: self.launchers.iter().map(|l| l.id.clone()).collect(),
+            launchers: self.launchers.iter().map(PopupLauncher::action).collect(),
             update: self.update.clone(),
             texts: self.texts.clone(),
         }
@@ -161,10 +191,16 @@ pub fn prepare(data: &PopupData, layout: &Layout, scale: f32) -> Prepared {
     let mut kept: HashMap<CacheKey, Arc<Pixels>> = HashMap::new();
     let mut prepared = Prepared::default();
     for (index, item) in layout.items.iter().enumerate() {
-        let Some(game) = data.game(item.kind) else {
-            continue;
+        let request = match item.kind {
+            ItemKind::Launcher(i) => data.launchers.get(i).and_then(|l| {
+                let side = (layout::LAUNCHER_ICON_SIZE * scale).round() as u32;
+                l.image.as_deref().map(|p| (p, side, side, ImageKind::Icon))
+            }),
+            kind => data
+                .game(kind)
+                .and_then(|game| image_request(game, item, scale)),
         };
-        let Some((path, w, h, kind)) = image_request(game, item, scale) else {
+        let Some((path, w, h, kind)) = request else {
             continue;
         };
         let key = (path.to_path_buf(), w, h);

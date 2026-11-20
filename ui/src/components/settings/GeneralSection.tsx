@@ -6,6 +6,7 @@ import { settingsGeneral } from "../../i18n/settingsGeneral";
 import { allViews, shownName } from "../../lib/views";
 import { store } from "../../lib/store";
 import { ChipInput } from "../ChipInput";
+import { TraySettings } from "./TraySettings";
 import type { SettingsModel } from "./useSettings";
 
 /** Common leading words offered while typing (English, German, French, Spanish). */
@@ -253,6 +254,10 @@ export function GeneralSection(props: { model: SettingsModel }) {
               option="minimizeToTray"
               checked={current().minimizeToTray}
             />
+          </fieldset>
+          <fieldset class="fieldset settings-group">
+            <legend class="fieldset__legend">{tr("trayGroup")}</legend>
+            <TraySettings model={props.model} />
           </fieldset>
           <fieldset class="fieldset settings-group">
             <legend class="fieldset__legend">{tr("gameStartsGroup")}</legend>

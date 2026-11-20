@@ -10,7 +10,9 @@ import {
   moveItem,
   parseGigabytes,
   parseHours,
+  parsePlaytime,
   parseScore,
+  playtimeParts,
   SECTION_FIELDS,
   shortUrl,
   sourceLabel,
@@ -69,6 +71,8 @@ describe("edit game helpers", () => {
       sortingName: null,
       userImages: { cover: false, background: false, icon: false },
       metadataLink: null,
+      metadataName: null,
+      automaticMetadataName: "",
     };
     const values = startValues(info);
     expect(values.description).toBe("Mine");
@@ -105,6 +109,11 @@ describe("edit game helpers", () => {
     expect(parseScore("85")).toBe(85);
     expect(parseScore("101")).toBeUndefined();
     expect(parseScore(" ")).toBeNull();
+    expect(playtimeParts(3 * 3600 + 25 * 60 + 59)).toEqual({ hours: "3", minutes: "25" });
+    expect(parsePlaytime("3", "25")).toBe(3 * 3600 + 25 * 60);
+    expect(parsePlaytime(" ", "90")).toBe(90 * 60);
+    expect(parsePlaytime("1.5", "")).toBeNull();
+    expect(parsePlaytime("-1", "")).toBeNull();
   });
 
   it("shorten links, prefill web searches and move items", () => {

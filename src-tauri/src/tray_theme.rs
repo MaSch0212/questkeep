@@ -5,17 +5,21 @@
 //! in `RegNotifyChangeKeyValue` (no polling, no CPU while waiting) and swaps the icon when it
 //! changes. Other platforms use the white glyph: most Linux panels are dark.
 
+use questkeep_core::settings::TrayIconStyle;
 use tauri::image::Image;
 
 const DARK_TASKBAR_ICON: &[u8] = include_bytes!("../icons/tray-dark.png");
 const LIGHT_TASKBAR_ICON: &[u8] = include_bytes!("../icons/tray-light.png");
+const DARK_TASKBAR_CONTROLLER: &[u8] = include_bytes!("../icons/tray-controller-dark.png");
+const LIGHT_TASKBAR_CONTROLLER: &[u8] = include_bytes!("../icons/tray-controller-light.png");
 
-/// The glyph for a light (`true`) or dark taskbar.
-pub fn icon(light_taskbar: bool) -> tauri::Result<Image<'static>> {
-    Image::from_bytes(if light_taskbar {
-        LIGHT_TASKBAR_ICON
-    } else {
-        DARK_TASKBAR_ICON
+/// The chosen glyph for a light (`true`) or dark taskbar.
+pub fn icon(style: TrayIconStyle, light_taskbar: bool) -> tauri::Result<Image<'static>> {
+    Image::from_bytes(match (style, light_taskbar) {
+        (TrayIconStyle::Questkeep, true) => LIGHT_TASKBAR_ICON,
+        (TrayIconStyle::Questkeep, false) => DARK_TASKBAR_ICON,
+        (TrayIconStyle::Controller, true) => LIGHT_TASKBAR_CONTROLLER,
+        (TrayIconStyle::Controller, false) => DARK_TASKBAR_CONTROLLER,
     })
 }
 
@@ -137,10 +141,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn both_icons_decode() {
-        for light in [false, true] {
-            let image = icon(light).unwrap();
-            assert_eq!((image.width(), image.height()), (32, 32));
+    fn every_icon_decodes() {
+        for style in [TrayIconStyle::Questkeep, TrayIconStyle::Controller] {
+            for light in [false, true] {
+                let image = icon(style, light).unwrap();
+                assert_eq!((image.width(), image.height()), (32, 32));
+            }
         }
     }
 }

@@ -35,6 +35,8 @@ import {
   editedCount,
   gigabytesText,
   hoursText,
+  parsePlaytime,
+  playtimeParts,
   LIST_FIELDS,
   parseGigabytes,
   parseHours,
@@ -178,7 +180,17 @@ function ImageRow(props: {
       <div class="image-row__frame">
         <Switch>
           <Match when={typeof props.draft === "string" && props.draft}>
-            {(draft) => <img class="image-row__img" src={imageSrc(draft())} alt="" />}
+            {(draft) => (
+              <Show
+                when={props.slot === "cover"}
+                fallback={<img class="image-row__img" src={imageSrc(draft())} alt="" />}
+              >
+                {/* Framed like the saved cover below, so picking doesn't change how it looks. */}
+                <div class="image-row__cover">
+                  <img class="cover cover--image" src={imageSrc(draft())} alt="" />
+                </div>
+              </Show>
+            )}
           </Match>
           <Match when={props.draft === null}>
             <span class="muted">{tr("none")}</span>
@@ -365,6 +377,19 @@ export function EditGameDialog(props: {
   // Drafts.
   const [name, setName] = createSignal(props.game.name);
   const [sortingName, setSortingName] = createSignal<string | null>(null);
+  const [metadataName, setMetadataName] = createSignal<string | null>(null);
+  // Time played as typed: whole hours and minutes.
+  const startPlaytime = playtimeParts(props.game.playtimeSeconds);
+  const [playHours, setPlayHours] = createSignal(startPlaytime.hours);
+  const [playMinutes, setPlayMinutes] = createSignal(startPlaytime.minutes);
+  const playtimeSeconds = () => parsePlaytime(playHours(), playMinutes());
+  const playtimeChanged = () => {
+    const seconds = playtimeSeconds();
+    // Seconds below a minute aren't shown, so an untouched field keeps them.
+    return (
+      seconds !== null && Math.floor(seconds / 60) !== Math.floor(props.game.playtimeSeconds / 60)
+    );
+  };
   const [values, setValues] = createSignal<GameMetadata | null>(null);
   const [edited, setEdited] = createSignal<ReadonlySet<MetadataField>>(new Set());
   const [ownLinks, setOwnLinks] = createSignal<GameLink[]>([]);
@@ -397,7 +422,8 @@ export function EditGameDialog(props: {
     [...edited()].toSorted().join() === prev.edits.edited.toSorted().join() &&
     ownLinks() === prev.edits.meta.links &&
     hidden() === prev.edits.hiddenLinks &&
-    sortingName() === prev.sortingName;
+    sortingName() === prev.sortingName &&
+    metadataName() === prev.metadataName;
   createEffect(() => {
     const loaded = info();
     if (!loaded || loaded === base) return;
@@ -421,6 +447,7 @@ export function EditGameDialog(props: {
       completion() !== g.completionStatus ||
       score() !== g.userScore ||
       notes() !== (g.notes ?? "") ||
+      playtimeChanged() ||
       detectLaunches() !== g.detectLaunches ||
       ignored() !== g.ignoredProcesses.join("\n") ||
       categoryNames().join("\n") !== startCategories ||
@@ -441,6 +468,7 @@ export function EditGameDialog(props: {
       setOwnLinks(loaded.edits.meta.links);
       setHidden(loaded.edits.hiddenLinks);
       setSortingName(loaded.sortingName);
+      setMetadataName(loaded.metadataName);
       setNumbers({
         criticScore: start.criticScore ? String(start.criticScore.value) : "",
         communityScore: start.communityScore ? String(start.communityScore.value) : "",
@@ -561,6 +589,11 @@ export function EditGameDialog(props: {
       setError(tr("nameError"));
       return;
     }
+    if (playtimeSeconds() === null) {
+      setSection("general");
+      setError(tr("playtimeError"));
+      return;
+    }
     const failedInput = readNumbers();
     if (failedInput) {
       setError(failedInput);
@@ -608,14 +641,22 @@ export function EditGameDialog(props: {
           sortingName: sortingName(),
           userScore: score(),
           notes: notes(),
+          metadataName: metadataName(),
+          playtimeSeconds: playtimeChanged() ? playtimeSeconds() : null,
         };
         const nothing =
           edits.edits.edited.length === 0 &&
           ownLinks().length === 0 &&
           sortingName() === null &&
+          metadataName() === null &&
+          edits.playtimeSeconds === null &&
           score() === null &&
           notes().trim() === "";
         if (!isNew || !nothing) steps.push(() => api.saveGameEdits(gameId, edits));
+        // Metadata and images are looked up again under the new name.
+        if ((info()?.metadataName ?? null) !== (metadataName()?.trim() || null)) {
+          steps.push(() => refreshMetadata(gameId));
+        }
       }
       if (kind() === "game" && completion() !== props.game.completionStatus) {
         steps.push(() => store.setCompletionStatus([gameId], completion()));
@@ -983,6 +1024,21 @@ export function EditGameDialog(props: {
                         onInput={(event) => setSortingName(event.currentTarget.value || null)}
                       />
                     </label>
+                    <label class="field">
+                      <span class="field__label edit-field__label">
+                        {tr("metadataName")}
+                        <span class="edit-field__source">
+                          {metadataName() ? tr("yourOwn") : tr("automatic")}
+                        </span>
+                      </span>
+                      <input
+                        class="input"
+                        value={metadataName() ?? ""}
+                        placeholder={info()?.automaticMetadataName}
+                        onInput={(event) => setMetadataName(event.currentTarget.value || null)}
+                      />
+                      <span class="field__hint">{tr("metadataNameHint")}</span>
+                    </label>
                     <div class="field">
                       {label(tr("releaseDate"), "releaseDate")}
                       <input
@@ -1083,6 +1139,43 @@ export function EditGameDialog(props: {
                           {tr("clear")}
                         </button>
                       </div>
+                    </div>
+                    <div class="field">
+                      <span class="field__label" id="edit-playtime">
+                        {tr("playtime")}
+                      </span>
+                      <div class="edit-playtime" role="group" aria-labelledby="edit-playtime">
+                        <label class="edit-playtime__part">
+                          <input
+                            class="input"
+                            type="number"
+                            min="0"
+                            step="1"
+                            inputmode="numeric"
+                            aria-label={tr("hours")}
+                            aria-invalid={playtimeSeconds() === null ? "true" : undefined}
+                            value={playHours()}
+                            onInput={(event) => setPlayHours(event.currentTarget.value)}
+                          />
+                          <span class="muted">{tr("hours")}</span>
+                        </label>
+                        <label class="edit-playtime__part">
+                          <input
+                            class="input"
+                            type="number"
+                            min="0"
+                            max="59"
+                            step="1"
+                            inputmode="numeric"
+                            aria-label={tr("minutes")}
+                            aria-invalid={playtimeSeconds() === null ? "true" : undefined}
+                            value={playMinutes()}
+                            onInput={(event) => setPlayMinutes(event.currentTarget.value)}
+                          />
+                          <span class="muted">{tr("minutes")}</span>
+                        </label>
+                      </div>
+                      <span class="field__hint">{tr("playtimeHint")}</span>
                     </div>
                     <div class="field">
                       <span class="field__label">{tr("categories")}</span>

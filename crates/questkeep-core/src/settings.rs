@@ -95,6 +95,45 @@ pub struct Settings {
     /// Errors and warnings also show as system notifications while the window is minimized or
     /// hidden in the tray.
     pub system_notifications: bool,
+    /// The tray icon and what its popup's quick-launch strip holds.
+    pub tray: TraySettings,
+}
+
+/// The tray icon's look and the quick-launch strip of the tray popup.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", default)]
+#[ts(export)]
+pub struct TraySettings {
+    pub icon: TrayIconStyle,
+    /// Store launchers and apps in the quick-launch strip, in order. `None` until the user
+    /// arranges it: then every installed store launcher, in store order.
+    pub quick_launch: Option<Vec<QuickLaunchItem>>,
+}
+
+/// The glyph in the notification area.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum TrayIconStyle {
+    /// The Questkeep logo.
+    #[default]
+    Questkeep,
+    /// A game controller.
+    Controller,
+}
+
+/// One entry of the tray popup's quick-launch strip.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+#[ts(export)]
+pub enum QuickLaunchItem {
+    /// A store's own launcher (provider id); left out while it isn't installed.
+    Store { id: String },
+    /// A game or app of the library; left out while it isn't installed, hidden or gone.
+    Game {
+        #[ts(type = "string")]
+        id: uuid::Uuid,
+    },
 }
 
 /// How the UI looks: the color scheme, the theme and the values of theme parameters.
@@ -265,6 +304,7 @@ impl Default for Settings {
             launcher_close_delay_seconds: 60,
             launcher_close_min_minutes: 2,
             system_notifications: true,
+            tray: TraySettings::default(),
         }
     }
 }
@@ -625,6 +665,10 @@ mod tests {
             launcher_close_delay_seconds: 30,
             launcher_close_min_minutes: 5,
             system_notifications: false,
+            tray: TraySettings {
+                icon: TrayIconStyle::Controller,
+                quick_launch: Some(vec![QuickLaunchItem::Store { id: "steam".into() }]),
+            },
         };
         store.save(&custom).unwrap();
         let raw = std::fs::read_to_string(&path).unwrap();

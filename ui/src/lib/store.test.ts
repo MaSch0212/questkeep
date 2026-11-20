@@ -7,6 +7,7 @@ import { makeGame, makePlugin, makeProvider } from "../test-utils";
 import * as api from "./api";
 import { defaultQuery } from "./query";
 import { store } from "./store";
+import { EXPLORE_ID } from "./views";
 
 vi.mock("./api");
 vi.mock("@tauri-apps/api/core", () => ({
@@ -118,11 +119,14 @@ describe("store", () => {
     expect(store.selectedId()).toBe("h");
     expect(store.detailsOpen()).toBe(true);
 
-    // No view contains a hidden game without the Hidden view: shown over the first view.
+    // No view contains a hidden game without the Hidden view: Explore opens, filters reset.
     vi.mocked(api.listViews).mockResolvedValue(testSections().slice(0, 1));
     await store.loadViews();
+    store.openExplore({ kind: "apps" });
+    store.selectView("all");
     store.openGamePage(hidden);
-    expect(store.activeViewId()).toBe("all");
+    expect(store.activeViewId()).toBe(EXPLORE_ID);
+    expect(store.query().kind).toBe("both");
     expect(store.selectedGame()?.id).toBe("h");
   });
 

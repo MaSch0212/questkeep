@@ -9,4 +9,12 @@ export type GameEdits = { edits: UserEdits,
 /**
  * The user's own sorting name; `None` or blank uses the automatic one.
  */
-sortingName: string | null, userScore: number | null, notes: string | null, };
+sortingName: string | null, userScore: number | null, notes: string | null, 
+/**
+ * The name metadata and artwork are searched by; `None` or blank uses the game's name.
+ */
+metadataName: string | null, 
+/**
+ * The entry's total playtime as the user set it; `None` (or the current total) keeps it.
+ */
+playtimeSeconds: number | null, };

@@ -185,3 +185,24 @@ export function moveItem<T>(items: readonly T[], index: number, by: -1 | 1): T[]
   if (item !== undefined) copy.splice(target, 0, item);
   return copy;
 }
+
+/** A playtime as the Edit dialog shows it: whole hours and the remaining minutes. */
+export function playtimeParts(seconds: number): { hours: string; minutes: string } {
+  const minutes = Math.floor(seconds / 60);
+  return { hours: String(Math.floor(minutes / 60)), minutes: String(minutes % 60) };
+}
+
+/** A whole number as typed; blank is 0, anything else `null`. */
+function playtimePart(text: string): number | null {
+  const trimmed = text.trim();
+  if (trimmed === "") return 0;
+  return /^\d+$/.test(trimmed) ? Number(trimmed) : null;
+}
+
+/** Hours and minutes as typed to seconds; blank counts as 0, junk or negatives are `null`. */
+export function parsePlaytime(hours: string, minutes: string): number | null {
+  const h = playtimePart(hours);
+  const m = playtimePart(minutes);
+  if (h === null || m === null) return null;
+  return (h * 60 + m) * 60;
+}

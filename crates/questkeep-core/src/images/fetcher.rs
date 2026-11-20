@@ -20,7 +20,7 @@ use chrono::Utc;
 use uuid::Uuid;
 
 use super::hltb::Hltb;
-use super::igdb::{CHECKED_KEY as IGDB_CHECKED_KEY, Igdb, IgdbLookup, release_year};
+use super::igdb::{CHECKED_KEY as IGDB_CHECKED_KEY, Igdb, IgdbLookup};
 use super::steamgriddb::{Lookup, SteamGridDb, checked_key};
 use super::{ImageCache, ImageKind, MAX_IMAGE_BYTES};
 use crate::db::Database;
@@ -335,8 +335,9 @@ fn steamgriddb_lookup(
     game: &Game,
     kind: ImageKind,
 ) -> Option<(&'static str, Vec<u8>)> {
+    let name = game.lookup_name();
     let lookup = Lookup {
-        name: &game.name,
+        name: &name,
         source: &game.source,
         source_game_id: game.source_game_id.as_deref(),
     };
@@ -673,9 +674,10 @@ fn fetch_igdb(shared: &MetadataShared, id: Uuid) -> bool {
     if game.kind == GameKind::App && linked.is_none() {
         return false;
     }
+    let name = game.lookup_name();
     let lookup = IgdbLookup {
-        name: &game.name,
-        year: release_year(game.release_date.as_deref()),
+        name: &name,
+        year: game.lookup_year(),
         id: linked,
     };
     match shared.igdb.fetch_metadata(&lookup) {
@@ -728,7 +730,7 @@ fn fetch_hltb(shared: &MetadataShared, id: Uuid) -> bool {
     let Ok(Some(game)) = shared.db.find_game(entry) else {
         return false;
     };
-    match hltb.time_to_beat(&game.name, release_year(game.release_date.as_deref())) {
+    match hltb.time_to_beat(&game.lookup_name(), game.lookup_year()) {
         Ok(found) => {
             let meta = found.map(|times| GameMetadata {
                 time_to_beat: Some(times.into()),

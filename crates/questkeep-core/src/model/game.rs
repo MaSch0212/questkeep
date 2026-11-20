@@ -120,6 +120,23 @@ pub struct Game {
 
 /// `games.extra` key of a game's [`MetadataLink`].
 pub const METADATA_LINK_KEY: &str = "metadataLink";
+/// `games.extra` key of the name the user wants metadata and artwork searched by.
+pub const METADATA_NAME_KEY: &str = "metadataName";
+
+/// A name without a trailing release year in brackets ("Mass Effect 2 (2010)"), and that year.
+fn split_year(name: &str) -> (&str, Option<i32>) {
+    let trimmed = name.trim();
+    let split = trimmed.strip_suffix(')').and_then(|head| {
+        let open = head.rfind('(')?;
+        let year: i32 = head[open + 1..].trim().parse().ok()?;
+        let base = head[..open].trim_end();
+        ((1950..=2100).contains(&year) && !base.is_empty()).then_some((base, year))
+    });
+    match split {
+        Some((base, year)) => (base, Some(year)),
+        None => (trimmed, None),
+    }
+}
 
 /// The store or IGDB game a game added by hand takes its metadata and images from, picked by
 /// the user from a search. Stored in `extra`, so refreshing metadata keeps using it.
@@ -136,6 +153,32 @@ pub struct MetadataLink {
 }
 
 impl Game {
+    /// The name the user set for metadata and artwork searches, if any.
+    pub fn metadata_name(&self) -> Option<String> {
+        self.extra
+            .get(METADATA_NAME_KEY)
+            .and_then(serde_json::Value::as_str)
+            .map(str::trim)
+            .filter(|n| !n.is_empty())
+            .map(str::to_string)
+    }
+
+    /// The name to search metadata and artwork by: the user's metadata name, else the name
+    /// without a trailing "(2010)" (some stores add the release year, which searches miss).
+    pub fn lookup_name(&self) -> String {
+        self.metadata_name()
+            .unwrap_or_else(|| split_year(&self.name).0.to_string())
+    }
+
+    /// The release year for searches: the known release date's, else a "(2010)" in the name.
+    pub fn lookup_year(&self) -> Option<i32> {
+        self.release_date
+            .as_deref()
+            .and_then(|d| d.get(..4))
+            .and_then(|y| y.parse().ok())
+            .or_else(|| split_year(&self.name).1)
+    }
+
     /// The game's metadata link, when it has a valid one.
     pub fn metadata_link(&self) -> Option<MetadataLink> {
         let value = self.extra.get(METADATA_LINK_KEY)?;
@@ -245,4 +288,55 @@ pub struct ScanSummary {
     #[serde(skip)]
     #[ts(skip)]
     pub changed_ids: Vec<Uuid>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn splits_a_trailing_release_year() {
+        assert_eq!(
+            split_year("Mass Effect 2 (2010)"),
+            ("Mass Effect 2", Some(2010))
+        );
+        assert_eq!(split_year(" Doom (1993) "), ("Doom", Some(1993)));
+        assert_eq!(split_year("Doom"), ("Doom", None));
+        assert_eq!(split_year("Game (Classic)"), ("Game (Classic)", None));
+        assert_eq!(split_year("(2010)"), ("(2010)", None));
+        assert_eq!(split_year("Game (12)"), ("Game (12)", None));
+    }
+
+    #[test]
+    fn lookup_name_prefers_the_users_metadata_name() {
+        let mut game: Game = serde_json::from_str(
+            r#"{
+            "id": "00000000-0000-0000-0000-000000000000", "name": "Mass Effect 3 (2012)",
+            "sortingName": "", "source": "ea", "sourceGameId": "1", "installed": false,
+            "installDir": null, "playAction": null, "playtimeSeconds": 0, "playCount": 0,
+            "lastPlayed": null, "dateAdded": "2026-01-01T00:00:00Z", "favorite": false,
+            "hidden": false, "kind": "game", "detectLaunches": true, "ignoredProcesses": [],
+            "coverPath": null, "iconPath": null, "backgroundPath": null, "description": null,
+            "releaseDate": null, "developers": [], "publishers": [], "genres": [], "tags": [],
+            "features": [], "series": [], "ageRatings": [], "platforms": [], "gameModes": [],
+            "themes": [], "perspectives": [], "criticScore": null, "communityScore": null,
+            "installSize": null, "timeToBeat": null, "links": [], "fieldSources": {},
+            "completionStatus": null, "userScore": null, "notes": null, "categories": [],
+            "copies": [], "metadataUpdatedAt": null, "extra": {}
+        }"#,
+        )
+        .unwrap();
+        assert_eq!(game.lookup_name(), "Mass Effect 3");
+        assert_eq!(game.lookup_year(), Some(2012));
+        game.release_date = Some("2012-03-06".into());
+        assert_eq!(game.lookup_year(), Some(2012));
+        game.extra = serde_json::json!({ METADATA_NAME_KEY: "  Mass Effect 3: Legendary  " });
+        assert_eq!(
+            game.metadata_name().as_deref(),
+            Some("Mass Effect 3: Legendary")
+        );
+        assert_eq!(game.lookup_name(), "Mass Effect 3: Legendary");
+        game.extra = serde_json::json!({ METADATA_NAME_KEY: " " });
+        assert_eq!(game.metadata_name(), None);
+    }
 }

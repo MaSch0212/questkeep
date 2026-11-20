@@ -40,6 +40,8 @@ fn scanned_kind(game: &ImportedGame) -> Option<GameKind> {
 
 /// `extra` key set when the user renamed a store game, so re-scans keep their name.
 pub(super) const USER_RENAMED: &str = "userRenamed";
+/// `extra` flag of a row whose playtime the user set: store-reported totals no longer change it.
+pub(super) const USER_PLAYTIME: &str = "userPlaytime";
 
 /// An installed game row to notice when started outside Questkeep (see
 /// [`Database::launch_detection_dirs`]).
@@ -821,6 +823,8 @@ impl Database {
             playtime_seconds: i64,
             last_played: Option<DateTime<Utc>>,
             user_renamed: bool,
+            /// The user set the playtime: the store's total doesn't raise it.
+            user_playtime: bool,
             /// The store's kind as last scanned.
             kind: String,
         }
@@ -836,10 +840,15 @@ impl Database {
             )?;
             let rows = stmt.query_map([source], |r| {
                 let extra: String = r.get(5)?;
-                let user_renamed = serde_json::from_str::<serde_json::Value>(&extra)
-                    .ok()
-                    .and_then(|v| v.get(USER_RENAMED).and_then(serde_json::Value::as_bool))
-                    .unwrap_or(false);
+                let extra = serde_json::from_str::<serde_json::Value>(&extra).ok();
+                let flag = |key: &str| {
+                    extra
+                        .as_ref()
+                        .and_then(|v| v.get(key).and_then(serde_json::Value::as_bool))
+                        .unwrap_or(false)
+                };
+                let user_renamed = flag(USER_RENAMED);
+                let user_playtime = flag(USER_PLAYTIME);
                 Ok((
                     r.get::<_, String>(6)?,
                     Existing {
@@ -851,6 +860,7 @@ impl Database {
                         playtime_seconds: r.get(7)?,
                         last_played: r.get(8)?,
                         user_renamed,
+                        user_playtime,
                         kind: r.get(9)?,
                     },
                 ))
@@ -876,8 +886,13 @@ impl Database {
                     } else {
                         &game.name
                     };
-                    // Store playtime and last played merge as maximum with our own tracking.
-                    let playtime = row.playtime_seconds.max(store_playtime);
+                    // Store playtime and last played merge as maximum with our own tracking,
+                    // unless the user set the playtime.
+                    let playtime = if row.user_playtime {
+                        row.playtime_seconds
+                    } else {
+                        row.playtime_seconds.max(store_playtime)
+                    };
                     let last_played = row.last_played.max(game.last_played);
                     let kind = scanned_kind(game).map_or(row.kind.as_str(), |k| k.as_str());
                     let changed = *name != row.name
@@ -1109,6 +1124,23 @@ impl Database {
             }
         }
         Ok(out)
+    }
+
+    /// Sets an entry's total playtime as the user wants it: all of it on the entry's own row
+    /// (copies combined into it drop theirs), and every row marked so store-reported totals no
+    /// longer raise it. Sessions played later still add to it.
+    pub fn set_user_playtime(&self, entry_id: Uuid, seconds: u64) -> Result<()> {
+        let seconds = i64::try_from(seconds).unwrap_or(i64::MAX);
+        let changed = self.conn().execute(
+            &format!(
+                "UPDATE games SET playtime_seconds = CASE WHEN id = ?1 THEN ?2 ELSE 0 END,                  extra = json_set(CASE WHEN json_valid(extra) AND json_type(extra) = 'object'                  THEN extra ELSE '{{}}' END, '$.{USER_PLAYTIME}', json('true'))                  WHERE id = ?1 OR merged_into = ?1"
+            ),
+            params![entry_id.to_string(), seconds],
+        )?;
+        if changed == 0 {
+            return Err(CoreError::GameNotFound(entry_id));
+        }
+        Ok(())
     }
 
     /// Sets (or with `None` removes) one top-level key of the game's `extra` JSON object.
@@ -1786,6 +1818,16 @@ mod tests {
         db.upsert_imported("steam", &[with_stats(5000, earlier)], now)
             .unwrap();
         assert_eq!(db.get_game(g.id).unwrap().playtime_seconds, 5000);
+
+        // A playtime the user set wins over store totals; sessions still add to it.
+        db.set_user_playtime(g.id, 120).unwrap();
+        db.upsert_imported("steam", &[with_stats(9000, earlier)], now)
+            .unwrap();
+        assert_eq!(db.get_game(g.id).unwrap().playtime_seconds, 120);
+        let s = db.begin_session(g.id, now).unwrap();
+        db.finish_session(s, now, 30).unwrap();
+        assert_eq!(db.get_game(g.id).unwrap().playtime_seconds, 150);
+        assert!(db.set_user_playtime(Uuid::new_v4(), 1).is_err());
     }
 
     #[test]

@@ -33,4 +33,12 @@ userImages: UserImages,
 /**
  * The store or IGDB game the user linked a game added by hand to.
  */
-metadataLink: MetadataLink | null, };
+metadataLink: MetadataLink | null, 
+/**
+ * The name the user wants metadata searched by.
+ */
+metadataName: string | null, 
+/**
+ * The name searches use without one (the name without a "(2010)" year).
+ */
+automaticMetadataName: string, };

@@ -88,6 +88,10 @@ pub struct GameEditInfo {
     pub user_images: UserImages,
     /// The store or IGDB game the user linked a game added by hand to.
     pub metadata_link: Option<super::MetadataLink>,
+    /// The name the user wants metadata searched by.
+    pub metadata_name: Option<String>,
+    /// The name searches use without one (the name without a "(2010)" year).
+    pub automatic_metadata_name: String,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -110,6 +114,11 @@ pub struct GameEdits {
     pub sorting_name: Option<String>,
     pub user_score: Option<u8>,
     pub notes: Option<String>,
+    /// The name metadata and artwork are searched by; `None` or blank uses the game's name.
+    pub metadata_name: Option<String>,
+    /// The entry's total playtime as the user set it; `None` (or the current total) keeps it.
+    #[ts(type = "number | null")]
+    pub playtime_seconds: Option<u64>,
 }
 
 /// One way to start a library entry.

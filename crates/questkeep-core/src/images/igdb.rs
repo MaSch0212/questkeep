@@ -829,11 +829,6 @@ pub(crate) fn to_metadata(game: &Game) -> Option<GameMetadata> {
     (meta != GameMetadata::default()).then_some(meta)
 }
 
-/// Year of a stored release date (`YYYY`, `YYYY-MM` or `YYYY-MM-DD`).
-pub(crate) fn release_year(release_date: Option<&str>) -> Option<i32> {
-    release_date?.get(..4)?.parse().ok()
-}
-
 /// A tiny HTTP server for tests: answers requests in order with canned replies and records them.
 #[cfg(test)]
 pub(crate) mod test_server {
@@ -1120,14 +1115,6 @@ mod tests {
         assert!(best_match(&hits, &lookup("Doom 3")).is_none());
         assert!(best_match(&[], &lookup("x")).is_none());
         assert!(best_match(&hits, &lookup("!!")).is_none());
-    }
-
-    #[test]
-    fn reads_the_year_of_a_release_date() {
-        assert_eq!(release_year(Some("2015-05-19")), Some(2015));
-        assert_eq!(release_year(Some("2015")), Some(2015));
-        assert_eq!(release_year(Some("x")), None);
-        assert_eq!(release_year(None), None);
     }
 
     #[test]

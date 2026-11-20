@@ -87,6 +87,8 @@ beforeEach(() => {
     sortingName: null,
     userImages: { cover: false, background: false, icon: false },
     metadataLink: null,
+    metadataName: null,
+    automaticMetadataName: "",
   });
   vi.mocked(api.launchProfiles).mockResolvedValue({ profiles: [], defaultId: null, playId: null });
   vi.mocked(api.gameScripts).mockResolvedValue(scripts());

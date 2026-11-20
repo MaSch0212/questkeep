@@ -733,11 +733,11 @@ mod tests {
                 }],
                 favorites: vec![],
             },
-            launchers: vec![crate::PopupLauncher {
-                id: "steam".into(),
-                name: "Steam".into(),
-                icon: crate::test_icons::STEAM.into(),
-            }],
+            launchers: vec![crate::PopupLauncher::store(
+                "steam",
+                "Steam",
+                crate::test_icons::STEAM,
+            )],
             update: None,
             texts: PopupTexts::default(),
         };

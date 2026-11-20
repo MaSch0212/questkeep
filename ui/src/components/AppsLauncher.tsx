@@ -17,7 +17,7 @@ const tr = translator(shellApps);
 const SHOWN = 8;
 
 /** Installed, visible apps, most used first. */
-const loadApps = () =>
+const loadApps = (_revision: number) =>
   api.listGames({ ...defaultQuery(), kind: "apps", sort: "playtime", descending: true });
 
 // The launcher stays open behind the menu (the menu counts as inside it, see Popover).
@@ -35,7 +35,8 @@ export function AppsLauncher(props: {
   onClose: (returnFocus: boolean) => void;
   inside: () => (Element | undefined)[];
 }) {
-  const [apps] = createResource(loadApps);
+  // Reloads when the library changes (an app hidden from its menu disappears at once).
+  const [apps] = createResource(() => store.libraryRevision(), loadApps);
   const [text, setText] = createSignal("");
   let input: HTMLInputElement | undefined;
 

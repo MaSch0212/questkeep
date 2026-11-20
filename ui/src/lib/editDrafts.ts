@@ -107,6 +107,8 @@ export function newGameInfo(): GameEditInfo {
     sortingName: null,
     userImages: { cover: false, background: false, icon: false },
     metadataLink: null,
+    metadataName: null,
+    automaticMetadataName: "",
   };
 }
 

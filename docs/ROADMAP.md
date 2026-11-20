@@ -72,6 +72,15 @@ autocomplete, game details as variables and placeholders); closing store launche
 runs; the notification bell with system notifications for errors in the background; the Edit
 dialog asks before Escape or a click outside discard changes.
 
+New store: Meta Horizon Link (the Meta Quest PC app): installed PC VR apps from its library
+folders, owned ones from its local cache without a sign-in, store art, details and PC playtime.
+
+Also: Edit game has a Time played field (a set time wins over store totals) and a Name for
+metadata field (metadata and artwork searches; a trailing "(2010)" becomes the year); EA imports
+play time and last played from its account, and duplicate editions are imported once; Settings
+has a Tray group (tray icon choice) and the tray's Quick launch holds store launchers and picked
+apps in your order; Explore shows games and apps by default.
+
 ## Next
 
 - **Verify on Linux**: Heroic Amazon (Nile) and sideloaded games, owned games from Heroic/Lutris.

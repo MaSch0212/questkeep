@@ -557,9 +557,17 @@ impl Painter<'_> {
                         Rect::new(r.x + (r.w - size) / 2.0, r.y + 10.0, size, size),
                         self.scale,
                     );
-                    if self.svg(&launcher.icon, icon, color::TEXT).is_err() {
-                        let initial: String = launcher.name.chars().take(1).collect();
-                        self.text(&initial, &self.renderer.letter, icon, &text);
+                    // An app's own icon, else the store's logo, else the first letter.
+                    match self.bitmap(index, images, bitmaps)? {
+                        Some(b) => self.fill_bitmap(icon, BITMAP_ICON_RADIUS, &b)?,
+                        None => {
+                            if launcher.icon.is_empty()
+                                || self.svg(&launcher.icon, icon, color::TEXT).is_err()
+                            {
+                                let initial: String = launcher.name.chars().take(1).collect();
+                                self.text(&initial, &self.renderer.letter, icon, &text);
+                            }
+                        }
                     }
                     let name = Rect::new(r.x + 4.0, icon.bottom() + 4.0, r.w - 8.0, 20.0);
                     self.text(
@@ -759,11 +767,7 @@ mod tests {
     use crate::test_icons as icons;
 
     fn launcher(id: &str, name: &str, icon: &str) -> PopupLauncher {
-        PopupLauncher {
-            id: id.into(),
-            name: name.into(),
-            icon: icon.into(),
-        }
+        PopupLauncher::store(id, name, icon)
     }
     use crate::{PopupGame, PopupGames, PopupTexts};
     use windows::Win32::Graphics::Direct2D::{
@@ -899,6 +903,18 @@ mod tests {
                     launcher("ubisoft", "Ubisoft Connect", icons::UBISOFT),
                     launcher("battlenet", "Battle.net", icons::BATTLENET),
                     launcher("prism", "Prism Launcher", icons::PRISM),
+                    PopupLauncher {
+                        target: crate::LauncherTarget::Game(Uuid::from_u128(99)),
+                        name: "Discord".into(),
+                        icon: String::new(),
+                        image: Some(icon.clone()),
+                    },
+                    PopupLauncher {
+                        target: crate::LauncherTarget::Game(Uuid::from_u128(98)),
+                        name: "No icon".into(),
+                        icon: String::new(),
+                        image: None,
+                    },
                 ],
                 update: Some("0.3.0".into()),
                 texts: PopupTexts::default(),
