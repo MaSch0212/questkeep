@@ -27,8 +27,8 @@ use windows::Win32::Graphics::Dwm::{
 };
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_UNKNOWN;
 use windows::Win32::Graphics::Gdi::{
-    GetMonitorInfoW, InvalidateRect, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromPoint,
-    ScreenToClient, UpdateWindow, ValidateRect,
+    ClientToScreen, GetMonitorInfoW, InvalidateRect, MONITOR_DEFAULTTONEAREST, MONITORINFO,
+    MonitorFromPoint, ScreenToClient, UpdateWindow, ValidateRect,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
@@ -37,14 +37,15 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
     VK_LEFT, VK_RETURN, VK_RIGHT, VK_SHIFT, VK_SPACE, VK_TAB, VK_UP,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetCursorPos, GetMessageW,
-    IDC_ARROW, LoadCursorW, MSG, PostMessageW, PostQuitMessage, RegisterClassExW, SW_SHOW,
-    SetForegroundWindow, ShowWindow, TranslateMessage, WA_INACTIVE, WM_ACTIVATE, WM_APP, WM_CLOSE,
-    WM_DESTROY, WM_DISPLAYCHANGE, WM_DPICHANGED, WM_ERASEBKGND, WM_GETOBJECT, WM_KEYDOWN,
-    WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_PAINT, WNDCLASSEXW,
-    WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
+    AppendMenuW, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyMenu, DestroyWindow,
+    DispatchMessageW, GetCursorPos, GetMessageW, IDC_ARROW, LoadCursorW, MF_STRING, MSG,
+    PostMessageW, PostQuitMessage, RegisterClassExW, SW_SHOW, SetForegroundWindow, ShowWindow,
+    TPM_LEFTALIGN, TPM_NONOTIFY, TPM_RETURNCMD, TPM_TOPALIGN, TrackPopupMenu, TranslateMessage,
+    WA_INACTIVE, WM_ACTIVATE, WM_APP, WM_CLOSE, WM_DESTROY, WM_DISPLAYCHANGE, WM_DPICHANGED,
+    WM_ERASEBKGND, WM_GETOBJECT, WM_KEYDOWN, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE,
+    WM_MOUSEWHEEL, WM_PAINT, WNDCLASSEXW, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
 };
-use windows::core::{Result, w};
+use windows::core::{HSTRING, PCWSTR, Result, w};
 
 use accesskit::{
     Action as A11yAction, ActionHandler, ActionRequest, ActivationHandler, TreeUpdate,
@@ -348,6 +349,8 @@ enum Effect {
     None,
     Redraw,
     Close,
+    /// Opens the menu of the quick-launch entries behind the "..." tile (layout item index).
+    Menu(usize),
 }
 
 fn with_state(f: impl FnOnce(&mut State) -> Effect) -> Effect {
@@ -528,6 +531,7 @@ fn sync_a11y() {
 
 fn activate(state: &mut State, index: usize) -> Effect {
     match state.layout.items.get(index) {
+        Some(item) if item.action == Action::More => Effect::Menu(index),
         Some(item) => {
             state.action = Some(item.action.clone());
             Effect::Close
@@ -702,8 +706,83 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
         Effect::Close => unsafe {
             let _ = DestroyWindow(hwnd);
         },
+        Effect::Menu(index) => {
+            if open_more_menu(hwnd, index) {
+                // SAFETY: as above; the menu loop has ended and no borrow is held.
+                unsafe {
+                    let _ = DestroyWindow(hwnd);
+                }
+            }
+        }
     }
     LRESULT(0)
+}
+
+/// Shows the native menu of the quick-launch entries that did not fit, below the "..." tile
+/// (Windows flips it up when there is no room). Returns whether an entry was chosen (its
+/// action is stored, so the popup closes).
+fn open_more_menu(hwnd: HWND, item: usize) -> bool {
+    let Some((rect, scale, entries)) = STATE.with(|s| {
+        let guard = s.try_borrow().ok()?;
+        let state = guard.as_ref()?;
+        let rect = state.layout.items.get(item)?.rect;
+        let from = state.layout.overflow_from?;
+        let entries: Vec<(String, Action)> = state
+            .data
+            .launchers
+            .iter()
+            .skip(from)
+            .map(|l| (l.name.replace('&', "&&"), l.action()))
+            .collect();
+        Some((rect, state.scale, entries))
+    }) else {
+        return false;
+    };
+    // SAFETY: creating, showing and destroying a menu owned by this thread's window; every
+    // pointer passed is valid for its call.
+    let chosen = unsafe {
+        let Ok(menu) = CreatePopupMenu() else {
+            return false;
+        };
+        for (n, (name, _)) in entries.iter().enumerate() {
+            let text = HSTRING::from(name.as_str());
+            let _ = AppendMenuW(menu, MF_STRING, n + 1, PCWSTR(text.as_ptr()));
+        }
+        let mut at = POINT {
+            x: (rect.x * scale).round() as i32,
+            y: (rect.bottom() * scale).round() as i32,
+        };
+        let command = if ClientToScreen(hwnd, &mut at).as_bool() {
+            TrackPopupMenu(
+                menu,
+                TPM_RETURNCMD | TPM_NONOTIFY | TPM_LEFTALIGN | TPM_TOPALIGN,
+                at.x,
+                at.y,
+                None,
+                hwnd,
+                None,
+            )
+            .0
+        } else {
+            0
+        };
+        let _ = DestroyMenu(menu);
+        usize::try_from(command).ok().filter(|c| *c > 0)
+    };
+    let Some(action) = chosen
+        .and_then(|c| entries.into_iter().nth(c - 1))
+        .map(|(_, a)| a)
+    else {
+        return false;
+    };
+    STATE.with(|s| {
+        if let Ok(mut guard) = s.try_borrow_mut()
+            && let Some(state) = guard.as_mut()
+        {
+            state.action = Some(action);
+        }
+    });
+    true
 }
 
 #[cfg(test)]
@@ -738,6 +817,7 @@ mod tests {
                 "Steam",
                 crate::test_icons::STEAM,
             )],
+            launcher_rows: 3,
             update: None,
             texts: PopupTexts::default(),
         };

@@ -55,6 +55,7 @@ fn item_label(data: &PopupData, kind: ItemKind) -> String {
             .launchers
             .get(i)
             .map_or_else(String::new, |l| data.texts.open_launcher_label(&l.name)),
+        ItemKind::More => data.texts.more.clone(),
         ItemKind::OpenButton => data.texts.open.clone(),
         ItemKind::UpdateButton => data
             .update
@@ -110,7 +111,7 @@ pub fn tree(layout: &Layout, data: &PopupData, focus: Option<usize>, scale: f32)
                 node.add_action(A11yAction::ScrollIntoView);
                 favorites.push(id);
             }
-            ItemKind::Launcher(_) => launchers.push(id),
+            ItemKind::Launcher(_) | ItemKind::More => launchers.push(id),
             ItemKind::OpenButton | ItemKind::UpdateButton | ItemKind::ExitButton => {
                 footer.push(id);
             }
@@ -201,6 +202,7 @@ mod tests {
                 "Steam",
                 crate::test_icons::STEAM,
             )],
+            launcher_rows: 3,
             update: None,
             texts: PopupTexts::default(),
         }

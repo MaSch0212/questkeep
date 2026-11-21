@@ -103,14 +103,37 @@ pub struct Settings {
 }
 
 /// The tray icon's look and the quick-launch strip of the tray popup.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", default)]
 #[ts(export)]
 pub struct TraySettings {
     pub icon: TrayIconStyle,
+    /// Rows of the popup's quick-launch strip (1 to 3, four entries each); the entries that do
+    /// not fit are in a menu behind its last tile.
+    pub quick_launch_rows: u8,
     /// Store launchers and apps in the quick-launch strip, in order. `None` until the user
     /// arranges it: then every installed store launcher, in store order.
     pub quick_launch: Option<Vec<QuickLaunchItem>>,
+}
+
+/// Rows of quick-launch tiles in the tray popup unless the user chose.
+pub const DEFAULT_QUICK_LAUNCH_ROWS: u8 = 3;
+
+impl Default for TraySettings {
+    fn default() -> Self {
+        Self {
+            icon: TrayIconStyle::default(),
+            quick_launch_rows: DEFAULT_QUICK_LAUNCH_ROWS,
+            quick_launch: None,
+        }
+    }
+}
+
+impl TraySettings {
+    /// The chosen number of rows, kept within 1 to 3.
+    pub fn rows(&self) -> u8 {
+        self.quick_launch_rows.clamp(1, 3)
+    }
 }
 
 /// The glyph in the notification area.
@@ -672,6 +695,7 @@ mod tests {
             system_notifications: false,
             tray: TraySettings {
                 icon: TrayIconStyle::Controller,
+                quick_launch_rows: 2,
                 quick_launch: Some(vec![QuickLaunchItem::Store { id: "steam".into() }]),
             },
         };

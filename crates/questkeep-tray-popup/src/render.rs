@@ -580,6 +580,37 @@ impl Painter<'_> {
                         self.stroke(inflate(r, 2.0), TILE_RADIUS + 2.0, &focus, FOCUS_WIDTH);
                     }
                 }
+                ItemKind::More => {
+                    let bg = self.brush(
+                        if pressed {
+                            color::BORDER
+                        } else if hovered {
+                            color::HOVER
+                        } else {
+                            color::RAISED
+                        },
+                        1.0,
+                    )?;
+                    self.fill(r, TILE_RADIUS, &bg);
+                    let border = self.brush(color::BORDER, 1.0)?;
+                    self.stroke(inflate(r, -0.5), TILE_RADIUS, &border, 1.0);
+                    let size = layout::LAUNCHER_ICON_SIZE;
+                    let icon = snapped(
+                        Rect::new(r.x + (r.w - size) / 2.0, r.y + 10.0, size, size),
+                        self.scale,
+                    );
+                    self.text("\u{2026}", &self.renderer.letter, icon, &text);
+                    let name = Rect::new(r.x + 4.0, icon.bottom() + 4.0, r.w - 8.0, 20.0);
+                    self.text(
+                        &data.texts.more,
+                        &self.renderer.launcher_name,
+                        name,
+                        if hovered { &text } else { &muted },
+                    );
+                    if focused {
+                        self.stroke(inflate(r, 2.0), TILE_RADIUS + 2.0, &focus, FOCUS_WIDTH);
+                    }
+                }
                 ItemKind::OpenButton => {
                     let bg = self.brush(
                         if hovered {
@@ -857,6 +888,7 @@ mod tests {
                     .collect(),
             },
             launchers: vec![launcher("steam", "Steam", icons::STEAM)],
+            launcher_rows: 3,
             update: None,
             texts: PopupTexts::default(),
         }
@@ -916,6 +948,8 @@ mod tests {
                         image: None,
                     },
                 ],
+                // Two rows hold seven of the eleven; the "..." tile takes the eighth slot.
+                launcher_rows: 2,
                 update: Some("0.3.0".into()),
                 texts: PopupTexts::default(),
             };

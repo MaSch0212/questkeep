@@ -418,6 +418,9 @@ fn show_popup(app: &AppHandle, rect: &tauri::Rect) {
         .unwrap_or_else(PoisonError::into_inner)
         .clone()
         .unwrap_or_default();
+    let launcher_rows = app
+        .try_state::<Arc<AppState>>()
+        .map_or(3, |state| usize::from(state.library.settings().tray.rows()));
     let game = |g: questkeep_core::tray::TrayGame| PopupGame {
         id: g.id,
         name: g.name,
@@ -442,6 +445,7 @@ fn show_popup(app: &AppHandle, rect: &tauri::Rect) {
                 },
             })
             .collect(),
+        launcher_rows,
         update: model.update,
         texts: i18n::popup_texts(model.lang),
     };
@@ -449,6 +453,8 @@ fn show_popup(app: &AppHandle, rect: &tauri::Rect) {
     questkeep_tray_popup::show(anchor, data, move |action| match action {
         Action::Launch(id) => launch(&app, id),
         Action::OpenLauncher(id) => open_launcher(&app, id),
+        // The popup opens that menu itself and hands over the chosen entry instead.
+        Action::More => {}
         Action::OpenWindow => window::show_main_window(&app),
         Action::ShowUpdate => crate::updates::show(&app),
         Action::Exit => exit(&app),

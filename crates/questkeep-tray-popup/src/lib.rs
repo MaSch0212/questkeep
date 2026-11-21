@@ -80,7 +80,7 @@ impl PopupLauncher {
         }
     }
 
-    fn action(&self) -> Action {
+    pub(crate) fn action(&self) -> Action {
         match &self.target {
             LauncherTarget::Store(id) => Action::OpenLauncher(id.clone()),
             LauncherTarget::Game(id) => Action::Launch(*id),
@@ -93,6 +93,8 @@ impl PopupLauncher {
 pub struct PopupData {
     pub games: PopupGames,
     pub launchers: Vec<PopupLauncher>,
+    /// Rows of quick-launch tiles (1 to 3); entries that do not fit go into a menu.
+    pub launcher_rows: usize,
     /// Version of an available app update.
     pub update: Option<String>,
     pub texts: PopupTexts,
@@ -104,6 +106,7 @@ impl PopupData {
             recent: self.games.recent.iter().map(|g| g.id).collect(),
             favorites: self.games.favorites.iter().map(|g| g.id).collect(),
             launchers: self.launchers.iter().map(PopupLauncher::action).collect(),
+            launcher_rows: self.launcher_rows,
             update: self.update.clone(),
             texts: self.texts.clone(),
         }
