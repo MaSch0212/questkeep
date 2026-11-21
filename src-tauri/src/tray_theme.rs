@@ -35,16 +35,11 @@ pub fn light_taskbar() -> bool {
     }
 }
 
-/// Whether apps (the webview's `prefers-color-scheme`) currently use the light theme.
+/// Whether apps (the webview's `prefers-color-scheme`) currently use the light theme. Only the
+/// Windows tray popup asks.
+#[cfg(windows)]
 pub fn light_apps() -> bool {
-    #[cfg(windows)]
-    {
-        windows_impl::light_apps()
-    }
-    #[cfg(not(windows))]
-    {
-        false
-    }
+    windows_impl::light_apps()
 }
 
 /// Calls `on_change` with the new value whenever the taskbar theme changes (Windows only; a
