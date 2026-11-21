@@ -18,7 +18,7 @@ use windows::Win32::Graphics::Direct2D::Common::{
 };
 use windows::Win32::Graphics::Direct2D::{
     D2D1_FEATURE_LEVEL_DEFAULT, D2D1_HWND_RENDER_TARGET_PROPERTIES, D2D1_PRESENT_OPTIONS_NONE,
-    D2D1_RENDER_TARGET_PROPERTIES, D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1_RENDER_TARGET_USAGE_NONE,
+    D2D1_RENDER_TARGET_PROPERTIES, D2D1_RENDER_TARGET_TYPE_SOFTWARE, D2D1_RENDER_TARGET_USAGE_NONE,
     ID2D1HwndRenderTarget,
 };
 use windows::Win32::Graphics::Dwm::{
@@ -124,7 +124,7 @@ pub fn show(anchor: ScreenRect, data: PopupData, on_action: impl Fn(Action) + Se
     let spawned = std::thread::Builder::new()
         .name("tray-popup".into())
         .spawn(move || {
-            let action = match run(anchor, data) {
+            let action = match run_with(anchor, data, true, |_| {}) {
                 Ok(action) => action,
                 Err(err) => {
                     tracing::error!(%err, "tray popup failed");
@@ -206,24 +206,32 @@ fn monitor_for(anchor: ScreenRect) -> (ScreenRect, f32) {
     }
 }
 
-fn run(anchor: ScreenRect, data: PopupData) -> Result<Option<Action>> {
-    run_with(anchor, data, true, |_| {})
-}
-
-/// Creates the popup and runs its message loop until it closes. `visible: false` never shows
-/// or activates it (tests); `on_created` gets the window before the loop starts.
+/// Creates the popup and runs its message loop until it closes; `on_created` gets the window
+/// before the loop starts.
 fn run_with(
     anchor: ScreenRect,
     data: PopupData,
     visible: bool,
     on_created: impl FnOnce(HWND),
 ) -> Result<Option<Action>> {
+    let started = Instant::now();
+    // Milliseconds since the previous call, for the timing log.
+    let mut mark = started;
+    let mut lap = move || {
+        let ms = mark.elapsed().as_secs_f32() * 1000.0;
+        mark = Instant::now();
+        ms
+    };
     register_class()?;
     let (work, scale) = monitor_for(anchor);
     let light = data.light;
+    let _ = lap();
     let renderer = Renderer::new()?;
+    let renderer_ms = lap();
     let layout = layout::layout(&data.content(), 0.0, |t| renderer.measure(t));
+    let layout_ms = lap();
     let images = prepare(&data, &layout, scale);
+    let images_ms = lap();
     let layout_empty = layout.items.is_empty();
     let (w, h) = (
         (layout.width * scale).round() as i32,
@@ -284,18 +292,31 @@ fn run_with(
         *OPEN
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(hwnd.0 as isize);
+        let window_ms = lap();
         if visible {
-            // The first frame needs the Direct2D device, which takes a moment; shown right away
-            // the popup would flash as an empty frame. So it is shown cloaked (DWM composes it
-            // but nothing appears), painted, and uncloaked once DWM has that frame.
+            // The first frame takes a moment; shown right away the popup would flash as an empty
+            // frame. So it is shown cloaked (DWM composes it but nothing appears), painted, and
+            // uncloaked once DWM has that frame.
             set_cloaked(hwnd, true);
             let _ = ShowWindow(hwnd, SW_SHOW);
             let _ = UpdateWindow(hwnd);
+            let paint_ms = lap();
             let _ = DwmFlush();
+            let flush_ms = lap();
             set_cloaked(hwnd, false);
             // The shell lets the tray icon's process take the foreground after a click on its
             // icon; without activation the popup could not notice clicks elsewhere.
             let _ = SetForegroundWindow(hwnd);
+            tracing::debug!(
+                renderer_ms,
+                layout_ms,
+                images_ms,
+                window_ms,
+                paint_ms,
+                flush_ms,
+                total_ms = started.elapsed().as_millis() as u64,
+                "tray popup: opened"
+            );
         }
         on_created(hwnd);
 
@@ -391,9 +412,13 @@ fn hover_at_cursor(hwnd: HWND, state: &mut State) -> Effect {
 }
 
 fn paint(hwnd: HWND, state: &mut State) -> Result<()> {
+    let created_at = state.target.is_none().then(Instant::now);
     if state.target.is_none() {
         let props = D2D1_RENDER_TARGET_PROPERTIES {
-            r#type: D2D1_RENDER_TARGET_TYPE_DEFAULT,
+            // The CPU rasterizer: the default creates a GPU device for every popup window, which
+            // took about 115 ms. The popup is small and static, so software drawing is plenty
+            // and needs no GPU device or driver memory.
+            r#type: D2D1_RENDER_TARGET_TYPE_SOFTWARE,
             pixelFormat: D2D1_PIXEL_FORMAT {
                 format: DXGI_FORMAT_UNKNOWN,
                 alphaMode: D2D1_ALPHA_MODE_UNKNOWN,
@@ -427,6 +452,8 @@ fn paint(hwnd: HWND, state: &mut State) -> Result<()> {
     let Some(target) = state.target.clone() else {
         return Ok(());
     };
+    let target_ms = created_at.map(|t| t.elapsed().as_secs_f32() * 1000.0);
+    let draw_started = Instant::now();
     // SAFETY: drawing between BeginDraw and EndDraw on this thread's target.
     let result = unsafe {
         target.BeginDraw();
@@ -438,7 +465,16 @@ fn paint(hwnd: HWND, state: &mut State) -> Result<()> {
             scale: state.scale,
         };
         let drawn = state.renderer.draw(&target, &frame, &mut state.bitmaps);
+        let draw_ms = draw_started.elapsed().as_secs_f32() * 1000.0;
         let ended = target.EndDraw(None, None);
+        if let Some(target_ms) = target_ms {
+            tracing::debug!(
+                target_ms,
+                draw_ms,
+                end_draw_ms = draw_started.elapsed().as_secs_f32() * 1000.0 - draw_ms,
+                "tray popup: first paint"
+            );
+        }
         drawn.and(ended)
     };
     if let Err(err) = result {

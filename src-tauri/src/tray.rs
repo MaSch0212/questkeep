@@ -121,6 +121,12 @@ fn set_glyph(tray: &TrayIcon<Wry>, light_taskbar: bool) {
     }
 }
 
+/// The games' files changed without the library changing (cover tiles were made): the tray
+/// rebuilds its lists.
+pub fn games_changed() {
+    send(Trigger::Games);
+}
+
 fn send(trigger: Trigger) {
     if let Some(tx) = TRIGGER
         .lock()
@@ -385,34 +391,59 @@ fn build_menu(app: &AppHandle, model: &MenuModel) -> tauri::Result<Menu<Wry>> {
 fn on_tray_event(app: &AppHandle, event: &TrayIconEvent) {
     let TrayIconEvent::Click {
         button,
-        button_state: MouseButtonState::Up,
+        button_state,
         rect,
         ..
     } = event
     else {
         return;
     };
-    match button {
-        MouseButton::Left => window::show_main_window_async(app),
-        MouseButton::Right if USE_POPUP => show_popup(app, rect),
+    match (button, button_state) {
+        (MouseButton::Left, MouseButtonState::Up) => window::show_main_window_async(app),
+        // Windows delivers the right button's down and up messages together, on release, so the
+        // press gives no head start.
+        (MouseButton::Right, MouseButtonState::Up) if USE_POPUP => show_popup(app, rect),
         _ => {}
     }
 }
 
 #[cfg(windows)]
-fn show_popup(app: &AppHandle, rect: &tauri::Rect) {
-    use questkeep_tray_popup::{
-        Action, LauncherTarget, PopupData, PopupGame, PopupGames, PopupLauncher, ScreenRect,
-    };
-
+fn popup_anchor(rect: &tauri::Rect) -> questkeep_tray_popup::ScreenRect {
     let position = rect.position.to_physical::<i32>(1.0);
     let size = rect.size.to_physical::<i32>(1.0);
-    let anchor = ScreenRect {
+    questkeep_tray_popup::ScreenRect {
         x: position.x,
         y: position.y,
         w: size.width,
         h: size.height,
-    };
+    }
+}
+
+/// Right button released: opens the popup (or closes it when it is open).
+#[cfg(windows)]
+fn show_popup(app: &AppHandle, rect: &tauri::Rect) {
+    questkeep_tray_popup::show(popup_anchor(rect), popup_data(app), popup_action(app));
+}
+
+#[cfg(windows)]
+fn popup_action(app: &AppHandle) -> impl Fn(questkeep_tray_popup::Action) + Send + 'static {
+    use questkeep_tray_popup::Action;
+    let app = app.clone();
+    move |action| match action {
+        Action::Launch(id) => launch(&app, id),
+        Action::OpenLauncher(id) => open_launcher(&app, id),
+        // The popup opens that menu itself and hands over the chosen entry instead.
+        Action::More => {}
+        Action::OpenWindow => window::show_main_window(&app),
+        Action::ShowUpdate => crate::updates::show(&app),
+        Action::Exit => exit(&app),
+    }
+}
+
+#[cfg(windows)]
+fn popup_data(app: &AppHandle) -> questkeep_tray_popup::PopupData {
+    use questkeep_tray_popup::{LauncherTarget, PopupData, PopupGame, PopupGames, PopupLauncher};
+
     let model = CURRENT
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
@@ -436,7 +467,7 @@ fn show_popup(app: &AppHandle, rect: &tauri::Rect) {
         Some(questkeep_core::settings::ColorScheme::Dark) => false,
         _ => crate::tray_theme::light_apps(),
     };
-    let data = PopupData {
+    PopupData {
         light,
         games: PopupGames {
             recent: model.games.recent.into_iter().map(game).collect(),
@@ -458,17 +489,7 @@ fn show_popup(app: &AppHandle, rect: &tauri::Rect) {
         launcher_rows,
         update: model.update,
         texts: i18n::popup_texts(model.lang),
-    };
-    let app = app.clone();
-    questkeep_tray_popup::show(anchor, data, move |action| match action {
-        Action::Launch(id) => launch(&app, id),
-        Action::OpenLauncher(id) => open_launcher(&app, id),
-        // The popup opens that menu itself and hands over the chosen entry instead.
-        Action::More => {}
-        Action::OpenWindow => window::show_main_window(&app),
-        Action::ShowUpdate => crate::updates::show(&app),
-        Action::Exit => exit(&app),
-    });
+    }
 }
 
 #[cfg(not(windows))]

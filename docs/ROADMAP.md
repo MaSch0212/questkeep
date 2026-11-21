@@ -74,6 +74,10 @@ dialog asks before Escape or a click outside discard changes.
 
 ## Done in the next release
 
+Faster tray popup (about 28 ms instead of 140 ms, and no 500+ ms first open): drawn by the CPU
+rasterizer instead of a GPU device per window, and fed small cover tiles made when a cover is
+stored. Games from earlier versions get theirs in the background (`games.state_version`).
+
 New store: Meta Horizon Link (the Meta Quest PC app): installed PC VR apps from its library
 folders, owned ones from its local cache without a sign-in, store art, details and PC playtime.
 

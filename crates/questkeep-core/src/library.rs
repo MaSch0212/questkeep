@@ -328,12 +328,20 @@ impl Library {
         // Icons are shown from their absolute path; files that are gone count as missing, which
         // makes the shell queue a new icon job.
         let quick = self.settings().tray.quick_launch;
-        Ok(
-            tray::tray_games(&games, quick.as_deref()).map_images(|relative| {
+        // Covers come as their small tiles when those exist (older libraries are caught up in the
+        // background, see `game_state`), else the full cover.
+        Ok(tray::tray_games(&games, quick.as_deref())
+            .map_images(|relative| {
                 self.images
                     .resolve(&relative.to_string_lossy().replace('\\', "/"))
-            }),
-        )
+            })
+            .map_covers(|id, cover| self.images.tile_path(id).unwrap_or(cover)))
+    }
+
+    /// Brings the games' derived data (cover tiles, ...) up to date, see `game_state`. Blocking and
+    /// slow on the first start after an update: the shell runs it on a background thread.
+    pub fn migrate_game_states(&self, notify: impl Fn()) -> Result<crate::game_state::Report> {
+        crate::game_state::migrate(&self.db, &self.images, notify)
     }
 
     pub fn settings(&self) -> Settings {

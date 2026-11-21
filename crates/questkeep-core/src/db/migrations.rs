@@ -442,6 +442,12 @@ pub(crate) const MIGRATIONS: &[&str] = &[
         game_id TEXT PRIMARY KEY REFERENCES games (id) ON DELETE CASCADE
     );
     "#,
+    // 19: `state_version` is how far a game's derived data (files made from its other data, such
+    // as the cover tile) has been brought up to date; see `game_state`. Every existing game
+    // starts at 0 and is caught up in the background at the next start.
+    r#"
+    ALTER TABLE games ADD COLUMN state_version INTEGER NOT NULL DEFAULT 0;
+    "#,
 ];
 
 /// Latest schema version this build knows.

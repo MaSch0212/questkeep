@@ -32,6 +32,26 @@ debug = "line-tables-only"
 [profile.dev.package."*"]
 debug = false
 
+# Decoding and scaling images is 10-30x slower unoptimized: the tray popup took ~500 ms to open in
+# debug builds (covers decoded and scaled), a few ms in release. These keep dev builds close to
+# what users get; the rest of the dev build stays unoptimized for fast compiles.
+[profile.dev.package.questkeep-imaging]
+opt-level = 3
+[profile.dev.package.image]
+opt-level = 3
+[profile.dev.package.zune-jpeg]
+opt-level = 3
+[profile.dev.package.zune-core]
+opt-level = 3
+[profile.dev.package.png]
+opt-level = 3
+[profile.dev.package.fdeflate]
+opt-level = 3
+[profile.dev.package.miniz_oxide]
+opt-level = 3
+[profile.dev.package.moxcms]
+opt-level = 3
+
 [profile.release]
 codegen-units = 1
 lto = true

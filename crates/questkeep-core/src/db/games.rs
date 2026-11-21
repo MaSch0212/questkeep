@@ -29,6 +29,16 @@ pub(super) const COLUMNS: &str = "id, name, sorting_name, source, source_game_id
     (SELECT group_concat(category_id, char(31)) FROM game_category_links WHERE game_id = games.id) \
     AS category_ids";
 
+/// What `game_state` needs of a game to bring its derived data up to date.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StateRow {
+    pub id: Uuid,
+    /// The cover, relative to the data dir.
+    pub cover_path: Option<String>,
+    /// How far the game's derived data is up to date.
+    pub state_version: u32,
+}
+
 /// A game row's type: the user's choice, else the store's.
 pub(super) const KIND_SQL: &str = "COALESCE(games.kind_user, games.kind)";
 
@@ -775,6 +785,44 @@ impl Database {
         if changed == 0 {
             return Err(CoreError::GameNotFound(id));
         }
+        Ok(())
+    }
+
+    /// The games whose derived data is older than `current` (see `game_state`), the most recently
+    /// played first (those are the ones the tray shows).
+    pub fn games_below_state(&self, current: u32) -> Result<Vec<StateRow>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT id, cover_path, state_version FROM games WHERE state_version < ?1 \
+             ORDER BY last_played IS NULL, last_played DESC, favorite DESC",
+        )?;
+        let rows = stmt
+            .query_map([current], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, u32>(2)?,
+                ))
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(rows
+            .into_iter()
+            .filter_map(|(id, cover_path, state_version)| {
+                Some(StateRow {
+                    id: Uuid::parse_str(&id).ok()?,
+                    cover_path,
+                    state_version,
+                })
+            })
+            .collect())
+    }
+
+    /// Records that the game's derived data is up to date as of `version`.
+    pub fn set_state_version(&self, id: Uuid, version: u32) -> Result<()> {
+        self.conn().execute(
+            "UPDATE games SET state_version = ?2 WHERE id = ?1",
+            params![id.to_string(), version],
+        )?;
         Ok(())
     }
 

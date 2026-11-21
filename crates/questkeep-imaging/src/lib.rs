@@ -191,6 +191,31 @@ fn fill(source: &RgbaImage, width: u32, height: u32, top: bool) -> IconRgba {
     }
 }
 
+/// JPEG quality of stored cover tiles.
+const TILE_JPEG_QUALITY: u8 = 88;
+
+/// Reads a cover and returns it as a JPEG of exactly `width` x `height` pixels (cropped like
+/// [`load_image_filled`], centered), for the tray popup's cover tiles: small enough to decode in
+/// a millisecond, so the popup never has to read the full cover. Transparency is flattened onto
+/// black. `None` for missing, unsupported or invalid files.
+pub fn cover_tile_jpeg(path: &Path, width: u32, height: u32) -> Option<Vec<u8>> {
+    let tile = load_image_filled(path, width, height, false)?;
+    let mut rgb = Vec::with_capacity(tile.rgba.len() / 4 * 3);
+    for p in tile.rgba.as_chunks::<4>().0 {
+        let a = u32::from(p[3]);
+        rgb.extend(
+            p[..3]
+                .iter()
+                .map(|&c| ((u32::from(c) * a + 127) / 255) as u8),
+        );
+    }
+    let mut out = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, TILE_JPEG_QUALITY)
+        .encode(&rgb, width, height, image::ExtendedColorType::Rgb8)
+        .ok()?;
+    Some(out)
+}
+
 /// Scales decoded pixels to `side` x `side` (a stored icon to its on-screen pixel size).
 pub fn scale_icon(icon: &IconRgba, side: u32) -> Option<IconRgba> {
     if side == 0 {
@@ -247,6 +272,22 @@ mod tests {
         assert_eq!(out.dimensions(), (ICON_SIZE, ICON_SIZE));
         assert_eq!(out.get_pixel(16, 2).0, [255, 0, 0, 255]);
         assert_eq!(out.get_pixel(16, 29).0, [0, 0, 255, 255]);
+    }
+
+    #[test]
+    fn cover_tiles_are_jpegs_of_the_requested_size() {
+        let dir = tempfile::tempdir().unwrap();
+        let cover = dir.path().join("cover.png");
+        // A wide cover: cropped to the tile's 2:3, red above and blue below.
+        std::fs::write(&cover, encode(&two_tone(600, 400), ImageFormat::Png)).unwrap();
+        let jpeg = cover_tile_jpeg(&cover, 60, 90).unwrap();
+        let tile = image::load_from_memory_with_format(&jpeg, ImageFormat::Jpeg)
+            .unwrap()
+            .into_rgba8();
+        assert_eq!(tile.dimensions(), (60, 90));
+        assert!(tile.get_pixel(30, 5).0[0] > 200, "red on top");
+        assert!(tile.get_pixel(30, 85).0[2] > 200, "blue below");
+        assert!(cover_tile_jpeg(&dir.path().join("missing.png"), 60, 90).is_none());
     }
 
     #[test]

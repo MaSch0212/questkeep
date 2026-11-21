@@ -255,6 +255,19 @@ fn spawn_startup_tasks(state: Arc<AppState>) {
             move || settings_state.library.settings().check_plugin_updates,
         );
     }
+    // Games from before an update get the files newer versions make for them (cover tiles for the
+    // tray popup, ...) while the app is already usable; the tray picks them up when done.
+    let migrating = state.clone();
+    let spawned = std::thread::Builder::new()
+        .name("game-state".into())
+        .spawn(move || {
+            if let Err(err) = migrating.library.migrate_game_states(tray::games_changed) {
+                tracing::warn!(%err, "could not bring the games' data up to date");
+            }
+        });
+    if let Err(err) = spawned {
+        tracing::warn!(%err, "could not start the game state migration");
+    }
     let watcher = state.clone();
     tauri::async_runtime::spawn_blocking(move || {
         // Before the first sync, so the stores of plugins are synced too.

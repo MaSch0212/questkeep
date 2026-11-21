@@ -106,7 +106,8 @@ crates/questkeep-core/src/     all app logic; sees stores only through the store
                                (mod.rs), installed runtimes (runtimes.rs), QK_* variables
                                and {Placeholders} (variables.rs)
   notifications.rs             the notification bell's entries (notifications.json, last 100)
-  images/                      cover/background cache (mod.rs) + cover and metadata fetchers (fetcher.rs)
+  images/                      cover/background cache (mod.rs; also the cover tiles the tray popup reads) + cover and metadata fetchers (fetcher.rs)
+  game_state.rs                games.state_version: brings derived data (cover tiles) up to date in the background after start
   events.rs                    EventBus + CoreEvent
   platform/                    executable icons, URI opening, processes, argument handling (cfg-gated)
   programs/                    installed programs for Add game (Apps list + Start menu, lnk.rs
