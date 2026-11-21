@@ -8155,12 +8155,14 @@ label[for="quick-launch-add"] {
   width: 0;
 }
 
-/* The search at the top of the settings nav, and its results in place of the pages. */
+/* The search in the settings header, with its dropdown of results. */
 .settings__search {
+  position: relative;
   display: flex;
+  flex: 0 1 var(--qk-settings-search-width);
   align-items: center;
   gap: var(--qk-space-2);
-  margin-bottom: var(--qk-space-3);
+  margin-left: var(--qk-space-4);
   padding: 0 var(--qk-space-2);
   border: 1px solid var(--qk-color-border);
   border-radius: var(--qk-radius-md);
@@ -8181,18 +8183,33 @@ label[for="quick-launch-add"] {
   font: inherit;
 }
 .settings__results {
+  position: absolute;
+  top: calc(100% + var(--qk-space-1));
+  right: 0;
+  left: 0;
+  z-index: 20;
   display: flex;
   flex-direction: column;
-  gap: var(--qk-space-1);
+  max-height: 60vh;
   margin: 0;
-  padding: 0;
+  padding: var(--qk-space-1);
+  overflow-y: auto;
   list-style: none;
+  border: 1px solid var(--qk-color-border);
+  border-radius: var(--qk-radius-md);
+  background: var(--qk-color-surface-raised);
+  box-shadow: var(--qk-shadow-popover);
 }
 .settings__result {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 0;
+  padding: var(--qk-space-2) var(--qk-space-3);
+  border-radius: var(--qk-radius-sm);
+  color: var(--qk-color-text);
+  cursor: pointer;
+}
+.settings__result--active {
+  background: var(--qk-color-surface-hover);
 }
 .settings__no-results {
   padding: var(--qk-space-2) var(--qk-space-3);

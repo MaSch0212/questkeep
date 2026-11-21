@@ -304,6 +304,7 @@
   --qk-split-breakpoint: 1100px;
   --qk-settings-nav-width: 200px;
   --qk-settings-content-width: 720px;
+  --qk-settings-search-width: 360px;
   --qk-settings-select-width: 300px;
   --qk-settings-number-width: 80px;
   /* Settings → Appearance: theme cards with their preview, and the theme option rows. */

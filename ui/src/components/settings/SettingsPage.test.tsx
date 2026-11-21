@@ -578,10 +578,10 @@ describe("Launch automation settings", () => {
 describe("Settings search", () => {
   it("finds a setting on another page, opens that page and says when nothing matches", async () => {
     render(() => <SettingsPage />);
-    const search = screen.getByRole("searchbox", { name: "Search settings" });
+    const search = screen.getByRole("combobox", { name: "Search settings" });
     await fireEvent.input(search, { target: { value: "minimize tray" } });
-    const results = within(screen.getByRole("list", { name: "Search results" }));
-    await fireEvent.click(results.getByRole("button", { name: /Minimize to the tray/ }));
+    const results = within(screen.getByRole("listbox", { name: "Search results" }));
+    await fireEvent.click(results.getByRole("option", { name: /Minimize to the tray/ }));
     // The page holding it is shown, the search is cleared and the pages are back.
     expect(await screen.findByRole("switch", { name: "Minimize to the tray" })).toBeInTheDocument();
     expect(search).toHaveValue("");
@@ -599,7 +599,19 @@ describe("Settings search", () => {
 
   it("opens the first result with Enter, also for a page name", async () => {
     render(() => <SettingsPage />);
-    const search = screen.getByRole("searchbox", { name: "Search settings" });
+    const search = screen.getByRole("combobox", { name: "Search settings" });
+    await fireEvent.input(search, { target: { value: "tray" } });
+    // The arrow keys move through the results, Enter opens the highlighted one.
+    const options = within(screen.getByRole("listbox", { name: "Search results" })).getAllByRole(
+      "option",
+    );
+    expect(options[0]).toHaveAttribute("aria-selected", "true");
+    await fireEvent.keyDown(search, { key: "ArrowDown" });
+    expect(options[1]).toHaveAttribute("aria-selected", "true");
+    await fireEvent.keyDown(search, { key: "ArrowUp" });
+    expect(options[0]).toHaveAttribute("aria-selected", "true");
+    await fireEvent.keyDown(search, { key: "ArrowUp" });
+    expect(options.at(-1)).toHaveAttribute("aria-selected", "true");
     await fireEvent.input(search, { target: { value: "backups" } });
     await fireEvent.keyDown(search, { key: "Enter" });
     const nav = within(screen.getByRole("navigation", { name: "Settings sections" }));
