@@ -35,6 +35,8 @@ const MAX_PAGES: u32 = 200;
 /// The in-app login window: GOG ends the login on the success redirect with the code.
 pub const LOGIN_WINDOW: LoginWindow = LoginWindow {
     title: "Sign in to GOG",
+    domains: &[],
+    rule: None,
     user_agent: None,
     script: None,
     web_session: None,

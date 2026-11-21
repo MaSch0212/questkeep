@@ -19,6 +19,22 @@ newRead: Array<string>,
  */
 newFolders: Array<FolderRequest>, 
 /**
+ * The new version may now read every file of this PC.
+ */
+addsFilesystem: boolean, 
+/**
+ * The new version may now read the registry.
+ */
+addsRegistry: boolean, 
+/**
+ * Programs Questkeep may now close after a game.
+ */
+newLauncher: Array<string>, 
+/**
+ * Hosts the sign-in windows may now visit.
+ */
+newLogin: Array<string>, 
+/**
  * The new version runs an extension (JavaScript in the app) the installed one did not.
  */
 addsExtension: boolean, 

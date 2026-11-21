@@ -56,6 +56,11 @@ pub async fn run(
     if url.scheme() != "https" {
         return Err("The sign-in address is not secure.".into());
     }
+    // The first page is subject to the same rules as every later navigation (a plugin's window
+    // may only visit the domains its manifest names).
+    if !window.domains.is_empty() && !matches!(window.navigation(login_url), Navigation::Allow) {
+        return Err("The sign-in address is not allowed for this store.".into());
+    }
 
     let (tx, mut rx) = tauri::async_runtime::channel::<Outcome>(4);
     let nav_tx = tx.clone();
@@ -165,6 +170,9 @@ impl ShellWebSession {
     fn load(&self, provider: &str, window: &LoginWindow, url: &str) -> Result<String, String> {
         let store_name = window.web_session.map_or(window.title, |p| p.store_name);
         let _busy = self.busy.lock().unwrap_or_else(|e| e.into_inner());
+        if !window.domains.is_empty() && !matches!(window.navigation(url), Navigation::Allow) {
+            return Err("The store address is not allowed for this store.".into());
+        }
         let url: Url = url
             .parse()
             .map_err(|_| "The store address is invalid.".to_string())?;

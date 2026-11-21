@@ -3836,6 +3836,7 @@ dependencies = [
  "questkeep-core",
  "questkeep-plugin-sdk",
  "questkeep-store-api",
+ "rusqlite",
  "semver",
  "serde",
  "serde_json",

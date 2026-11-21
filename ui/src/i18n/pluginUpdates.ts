@@ -21,6 +21,10 @@ const en = {
   askFolders: "a folder you choose: {values}",
   askExtension: "an extension (it runs inside the app)",
   askStore: "another store",
+  askFilesystem: "read access to every file on this PC",
+  askRegistry: "read access to the Windows registry",
+  askLauncher: "closing these programs after a game: {values}",
+  askLogin: "sign-in windows on {values}",
   confirmTitle: (p: { count: number }) =>
     p.count === 1 ? "Update 1 plugin" : `Update ${p.count} plugins`,
   confirmIntro:
@@ -75,6 +79,10 @@ export const pluginUpdates: Translations<typeof en> = {
     askFolders: "einen Ordner, den du wählst: {values}",
     askExtension: "eine Erweiterung (läuft in der App)",
     askStore: "einen weiteren Store",
+    askFilesystem: "Lesezugriff auf jede Datei dieses PCs",
+    askRegistry: "Lesezugriff auf die Windows-Registry",
+    askLauncher: "das Schließen dieser Programme nach einem Spiel: {values}",
+    askLogin: "Anmeldefenster auf {values}",
     confirmTitle: (p) =>
       p.count === 1 ? "1 Plugin aktualisieren" : `${p.count} Plugins aktualisieren`,
     confirmIntro:
@@ -125,6 +133,10 @@ export const pluginUpdates: Translations<typeof en> = {
     askFolders: "un dossier que vous choisissez : {values}",
     askExtension: "une extension (elle s’exécute dans l’application)",
     askStore: "une autre boutique",
+    askFilesystem: "un accès en lecture à tous les fichiers de ce PC",
+    askRegistry: "un accès en lecture au registre Windows",
+    askLauncher: "la fermeture de ces programmes après une partie : {values}",
+    askLogin: "des fenêtres de connexion sur {values}",
     confirmTitle: (p) =>
       p.count === 1 ? "Mettre à jour 1 plugin" : `Mettre à jour ${p.count} plugins`,
     confirmIntro:
@@ -176,6 +188,10 @@ export const pluginUpdates: Translations<typeof en> = {
     askFolders: "una cartella che scegli tu: {values}",
     askExtension: "un’estensione (gira nell’app)",
     askStore: "un altro store",
+    askFilesystem: "accesso in lettura a tutti i file di questo PC",
+    askRegistry: "accesso in lettura al registro di Windows",
+    askLauncher: "la chiusura di questi programmi dopo una partita: {values}",
+    askLogin: "finestre di accesso su {values}",
     confirmTitle: (p) => (p.count === 1 ? "Aggiorna 1 plugin" : `Aggiorna ${p.count} plugin`),
     confirmIntro:
       "Questi aggiornamenti non chiedono nulla di nuovo: mantengono i permessi e le cartelle già accettati.",
@@ -226,6 +242,10 @@ export const pluginUpdates: Translations<typeof en> = {
     askFolders: "una carpeta que tú eliges: {values}",
     askExtension: "una extensión (se ejecuta dentro de la aplicación)",
     askStore: "otra tienda",
+    askFilesystem: "acceso de lectura a todos los archivos de este equipo",
+    askRegistry: "acceso de lectura al registro de Windows",
+    askLauncher: "cerrar estos programas después de una partida: {values}",
+    askLogin: "ventanas de inicio de sesión en {values}",
     confirmTitle: (p) => (p.count === 1 ? "Actualizar 1 plugin" : `Actualizar ${p.count} plugins`),
     confirmIntro:
       "Estas actualizaciones no piden nada nuevo: conservan los permisos y las carpetas que ya aceptaste.",
@@ -277,6 +297,10 @@ export const pluginUpdates: Translations<typeof en> = {
     askFolders: "uma pasta que você escolhe: {values}",
     askExtension: "uma extensão (corre dentro da aplicação)",
     askStore: "outra loja",
+    askFilesystem: "acesso de leitura a todos os arquivos deste PC",
+    askRegistry: "acesso de leitura ao registro do Windows",
+    askLauncher: "fechar estes programas depois de um jogo: {values}",
+    askLogin: "janelas de login em {values}",
     confirmTitle: (p) => (p.count === 1 ? "Atualizar 1 plugin" : `Atualizar ${p.count} plugins`),
     confirmIntro:
       "Estas atualizações não pedem nada de novo: mantêm as permissões e as pastas que já aceitou.",

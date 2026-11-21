@@ -35,8 +35,14 @@
 //!   in `plugin.json` (read-only, at its `as` path).
 //! - **The web** through [`http`], only on the hosts declared under `permissions.http`.
 //! - **The app's log** through [`log`].
+//! - **Every file of this PC, read-only**, below `/host` (`C:\Games` is `/host/c/Games`), with
+//!   `permissions.filesystem: "read"`; [`known_folder`] and [`host_path`] find and convert
+//!   paths. Other programs' SQLite databases through [`sqlite`].
+//! - **The registry** through [`registry`], with `permissions.registry: "read"`.
+//! - **Secrets** in the system keyring through [`secrets`] (tokens never belong in `/data`).
+//! - **A website session** through [`session`], with `permissions.login`.
 //!
-//! Nothing else: no environment, no sockets, no other files.
+//! Nothing else: no environment, no sockets, no processes, nothing is writable but `/data`.
 //!
 //! # Wire format
 //!
@@ -49,7 +55,12 @@ pub use questkeep_store_model::{model, settings};
 pub mod http;
 pub mod log;
 mod provider;
+mod system;
 pub mod wire;
+
+pub use system::{
+    HOST_ROOT, Platform, host_path, known_folder, platform, registry, secrets, session, sqlite,
+};
 
 pub use provider::{Provider, ProviderError, describe, descriptor, dispatch};
 pub use wire::{ImageCandidate, ProviderDescriptor};

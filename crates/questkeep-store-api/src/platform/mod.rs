@@ -6,6 +6,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 #[cfg(windows)]
+mod drives;
+#[cfg(windows)]
 mod foreground;
 #[cfg(windows)]
 mod windows;
@@ -46,6 +48,31 @@ pub fn registry_value(path: &str) -> Option<String> {
         let _ = path;
         None
     }
+}
+
+/// The names of the subkeys of a registry key given as `HKEY_LOCAL_MACHINE\Some\Key`; empty
+/// elsewhere or when the key is missing.
+pub fn registry_subkeys(path: &str) -> Vec<String> {
+    #[cfg(windows)]
+    {
+        windows::registry_subkeys(path)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = path;
+        Vec::new()
+    }
+}
+
+/// The roots of the local drives (`C:\`): fixed disks and removable ones. Windows only; empty
+/// elsewhere (the file system has one root).
+pub fn local_drives() -> Vec<PathBuf> {
+    #[cfg(windows)]
+    {
+        drives::fixed_drives()
+    }
+    #[cfg(not(windows))]
+    Vec::new()
 }
 
 /// A command line such as an `UninstallString` (`"C:\x\y.exe" /a b` or `C:\x\y.exe /a`) as a

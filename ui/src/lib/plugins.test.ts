@@ -71,11 +71,35 @@ describe("plugins", () => {
   it("knows whether a plugin asks for extra access", () => {
     expect(hasPermissions(makePlugin())).toBe(false);
     expect(
-      hasPermissions(makePlugin({ permissions: { read: [], http: ["a.com"], folders: [] } })),
+      hasPermissions(
+        makePlugin({
+          permissions: {
+            read: [],
+            http: ["a.com"],
+            folders: [],
+            filesystem: false,
+            registry: false,
+            launcher: [],
+            login: [],
+          },
+        }),
+      ),
     ).toBe(true);
     const asking = { key: "g", label: "Games", hint: null, default: null };
     expect(
-      hasPermissions(makePlugin({ permissions: { read: [], http: [], folders: [asking] } })),
+      hasPermissions(
+        makePlugin({
+          permissions: {
+            read: [],
+            http: [],
+            folders: [asking],
+            filesystem: false,
+            registry: false,
+            launcher: [],
+            login: [],
+          },
+        }),
+      ),
     ).toBe(true);
   });
 

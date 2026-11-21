@@ -42,6 +42,9 @@ Examples live in [`examples/plugins`](../examples/plugins):
 | `apiVersion` | `1`. |
 | `providers`, `permissions` | Stores and what they may reach (`read`, `http`, `folders`); see [store plugins](#store-plugins). |
 | `permissions.folders` | Folders the user chooses for the plugin; see [folders the user chooses](#folders-the-user-chooses). |
+| `permissions.filesystem`, `permissions.registry` | `"read"`: the stores may read every file of the PC, or the registry; see [broad access](#broad-access-files-and-registry). |
+| `permissions.launcher` | `{ "processNames": ["steam.exe"] }`: the programs Questkeep may close after a game; see [the store launcher](#the-store-launcher). |
+| `permissions.login` | How a store with an account signs the user in; see [accounts and sign-in](#accounts-and-sign-in). |
 | `extension.main` | The ES module Questkeep imports, relative to the plugin folder. |
 | `extension.styles` | Style sheets loaded with the extension (optional). |
 | `extension.settings` | Settings the app draws for the plugin (optional); see [settings](#settings). |
@@ -49,6 +52,27 @@ Examples live in [`examples/plugins`](../examples/plugins):
 
 Paths are relative, use forward slashes and stay inside the plugin folder. A plugin needs none
 of `providers`, `extension` and `themes` in particular: any combination works.
+
+### What a plugin can and cannot do
+
+| | Store (WASM) | Extension (JavaScript) | Theme (CSS) |
+|---|---|---|---|
+| Runs as | a sandboxed component | trusted code in the app window | styles only, no code |
+| Files | `/plugin` (read-only), `/data` (own, read-write); read-only: the `read` and `folders` mounts, and with `permissions.filesystem` every file of the PC below `/host` | none directly, but every app command | none |
+| Registry | with `permissions.registry` (read-only host functions) | no | no |
+| Web | `https:` on the hosts under `permissions.http` (listed at install) | any `https:` host | `url()` in its CSS |
+| Secrets | the system keyring, under the plugin's own name | `api.settings` (plain file) | no |
+| Account sign-in | with `permissions.login`: windows locked to the declared domains | no | no |
+| Start or close programs | returns play actions Questkeep runs when the user plays; only the declared launcher programs are closed | every app command, including starting and removing games | no |
+| Other programs' databases | read-only SQLite queries (`permissions.filesystem`) | no | no |
+| Cannot | write outside `/data`, read processes, run programs itself, use raw sockets or environment variables | add stores | run code |
+
+Extensions and themes have no permission declarations: they are trusted, as the install dialog
+says. A store that declares `filesystem` or `registry` can read everything the user can, and the
+only way out of the PC for what it reads is the web hosts it lists, which is why the install
+dialog shows them (and a plugin installed from a folder or zip shows a warning: only install
+plugins from authors and sources you trust). Registry plugins are reviewed first, see
+[`PLUGIN_REGISTRY.md`](PLUGIN_REGISTRY.md#trust).
 
 ### Install, reload, remove
 
@@ -164,6 +188,79 @@ actions and the store launcher) and in image candidates (`file`). Rules:
 - `/plugin` and `/data` are never translated for launching or install dirs: a plugin writes
   `/data`, so a path there must not turn into a program Questkeep starts. (Image candidates may
   still come from them, since images are only read.)
+
+### Broad access: files and registry
+
+```json
+"permissions": { "filesystem": "read", "registry": "read", "http": ["api.example.com"] }
+```
+
+- `filesystem: "read"` mounts every file of the PC read-only below `/host`: on Windows each local
+  drive (`C:\Games` is `/host/c/Games`; network drives are left out), elsewhere the root
+  (`/home/me` is `/host/home/me`). The SDK's `host_path()` turns a path from the registry or a
+  config file into that form, `known_folder("local-app-data" | "app-data" | "program-data" |
+  "program-files" | "program-files-x86" | "home" | "config" | "data")` finds the usual places. The
+  paths a store returns (install dirs, play actions, images) are translated back like those of
+  `read` and `folders` mounts, except that a path into Questkeep's `plugins` or `plugin-data`
+  folders is never translated for launching, installing or tracking: a plugin writes there.
+- `sqlite::query(path, sql, params)` runs one read-only `SELECT`/`WITH`/`VALUES` statement on
+  another program's SQLite database (a locked one is read from a temporary copy, WAL included).
+  Plugins do not ship SQLite.
+- `registry: "read"` gives `registry::read("HKLM\\Key\\Value")` (a trailing `\` reads the default
+  value), `registry::subkeys`, `registry::uninstall_entries()` and `registry::appx_packages()`.
+  Windows only: off Windows they answer empty.
+- Neither is needed for the fixed or user-chosen folders of `read` and `folders`, which keep the
+  narrow sandbox. Questkeep never offers process enumeration, writes outside `/data`, or running
+  programs.
+- Updates that add either permission (or new `http` hosts, login domains or launcher programs)
+  are never part of "Update all".
+
+### Secrets
+
+`secrets::get/set/delete(key)` keep a plugin's tokens in the system keyring (the same place the
+built-in stores use), under `plugin/<plugin id>/<key>`: a plugin reads and writes only its own.
+Values are limited to 1200 characters (the Windows credential store's limit). Never keep tokens in
+`/data`: any plugin with `filesystem` can read it. Remove deletes nothing there; delete the
+secrets on sign-out.
+
+### Accounts and sign-in
+
+A store with an account declares `permissions.login` and implements `has_account`,
+`account_status`, `sign_in_with_code` and `sign_out` (the SDK's `Provider`):
+
+```json
+"login": {
+  "title": "Sign in to Example",
+  "url": "https://auth.example.com/login",
+  "domains": ["example.com"],
+  "capture": { "param": "code", "urlPrefix": "https://auth.example.com/done" },
+  "userAgent": null,
+  "script": "login.js",
+  "session": { "url": "https://www.example.com/account", "script": "session.js",
+               "renewUrl": null }
+}
+```
+
+- Questkeep owns the window. It loads `url` and allows only `domains` (and their subdomains);
+  any other navigation is blocked. When the window navigates to `capture.urlPrefix` with the query
+  parameter `param`, the navigation is cancelled and the value goes to `sign_in_with_code`.
+- `script` runs on every page of the sign-in window. A script reports by navigating to an address
+  below `https://questkeep.invalid/` (never loaded): the whole address goes to
+  `sign_in_with_code`. `domains` are listed in the install dialog.
+- `session` (stores signed in through their website) keeps a persistent browser profile per
+  store; `session::refresh()` loads `session.url` in a hidden window and returns what its script
+  reported (`None`: signed out); `session::renew()` does the same for `renewUrl`. The script has
+  `var reportSignedOut = REPORT_SIGNED_OUT;` replaced by `true` in the hidden window. The plugin
+  gets the reported address only, never the cookies. Signing out deletes the profile.
+- Scripts are files in the plugin folder (at most 256 KB each).
+
+### The store launcher
+
+`permissions.launcher.processNames` lists the executable names (`steam.exe`) of the store's
+launcher. A store's `launcher_process()` only takes effect for these names, and a clean-exit
+command only when its program is one of them; without the declaration the store has no launcher
+process. Questkeep still closes them only when the user turned on "Close launcher after playing"
+for the store.
 
 ## Themes
 

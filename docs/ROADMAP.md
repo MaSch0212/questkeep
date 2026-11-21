@@ -74,6 +74,11 @@ dialog asks before Escape or a click outside discard changes.
 
 ## Done in the next release
 
+Store plugins can do what the built-in stores do: read every file and the registry (declared,
+shown at install, reviewed in the registry), read other programs' SQLite databases, keep tokens in
+the keyring, sign the user in through windows locked to declared domains and declare the launcher
+programs Questkeep may close. Plugins installed from a folder or zip show a warning.
+
 Faster tray popup (about 28 ms instead of 140 ms, and no 500+ ms first open): drawn by the CPU
 rasterizer instead of a GPU device per window, and fed small cover tiles made when a cover is
 stored. Games from earlier versions get theirs in the background (`games.state_version`).

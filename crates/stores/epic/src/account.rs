@@ -54,6 +54,8 @@ const CAPTURE_URL: &str = "https://questkeep.invalid/epic-auth";
 /// The in-app login window. `login.js` runs on every page but only acts on the redirect page.
 pub const LOGIN_WINDOW: LoginWindow = LoginWindow {
     title: "Sign in to Epic Games",
+    domains: &[],
+    rule: None,
     user_agent: None,
     script: Some(include_str!("login.js")),
     web_session: None,

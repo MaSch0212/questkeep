@@ -66,6 +66,84 @@ pub struct Permissions {
     /// points to, the stores see it read-only.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub folders: Vec<FolderPermission>,
+    /// Read access to every file on this PC (read-only). Without it the stores only see their own
+    /// folders and the `read` / `folders` mounts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filesystem: Option<ReadAccess>,
+    /// Read access to the registry (Windows) through the registry host functions.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub registry: Option<ReadAccess>,
+    /// The store launcher's programs, which Questkeep may close after a game (if the user turned
+    /// "Close launcher after playing" on for the store).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub launcher: Option<LauncherPermission>,
+    /// The sign-in window and website session of a store with an account.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub login: Option<LoginPermission>,
+}
+
+/// The only access level there is: reading.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ReadAccess {
+    Read,
+}
+
+/// `permissions.launcher`: names of the launcher's processes.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LauncherPermission {
+    /// Executable file names (`steam.exe`), matched case-insensitively. Questkeep closes only
+    /// processes with these names.
+    #[serde(default)]
+    pub process_names: Vec<String>,
+}
+
+/// `permissions.login`: how a store signs the user in. The host runs the windows; the plugin
+/// supplies the addresses, scripts and the rule that recognizes the result.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LoginPermission {
+    /// The login window's title, e.g. `Sign in to GOG`.
+    pub title: String,
+    /// The page the login window opens.
+    pub url: String,
+    /// Host names the windows may visit (each also covers its subdomains). Any other
+    /// navigation is blocked.
+    pub domains: Vec<String>,
+    /// Recognizes the navigation that carries the result of a sign-in.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub capture: Option<LoginCapture>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_agent: Option<String>,
+    /// A script in the plugin folder that runs on every page of the login window.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub script: Option<String>,
+    /// For stores signed in through their website: the session page and its script.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session: Option<LoginSession>,
+}
+
+/// The navigation that ends a sign-in: a URL starting with `url_prefix` whose query holds
+/// `param`. The navigation is cancelled and the parameter's value goes to the plugin.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LoginCapture {
+    pub param: String,
+    pub url_prefix: String,
+}
+
+/// A store's website session: a hidden window loads `url` and its `script` reports what it reads.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LoginSession {
+    pub url: String,
+    /// A script in the plugin folder that runs on every page of the store's windows.
+    pub script: String,
+    /// A page that signs a remembered login in again when the session page reports a signed-out
+    /// session.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub renew_url: Option<String>,
 }
 
 /// One entry of `permissions.folders`: a folder the plugin asks the user for.
@@ -214,6 +292,19 @@ impl PluginManifest {
                 )));
             }
         }
+        if let Some(launcher) = &self.permissions.launcher {
+            for name in &launcher.process_names {
+                if !is_valid_process_name(name) {
+                    return Err(invalid(format!(
+                        "The launcher process name \"{name}\" is not valid: use a file name \
+                         such as steam.exe."
+                    )));
+                }
+            }
+        }
+        if let Some(login) = &self.permissions.login {
+            validate_login(login)?;
+        }
         Ok(())
     }
 
@@ -229,6 +320,92 @@ impl PluginManifest {
 
 fn invalid(message: impl Into<String>) -> PluginError {
     PluginError::Invalid(message.into())
+}
+
+/// A plain executable file name: no path, no wildcards, no control characters.
+pub fn is_valid_process_name(name: &str) -> bool {
+    !name.trim().is_empty()
+        && name.len() <= 255
+        && !name.contains(['/', '\\', ':', '*', '?', '"', '<', '>', '|'])
+        && !name.chars().any(char::is_control)
+        && name == name.trim()
+}
+
+/// A host name for `login.domains`: like a web permission without `*.`, scheme or port.
+fn is_valid_domain(domain: &str) -> bool {
+    !domain.starts_with("*.")
+        && !domain.contains("://")
+        && HostRule::parse(domain).is_some_and(|rule| !rule.subdomains && !rule.plain_http)
+}
+
+/// The host part of an `https://` URL (or `None` for anything else, also userinfo URLs).
+pub fn https_host(url: &str) -> Option<String> {
+    let rest = url.strip_prefix("https://")?;
+    let authority = rest.split(['/', '?', '#']).next()?;
+    if authority.is_empty() || authority.contains('@') {
+        return None;
+    }
+    let host = authority.split(':').next()?.to_ascii_lowercase();
+    let host = host.trim_end_matches('.');
+    (!host.is_empty()).then(|| host.to_string())
+}
+
+/// Whether `host` is one of `domains` or a subdomain of one.
+pub fn domain_allowed(domains: &[String], host: &str) -> bool {
+    let host = host.to_ascii_lowercase();
+    let host = host.trim_end_matches('.');
+    domains.iter().any(|domain| {
+        let domain = domain.to_ascii_lowercase();
+        host == domain
+            || host
+                .strip_suffix(&domain)
+                .is_some_and(|prefix| prefix.ends_with('.'))
+    })
+}
+
+fn validate_login(login: &LoginPermission) -> Result<()> {
+    if login.title.trim().is_empty() {
+        return Err(invalid("The sign-in window has no title."));
+    }
+    if login.domains.is_empty() {
+        return Err(invalid(
+            "The sign-in permission lists no domains: name the hosts the sign-in windows visit.",
+        ));
+    }
+    for domain in &login.domains {
+        if !is_valid_domain(domain) {
+            return Err(invalid(format!(
+                "The sign-in domain \"{domain}\" is not valid: use a host name such as \
+                 gog.com (subdomains are included)."
+            )));
+        }
+    }
+    let on_listed_domain = |url: &str, what: &str| -> Result<()> {
+        match https_host(url) {
+            Some(host) if domain_allowed(&login.domains, &host) => Ok(()),
+            _ => Err(invalid(format!(
+                "{what} \"{url}\" must be an https address on one of the sign-in domains."
+            ))),
+        }
+    };
+    on_listed_domain(&login.url, "The sign-in address")?;
+    if let Some(capture) = &login.capture {
+        if capture.param.trim().is_empty() {
+            return Err(invalid("The sign-in capture names no parameter."));
+        }
+        on_listed_domain(&capture.url_prefix, "The sign-in capture address")?;
+    }
+    if let Some(script) = &login.script {
+        check_relative(script, "The sign-in script")?;
+    }
+    if let Some(session) = &login.session {
+        on_listed_domain(&session.url, "The website session address")?;
+        check_relative(&session.script, "The website session script")?;
+        if let Some(renew) = &session.renew_url {
+            on_listed_domain(renew, "The website session renewal address")?;
+        }
+    }
+    Ok(())
 }
 
 /// `^[a-z0-9][a-z0-9-]{1,63}$`
@@ -912,6 +1089,123 @@ mod tests {
             let result = manifest(|j| j["permissions"]["http"] = serde_json::json!([host]));
             assert!(result.is_err(), "{host}");
         }
+    }
+
+    #[test]
+    fn broad_permissions_are_optional_and_round_trip() {
+        let plain = manifest(|_| {}).unwrap();
+        assert!(plain.permissions.filesystem.is_none() && plain.permissions.registry.is_none());
+        let json = serde_json::to_string(&plain).unwrap();
+        assert!(!json.contains("filesystem") && !json.contains("login"));
+        let parsed = manifest(|j| {
+            j["permissions"]["filesystem"] = "read".into();
+            j["permissions"]["registry"] = "read".into();
+            j["permissions"]["launcher"] = serde_json::json!({ "processNames": ["steam.exe"] });
+        })
+        .unwrap();
+        assert_eq!(parsed.permissions.filesystem, Some(ReadAccess::Read));
+        assert_eq!(parsed.permissions.registry, Some(ReadAccess::Read));
+        let launcher = parsed.permissions.launcher.as_ref().unwrap();
+        assert_eq!(launcher.process_names, ["steam.exe"]);
+        let again = PluginManifest::parse(&serde_json::to_string(&parsed).unwrap()).unwrap();
+        assert_eq!(again, parsed);
+        // Only reading exists.
+        assert!(manifest(|j| j["permissions"]["filesystem"] = "write".into()).is_err());
+        assert!(manifest(|j| j["permissions"]["registry"] = true.into()).is_err());
+    }
+
+    #[test]
+    fn rejects_bad_launcher_process_names() {
+        for name in [
+            "",
+            " steam.exe",
+            "C:\\Steam\\steam.exe",
+            "a/b.exe",
+            "*.exe",
+            "a\nb",
+        ] {
+            let result = manifest(|j| {
+                j["permissions"]["launcher"] = serde_json::json!({ "processNames": [name] });
+            });
+            assert!(result.is_err(), "{name:?}");
+        }
+        assert!(is_valid_process_name("Steam Helper.exe"));
+    }
+
+    fn login(patch: impl Fn(&mut serde_json::Value)) -> Result<PluginManifest> {
+        manifest(|j| {
+            let mut login = serde_json::json!({
+                "title": "Sign in to Example",
+                "url": "https://auth.example.com/login",
+                "domains": ["example.com"],
+                "capture": { "param": "code", "urlPrefix": "https://embed.example.com/ok" },
+                "script": "login.js",
+                "session": { "url": "https://www.example.com/account", "script": "session.js" }
+            });
+            patch(&mut login);
+            j["permissions"]["login"] = login;
+        })
+    }
+
+    #[test]
+    fn parses_a_login_permission() {
+        let parsed = login(|_| {}).unwrap();
+        let permission = parsed.permissions.login.as_ref().unwrap();
+        assert_eq!(permission.domains, ["example.com"]);
+        assert_eq!(permission.capture.as_ref().unwrap().param, "code");
+        assert_eq!(permission.session.as_ref().unwrap().script, "session.js");
+        let again = PluginManifest::parse(&serde_json::to_string(&parsed).unwrap()).unwrap();
+        assert_eq!(again, parsed);
+        // Only the title, address and domains are required.
+        assert!(
+            login(|l| {
+                l.as_object_mut()
+                    .unwrap()
+                    .retain(|k, _| matches!(k.as_str(), "title" | "url" | "domains"));
+            })
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn rejects_bad_login_permissions() {
+        type Patch = Box<dyn Fn(&mut serde_json::Value)>;
+        let bad: Vec<Patch> = vec![
+            Box::new(|l| l["title"] = " ".into()),
+            Box::new(|l| l["domains"] = serde_json::json!([])),
+            Box::new(|l| l["domains"] = serde_json::json!(["*.example.com"])),
+            Box::new(|l| l["domains"] = serde_json::json!(["http://example.com"])),
+            Box::new(|l| l["domains"] = serde_json::json!(["example.com/path"])),
+            Box::new(|l| l["url"] = "http://auth.example.com/".into()),
+            Box::new(|l| l["url"] = "https://evil.net/".into()),
+            Box::new(|l| l["url"] = "https://example.com.evil.net/".into()),
+            Box::new(|l| l["url"] = "https://user@example.com/".into()),
+            Box::new(|l| l["capture"]["param"] = "".into()),
+            Box::new(|l| l["capture"]["urlPrefix"] = "https://evil.net/ok".into()),
+            Box::new(|l| l["script"] = "../login.js".into()),
+            Box::new(|l| l["session"]["script"] = "/session.js".into()),
+            Box::new(|l| l["session"]["url"] = "https://evil.net/".into()),
+            Box::new(|l| l["session"]["renewUrl"] = "https://evil.net/".into()),
+        ];
+        for (i, patch) in bad.iter().enumerate() {
+            assert!(login(patch).is_err(), "case {i}");
+        }
+    }
+
+    #[test]
+    fn login_domains_cover_subdomains_only() {
+        let domains = vec!["example.com".to_string()];
+        assert!(domain_allowed(&domains, "example.com"));
+        assert!(domain_allowed(&domains, "Auth.Example.com."));
+        assert!(!domain_allowed(&domains, "badexample.com"));
+        assert!(!domain_allowed(&domains, "example.com.evil.net"));
+        assert_eq!(
+            https_host("https://Auth.example.com:8443/x?y#z").as_deref(),
+            Some("auth.example.com")
+        );
+        assert_eq!(https_host("http://example.com"), None);
+        assert_eq!(https_host("https://a@example.com"), None);
+        assert_eq!(https_host("https:///x"), None);
     }
 
     #[test]

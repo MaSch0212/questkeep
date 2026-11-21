@@ -5,7 +5,8 @@ use std::collections::HashMap;
 use serde::Serialize;
 
 use crate::model::{
-    Achievements, AddGameOption, GameMetadata, GameNews, ImportedGame, LauncherProcess, PlayAction,
+    AccountInfo, Achievements, AddGameOption, GameMetadata, GameNews, ImportedGame,
+    LauncherProcess, PlayAction,
 };
 use crate::settings::StoreSettings;
 use crate::wire::{CallArgs, ImageCandidate, Method, ProviderDescriptor};
@@ -55,7 +56,7 @@ impl From<serde_json::Error> for ProviderError {
 }
 
 /// A store that reports games. It mirrors the app's own provider interface method for method
-/// (without accounts: plugin stores have no sign-in yet). Methods take `&self`; keep what
+/// (accounts included: see [`has_account`](Self::has_account)). Methods take `&self`; keep what
 /// [`configure`](Self::configure) hands you in a `Cell` or `RefCell`.
 ///
 /// The app asks for [`id`](Self::id), [`name`](Self::name), [`icon_svg`](Self::icon_svg), the
@@ -195,6 +196,25 @@ pub trait Provider {
     fn run_add_game_option(&self, _option_id: &str) -> Result<(), ProviderError> {
         Err(ProviderError::Unsupported)
     }
+    /// Whether the store has an account to sign in to. It needs `permissions.login` in
+    /// `plugin.json`: the app opens the sign-in window described there and hands what it
+    /// captured to [`sign_in_with_code`](Self::sign_in_with_code).
+    fn has_account(&self) -> bool {
+        false
+    }
+    /// Whether the user is signed in (and as whom). Keep tokens with [`crate::secrets`], never
+    /// in `/data`.
+    fn account_status(&self) -> AccountInfo {
+        AccountInfo::default()
+    }
+    /// Completes a sign-in from what the window captured (or the user pasted); stores the tokens.
+    fn sign_in_with_code(&self, _input: &str) -> Result<(), ProviderError> {
+        Err(ProviderError::Unsupported)
+    }
+    /// Forgets the sign-in (delete the secrets).
+    fn sign_out(&self) -> Result<(), ProviderError> {
+        Err(ProviderError::Unsupported)
+    }
 }
 
 /// The answers the app remembers (the plugin's `describe` export).
@@ -213,6 +233,7 @@ pub fn descriptor<P: Provider + ?Sized>(provider: &P) -> ProviderDescriptor {
         installed: provider.is_installed(),
         settings: provider.settings(),
         add_game_options: provider.add_game_options(),
+        has_account: provider.has_account(),
     }
 }
 
@@ -257,6 +278,9 @@ pub fn dispatch<P: Provider + ?Sized>(
             json(&())
         }
         Method::RunAddGameOption => json(&provider.run_add_game_option(&a.option_id)?),
+        Method::AccountStatus => json(&provider.account_status()),
+        Method::SignInWithCode => json(&provider.sign_in_with_code(&a.input)?),
+        Method::SignOut => json(&provider.sign_out()?),
     }
 }
 

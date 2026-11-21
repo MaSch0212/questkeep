@@ -2906,6 +2906,8 @@ mod tests {
         fn login_window(&self) -> crate::auth::LoginWindow {
             crate::auth::LoginWindow {
                 title: "Sign in to Account",
+                domains: &[],
+                rule: None,
                 user_agent: None,
                 script: None,
                 web_session: None,

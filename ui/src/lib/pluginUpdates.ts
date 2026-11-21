@@ -5,12 +5,25 @@ import type { PluginUpdate } from "../bindings/PluginUpdate";
 import type { RegistryPluginPreview } from "../bindings/RegistryPluginPreview";
 
 /** What an update can ask for beyond what the installed version has. */
-export type ChangeKind = "http" | "read" | "folders" | "extension" | "store";
+export type ChangeKind =
+  | "filesystem"
+  | "registry"
+  | "http"
+  | "login"
+  | "launcher"
+  | "read"
+  | "folders"
+  | "extension"
+  | "store";
 
 /** The things `changes` lists, in display order (empty when the update needs no review). */
 export function changeKinds(changes: PluginChanges): ChangeKind[] {
   const kinds: ChangeKind[] = [];
+  if (changes.addsFilesystem) kinds.push("filesystem");
+  if (changes.addsRegistry) kinds.push("registry");
   if (changes.newHttp.length > 0) kinds.push("http");
+  if (changes.newLogin.length > 0) kinds.push("login");
+  if (changes.newLauncher.length > 0) kinds.push("launcher");
   if (changes.newRead.length > 0) kinds.push("read");
   if (changes.newFolders.length > 0) kinds.push("folders");
   if (changes.addsExtension) kinds.push("extension");
@@ -23,6 +36,10 @@ export function changeValues(changes: PluginChanges, kind: ChangeKind): string[]
   switch (kind) {
     case "http":
       return changes.newHttp;
+    case "login":
+      return changes.newLogin;
+    case "launcher":
+      return changes.newLauncher;
     case "read":
       return changes.newRead;
     case "folders":
@@ -35,6 +52,10 @@ export function changeValues(changes: PluginChanges, kind: ChangeKind): string[]
 const tr = translator(pluginUpdatesMessages);
 
 const ASK_LABEL = {
+  filesystem: "askFilesystem",
+  registry: "askRegistry",
+  login: "askLogin",
+  launcher: "askLauncher",
   http: "askHttp",
   read: "askRead",
   folders: "askFolders",

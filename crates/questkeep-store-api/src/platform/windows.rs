@@ -79,10 +79,9 @@ pub(super) fn uninstall_entries() -> Vec<super::UninstallEntry> {
     entries
 }
 
-/// A registry value given as `HKEY_LOCAL_MACHINE\Some\Key\Value` (the 64-bit view first, then
-/// the 32-bit one).
-pub(super) fn registry_value(path: &str) -> Option<String> {
-    use winreg::enums::{HKEY_CLASSES_ROOT, KEY_WOW64_32KEY, KEY_WOW64_64KEY};
+/// The hive and the rest of a registry path such as `HKEY_LOCAL_MACHINE\Some\Key`.
+fn split_hive(path: &str) -> Option<(winreg::HKEY, &str)> {
+    use winreg::enums::HKEY_CLASSES_ROOT;
     let (hive_name, rest) = path.split_once('\\')?;
     let hive = match hive_name.to_ascii_uppercase().as_str() {
         "HKEY_LOCAL_MACHINE" | "HKLM" => HKEY_LOCAL_MACHINE,
@@ -90,6 +89,39 @@ pub(super) fn registry_value(path: &str) -> Option<String> {
         "HKEY_CLASSES_ROOT" | "HKCR" => HKEY_CLASSES_ROOT,
         _ => return None,
     };
+    Some((hive, rest))
+}
+
+/// The names of the subkeys of `HKEY_LOCAL_MACHINE\Some\Key` (both registry views, sorted, each
+/// name once). Empty when the key does not exist.
+pub(super) fn registry_subkeys(path: &str) -> Vec<String> {
+    use winreg::enums::{KEY_WOW64_32KEY, KEY_WOW64_64KEY};
+    let Some((hive, key)) = split_hive(path.trim_end_matches('\\')) else {
+        return Vec::new();
+    };
+    let mut names: Vec<String> = [KEY_WOW64_64KEY, KEY_WOW64_32KEY]
+        .iter()
+        .filter_map(|view| {
+            RegKey::predef(hive)
+                .open_subkey_with_flags(key, KEY_READ | view)
+                .ok()
+        })
+        .flat_map(|key| {
+            key.enum_keys()
+                .filter_map(|name| name.ok())
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    names.sort_unstable();
+    names.dedup();
+    names
+}
+
+/// A registry value given as `HKEY_LOCAL_MACHINE\Some\Key\Value` (the 64-bit view first, then
+/// the 32-bit one).
+pub(super) fn registry_value(path: &str) -> Option<String> {
+    use winreg::enums::{KEY_WOW64_32KEY, KEY_WOW64_64KEY};
+    let (hive, rest) = split_hive(path)?;
     let (key, value) = rest.rsplit_once('\\')?;
     [KEY_WOW64_64KEY, KEY_WOW64_32KEY].iter().find_map(|view| {
         RegKey::predef(hive)

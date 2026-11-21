@@ -17,6 +17,10 @@ const NONE: PluginChanges = {
   newHttp: [],
   newRead: [],
   newFolders: [],
+  addsFilesystem: false,
+  addsRegistry: false,
+  newLauncher: [],
+  newLogin: [],
   addsExtension: false,
   addsStore: false,
   needsReview: false,
@@ -51,11 +55,27 @@ describe("changeKinds", () => {
       newHttp: ["api.example.com"],
       newRead: ["~/games"],
       newFolders: [{ key: "inst", label: "Instances", hint: null, default: null }],
+      addsFilesystem: true,
+      addsRegistry: true,
+      newLauncher: ["steam.exe"],
+      newLogin: ["example.com"],
       addsExtension: true,
       addsStore: true,
       needsReview: true,
     };
-    expect(changeKinds(all)).toEqual(["http", "read", "folders", "extension", "store"]);
+    expect(changeKinds(all)).toEqual([
+      "filesystem",
+      "registry",
+      "http",
+      "login",
+      "launcher",
+      "read",
+      "folders",
+      "extension",
+      "store",
+    ]);
+    expect(changeValues(all, "login")).toEqual(["example.com"]);
+    expect(changeValues(all, "launcher")).toEqual(["steam.exe"]);
     expect(changeValues(all, "http")).toEqual(["api.example.com"]);
     expect(changeValues(all, "read")).toEqual(["~/games"]);
     expect(changeValues(all, "folders")).toEqual(["Instances"]);

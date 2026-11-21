@@ -65,6 +65,8 @@ pub const ACCOUNT_SPEC: WebAccountSpec = WebAccountSpec {
     // session and reports them. On a login page the hidden window reports a signed-out session.
     window: LoginWindow {
         title: "Sign in to Battle.net",
+        domains: &[],
+        rule: None,
         user_agent: None,
         script: None,
         web_session: Some(WebSessionPage {

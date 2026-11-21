@@ -26,7 +26,7 @@ use questkeep_core::launcher::Launcher;
 use questkeep_core::paths::DataPaths;
 use questkeep_core::providers::ProviderRegistry;
 use questkeep_core::tray::{self as tray_logic, MINIMIZED_ARG};
-use questkeep_plugins::PluginManager;
+use questkeep_plugins::{PluginManager, PluginServices};
 use tauri::{Emitter, Manager, RunEvent};
 use tauri_plugin_autostart::MacosLauncher;
 use tracing_appender::non_blocking::WorkerGuard;
@@ -184,16 +184,23 @@ fn build_state(app: &tauri::AppHandle) -> Result<(AppState, Option<WorkerGuard>)
     } else {
         Arc::new(KeyringTokenStore::new())
     };
+    let web_session = Arc::new(signin::ShellWebSession::new(
+        app.clone(),
+        paths.webview_dir(),
+    ));
     let providers = ProviderRegistry::with_stores(questkeep_stores::builtin(
         keyring.clone(),
         Some(&paths.cache_dir()),
-        Some(Arc::new(signin::ShellWebSession::new(
-            app.clone(),
-            paths.webview_dir(),
-        ))),
+        Some(web_session.clone()),
     ));
-    // Plugin stores are added to the very registry the library and the fetchers use.
+    // Plugin stores are added to the very registry the library and the fetchers use. They keep
+    // their secrets in the same keyring (under their own names) and use the same hidden windows
+    // for website sessions.
     let plugins = PluginManager::new(paths.clone(), providers.clone(), events.clone());
+    plugins.set_services(PluginServices {
+        secrets: keyring.clone(),
+        web: Some(web_session),
+    });
     let library = Library::open(paths, providers.clone(), events.clone(), keyring)
         .map_err(|e| e.to_string())?;
     match library.database().recover_open_sessions() {

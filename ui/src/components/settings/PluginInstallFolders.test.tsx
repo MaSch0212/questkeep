@@ -48,6 +48,10 @@ const storePreview = (...folders: ReturnType<typeof makeFolder>[]) =>
     permissions: {
       read: [],
       http: [],
+      filesystem: false,
+      registry: false,
+      launcher: [],
+      login: [],
       folders: folders.map(({ key, label, hint, default: d }) => ({
         key,
         label,

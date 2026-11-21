@@ -28,7 +28,15 @@ const makePreview = (overrides: Partial<PluginPreview> = {}): PluginPreview => (
   stores: 1,
   hasExtension: false,
   themes: [],
-  permissions: { read: [], http: [], folders: [] },
+  permissions: {
+    read: [],
+    http: [],
+    folders: [],
+    filesystem: false,
+    registry: false,
+    launcher: [],
+    login: [],
+  },
   folders: [],
   installedVersion: null,
   ...overrides,
@@ -55,6 +63,10 @@ const withFolders = (...folders: PluginFolder[]) =>
     permissions: {
       read: [],
       http: [],
+      filesystem: false,
+      registry: false,
+      launcher: [],
+      login: [],
       folders: folders.map(({ key, label, hint, default: d }) => ({
         key,
         label,
@@ -141,7 +153,15 @@ describe("PluginsSection", () => {
       makePlugin({
         source: "C:\\Dev\\x",
         sourceExists: false,
-        permissions: { read: ["%LOCALAPPDATA%/X"], http: ["api.x.com"], folders: [] },
+        permissions: {
+          read: ["%LOCALAPPDATA%/X"],
+          http: ["api.x.com"],
+          folders: [],
+          filesystem: false,
+          registry: false,
+          launcher: [],
+          login: [],
+        },
       }),
     );
     const details = screen.getByRole("button", { name: "Details of Example Store" });
@@ -210,6 +230,10 @@ describe("PluginsSection", () => {
           read: ["%APPDATA%/NewStore"],
           http: ["api.new.example"],
           folders: [],
+          filesystem: false,
+          registry: false,
+          launcher: [],
+          login: [],
         },
         installedVersion: "1.0.0",
       }),
@@ -233,6 +257,36 @@ describe("PluginsSection", () => {
     // Installing is not a destructive action: no danger button, and Cancel has the focus.
     expect(shown.getByRole("button", { name: "Install" })).toHaveClass("btn--primary");
     expect(shown.getByRole("button", { name: "Cancel" })).toHaveFocus();
+  });
+
+  it("names broad access, sign-in domains and launcher programs before installing, and warns about unreviewed sources", async () => {
+    await show();
+    vi.mocked(open).mockResolvedValue("C:/Dev/new-plugin");
+    vi.mocked(api.previewPlugin).mockResolvedValue(
+      makePreview({
+        permissions: {
+          read: [],
+          http: ["api.new.example"],
+          folders: [],
+          filesystem: true,
+          registry: true,
+          launcher: ["steam.exe"],
+          login: ["new.example"],
+        },
+      }),
+    );
+    await fireEvent.click(screen.getByRole("button", { name: "Install from folder…" }));
+    const shown = within(await screen.findByRole("dialog"));
+    expect(shown.getByText("Can read every file on this PC (read-only)")).toBeInTheDocument();
+    expect(shown.getByText("Can read the Windows registry (read-only)")).toBeInTheDocument();
+    expect(shown.getByText("api.new.example")).toBeInTheDocument();
+    expect(shown.getByText("Sign-in windows may visit these web domains")).toBeInTheDocument();
+    expect(shown.getByText("new.example")).toBeInTheDocument();
+    expect(shown.getByText("Questkeep may close these programs after a game")).toBeInTheDocument();
+    expect(shown.getByText("steam.exe")).toBeInTheDocument();
+    // From a folder, nobody has reviewed it.
+    expect(shown.getByRole("alert")).toHaveTextContent(/not come from the plugin registry/);
+    expect(shown.queryByText("No extra permissions")).toBeNull();
   });
 
   it("says why a chosen folder is no plugin, without asking to install", async () => {
@@ -438,6 +492,10 @@ describe("PluginsSection", () => {
           permissions: {
             read: [],
             http: [],
+            filesystem: false,
+            registry: false,
+            launcher: [],
+            login: [],
             folders: [
               {
                 key: "instances",
