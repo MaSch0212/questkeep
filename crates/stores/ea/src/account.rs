@@ -56,6 +56,8 @@ pub const ACCOUNT_SPEC: WebAccountSpec = WebAccountSpec {
     // session. The website login itself ends on `login_check`; the session is then read anew.
     window: LoginWindow {
         title: "Sign in to EA",
+        domains: &[],
+        rule: None,
         user_agent: None,
         script: None,
         web_session: Some(WebSessionPage {

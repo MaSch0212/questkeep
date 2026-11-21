@@ -21,10 +21,12 @@ run sandboxed by Questkeep.
   "version": "0.1.0",
   "description": "Optional.",
   "author": "Optional.",
+  "icon": "icon.svg",
   "apiVersion": 1,
   "providers": [{ "wasm": "provider.wasm" }],
   "permissions": {
     "read": [{ "path": "%LOCALAPPDATA%/MyStore", "as": "/store" }],
+    "folders": [{ "key": "library", "label": "My Store library folder", "as": "/library" }],
     "http": ["api.example.com", "*.example-cdn.com"]
   }
 }
@@ -32,11 +34,45 @@ run sandboxed by Questkeep.
 
 - `id`: 2 to 64 lowercase letters, digits and dashes. The store's id must be the same, or start
   with it and a dash (`my-store-beta`).
+- `icon` (optional): an `.svg` or `.png` in the plugin folder, at most 200 KB; an SVG may not
+  contain scripts, `on...=` attributes or `javascript:` links. It is shown in Settings > Plugins
+  and the install dialog. Older Questkeep versions ignore the field, so it needs no `minApp`.
 - `providers[].wasm`: the built component, relative to the plugin folder.
 - `permissions.read`: folders the store may read, each mounted read-only at its `as` path.
   `%VAR%` and a leading `~` are expanded; a folder that does not exist is simply not mounted.
+- `permissions.folders`: folders the **user** chooses (Settings > Plugins > Folders). Each has a
+  `key` (1 to 32 lowercase letters, digits, dashes; unique), a `label`, an optional `hint` and
+  `default` (expanded like `read` paths), and an `as` path that is unique across `read` and
+  `folders`. The effective folder (the choice, else the default) is mounted read-only at `as`
+  when it exists. The store can neither choose nor change it. Older Questkeep versions ignore
+  the field: set `minApp` in the plugin registry. Details: [`docs/PLUGINS.md`](../../docs/PLUGINS.md#folders-the-user-chooses).
+- Paths: a path the store returns that starts with the guest path of a `read` or `folders` mount
+  (`/library/Game/game.exe` as `install_dir`, a play action's `target`/`working_dir`, an image
+  `file`) is translated to the real path on the PC; other paths stay as they are, `..` is never
+  resolved, and `/plugin` and `/data` never become launchable paths.
 - `permissions.http`: hosts the store may request over https. `*.example.com` covers every
   subdomain; `http://localhost` also allows plain http for that host. Redirects are not followed.
+- `permissions.filesystem: "read"`: every file of the PC, read-only, below `/host` (`C:\Games` is
+  `/host/c/Games`, `/home/me` is `/host/home/me`). Use `questkeep_plugin_sdk::known_folder("…")`
+  to find usual places (`local-app-data`, `program-data`, `config`, …) and
+  `questkeep_plugin_sdk::host_path(r"C:\Program Files\Steam")` to turn a path read from the
+  registry or a config file into the plugin's view of it. `sqlite::query(path, sql, params)` reads
+  other programs' SQLite databases (read-only; locked databases work).
+- `permissions.registry: "read"`: `registry::read`, `registry::subkeys`,
+  `registry::uninstall_entries()` and `registry::appx_packages()` (Windows; empty elsewhere).
+- Secrets: `secrets::get/set/delete` keep tokens in the system keyring under the plugin's name
+  (no permission needed). Keep tokens there, not in `/data`.
+- `permissions.launcher.processNames`: the launcher's executable names; only these can be closed
+  after a game (see `Provider::launcher_process`).
+- `permissions.login` with `has_account`, `account_status`, `sign_in_with_code` and `sign_out`:
+  a sign-in window locked to the declared `domains`, an optional website session
+  (`session::refresh()`). Details and the manifest block:
+  [`docs/PLUGINS.md`](../../docs/PLUGINS.md#accounts-and-sign-in).
+
+A store that declares `filesystem` or `registry` can read everything the user can; the web hosts
+it lists are the only way for that to leave the PC and are shown in the install dialog, and the
+registry reviews them. The test store [`sandbox_probe`](../../crates/questkeep-plugin-sdk/examples/sandbox_probe.rs)
+uses each of these and is what the app's plugin tests run.
 
 ## Writing a store
 

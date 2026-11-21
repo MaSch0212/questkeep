@@ -322,6 +322,7 @@ describe("AccountsSection", () => {
 function makeSettings(overrides: Partial<Settings> = {}): Settings {
   return {
     scanOnStartup: true,
+    checkPluginUpdates: true,
     autoSyncMinutes: 15,
     watchInstallFolders: true,
     downloadCovers: true,
@@ -339,7 +340,8 @@ function makeSettings(overrides: Partial<Settings> = {}): Settings {
     launcherCloseDelaySeconds: 60,
     launcherCloseMinMinutes: 2,
     systemNotifications: true,
-    tray: { icon: "questkeep", quickLaunch: null },
+    tray: { icon: "questkeep", quickLaunchRows: 3, quickLaunch: null },
+    startPage: { background: true, statistics: true, recentlyPlayed: true, recentlyAdded: true },
     detectExternalLaunches: true,
     showStartPage: true,
     showStatistics: true,
@@ -451,7 +453,7 @@ describe("GeneralSection sorting", () => {
     vi.mocked(api.getSettings).mockResolvedValue(makeSettings());
     render(() => <GeneralHarness />);
     await fireEvent.click(
-      await screen.findByRole("checkbox", {
+      await screen.findByRole("switch", {
         name: "Ignore words at the start of names when sorting",
       }),
     );

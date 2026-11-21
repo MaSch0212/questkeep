@@ -6,6 +6,7 @@ import EyeOff from "lucide-solid/icons/eye-off";
 import Eye from "lucide-solid/icons/eye";
 import ExternalLink from "lucide-solid/icons/external-link";
 import FolderOpen from "lucide-solid/icons/folder-open";
+import Clock from "lucide-solid/icons/clock";
 import ImageDown from "lucide-solid/icons/image-down";
 import PackageMinus from "lucide-solid/icons/package-minus";
 import Pencil from "lucide-solid/icons/pencil";
@@ -78,6 +79,8 @@ import {
 } from "./GameSections";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { Cover } from "./Cover";
+import { gameSessions } from "../i18n/gameSessions";
+import { SessionsDialog } from "./SessionsDialog";
 import { EditGameDialog } from "./EditGameDialog";
 import { extensionEntries } from "./ExtensionIcon";
 import { GameActionButtons } from "./GameActionButtons";
@@ -86,6 +89,7 @@ import type { PopoverAnchor } from "./Popover";
 import { SourceIcon, SourceIcons, sourceName, storeNames } from "./SourceIcon";
 
 const tr = translator(gamePage);
+const trSessions = translator(gameSessions);
 
 const DESCRIPTION_CLAMP_CHARS = 300;
 const DESCRIPTION_CLAMP_LINES = 5;
@@ -233,6 +237,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
     null,
   );
   const [combining, setCombining] = createSignal<PopoverAnchor | null>(null);
+  const [editingSessions, setEditingSessions] = createSignal(false);
   let storeMenuButton: HTMLButtonElement | undefined;
   let moreButton: HTMLButtonElement | undefined;
   const copyButtons = new Map<string, HTMLButtonElement>();
@@ -311,6 +316,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
         setMoreMenu(null);
         setCopyMenu(null);
         setCombining(null);
+        setEditingSessions(false);
         setDescriptionOpen(false);
         setHeroFailed(false);
       },
@@ -384,6 +390,11 @@ export function DetailsPanel(props: DetailsPanelProps) {
       label: tr("refetchArtwork"),
       icon: () => <ImageDown class="icon" aria-hidden="true" />,
       onSelect: () => void refetchGameArtwork(),
+    },
+    {
+      label: trSessions("edit"),
+      icon: () => <Clock class="icon" aria-hidden="true" />,
+      onSelect: () => setEditingSessions(true),
     },
     {
       label: tr("combine"),
@@ -539,7 +550,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
                     disabled={running()}
                     onClick={() => void run(() => launchGame(props.game.id))}
                   >
-                    {running() ? tr("running") : tr("play")}
+                    {running() ? tr("running") : tr(props.game.kind === "app" ? "start" : "play")}
                   </button>
                 </Show>
                 <Show when={combined() || (profiles()?.profiles.length ?? 0) > 1}>
@@ -751,7 +762,12 @@ export function DetailsPanel(props: DetailsPanelProps) {
                 <dt>{tr("dateAdded")}</dt>
                 <dd>{formatDate(props.game.dateAdded)}</dd>
                 <dt>{tr("playCount")}</dt>
-                <dd>{props.game.playCount}</dd>
+                <dd>
+                  {props.game.playCount}{" "}
+                  <button type="button" class="link-btn" onClick={() => setEditingSessions(true)}>
+                    {trSessions("edit")}
+                  </button>
+                </dd>
               </dl>
             </Card>
           </div>
@@ -869,6 +885,9 @@ export function DetailsPanel(props: DetailsPanelProps) {
         )}
       </Show>
 
+      <Show when={editingSessions()}>
+        <SessionsDialog game={props.game} onClose={() => setEditingSessions(false)} />
+      </Show>
       <Show when={editing()}>
         {(section) => (
           <EditGameDialog

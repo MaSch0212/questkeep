@@ -265,7 +265,9 @@ export function CommandBar(props: {
                         >
                           <Play class="icon" aria-hidden="true" />
                         </Show>
-                        {action() === "play" ? tr("play") : tr("install")}
+                        {action() === "play"
+                          ? tr(game.kind === "app" ? "start" : "play")
+                          : tr("install")}
                       </button>
                     </Show>
                   </li>

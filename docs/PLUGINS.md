@@ -21,6 +21,7 @@ Examples live in [`examples/plugins`](../examples/plugins):
   "version": "0.1.0",
   "description": "Optional.",
   "author": "Optional.",
+  "icon": "icon.svg",
   "apiVersion": 1,
   "providers": [{ "wasm": "provider.wasm" }],
   "permissions": { "read": [], "http": [] },
@@ -37,8 +38,13 @@ Examples live in [`examples/plugins`](../examples/plugins):
 | `id` | 2 to 64 lowercase letters, digits and dashes; unique. |
 | `name`, `version` | Shown in Settings > Plugins. |
 | `description`, `author` | Optional. |
+| `icon` | Optional. An `.svg` or `.png` file inside the plugin folder (square; at most 200 KB), shown at the start of the plugin's row in Settings > Plugins and in the install dialog. An SVG may not contain `<script`, `on<event>=` attributes or `javascript:` links, and is only ever shown as an image. Install refuses a missing, too large or unsafe icon with a message. Questkeep versions before this field ignore it, so a plugin that adds an icon needs no `minApp`. |
 | `apiVersion` | `1`. |
-| `providers`, `permissions` | Stores and what they may reach; see [store plugins](#store-plugins). |
+| `providers`, `permissions` | Stores and what they may reach (`read`, `http`, `folders`); see [store plugins](#store-plugins). |
+| `permissions.folders` | Folders the user chooses for the plugin; see [folders the user chooses](#folders-the-user-chooses). |
+| `permissions.filesystem`, `permissions.registry` | `"read"`: the stores may read every file of the PC, or the registry; see [broad access](#broad-access-files-and-registry). |
+| `permissions.launcher` | `{ "processNames": ["steam.exe"] }`: the programs Questkeep may close after a game; see [the store launcher](#the-store-launcher). |
+| `permissions.login` | How a store with an account signs the user in; see [accounts and sign-in](#accounts-and-sign-in). |
 | `extension.main` | The ES module Questkeep imports, relative to the plugin folder. |
 | `extension.styles` | Style sheets loaded with the extension (optional). |
 | `extension.settings` | Settings the app draws for the plugin (optional); see [settings](#settings). |
@@ -46,6 +52,27 @@ Examples live in [`examples/plugins`](../examples/plugins):
 
 Paths are relative, use forward slashes and stay inside the plugin folder. A plugin needs none
 of `providers`, `extension` and `themes` in particular: any combination works.
+
+### What a plugin can and cannot do
+
+| | Store (WASM) | Extension (JavaScript) | Theme (CSS) |
+|---|---|---|---|
+| Runs as | a sandboxed component | trusted code in the app window | styles only, no code |
+| Files | `/plugin` (read-only), `/data` (own, read-write); read-only: the `read` and `folders` mounts, and with `permissions.filesystem` every file of the PC below `/host` | none directly, but every app command | none |
+| Registry | with `permissions.registry` (read-only host functions) | no | no |
+| Web | `https:` on the hosts under `permissions.http` (listed at install) | any `https:` host | `url()` in its CSS |
+| Secrets | the system keyring, under the plugin's own name | `api.settings` (plain file) | no |
+| Account sign-in | with `permissions.login`: windows locked to the declared domains | no | no |
+| Start or close programs | returns play actions Questkeep runs when the user plays; only the declared launcher programs are closed | every app command, including starting and removing games | no |
+| Other programs' databases | read-only SQLite queries (`permissions.filesystem`) | no | no |
+| Cannot | write outside `/data`, read processes, run programs itself, use raw sockets or environment variables | add stores | run code |
+
+Extensions and themes have no permission declarations: they are trusted, as the install dialog
+says. A store that declares `filesystem` or `registry` can read everything the user can, and the
+only way out of the PC for what it reads is the web hosts it lists, which is why the install
+dialog shows them (and a plugin installed from a folder or zip shows a warning: only install
+plugins from authors and sources you trust). Registry plugins are reviewed first, see
+[`PLUGIN_REGISTRY.md`](PLUGIN_REGISTRY.md#trust).
 
 ### Install, reload, remove
 
@@ -55,14 +82,33 @@ and restarts the plugin; with **Reload on change** on, that happens whenever the
 changes. **Disable** stops the plugin and keeps its files; **Remove** deletes the copy and, on
 request, the plugin's own data. Nothing needs an app restart.
 
+Plugins can also be installed from the community plugin registry (Settings > Plugins > "Browse plugins…", the plugin
+browser): the zip is downloaded from the author's release, checked against the hash the registry
+lists, shown in the usual install confirmation and then installed. Such a plugin remembers its
+registry version (updates are offered unless you picked an older version on purpose, which
+"pins" it); before an update or downgrade replaces it, its data folder is copied to
+`<data>/plugin-data-backup/<id>/<old version>/` (the last 3 are kept). Plugins installed from a
+folder or file are never touched by the registry. Format and flow: [`PLUGIN_REGISTRY.md`](PLUGIN_REGISTRY.md).
+
+Questkeep looks for updates of registry plugins about 20 seconds after start and every 12 hours
+(Settings > Plugins: "Check for plugin updates" turns it off, "Check now" asks right away) and puts
+one entry in the notification bell when there is a new version. The Plugin updates dialog (bell
+entry or Settings > Plugins > Updates) updates one plugin or all of them; "Update all" leaves out
+updates that ask for more than the installed version (new web hosts, folders, an extension or
+store) so you can look at them one by one. Nothing is installed without your go-ahead.
+
 ### Where things are stored
 
 | What | Where |
 |---|---|
 | The installed copy | `<data>/plugins/<id>/` |
-| Which plugins are installed, their source, enabled, reload on change | `<data>/plugins/plugins.json` |
+| Which plugins are installed, their source, enabled, reload on change, the folders the user chose | `<data>/plugins/plugins.json` |
 | A store's own files (`/data` inside the sandbox) | `<data>/plugin-data/<id>/` |
 | An extension's settings | `<data>/plugin-data/<id>/settings.json` |
+| Registry plugins: the downloaded zip (the plugin's `source`) | `<data>/plugin-cache/<id>/<version>.zip` |
+| Registry plugins: data copies made before an update or downgrade | `<data>/plugin-data-backup/<id>/<old version>/` |
+| The registry's last loaded index and icons | `<data>/plugins/registry-cache.json`, `registry-icon.<id>.json` |
+| The bell entry for plugin updates and the update pairs the user dismissed | `<data>/plugins/plugin-update-notices.json` |
 
 `<data>` is the app's data folder (Settings > About has a button that opens it).
 
@@ -70,6 +116,151 @@ request, the plugin's own data. Nothing needs an app restart.
 
 See [`examples/plugins/README.md`](../examples/plugins/README.md): the `Provider` trait, the
 sandbox (folders and web hosts a store declares), building for `wasm32-wasip2`.
+
+### Folders the user chooses
+
+`permissions.read` mounts folders at fixed places. A plugin whose files live somewhere the user
+decides (a game manager's instances folder, a library of ROMs) declares a **folder** instead:
+
+```json
+"permissions": {
+  "folders": [
+    { "key": "instances", "label": "BSManager instances folder",
+      "hint": "The folder that contains your Beat Saber instances.",
+      "as": "/instances", "default": "~/BSManager/BSInstances" }
+  ]
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `key` | 1 to 32 lowercase letters, digits and dashes; unique in the plugin. Names the choice in `plugins.json`. |
+| `label` | Required. What the folder is; shown in the install dialog and Settings > Plugins. |
+| `hint` | Optional. One sentence of help under the label. |
+| `as` | Where the stores see it, validated like `permissions.read` names (`/instances`, not `/plugin` or `/data`). Unique across `read` and `folders`. |
+| `default` | Optional. Used until the user chooses; `%VAR%` and a leading `~` are expanded like in `read` paths. |
+
+- The folder a store gets is the user's choice, else the expanded `default`. It is mounted
+  **read-only** at `as`, and only when it exists and is a folder; otherwise nothing is mounted
+  (the store sees no `/instances`, like a missing `read` folder), and Settings > Plugins shows
+  "This folder was not found".
+- The **install dialog** lists each folder (label, hint, the default, "not found" when it is not
+  there) with **Choose…** and **Use default**, so the folders are set before anything is loaded
+  and the first scan already sees them. An update's dialog starts with the current choice. A
+  folder that is not found does not block the install (the user may fix it later). If a folder
+  is still unset and its default is missing after the install, the app does not scan the
+  plugin's stores (that would only fail) and shows "Choose <label> in Settings > Plugins >
+  <plugin> > Folders to list its games." Afterwards, Settings > Plugins shows a **Folders**
+  block per plugin with the same buttons. Changing a folder there reloads the plugin's stores
+  and scans them again.
+- The install commands (`install_plugin`, `install_registry_plugin`) take the dialog's choices
+  as an optional `folders` map (key to path). Every entry is checked like a later choice (below)
+  before anything changes: one bad entry refuses the whole install and an installed copy
+  stays. The choices are saved with the install, before the plugin is loaded. Choices made
+  earlier stay unless the map names the key again (a blank path goes back to the default).
+- The user can only pick an existing folder, given as a full path, that is neither Questkeep's
+  own data folder (or a folder containing it: it holds the library database) nor the plugin's
+  installed folder.
+- The choice is stored in `<data>/plugins/plugins.json` (`folders`: key to path), **never** in
+  `<data>/plugin-data/<id>/`, which the plugin can write: a plugin cannot choose or change a
+  path itself, only read what the user gave it. An update, a reinstall (also from another
+  source) and a version switch keep the choice; Remove deletes it.
+- Older Questkeep versions ignore `folders` without a message, so the plugin would start there
+  without the folder. A plugin that needs it must set `minApp` in the
+  [registry](PLUGIN_REGISTRY.md) to the first Questkeep version with this feature (the release
+  that added `permissions.folders`; `pnpm changeset status` names it while it is pending).
+  `apiVersion` stays `1`.
+
+#### Paths below a mount
+
+A store that found a game in `/instances/My Instance/Beat Saber.exe` returns that path as is:
+Questkeep translates a path that starts with the guest path of a `read` or `folders` mount to
+the real path on this PC (`D:\BSManager\BSInstances\My Instance\Beat Saber.exe`) in
+`install_dir`, in play actions (`target` of a `file` action, `working_dir`, `tracking_path` when
+the tracking mode is `directory`; also install, uninstall, launcher-page and launch-with-args
+actions and the store launcher) and in image candidates (`file`). Rules:
+
+- Only whole path parts match, case-sensitively, like the sandbox itself: `/instances/a` and
+  `/instances` translate, `/instancesx` and `/Instances` do not. The longest matching mount wins.
+- `.` parts, empty parts and trailing slashes are dropped; a path with a `..` part is **not**
+  translated and stays as written (it can never leave a mount).
+- Paths that are not below a mount stay as they are, e.g. a real `C:\Games\x.exe` or a URI.
+- `/plugin` and `/data` are never translated for launching or install dirs: a plugin writes
+  `/data`, so a path there must not turn into a program Questkeep starts. (Image candidates may
+  still come from them, since images are only read.)
+
+### Broad access: files and registry
+
+```json
+"permissions": { "filesystem": "read", "registry": "read", "http": ["api.example.com"] }
+```
+
+- `filesystem: "read"` mounts every file of the PC read-only below `/host`: on Windows each local
+  drive (`C:\Games` is `/host/c/Games`; network drives are left out), elsewhere the root
+  (`/home/me` is `/host/home/me`). The SDK's `host_path()` turns a path from the registry or a
+  config file into that form, `known_folder("local-app-data" | "app-data" | "program-data" |
+  "program-files" | "program-files-x86" | "home" | "config" | "data")` finds the usual places. The
+  paths a store returns (install dirs, play actions, images) are translated back like those of
+  `read` and `folders` mounts, except that a path into Questkeep's `plugins` or `plugin-data`
+  folders is never translated for launching, installing or tracking: a plugin writes there.
+- `sqlite::query(path, sql, params)` runs one read-only `SELECT`/`WITH`/`VALUES` statement on
+  another program's SQLite database (a locked one is read from a temporary copy, WAL included).
+  Plugins do not ship SQLite.
+- `registry: "read"` gives `registry::read("HKLM\\Key\\Value")` (a trailing `\` reads the default
+  value), `registry::subkeys`, `registry::uninstall_entries()` and `registry::appx_packages()`.
+  Windows only: off Windows they answer empty.
+- Neither is needed for the fixed or user-chosen folders of `read` and `folders`, which keep the
+  narrow sandbox. Questkeep never offers process enumeration, writes outside `/data`, or running
+  programs.
+- Updates that add either permission (or new `http` hosts, login domains or launcher programs)
+  are never part of "Update all".
+
+### Secrets
+
+`secrets::get/set/delete(key)` keep a plugin's tokens in the system keyring (the same place the
+built-in stores use), under `plugin/<plugin id>/<key>`: a plugin reads and writes only its own.
+Values are limited to 1200 characters (the Windows credential store's limit). Never keep tokens in
+`/data`: any plugin with `filesystem` can read it. Remove deletes nothing there; delete the
+secrets on sign-out.
+
+### Accounts and sign-in
+
+A store with an account declares `permissions.login` and implements `has_account`,
+`account_status`, `sign_in_with_code` and `sign_out` (the SDK's `Provider`):
+
+```json
+"login": {
+  "title": "Sign in to Example",
+  "url": "https://auth.example.com/login",
+  "domains": ["example.com"],
+  "capture": { "param": "code", "urlPrefix": "https://auth.example.com/done" },
+  "userAgent": null,
+  "script": "login.js",
+  "session": { "url": "https://www.example.com/account", "script": "session.js",
+               "renewUrl": null }
+}
+```
+
+- Questkeep owns the window. It loads `url` and allows only `domains` (and their subdomains);
+  any other navigation is blocked. When the window navigates to `capture.urlPrefix` with the query
+  parameter `param`, the navigation is cancelled and the value goes to `sign_in_with_code`.
+- `script` runs on every page of the sign-in window. A script reports by navigating to an address
+  below `https://questkeep.invalid/` (never loaded): the whole address goes to
+  `sign_in_with_code`. `domains` are listed in the install dialog.
+- `session` (stores signed in through their website) keeps a persistent browser profile per
+  store; `session::refresh()` loads `session.url` in a hidden window and returns what its script
+  reported (`None`: signed out); `session::renew()` does the same for `renewUrl`. The script has
+  `var reportSignedOut = REPORT_SIGNED_OUT;` replaced by `true` in the hidden window. The plugin
+  gets the reported address only, never the cookies. Signing out deletes the profile.
+- Scripts are files in the plugin folder (at most 256 KB each).
+
+### The store launcher
+
+`permissions.launcher.processNames` lists the executable names (`steam.exe`) of the store's
+launcher. A store's `launcher_process()` only takes effect for these names, and a clean-exit
+command only when its program is one of them; without the declaration the store has no launcher
+process. Questkeep still closes them only when the user turned on "Close launcher after playing"
+for the store.
 
 ## Themes
 

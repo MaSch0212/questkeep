@@ -1,5 +1,6 @@
 //! The installed plugins: loading, unloading and reloading them while the app runs.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError, Weak};
@@ -13,9 +14,11 @@ use questkeep_store_api::LibraryProvider;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use crate::access::{LoginSetup, PluginServices, filesystem_mounts};
 use crate::error::{PluginError, Result};
-use crate::install::{self, StateEntry};
-use crate::manifest::{PluginManifest, expand_path};
+use crate::install::{self, RegistryState, StateEntry};
+use crate::manifest::{FolderPermission, PluginManifest, expand_path, folder_path};
+use crate::registry;
 use crate::wasm::{CallLimits, Runtime, Sandbox, WasmProvider};
 
 /// How long the source folder must be quiet before a watched plugin is reloaded.
@@ -33,6 +36,9 @@ pub struct PluginInfo {
     pub version: String,
     pub description: Option<String>,
     pub author: Option<String>,
+    /// The manifest's `icon` (a path inside the plugin folder) while the plugin is enabled; the
+    /// UI turns it into an image URL with the plugin's file scheme.
+    pub icon: Option<String>,
     /// The folder or zip the plugin was installed from.
     pub source: String,
     /// The source is still there: Reload copies it again.
@@ -40,6 +46,9 @@ pub struct PluginInfo {
     pub enabled: bool,
     /// Reload whenever the source folder changes.
     pub watch: bool,
+    /// Set when the plugin was installed from the plugin registry (its `source` is then the cached
+    /// zip): the installed registry version and whether it is pinned (no update offers).
+    pub registry: Option<RegistryState>,
     /// Enabled and running.
     pub loaded: bool,
     /// Why the plugin could not be loaded or reloaded.
@@ -61,6 +70,55 @@ pub struct PluginInfo {
     #[ts(type = "Array<Record<string, unknown>>")]
     pub theme_defs: Vec<serde_json::Value>,
     pub permissions: PluginPermissions,
+    /// The folders the plugin asks the user for (`permissions.folders`) and what each points to.
+    pub folders: Vec<PluginFolder>,
+}
+
+/// One folder a plugin asks the user for, and what it points to now.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct PluginFolder {
+    pub key: String,
+    pub label: String,
+    pub hint: Option<String>,
+    /// Where the plugin's stores see it.
+    pub mount: String,
+    /// The default as written in the manifest (`%VAR%` and `~` not expanded).
+    pub default: Option<String>,
+    /// The default with `%VAR%` and `~` expanded; `None` without a default or while a variable
+    /// it uses is not set.
+    pub default_path: Option<String>,
+    /// `default_path` is an existing folder.
+    pub default_exists: bool,
+    /// The folder the user chose; `None` while the default applies.
+    pub path: Option<String>,
+    /// What the stores get: the choice, else the expanded default.
+    pub effective_path: Option<String>,
+    /// `effective_path` is an existing folder (only then it is mounted).
+    pub exists: bool,
+}
+
+/// A folder a plugin asks the user for, as the install dialog lists it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct FolderRequest {
+    pub key: String,
+    pub label: String,
+    pub hint: Option<String>,
+    pub default: Option<String>,
+}
+
+impl From<&FolderPermission> for FolderRequest {
+    fn from(folder: &FolderPermission) -> Self {
+        Self {
+            key: folder.key.clone(),
+            label: folder.label.clone(),
+            hint: folder.hint.clone(),
+            default: folder.default.clone(),
+        }
+    }
 }
 
 /// What a plugin's stores may reach, for display.
@@ -72,6 +130,41 @@ pub struct PluginPermissions {
     pub read: Vec<String>,
     /// Hosts the stores may send requests to.
     pub http: Vec<String>,
+    /// Folders the user chooses for the plugin: it may read each one that is set (or has a
+    /// default), nothing else of them.
+    pub folders: Vec<FolderRequest>,
+    /// The stores may read every file of this PC (`permissions.filesystem`).
+    pub filesystem: bool,
+    /// The stores may read the registry (`permissions.registry`).
+    pub registry: bool,
+    /// Programs Questkeep may close after a game (`permissions.launcher.processNames`).
+    pub launcher: Vec<String>,
+    /// The hosts the sign-in windows may visit (`permissions.login.domains`).
+    pub login: Vec<String>,
+}
+
+impl PluginPermissions {
+    /// What the manifest asks for.
+    pub fn of(manifest: &PluginManifest) -> Self {
+        let permissions = &manifest.permissions;
+        Self {
+            read: permissions.read.iter().map(|r| r.path.clone()).collect(),
+            http: permissions.http.clone(),
+            folders: permissions.folders.iter().map(Into::into).collect(),
+            filesystem: permissions.filesystem.is_some(),
+            registry: permissions.registry.is_some(),
+            launcher: permissions
+                .launcher
+                .as_ref()
+                .map(|l| l.process_names.clone())
+                .unwrap_or_default(),
+            login: permissions
+                .login
+                .as_ref()
+                .map(|l| l.domains.clone())
+                .unwrap_or_default(),
+        }
+    }
 }
 
 /// A plugin that is about to be installed, for the install dialog.
@@ -84,12 +177,17 @@ pub struct PluginPreview {
     pub version: String,
     pub description: Option<String>,
     pub author: Option<String>,
+    /// The plugin's icon as a `data:` URL (it is not installed yet, so it has no file URL).
+    pub icon: Option<String>,
     /// How many stores the plugin brings.
     pub stores: u32,
     pub has_extension: bool,
     /// The names of the plugin's themes.
     pub themes: Vec<String>,
     pub permissions: PluginPermissions,
+    /// The folders the plugin asks for, with their defaults and, when an installed copy is
+    /// replaced, what the user chose for them (`path`): the install dialog lets the user pick.
+    pub folders: Vec<PluginFolder>,
     /// The version that is installed now and would be replaced.
     pub installed_version: Option<String>,
 }
@@ -127,10 +225,14 @@ impl Plugin {
             version: manifest.map(|m| m.version.clone()).unwrap_or_default(),
             description: manifest.and_then(|m| m.description.clone()),
             author: manifest.and_then(|m| m.author.clone()),
+            icon: manifest
+                .filter(|_| self.entry.enabled)
+                .and_then(|m| m.icon.clone()),
             source: self.entry.source.clone(),
             source_exists: Path::new(&self.entry.source).exists(),
             enabled: self.entry.enabled,
             watch: self.entry.watch,
+            registry: self.entry.registry.clone(),
             loaded: self.loaded,
             error: self.error.clone(),
             providers: self.providers.iter().map(|p| p.id().to_string()).collect(),
@@ -144,10 +246,15 @@ impl Plugin {
                 .filter(|_| self.entry.enabled)
                 .map(|m| m.themes.clone())
                 .unwrap_or_default(),
-            permissions: manifest
-                .map(|m| PluginPermissions {
-                    read: m.permissions.read.iter().map(|r| r.path.clone()).collect(),
-                    http: m.permissions.http.clone(),
+            permissions: manifest.map(PluginPermissions::of).unwrap_or_default(),
+            folders: manifest
+                .map(|m| {
+                    let home = home_dir();
+                    m.permissions
+                        .folders
+                        .iter()
+                        .map(|f| plugin_folder(f, self.entry.folders.get(&f.key), home.as_deref()))
+                        .collect()
                 })
                 .unwrap_or_default(),
         }
@@ -161,10 +268,14 @@ struct Inner {
     limits: CallLimits,
     /// Started with the first store plugin.
     runtime: OnceLock<std::result::Result<Arc<Runtime>, String>>,
+    /// The keyring and website sessions the stores use; set once by the app before loading.
+    services: OnceLock<PluginServices>,
     /// In install order.
     plugins: Mutex<Vec<Plugin>>,
     /// One change at a time (a watched reload may come in at any moment).
     changing: Mutex<()>,
+    /// One registry download or install at a time (taken before `changing`).
+    registry_ops: Mutex<()>,
 }
 
 /// The installed plugins. Clones share one list.
@@ -194,10 +305,19 @@ impl PluginManager {
                 events,
                 limits,
                 runtime: OnceLock::new(),
+                services: OnceLock::new(),
                 plugins: Mutex::new(Vec::new()),
                 changing: Mutex::new(()),
+                registry_ops: Mutex::new(()),
             }),
         }
+    }
+
+    /// Hands the stores the app's keyring and website sessions. Call before
+    /// [`load_enabled`](Self::load_enabled); only the first call counts. Without it stores use the
+    /// system keyring and have no website sessions.
+    pub fn set_services(&self, services: PluginServices) {
+        let _ = self.inner.services.set(services);
     }
 
     /// Reads the plugin list and loads the enabled plugins (once, at startup). A plugin that
@@ -225,6 +345,32 @@ impl PluginManager {
         self.inner.plugins().iter().map(Plugin::info).collect()
     }
 
+    /// Whether any installed plugin came from the plugin registry (and so may get updates).
+    pub fn has_registry_plugins(&self) -> bool {
+        self.inner
+            .plugins()
+            .iter()
+            .any(|p| p.entry.registry.is_some())
+    }
+
+    /// What the installed copy of `id` asks for (`None`: not installed). A copy whose manifest
+    /// cannot be read counts as asking for nothing, so anything a new version asks is new.
+    pub(crate) fn installed_shape(&self, id: &str) -> Option<registry::PluginShape> {
+        let plugins = self.inner.plugins();
+        let plugin = plugins.iter().find(|p| p.entry.id == id)?;
+        Some(
+            plugin
+                .manifest
+                .as_ref()
+                .map(|m| registry::PluginShape {
+                    permissions: PluginPermissions::of(m),
+                    stores: m.providers.len() as u32,
+                    has_extension: m.extension.is_some(),
+                })
+                .unwrap_or_default(),
+        )
+    }
+
     /// Reads and checks the plugin in `path` (a folder or a zip) the way an install would,
     /// without installing it: what the install dialog shows before the user agrees.
     pub fn preview(&self, path: &Path) -> Result<PluginPreview> {
@@ -233,23 +379,29 @@ impl PluginManager {
         // The checked copy is thrown away again when `staged` is dropped.
         let staged = install::stage(&source, &self.inner.paths.plugins_dir(), None)?;
         let manifest = staged.manifest();
-        let installed_version = self
-            .inner
-            .plugins()
-            .iter()
-            .find(|p| p.entry.id == manifest.id)
-            .map(|p| {
-                p.manifest
-                    .as_ref()
-                    .map(|m| m.version.clone())
-                    .unwrap_or_default()
-            });
+        let (installed_version, chosen) = {
+            let plugins = self.inner.plugins();
+            let installed = plugins.iter().find(|p| p.entry.id == manifest.id);
+            (
+                installed.map(|p| {
+                    p.manifest
+                        .as_ref()
+                        .map(|m| m.version.clone())
+                        .unwrap_or_default()
+                }),
+                installed
+                    .map(|p| p.entry.folders.clone())
+                    .unwrap_or_default(),
+            )
+        };
+        let home = home_dir();
         Ok(PluginPreview {
             id: manifest.id.clone(),
             name: manifest.name.clone(),
             version: manifest.version.clone(),
             description: manifest.description.clone(),
             author: manifest.author.clone(),
+            icon: staged.icon_data_url()?,
             stores: manifest.providers.len() as u32,
             has_extension: manifest.extension.is_some(),
             themes: manifest
@@ -263,15 +415,13 @@ impl PluginManager {
                         .to_string()
                 })
                 .collect(),
-            permissions: PluginPermissions {
-                read: manifest
-                    .permissions
-                    .read
-                    .iter()
-                    .map(|r| r.path.clone())
-                    .collect(),
-                http: manifest.permissions.http.clone(),
-            },
+            permissions: PluginPermissions::of(manifest),
+            folders: manifest
+                .permissions
+                .folders
+                .iter()
+                .map(|f| plugin_folder(f, chosen.get(&f.key), home.as_deref()))
+                .collect(),
             installed_version,
         })
     }
@@ -279,10 +429,25 @@ impl PluginManager {
     /// Installs the plugin in `path` (a folder or a zip), enables and loads it. An installed
     /// plugin with the same id is replaced (an update).
     pub fn install(&self, path: &Path) -> Result<PluginInfo> {
+        self.install_with_folders(path, &BTreeMap::new())
+    }
+
+    /// [`install`](Self::install) with the folders the user chose for the plugin's
+    /// `permissions.folders` (key to absolute path). They are checked like
+    /// [`set_folder`](Self::set_folder) checks one, before anything changes (one bad entry
+    /// refuses the whole install and an installed copy stays), and saved together with the
+    /// install, so the first load already mounts them. Earlier choices stay unless `folders`
+    /// names the key again; a blank path there goes back to the default.
+    pub fn install_with_folders(
+        &self,
+        path: &Path,
+        folders: &BTreeMap<String, String>,
+    ) -> Result<PluginInfo> {
         let _change = self.inner.change();
         let source = std::path::absolute(path).map_err(|e| PluginError::io(path, e))?;
         let staged = install::stage(&source, &self.inner.paths.plugins_dir(), None)?;
         let id = staged.manifest().id.clone();
+        let folders = self.check_install_folders(staged.manifest(), folders)?;
         // The running copy lets go of its files before they are replaced.
         self.inner.unload(&id);
         if let Err(err) = staged.commit() {
@@ -290,22 +455,7 @@ impl PluginManager {
             self.inner.changed();
             return Err(err);
         }
-        {
-            let mut plugins = self.inner.plugins();
-            let source = source.display().to_string();
-            match plugins.iter_mut().find(|p| p.entry.id == id) {
-                Some(plugin) => {
-                    plugin.entry.source = source;
-                    plugin.entry.enabled = true;
-                }
-                None => plugins.push(Plugin::new(StateEntry {
-                    id: id.clone(),
-                    source,
-                    enabled: true,
-                    watch: false,
-                })),
-            }
-        }
+        self.record_install(&id, source.display().to_string(), None, folders);
         let saved = self.inner.save();
         self.inner.load(&id);
         self.sync_watch(&id);
@@ -313,6 +463,135 @@ impl PluginManager {
         tracing::info!(plugin = %id, source = %source.display(), "plugin installed");
         saved?;
         self.info(&id)
+    }
+
+    /// Installs version `version` of the registry plugin `id` from its cached zip `zip`, enables
+    /// and loads it; `pinned` is remembered (no update offers). The zip's `plugin.json` must have
+    /// that id and version, or nothing is installed. When a copy is replaced, the plugin's data
+    /// folder is backed up first (see [`registry::backup_plugin_data`]); if that fails the old copy
+    /// stays.
+    pub fn install_registry(
+        &self,
+        id: &str,
+        version: &str,
+        zip: &Path,
+        pinned: bool,
+    ) -> Result<PluginInfo> {
+        self.install_registry_with_folders(id, version, zip, pinned, &BTreeMap::new())
+    }
+
+    /// [`install_registry`](Self::install_registry) with the user's folders, see
+    /// [`install_with_folders`](Self::install_with_folders).
+    pub fn install_registry_with_folders(
+        &self,
+        id: &str,
+        version: &str,
+        zip: &Path,
+        pinned: bool,
+        folders: &BTreeMap<String, String>,
+    ) -> Result<PluginInfo> {
+        let _change = self.inner.change();
+        let source = std::path::absolute(zip).map_err(|e| PluginError::io(zip, e))?;
+        let staged = install::stage(&source, &self.inner.paths.plugins_dir(), None)?;
+        let found = staged.manifest();
+        if found.id != id || found.version != version {
+            return Err(registry::mismatch(id, version, &found.id, &found.version));
+        }
+        let folders = self.check_install_folders(found, folders)?;
+        let old_version = self
+            .inner
+            .plugins()
+            .iter()
+            .find(|p| p.entry.id == id)
+            .map(|p| p.manifest.as_ref().map(|m| m.version.clone()));
+        // The running copy lets go of its files (and of its data folder) before anything moves.
+        self.inner.unload(id);
+        if let Some(old_version) = old_version {
+            let old_version = old_version.unwrap_or_else(|| "unknown".into());
+            if let Err(err) = registry::backup_plugin_data(&self.inner.paths, id, &old_version) {
+                self.inner.load(id);
+                self.inner.changed();
+                return Err(err);
+            }
+        }
+        if let Err(err) = staged.commit() {
+            self.inner.load(id);
+            self.inner.changed();
+            return Err(err);
+        }
+        self.record_install(
+            id,
+            source.display().to_string(),
+            Some(RegistryState {
+                version: version.to_string(),
+                pinned,
+            }),
+            folders,
+        );
+        let saved = self.inner.save();
+        self.inner.load(id);
+        self.inner.changed();
+        registry::prune_cache(&self.inner.paths, id, &source);
+        tracing::info!(
+            plugin = id,
+            version,
+            pinned,
+            "plugin installed from the registry"
+        );
+        saved?;
+        self.info(id)
+    }
+
+    /// Notes an install in the list: a new entry, or the existing one pointed at the new source.
+    /// `folders` are the checked choices of this install: they win over earlier ones.
+    fn record_install(
+        &self,
+        id: &str,
+        source: String,
+        registry: Option<RegistryState>,
+        folders: BTreeMap<String, Option<String>>,
+    ) {
+        let mut plugins = self.inner.plugins();
+        match plugins.iter_mut().find(|p| p.entry.id == id) {
+            Some(plugin) => {
+                plugin.entry.source = source;
+                plugin.entry.enabled = true;
+                plugin.entry.registry = registry;
+                for (key, path) in folders {
+                    match path {
+                        Some(path) => plugin.entry.folders.insert(key, path),
+                        None => plugin.entry.folders.remove(&key),
+                    };
+                }
+            }
+            None => plugins.push(Plugin::new(StateEntry {
+                id: id.to_string(),
+                source,
+                enabled: true,
+                watch: false,
+                registry,
+                folders: folders
+                    .into_iter()
+                    .filter_map(|(key, path)| Some((key, path?)))
+                    .collect(),
+            })),
+        }
+    }
+
+    pub(crate) fn paths(&self) -> &DataPaths {
+        &self.inner.paths
+    }
+
+    pub(crate) fn events(&self) -> &EventBus {
+        &self.inner.events
+    }
+
+    /// Held while a registry download and the install that follows it run.
+    pub(crate) fn registry_ops(&self) -> MutexGuard<'_, ()> {
+        self.inner
+            .registry_ops
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
     }
 
     /// Loads the plugin anew: from its source when that still exists (copied again), otherwise
@@ -372,6 +651,109 @@ impl PluginManager {
         self.info(id)
     }
 
+    /// Points the plugin's folder `key` (one its manifest declares in `permissions.folders`) at
+    /// `path`, or back to its default with `None`, and loads the plugin's stores again so they
+    /// see the new folder. The choice is kept in `plugins.json` (see [`StateEntry::folders`]).
+    pub fn set_folder(&self, id: &str, key: &str, path: Option<&str>) -> Result<PluginInfo> {
+        let _change = self.inner.change();
+        let manifest = self
+            .manifest(id)
+            .ok_or_else(|| PluginError::NotFound(id.to_string()))?;
+        if !manifest.permissions.folders.iter().any(|f| f.key == key) {
+            return Err(PluginError::Invalid(format!(
+                "The plugin \"{}\" does not ask for a folder \"{key}\".",
+                manifest.name
+            )));
+        }
+        let chosen = match path.map(str::trim).filter(|p| !p.is_empty()) {
+            Some(path) => Some(self.check_folder(id, Path::new(path))?),
+            None => None,
+        };
+        self.update_entry(id, |entry| match &chosen {
+            Some(path) => {
+                entry.folders.insert(key.to_string(), path.clone());
+            }
+            None => {
+                entry.folders.remove(key);
+            }
+        })?;
+        let saved = self.inner.save();
+        self.inner.unload(id);
+        self.inner.load(id);
+        self.inner.changed();
+        tracing::info!(plugin = id, key, chosen = ?chosen, "plugin folder set");
+        saved?;
+        self.info(id)
+    }
+
+    /// The folders chosen for an install, checked against the staged manifest: every key is
+    /// one it declares and every path passes [`check_folder`](Self::check_folder). A blank path
+    /// (`None` in the result) means "back to the default". Returns the paths as they are stored.
+    fn check_install_folders(
+        &self,
+        manifest: &PluginManifest,
+        folders: &BTreeMap<String, String>,
+    ) -> Result<BTreeMap<String, Option<String>>> {
+        let mut checked = BTreeMap::new();
+        for (key, path) in folders {
+            if !manifest.permissions.folders.iter().any(|f| &f.key == key) {
+                return Err(PluginError::Invalid(format!(
+                    "The plugin \"{}\" does not ask for a folder \"{key}\".",
+                    manifest.name
+                )));
+            }
+            let path = path.trim();
+            let stored = if path.is_empty() {
+                None
+            } else {
+                Some(self.check_folder(&manifest.id, Path::new(path))?)
+            };
+            checked.insert(key.clone(), stored);
+        }
+        Ok(checked)
+    }
+
+    /// The folder as it is stored: absolute, existing, a folder, canonical (without the
+    /// `\\?\` prefix Windows adds), and not Questkeep's own data or the plugin's own files.
+    fn check_folder(&self, id: &str, path: &Path) -> Result<String> {
+        if !path.is_absolute() {
+            return Err(PluginError::Invalid(format!(
+                "\"{}\" is not a full path. Choose a folder with the folder picker.",
+                path.display()
+            )));
+        }
+        let real = std::fs::canonicalize(path).map_err(|err| {
+            if err.kind() == std::io::ErrorKind::NotFound {
+                PluginError::Invalid(format!("The folder {} does not exist.", path.display()))
+            } else {
+                PluginError::io(path, err)
+            }
+        })?;
+        if !real.is_dir() {
+            return Err(PluginError::Invalid(format!(
+                "{} is not a folder.",
+                path.display()
+            )));
+        }
+        let own = |dir: PathBuf| std::fs::canonicalize(&dir).unwrap_or(dir);
+        let data = own(self.inner.paths.root().to_path_buf());
+        // Inside Questkeep's data (the library database, settings, other plugins' data) or a
+        // folder that contains all of it: the plugin could read those.
+        if real.starts_with(&data) || data.starts_with(&real) {
+            return Err(PluginError::Invalid(
+                "That folder is Questkeep's own data folder, or contains it. Choose another \
+                 folder."
+                    .into(),
+            ));
+        }
+        if real.starts_with(own(self.plugin_dir(id))) {
+            return Err(PluginError::Invalid(
+                "That folder is the plugin's own installed folder. Choose another folder.".into(),
+            ));
+        }
+        Ok(plain_path(&real).display().to_string())
+    }
+
     /// Unloads the plugin and deletes its installed copy; with `delete_data` also what the
     /// plugin stored itself. Games of its stores stay in the library.
     pub fn remove(&self, id: &str, delete_data: bool) -> Result<()> {
@@ -390,8 +772,12 @@ impl PluginManager {
         self.inner.changed();
         removed?;
         saved?;
+        if let Err(err) = registry::remove_cache(&self.inner.paths, id) {
+            tracing::warn!(plugin = id, %err, "could not delete the cached plugin download");
+        }
         if delete_data {
             install::remove_dir(&self.inner.paths.plugin_data_dir().join(id))?;
+            registry::remove_backups(&self.inner.paths, id)?;
         }
         tracing::info!(plugin = id, delete_data, "plugin removed");
         Ok(())
@@ -584,10 +970,10 @@ impl Inner {
     /// Reads the installed copy's manifest and, for an enabled plugin, starts its stores. The
     /// outcome (also a failure) is kept with the plugin.
     fn load(&self, id: &str) {
-        let enabled = {
+        let (enabled, chosen) = {
             let plugins = self.plugins();
             match plugins.iter().find(|p| p.entry.id == id) {
-                Some(plugin) => plugin.entry.enabled,
+                Some(plugin) => (plugin.entry.enabled, plugin.entry.folders.clone()),
                 None => return,
             }
         };
@@ -604,7 +990,7 @@ impl Inner {
         });
         let (manifest, outcome) = match manifest {
             Ok(manifest) if enabled => {
-                let outcome = self.load_providers(&manifest, &dir);
+                let outcome = self.load_providers(&manifest, &dir, &chosen);
                 (Some(manifest), outcome)
             }
             Ok(manifest) => (Some(manifest), Ok(Vec::new())),
@@ -641,6 +1027,7 @@ impl Inner {
         &self,
         manifest: &PluginManifest,
         dir: &Path,
+        chosen: &BTreeMap<String, String>,
     ) -> Result<Vec<Arc<WasmProvider>>> {
         if manifest.providers.is_empty() {
             return Ok(Vec::new());
@@ -651,6 +1038,8 @@ impl Inner {
             plugin_id: manifest.id.clone(),
             plugin_dir: dir.to_path_buf(),
             data_dir: self.paths.plugin_data_dir().join(&manifest.id),
+            // The chosen folders are checked when they are chosen and again when mounted; a
+            // missing one is simply not mounted.
             mounts: manifest
                 .permissions
                 .read
@@ -659,8 +1048,44 @@ impl Inner {
                     let path = expand_path(&read.path, |v| std::env::var(v).ok(), home.as_deref())?;
                     Some((path, read.mount.clone()))
                 })
+                .chain(manifest.permissions.folders.iter().filter_map(|folder| {
+                    let path = folder_path(
+                        folder,
+                        chosen.get(&folder.key).map(String::as_str),
+                        |v| std::env::var(v).ok(),
+                        home.as_deref(),
+                    )?;
+                    Some((path, folder.mount.clone()))
+                }))
+                // The whole file system, read-only, below /host.
+                .chain(
+                    manifest
+                        .permissions
+                        .filesystem
+                        .is_some()
+                        .then(filesystem_mounts)
+                        .into_iter()
+                        .flatten(),
+                )
                 .collect(),
             hosts: manifest.host_rules(),
+            filesystem: manifest.permissions.filesystem.is_some(),
+            registry: manifest.permissions.registry.is_some(),
+            home: home.clone(),
+            protected: vec![
+                self.paths.plugins_dir(),
+                self.paths.plugin_data_dir(),
+                dir.to_path_buf(),
+            ],
+            launcher_names: manifest
+                .permissions
+                .launcher
+                .as_ref()
+                .map(|l| l.process_names.clone())
+                .unwrap_or_default(),
+            login: LoginSetup::new(manifest, dir)?,
+            services: self.services.get().cloned().unwrap_or_default(),
+            store_id: Default::default(),
         };
         let mut providers: Vec<Arc<WasmProvider>> = Vec::new();
         for entry in &manifest.providers {
@@ -682,6 +1107,46 @@ impl Inner {
             providers.push(Arc::new(provider));
         }
         Ok(providers)
+    }
+}
+
+/// A declared folder with what the user chose for it.
+fn plugin_folder(
+    folder: &FolderPermission,
+    chosen: Option<&String>,
+    home: Option<&Path>,
+) -> PluginFolder {
+    let effective = folder_path(
+        folder,
+        chosen.map(String::as_str),
+        |v| std::env::var(v).ok(),
+        home,
+    );
+    let default = folder_path(folder, None, |v| std::env::var(v).ok(), home);
+    PluginFolder {
+        key: folder.key.clone(),
+        label: folder.label.clone(),
+        hint: folder.hint.clone(),
+        mount: folder.mount.clone(),
+        default: folder.default.clone(),
+        default_exists: default.as_deref().is_some_and(Path::is_dir),
+        default_path: default.map(|p| p.display().to_string()),
+        path: chosen.cloned(),
+        exists: effective.as_deref().is_some_and(Path::is_dir),
+        effective_path: effective.map(|p| p.display().to_string()),
+    }
+}
+
+/// A canonical path without the `\\?\` prefix Windows puts on it (`\\?\C:\x` becomes `C:\x`,
+/// `\\?\UNC\server\share` becomes `\\server\share`), so people see the path they know.
+fn plain_path(path: &Path) -> PathBuf {
+    let text = path.to_string_lossy();
+    if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {
+        return PathBuf::from(format!(r"\\{rest}"));
+    }
+    match text.strip_prefix(r"\\?\") {
+        Some(rest) if rest.as_bytes().get(1) == Some(&b':') => PathBuf::from(rest),
+        _ => path.to_path_buf(),
     }
 }
 
@@ -896,6 +1361,7 @@ mod tests {
         assert_eq!(preview.themes.len(), 1);
         assert_eq!(preview.stores, 0);
         assert!(!preview.has_extension && preview.installed_version.is_none());
+        assert_eq!(preview.icon, None);
         assert!(manager.list().is_empty() && fx.changes() == 0);
         assert!(!manager.plugin_dir("theme-pack").exists());
         assert!(manager.preview(&fx.root.join("nope")).is_err());
@@ -992,6 +1458,36 @@ mod tests {
     }
 
     #[test]
+    fn an_icon_is_a_data_url_in_the_preview_and_a_path_in_the_list() {
+        let fx = Fixture::new();
+        let manager = fx.manager();
+        let source = fx.root.join("src/pic");
+        write_plugin(&source, "pic", "1.0.0");
+        let mut manifest: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(source.join("plugin.json")).unwrap()).unwrap();
+        manifest["icon"] = "img/logo.svg".into();
+        std::fs::write(source.join("plugin.json"), manifest.to_string()).unwrap();
+        std::fs::create_dir_all(source.join("img")).unwrap();
+        std::fs::write(source.join("img/logo.svg"), "<svg/>").unwrap();
+
+        let preview = manager.preview(&source).unwrap();
+        assert_eq!(
+            preview.icon.as_deref(),
+            Some("data:image/svg+xml;base64,PHN2Zy8+")
+        );
+        let info = manager.install(&source).unwrap();
+        assert_eq!(info.icon.as_deref(), Some("img/logo.svg"));
+        assert!(manager.file("pic", "img/logo.svg").is_some());
+        // A disabled plugin hands out no files, so it offers no icon either.
+        assert_eq!(manager.set_enabled("pic", false).unwrap().icon, None);
+
+        // A bad icon keeps a plugin from being previewed or installed.
+        std::fs::write(source.join("img/logo.svg"), "<svg><script/></svg>").unwrap();
+        assert!(manager.preview(&source).is_err());
+        assert!(manager.install(&source).is_err());
+    }
+
+    #[test]
     fn unknown_plugins_and_broken_installs_are_reported() {
         let fx = Fixture::new();
         let manager = fx.manager();
@@ -1043,6 +1539,165 @@ mod tests {
         assert_eq!(fx.registry.iter().count(), 0);
     }
 
+    /// A plugin zip like the registry serves one.
+    fn registry_zip(fx: &Fixture, id: &str, version: &str, inside: (&str, &str)) -> PathBuf {
+        let zip = fx.root.join(format!("zips/{id}-{version}.zip"));
+        std::fs::create_dir_all(zip.parent().unwrap()).unwrap();
+        let manifest = serde_json::json!({
+            "id": inside.0, "name": "P", "version": inside.1, "apiVersion": 1,
+            "themes": [{ "id": "t", "name": "T", "css": "theme.css" }],
+        })
+        .to_string();
+        crate::install::testing::write_zip(
+            &zip,
+            &[
+                ("plugin.json", manifest.as_bytes()),
+                ("theme.css", version.as_bytes()),
+            ],
+        );
+        zip
+    }
+
+    #[test]
+    fn registry_installs_check_the_zip_and_record_where_it_came_from() {
+        let fx = Fixture::new();
+        let manager = fx.manager();
+        // Another plugin or another version than requested: nothing is installed.
+        let wrong_id = registry_zip(&fx, "pack", "1.0.0", ("other", "1.0.0"));
+        let err = manager
+            .install_registry("pack", "1.0.0", &wrong_id, false)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("\"other\"") && err.contains("not \"pack\""),
+            "{err}"
+        );
+        let wrong_version = registry_zip(&fx, "pack", "1.0.0", ("pack", "1.0.1"));
+        let err = manager
+            .install_registry("pack", "1.0.0", &wrong_version, false)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("1.0.1") && err.contains("registry says 1.0.0"),
+            "{err}"
+        );
+        assert!(manager.list().is_empty() && fx.changes() == 0);
+        assert!(!manager.plugin_dir("pack").exists() && !manager.plugin_dir("other").exists());
+
+        let zip = registry_zip(&fx, "pack", "1.0.0", ("pack", "1.0.0"));
+        let info = manager
+            .install_registry("pack", "1.0.0", &zip, true)
+            .unwrap();
+        assert_eq!(
+            info.registry,
+            Some(RegistryState {
+                version: "1.0.0".into(),
+                pinned: true
+            })
+        );
+        assert_eq!(Path::new(&info.source), zip);
+        assert!(info.loaded && fx.changes() == 1);
+        // The state survives a restart.
+        let again = fx.manager();
+        again.load_enabled();
+        assert_eq!(again.list()[0].registry, info.registry);
+
+        // Without data there is nothing to back up.
+        assert!(!fx.paths.plugin_data_backup_dir().exists());
+
+        // Installing the same id from a folder takes it out of the registry's hands.
+        let source = fx.root.join("src/pack");
+        write_plugin(&source, "pack", "5.0.0");
+        let info = manager.install(&source).unwrap();
+        assert_eq!(info.registry, None);
+        assert!(
+            install::load_state(&fx.paths.plugins_dir())[0]
+                .registry
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn registry_updates_back_up_the_data_and_keep_three_backups() {
+        let fx = Fixture::new();
+        let manager = fx.manager();
+        let data = fx.paths.plugin_data_dir().join("pack");
+        for n in 1..=5 {
+            let version = format!("{n}.0.0");
+            let zip = registry_zip(&fx, "pack", &version, ("pack", &version));
+            manager
+                .install_registry("pack", &version, &zip, false)
+                .unwrap();
+            std::fs::create_dir_all(data.join("sub")).unwrap();
+            std::fs::write(data.join("sub/state.txt"), format!("data of {version}")).unwrap();
+        }
+        assert_eq!(manager.list()[0].version, "5.0.0");
+        // The copies made before the swaps (1.0.0 .. 4.0.0), the newest three are kept.
+        let mut kept: Vec<String> =
+            std::fs::read_dir(fx.paths.plugin_data_backup_dir().join("pack"))
+                .unwrap()
+                .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+                .collect();
+        kept.sort();
+        assert_eq!(kept, ["2.0.0", "3.0.0", "4.0.0"]);
+        let backup = fx
+            .paths
+            .plugin_data_backup_dir()
+            .join("pack/4.0.0/sub/state.txt");
+        assert_eq!(std::fs::read_to_string(backup).unwrap(), "data of 4.0.0");
+        // The live data is untouched.
+        assert_eq!(
+            std::fs::read_to_string(data.join("sub/state.txt")).unwrap(),
+            "data of 5.0.0"
+        );
+
+        // Removing keeps the backups unless the data goes too.
+        manager.remove("pack", false).unwrap();
+        assert!(fx.paths.plugin_data_backup_dir().join("pack").is_dir());
+        assert!(!fx.paths.plugin_cache_dir().join("pack").exists());
+        let zip = registry_zip(&fx, "pack", "6.0.0", ("pack", "6.0.0"));
+        manager
+            .install_registry("pack", "6.0.0", &zip, false)
+            .unwrap();
+        manager.remove("pack", true).unwrap();
+        assert!(!fx.paths.plugin_data_backup_dir().join("pack").exists());
+        assert!(!data.exists());
+    }
+
+    #[test]
+    fn a_failed_backup_stops_the_update() {
+        let fx = Fixture::new();
+        let manager = fx.manager();
+        let zip = registry_zip(&fx, "pack", "1.0.0", ("pack", "1.0.0"));
+        manager
+            .install_registry("pack", "1.0.0", &zip, false)
+            .unwrap();
+        let data = fx.paths.plugin_data_dir().join("pack");
+        std::fs::create_dir_all(&data).unwrap();
+        std::fs::write(data.join("state.txt"), "precious").unwrap();
+        // A file where the backup folder has to go.
+        std::fs::create_dir_all(fx.paths.plugin_data_backup_dir()).unwrap();
+        std::fs::write(fx.paths.plugin_data_backup_dir().join("pack"), "in the way").unwrap();
+
+        let newer = registry_zip(&fx, "pack", "2.0.0", ("pack", "2.0.0"));
+        let err = manager
+            .install_registry("pack", "2.0.0", &newer, false)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("back up the data") && err.contains("Nothing was changed"),
+            "{err}"
+        );
+        let info = &manager.list()[0];
+        assert_eq!(info.version, "1.0.0");
+        assert!(info.loaded);
+        assert_eq!(info.registry.as_ref().unwrap().version, "1.0.0");
+        assert_eq!(
+            std::fs::read_to_string(data.join("state.txt")).unwrap(),
+            "precious"
+        );
+    }
+
     #[test]
     fn watching_reloads_after_a_source_change() {
         let fx = Fixture::new();
@@ -1075,6 +1730,325 @@ mod tests {
         write_plugin(&source, "pack", "1.0.2");
         std::thread::sleep(WATCH_DEBOUNCE * 3);
         assert_eq!(manager.list()[0].version, "1.0.1");
+    }
+
+    /// A plugin without stores that asks for two folders.
+    fn write_folder_plugin(dir: &Path, version: &str, default: &Path) {
+        std::fs::create_dir_all(dir).unwrap();
+        let manifest = serde_json::json!({
+            "id": "folders", "name": "Folders", "version": version, "apiVersion": 1,
+            "permissions": { "folders": [
+                { "key": "games", "label": "Games", "hint": "Where they are", "as": "/games",
+                  "default": default.display().to_string() },
+                { "key": "other", "label": "Other", "as": "/other" }
+            ] }
+        });
+        std::fs::write(dir.join("plugin.json"), manifest.to_string()).unwrap();
+    }
+
+    #[test]
+    fn folders_the_user_chooses_are_checked_kept_and_removed() {
+        let fx = Fixture::new();
+        let manager = fx.manager();
+        let default = fx.root.join("default-games");
+        let chosen = fx.root.join("chosen");
+        std::fs::create_dir_all(&chosen).unwrap();
+        let source = fx.root.join("src/folders");
+        write_folder_plugin(&source, "1.0.0", &default);
+
+        // The install dialog lists what the plugin asks for.
+        let preview = manager.preview(&source).unwrap();
+        assert_eq!(preview.permissions.folders.len(), 2);
+        assert_eq!(preview.permissions.folders[0].label, "Games");
+        assert_eq!(
+            preview.permissions.folders[0].hint.as_deref(),
+            Some("Where they are")
+        );
+
+        // Nothing chosen: the default applies, and it is not there yet.
+        let info = manager.install(&source).unwrap();
+        let [games, other] = &info.folders[..] else {
+            panic!("two folders");
+        };
+        assert_eq!(games.mount, "/games");
+        assert_eq!(games.path, None);
+        assert_eq!(
+            games.effective_path.as_deref(),
+            Some(default.display().to_string().as_str())
+        );
+        assert!(!games.exists);
+        assert_eq!(other.effective_path, None);
+        assert!(!other.exists);
+        assert_eq!(info.permissions.folders.len(), 2);
+
+        // Choosing stores the real path in plugins.json and reports it.
+        let info = manager
+            .set_folder("folders", "games", Some(&chosen.display().to_string()))
+            .unwrap();
+        let stored = install::load_state(&fx.paths.plugins_dir())[0].folders["games"].clone();
+        assert_eq!(
+            std::fs::canonicalize(&stored).unwrap(),
+            std::fs::canonicalize(&chosen).unwrap()
+        );
+        assert!(!stored.starts_with(r"\\?\"), "{stored}");
+        assert_eq!(info.folders[0].path.as_deref(), Some(stored.as_str()));
+        assert_eq!(
+            info.folders[0].effective_path.as_deref(),
+            Some(stored.as_str())
+        );
+        assert!(info.folders[0].exists);
+        assert_eq!(fx.changes(), 2);
+        // It is not in the plugin's own writable data folder.
+        assert!(!fx.paths.plugin_data_dir().join("folders").exists());
+
+        // It survives a restart, an update and an install from another source.
+        let again = fx.manager();
+        again.load_enabled();
+        assert_eq!(
+            again.list()[0].folders[0].path.as_deref(),
+            Some(stored.as_str())
+        );
+        write_folder_plugin(&source, "2.0.0", &default);
+        let info = manager.install(&source).unwrap();
+        assert_eq!(info.version, "2.0.0");
+        assert_eq!(info.folders[0].path.as_deref(), Some(stored.as_str()));
+        let moved = fx.root.join("elsewhere/folders");
+        write_folder_plugin(&moved, "3.0.0", &default);
+        let info = manager.install(&moved).unwrap();
+        assert_eq!(info.folders[0].path.as_deref(), Some(stored.as_str()));
+        let info = manager.reload("folders").unwrap();
+        assert_eq!(info.folders[0].path.as_deref(), Some(stored.as_str()));
+
+        // A deleted folder is still the choice, but is reported missing.
+        std::fs::remove_dir_all(&chosen).unwrap();
+        let info = manager.list().remove(0);
+        assert_eq!(info.folders[0].path.as_deref(), Some(stored.as_str()));
+        assert!(!info.folders[0].exists);
+
+        // Back to the default.
+        let info = manager.set_folder("folders", "games", None).unwrap();
+        assert_eq!(info.folders[0].path, None);
+        assert_eq!(
+            info.folders[0].effective_path.as_deref(),
+            Some(default.display().to_string().as_str())
+        );
+        assert!(
+            install::load_state(&fx.paths.plugins_dir())[0]
+                .folders
+                .is_empty()
+        );
+
+        // Removing the plugin removes the choices.
+        std::fs::create_dir_all(&chosen).unwrap();
+        manager
+            .set_folder("folders", "other", Some(&chosen.display().to_string()))
+            .unwrap();
+        manager.remove("folders", false).unwrap();
+        assert!(install::load_state(&fx.paths.plugins_dir()).is_empty());
+        let info = manager.install(&source).unwrap();
+        assert!(info.folders.iter().all(|f| f.path.is_none()));
+    }
+
+    #[test]
+    fn a_folder_choice_is_refused_when_it_cannot_work() {
+        let fx = Fixture::new();
+        let manager = fx.manager();
+        let source = fx.root.join("src/folders");
+        write_folder_plugin(&source, "1.0.0", &fx.root.join("default"));
+        manager.install(&source).unwrap();
+        let file = fx.root.join("a-file.txt");
+        std::fs::write(&file, "x").unwrap();
+        let inside_data = fx.paths.plugin_data_dir().join("folders");
+        std::fs::create_dir_all(&inside_data).unwrap();
+        let ask = |key: &str, path: &str| {
+            manager
+                .set_folder("folders", key, Some(path))
+                .unwrap_err()
+                .to_string()
+        };
+        let path = |p: &Path| p.display().to_string();
+        assert!(ask("nope", &path(&fx.root)).contains("does not ask for a folder \"nope\""));
+        assert!(ask("games", "relative/dir").contains("not a full path"));
+        assert!(ask("games", &path(&fx.root.join("missing"))).contains("does not exist"));
+        assert!(ask("games", &path(&file)).contains("not a folder"));
+        // Questkeep's own data: the folder itself, below it, and what contains it.
+        for own in [
+            fx.paths.root().to_path_buf(),
+            fx.paths.plugins_dir(),
+            inside_data,
+            fx.root.clone(),
+        ] {
+            assert!(
+                ask("games", &path(&own)).contains("own data folder"),
+                "{own:?}"
+            );
+        }
+        let err = manager
+            .set_folder("unknown", "games", Some(&path(&fx.root)))
+            .unwrap_err();
+        assert!(matches!(err, PluginError::NotFound(_)));
+        // Nothing was stored by the refusals.
+        assert!(
+            install::load_state(&fx.paths.plugins_dir())[0]
+                .folders
+                .is_empty()
+        );
+        assert_eq!(fx.changes(), 1);
+    }
+
+    #[test]
+    fn folders_chosen_in_the_install_dialog_are_checked_first_and_kept() {
+        let fx = Fixture::new();
+        let manager = fx.manager();
+        let default = fx.root.join("default-games");
+        let chosen = fx.root.join("chosen");
+        let other = fx.root.join("other");
+        std::fs::create_dir_all(&chosen).unwrap();
+        std::fs::create_dir_all(&other).unwrap();
+        let source = fx.root.join("src/folders");
+        write_folder_plugin(&source, "1.0.0", &default);
+        let path = |p: &Path| p.display().to_string();
+        let choose = |pairs: &[(&str, String)]| -> BTreeMap<String, String> {
+            pairs
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.clone()))
+                .collect()
+        };
+
+        // The dialog sees the default, expanded, and that it is missing.
+        let preview = manager.preview(&source).unwrap();
+        let games = &preview.folders[0];
+        assert_eq!(games.default_path.as_deref(), Some(path(&default).as_str()));
+        assert!(!games.default_exists);
+        assert_eq!(games.path, None);
+        assert_eq!(preview.folders[1].default_path, None);
+
+        // A bad entry fails the whole install: nothing is installed or written.
+        let bad = choose(&[
+            ("games", path(&chosen)),
+            ("other", path(&fx.root.join("missing"))),
+        ]);
+        let err = manager.install_with_folders(&source, &bad).unwrap_err();
+        assert!(err.to_string().contains("does not exist"), "{err}");
+        assert!(manager.list().is_empty());
+        assert!(install::load_state(&fx.paths.plugins_dir()).is_empty());
+        assert!(!fx.paths.plugins_dir().join("folders").exists());
+        let undeclared = choose(&[("nope", path(&chosen))]);
+        let err = manager
+            .install_with_folders(&source, &undeclared)
+            .unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("does not ask for a folder \"nope\"")
+        );
+        // Questkeep's own data is refused like in Settings.
+        let own = choose(&[("games", path(fx.paths.root()))]);
+        let err = manager.install_with_folders(&source, &own).unwrap_err();
+        assert!(err.to_string().contains("own data folder"), "{err}");
+        assert!(manager.list().is_empty());
+
+        // A good choice is stored with the install and already applies to the first load.
+        let good = choose(&[("games", path(&chosen))]);
+        let info = manager.install_with_folders(&source, &good).unwrap();
+        let stored = install::load_state(&fx.paths.plugins_dir())[0].folders["games"].clone();
+        assert_eq!(info.folders[0].path.as_deref(), Some(stored.as_str()));
+        assert!(info.folders[0].exists);
+        assert_eq!(info.folders[1].path, None);
+
+        // The dialog of an update preselects the choice.
+        let preview = manager.preview(&source).unwrap();
+        assert_eq!(preview.folders[0].path.as_deref(), Some(stored.as_str()));
+        assert!(preview.folders[0].exists);
+
+        // An update without folders keeps it; a failing one keeps the old copy and the choice.
+        write_folder_plugin(&source, "2.0.0", &default);
+        let info = manager.install(&source).unwrap();
+        assert_eq!(info.version, "2.0.0");
+        assert_eq!(info.folders[0].path.as_deref(), Some(stored.as_str()));
+        write_folder_plugin(&source, "3.0.0", &default);
+        let bad = choose(&[("other", path(&fx.root.join("missing")))]);
+        assert!(manager.install_with_folders(&source, &bad).is_err());
+        let info = manager.list().remove(0);
+        assert_eq!(info.version, "2.0.0");
+        assert!(info.loaded);
+        assert_eq!(info.folders[0].path.as_deref(), Some(stored.as_str()));
+        assert_eq!(info.folders[1].path, None);
+
+        // An override replaces one key and leaves the other alone.
+        let more = choose(&[("other", path(&other))]);
+        let info = manager.install_with_folders(&source, &more).unwrap();
+        assert_eq!(info.version, "3.0.0");
+        assert_eq!(info.folders[0].path.as_deref(), Some(stored.as_str()));
+        assert!(info.folders[1].path.is_some());
+        // A blank path goes back to the default.
+        let blank = choose(&[("other", "  ".into())]);
+        let info = manager.install_with_folders(&source, &blank).unwrap();
+        assert_eq!(info.folders[1].path, None);
+        assert_eq!(info.folders[0].path.as_deref(), Some(stored.as_str()));
+        let info = manager
+            .install_with_folders(&source, &choose(&[("other", path(&other))]))
+            .unwrap();
+        assert!(info.folders[1].path.is_some());
+        let again = choose(&[("games", path(&other))]);
+        let info = manager.install_with_folders(&source, &again).unwrap();
+        assert_eq!(
+            std::fs::canonicalize(info.folders[0].path.as_deref().unwrap()).unwrap(),
+            std::fs::canonicalize(&other).unwrap()
+        );
+        assert!(info.folders[1].path.is_some());
+    }
+
+    #[test]
+    fn registry_installs_take_the_dialog_folders_too() {
+        let fx = Fixture::new();
+        let manager = fx.manager();
+        let chosen = fx.root.join("chosen");
+        std::fs::create_dir_all(&chosen).unwrap();
+        let zip = fx.root.join("zips/folders-1.0.0.zip");
+        std::fs::create_dir_all(zip.parent().unwrap()).unwrap();
+        let manifest = serde_json::json!({
+            "id": "folders", "name": "Folders", "version": "1.0.0", "apiVersion": 1,
+            "permissions": { "folders": [{ "key": "games", "label": "Games", "as": "/games" }] }
+        })
+        .to_string();
+        crate::install::testing::write_zip(&zip, &[("plugin.json", manifest.as_bytes())]);
+        let ask = |path: &Path| BTreeMap::from([("games".to_string(), path.display().to_string())]);
+
+        let err = manager
+            .install_registry_with_folders(
+                "folders",
+                "1.0.0",
+                &zip,
+                false,
+                &ask(&fx.root.join("x")),
+            )
+            .unwrap_err();
+        assert!(err.to_string().contains("does not exist"), "{err}");
+        assert!(manager.list().is_empty());
+
+        let info = manager
+            .install_registry_with_folders("folders", "1.0.0", &zip, false, &ask(&chosen))
+            .unwrap();
+        assert!(info.folders[0].path.is_some() && info.folders[0].exists);
+        assert!(info.registry.is_some());
+    }
+
+    #[test]
+    fn verbatim_prefixes_do_not_reach_the_user() {
+        assert_eq!(
+            plain_path(Path::new(r"\\?\C:\Games\x")),
+            PathBuf::from(r"C:\Games\x")
+        );
+        assert_eq!(
+            plain_path(Path::new(r"\\?\UNC\server\share\x")),
+            PathBuf::from(r"\\server\share\x")
+        );
+        // Other device paths are left alone.
+        assert_eq!(
+            plain_path(Path::new(r"\\?\Volume{1}\x")),
+            PathBuf::from(r"\\?\Volume{1}\x")
+        );
+        assert_eq!(plain_path(Path::new("/home/me")), PathBuf::from("/home/me"));
     }
 
     #[test]

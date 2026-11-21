@@ -63,10 +63,11 @@ function SettingRow(props: {
       <div class="settings-row plugin-setting__row">
         <Switch>
           <Match when={setting.type === "toggle"}>
-            <label class="check plugin-setting__label">
+            <label class="check check--switch plugin-setting__label">
               <input
                 id={id}
                 type="checkbox"
+                role="switch"
                 aria-describedby={hintId}
                 checked={value() === true}
                 onChange={(event) => save(event.currentTarget.checked)}

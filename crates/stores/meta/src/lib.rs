@@ -114,6 +114,7 @@ impl Paths {
 
 /// The client's executable from the command of its `oculus://` protocol handler
 /// (`"C:\...\Support\oculus-client\Client.exe" "--" "--url" "%1"`), when the file exists.
+#[cfg(any(windows, test))]
 fn client_from_command(command: &str) -> Option<PathBuf> {
     let (program, _) = questkeep_store_api::platform::split_command_line(command)?;
     let exe = PathBuf::from(program);

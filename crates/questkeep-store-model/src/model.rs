@@ -89,6 +89,21 @@ impl GameLink {
     }
 }
 
+/// What a plugin store tells about its account: the app adds the store's id and name to make the
+/// status the settings page shows. Only meaningful for stores with `permissions.login`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct AccountInfo {
+    pub signed_in: bool,
+    pub display_name: Option<String>,
+    /// Whether the user can paste a code (or address) instead of using the sign-in window.
+    pub supports_code_sign_in: bool,
+    /// Page the user opens in their normal browser to obtain the code.
+    pub code_url: Option<String>,
+    /// What to copy from the store's page after signing in there.
+    pub code_hint: Option<String>,
+}
+
 /// How a game is started.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]

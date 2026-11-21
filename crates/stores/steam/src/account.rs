@@ -38,6 +38,8 @@ pub const CAPTURE_PREFIX: &str = "https://questkeep.invalid/steam-session";
 /// after a moment, because Steam may still be renewing the session through a redirect.
 pub const LOGIN_WINDOW: LoginWindow = LoginWindow {
     title: "Sign in to Steam",
+    domains: &[],
+    rule: None,
     user_agent: None,
     script: None,
     web_session: Some(WebSessionPage {

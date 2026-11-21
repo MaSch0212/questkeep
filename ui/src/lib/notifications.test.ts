@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import type { Notification } from "../bindings/Notification";
 import {
   actionLabel,
+  badgeCount,
+  badgeHasSeenEntries,
   badgeKind,
   badgeText,
+  levelLabel,
   notificationTime,
   sourceLabel,
   unreadCount,
@@ -23,6 +26,15 @@ function entry(overrides: Partial<Notification> = {}): Notification {
     ...overrides,
   };
 }
+
+const updates = (overrides: Partial<Notification> = {}) =>
+  entry({
+    id: "u",
+    level: "info",
+    source: "plugins",
+    action: { type: "pluginUpdates" },
+    ...overrides,
+  });
 
 describe("notifications", () => {
   it("counts only unread entries", () => {
@@ -58,5 +70,53 @@ describe("notifications", () => {
     expect(actionLabel({ type: "openFile", path: "a.txt" })).toBe("Open file");
     expect(actionLabel({ type: "storeSettings", store: "epic" })).toBe("Store settings");
     expect(actionLabel({ type: "editScript", id: "s" })).toBe("Edit script");
+    expect(sourceLabel("plugins")).toBe("Plugins");
+    expect(actionLabel({ type: "pluginUpdates" })).toBe("View updates");
+  });
+
+  it("describes the level of an entry for screen readers", () => {
+    expect(levelLabel("error")).toBe("Error");
+    expect(levelLabel("warning")).toBe("Warning");
+    expect(levelLabel("info")).toBe("Information");
+  });
+
+  it("does not turn the badge red for information", () => {
+    expect(badgeKind([entry({ level: "info" })])).toBe("info");
+    expect(badgeKind([entry({ level: "info" }), entry()])).toBe("neutral");
+  });
+
+  describe("pending plugin updates", () => {
+    it("counts an unread entry once", () => {
+      expect(badgeCount([updates()])).toBe(1);
+      expect(badgeCount([updates(), entry()])).toBe(2);
+      expect(badgeHasSeenEntries([updates()])).toBe(false);
+    });
+
+    it("keeps counting a read entry", () => {
+      expect(badgeCount([updates({ read: true })])).toBe(1);
+      expect(badgeKind([updates({ read: true })])).toBe("info");
+      expect(badgeHasSeenEntries([updates({ read: true })])).toBe(true);
+      expect(badgeCount([updates({ read: true }), entry()])).toBe(2);
+      expect(badgeKind([updates({ read: true }), entry()])).toBe("neutral");
+    });
+
+    it("is red when an unread error comes with it", () => {
+      expect(badgeKind([updates({ read: true }), entry({ id: "e", level: "error" })])).toBe(
+        "error",
+      );
+      expect(badgeCount([updates({ read: true }), entry({ id: "e", level: "error" })])).toBe(2);
+    });
+
+    it("does not count other read entries or an empty list", () => {
+      expect(badgeCount([])).toBe(0);
+      expect(badgeKind([])).toBeNull();
+      expect(badgeCount([entry({ read: true }), entry({ read: true, level: "error" })])).toBe(0);
+      expect(badgeHasSeenEntries([entry({ read: true })])).toBe(false);
+    });
+
+    it("cuts big counts off as before", () => {
+      const many = Array.from({ length: 120 }, (_, i) => entry({ id: `x${i}` }));
+      expect(badgeText(badgeCount([...many, updates({ read: true })]))).toBe("99+");
+    });
   });
 });

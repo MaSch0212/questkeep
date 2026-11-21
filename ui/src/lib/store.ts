@@ -18,8 +18,10 @@ import type { GroupBy } from "../bindings/GroupBy";
 import type { LibraryView } from "../bindings/LibraryView";
 import type { ListField } from "../bindings/ListField";
 import type { PluginInfo } from "../bindings/PluginInfo";
+import type { PluginUpdate } from "../bindings/PluginUpdate";
 import type { ProviderInfo } from "../bindings/ProviderInfo";
 import type { Settings } from "../bindings/Settings";
+import type { StartPageSettings } from "../bindings/StartPageSettings";
 import type { GroupMerge } from "../bindings/GroupMerge";
 import type { PriceSite } from "../bindings/PriceSite";
 import type { SetupState } from "../bindings/SetupState";
@@ -184,6 +186,10 @@ function createAppStore() {
   const [running, setRunning] = createSignal<ReadonlySet<string>>(new Set());
   const [providers, setProviders] = createSignal<ProviderInfo[]>([]);
   const [plugins, setPlugins] = createSignal<PluginInfo[]>([]);
+  /** Installed registry plugins with a newer version (from the last registry fetch). */
+  const [pluginUpdates, setPluginUpdates] = createSignal<PluginUpdate[]>([]);
+  /** The Plugin updates dialog is open (the bell entry, the Updates button in Settings > Plugins). */
+  const [pluginUpdatesOpen, setPluginUpdatesOpen] = createSignal(false);
   const [appInfo, setAppInfo] = createSignal<AppInfo | null>(null);
   const [seenSources, setSeenSources] = createSignal<ReadonlySet<string>>(new Set());
   const [toasts, setToasts] = createSignal<Toast[]>([]);
@@ -224,6 +230,12 @@ function createAppStore() {
   const [page, setPage] = createSignal<Page>("library");
   const [showStartPage, setShowStartPage] = createSignal(true);
   const [showStatisticsPage, setShowStatisticsPage] = createSignal(true);
+  const [startPageSettings, setStartPageSettings] = createSignal<StartPageSettings>({
+    background: true,
+    statistics: true,
+    recentlyPlayed: true,
+    recentlyAdded: true,
+  });
   /** Price comparison sites offered in the + menu. */
   const [priceSites, setPriceSites] = createSignal<PriceSite[]>([]);
   /** Combined groups per grouping field (settings). */
@@ -704,6 +716,7 @@ function createAppStore() {
     applyAppearance(settings.appearance);
     setShowStartPage(settings.showStartPage);
     setShowStatisticsPage(settings.showStatistics);
+    if (settings.startPage) setStartPageSettings(settings.startPage);
     setPriceSites(settings.priceSites);
     setGroupMergesState(settings.groupMerges ?? {});
     if (
@@ -845,6 +858,11 @@ function createAppStore() {
   async function loadPlugins() {
     // A missing list (a stubbed api in tests) counts as no plugins.
     setPlugins((await api.listPlugins()) ?? []);
+  }
+
+  /** The update count for plugins from the registry; reads the cache, never the network. */
+  async function loadPluginUpdates() {
+    setPluginUpdates((await api.pluginUpdates()) ?? []);
   }
 
   async function loadProviders() {
@@ -990,6 +1008,14 @@ function createAppStore() {
    *  game when the open view may not contain it. */
   function openContextMenu(id: string, anchor: PopoverAnchor, game?: Game) {
     setContextMenu({ id, anchor, returnTo: document.activeElement, game });
+  }
+
+  /** A game on a start page shelf (it isn't in the open view): the fresh copy for its menu. */
+  function shelfGame(id: string): Game | undefined {
+    const data = startData();
+    return [...(data?.recentlyPlayed ?? []), ...(data?.recentlyAdded ?? [])].find(
+      (s) => s.game.id === id,
+    )?.game;
   }
 
   function closeContextMenu(returnFocus: boolean) {
@@ -1220,8 +1246,13 @@ function createAppStore() {
       case "pluginsChanged":
         // Plugin stores come and go: the store list and what games can do follow.
         void loadPlugins().catch(() => undefined);
+        void loadPluginUpdates().catch(() => undefined);
         void loadProviders().catch(() => undefined);
         scheduleRefresh();
+        break;
+      case "pluginUpdatesChanged":
+        // The update check (at start, every 12 hours, or "Check now") found something different.
+        void loadPluginUpdates().catch(() => undefined);
         break;
       case "backgroundWork":
         setBackgroundWork((work) => ({ ...work, [event.queue]: event.pending }));
@@ -1332,6 +1363,7 @@ function createAppStore() {
     const loads = Promise.allSettled([
       loadProviders(),
       loadPlugins().catch(() => undefined),
+      loadPluginUpdates().catch(() => undefined),
       loadCompletion(),
       api.appInfo().then(setAppInfo),
       api.runningGames().then((ids) => setRunning(new Set(ids))),
@@ -1351,6 +1383,7 @@ function createAppStore() {
           void loadUserThemes().catch(() => undefined);
           setShowStartPage(settings.showStartPage);
           setShowStatisticsPage(settings.showStatistics);
+          if (settings.startPage) setStartPageSettings(settings.startPage);
           setPriceSites(settings.priceSites);
           setGroupMergesState(settings.groupMerges ?? {});
         }
@@ -1446,6 +1479,8 @@ function createAppStore() {
       setRunning(new Set<string>());
       setProviders([]);
       setPlugins([]);
+      setPluginUpdates([]);
+      setPluginUpdatesOpen(false);
       setAppInfo(null);
       setUpdate(null);
       setUpdateOpen(false);
@@ -1472,6 +1507,10 @@ function createAppStore() {
     running,
     providers,
     plugins,
+    pluginUpdates,
+    pluginUpdatesOpen,
+    openPluginUpdates: () => setPluginUpdatesOpen(true),
+    closePluginUpdates: () => setPluginUpdatesOpen(false),
     appInfo,
     sources,
     toasts,
@@ -1486,6 +1525,7 @@ function createAppStore() {
     plainGroupsBy,
     loadProviders,
     loadPlugins,
+    loadPluginUpdates,
     update,
     setUpdate,
     updateOpen,
@@ -1522,7 +1562,12 @@ function createAppStore() {
     /** The game whose context menu is open (fresh from the list), if any. */
     contextMenu: () => {
       const open = contextMenu();
-      const game = open && (games().find((g) => g.id === open.id) ?? open.game ?? selectedGame());
+      const game =
+        open &&
+        (games().find((g) => g.id === open.id) ??
+          shelfGame(open.id) ??
+          open.game ??
+          selectedGame());
       if (!open || game?.id !== open.id) return null;
       // On a game of a multi-selection the menu acts on all selected games.
       const all = selectedGames();
@@ -1600,6 +1645,8 @@ function createAppStore() {
     showStatistics,
     showPluginPage,
     showStartPage,
+    /** What the start page shows (Settings → General). */
+    startPageSettings,
     startData,
     applySettings,
     showLibrary: () => setPage("library"),

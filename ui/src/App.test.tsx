@@ -96,6 +96,7 @@ beforeEach(() => {
 
 const SETTINGS: Settings = {
   scanOnStartup: true,
+  checkPluginUpdates: true,
   autoSyncMinutes: 15,
   watchInstallFolders: true,
   downloadCovers: true,
@@ -113,7 +114,8 @@ const SETTINGS: Settings = {
   launcherCloseDelaySeconds: 60,
   launcherCloseMinMinutes: 2,
   systemNotifications: true,
-  tray: { icon: "questkeep", quickLaunch: null },
+  tray: { icon: "questkeep", quickLaunchRows: 3, quickLaunch: null },
+  startPage: { background: true, statistics: true, recentlyPlayed: true, recentlyAdded: true },
   detectExternalLaunches: true,
   showStartPage: true,
   showStatistics: true,
@@ -250,7 +252,7 @@ describe("App", () => {
 
     await fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     expect(screen.getByRole("heading", { name: "Settings", level: 1 })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "About" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "General", level: 2 })).toBeInTheDocument();
     expect(screen.queryByRole("grid")).toBeNull();
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.getByRole("button", { name: "Settings" })).toHaveAttribute(

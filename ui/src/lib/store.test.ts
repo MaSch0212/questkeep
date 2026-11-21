@@ -140,6 +140,23 @@ describe("store", () => {
     await vi.waitFor(() => expect(store.games().map((g) => g.id)).toEqual(["g"]));
   });
 
+  it("reads the plugin updates again on pluginUpdatesChanged", async () => {
+    vi.mocked(api.pluginUpdates).mockResolvedValue([
+      { id: "p", name: "P", installedVersion: "1.0.0", latestVersion: "1.1.0", notes: null },
+    ]);
+    expect(store.pluginUpdates()).toEqual([]);
+    store.handleCoreEvent({ type: "pluginUpdatesChanged" });
+    await vi.waitFor(() => expect(store.pluginUpdates().map((u) => u.id)).toEqual(["p"]));
+  });
+
+  it("opens and closes the Plugin updates dialog", () => {
+    expect(store.pluginUpdatesOpen()).toBe(false);
+    store.openPluginUpdates();
+    expect(store.pluginUpdatesOpen()).toBe(true);
+    store.closePluginUpdates();
+    expect(store.pluginUpdatesOpen()).toBe(false);
+  });
+
   it("bumps cover versions on gamesChanged", () => {
     const game = makeGame({ coverPath: "x.jpg" });
     expect(store.coverUrl(game)).toBe("x.jpg?v=0");

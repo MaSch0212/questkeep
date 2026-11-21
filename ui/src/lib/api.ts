@@ -22,6 +22,7 @@ import type { Notification } from "../bindings/Notification";
 import type { NotificationLevel } from "../bindings/NotificationLevel";
 import type { NotificationSource } from "../bindings/NotificationSource";
 import type { GameActivity } from "../bindings/GameActivity";
+import type { GameSession } from "../bindings/GameSession";
 import type { GameEditInfo } from "../bindings/GameEditInfo";
 import type { GameEdits } from "../bindings/GameEdits";
 import type { ImageOption } from "../bindings/ImageOption";
@@ -38,6 +39,10 @@ import type { MetadataSourceInfo } from "../bindings/MetadataSourceInfo";
 import type { NewManualGame } from "../bindings/NewManualGame";
 import type { PluginInfo } from "../bindings/PluginInfo";
 import type { PluginPreview } from "../bindings/PluginPreview";
+import type { PluginUpdate } from "../bindings/PluginUpdate";
+import type { UpdateCheck } from "../bindings/UpdateCheck";
+import type { RegistryListing } from "../bindings/RegistryListing";
+import type { RegistryPluginPreview } from "../bindings/RegistryPluginPreview";
 import type { ProviderInfo } from "../bindings/ProviderInfo";
 import type { ScanSummary } from "../bindings/ScanSummary";
 import type { LibraryView } from "../bindings/LibraryView";
@@ -161,11 +166,37 @@ export const combineWithPlan = (plan: CombinePlan) => invoke<Game>("combine_with
 export const bulkChange = (ids: string[], change: BulkChange) =>
   invoke<void>("bulk_change", { ids, change });
 export const listPlugins = () => invoke<PluginInfo[]>("list_plugins");
-/** Installs a plugin folder or .zip (replacing one with the same id), enabled and loaded. */
 /** What the plugin in a folder or zip is, checked but not installed (for the install dialog). */
 export const previewPlugin = (path: string) => invoke<PluginPreview>("preview_plugin", { path });
-export const installPlugin = (path: string) => invoke<PluginInfo>("install_plugin", { path });
+/**
+ * Installs a plugin folder or .zip (replacing one with the same id), enabled and loaded.
+ * `folders` are the folders the user chose for its `permissions.folders` (key to path, blank
+ * for the default); they are checked first, so the first load already uses them.
+ */
+export const installPlugin = (path: string, folders?: Record<string, string>) =>
+  invoke<PluginInfo>("install_plugin", { path, folders: folders ?? null });
+/** The plugin registry: from the network, else the last copy (marked offline); fails with none. */
+export const fetchPluginRegistry = () => invoke<RegistryListing>("fetch_plugin_registry");
+/** Downloads and checks one registry version, without installing it (for the install dialog). */
+export const previewRegistryPlugin = (id: string, version: string) =>
+  invoke<RegistryPluginPreview>("preview_registry_plugin", { id, version });
+/** Installs a registry version (replacing the installed one), enabled and loaded; `folders` as for `installPlugin`. */
+export const installRegistryPlugin = (
+  id: string,
+  version: string,
+  folders?: Record<string, string>,
+) => invoke<PluginInfo>("install_registry_plugin", { id, version, folders: folders ?? null });
+/** Installed registry plugins with a newer version, from the last registry fetch (no network). */
+export const pluginUpdates = () => invoke<PluginUpdate[]>("plugin_updates");
+/**
+ * "Check now": refreshes the registry (whatever the automatic check's setting says) and returns
+ * the updates; fails with a readable message when the registry can't be reached.
+ */
+export const checkPluginUpdatesNow = () => invoke<UpdateCheck>("check_plugin_updates_now");
 export const reloadPlugin = (id: string) => invoke<PluginInfo>("reload_plugin", { id });
+/** Points a folder the plugin asks for at `path` (null: back to its default) and reloads its stores. */
+export const setPluginFolder = (id: string, key: string, path: string | null) =>
+  invoke<PluginInfo>("set_plugin_folder", { id, key, path });
 export const setPluginEnabled = (id: string, enabled: boolean) =>
   invoke<PluginInfo>("set_plugin_enabled", { id, enabled });
 export const setPluginWatch = (id: string, watch: boolean) =>
@@ -413,3 +444,13 @@ export const runScriptDraft = (script: ScriptInput, gameId: string, run: string)
   invoke<void>("run_script_draft", { script, gameId, run });
 /** Stops a run from the script dialog; false when it already ended. */
 export const stopScriptRun = (run: string) => invoke<boolean>("stop_script_run", { run });
+
+/** A game's finished play sessions, newest first. */
+export const gameSessions = (id: string) => invoke<GameSession[]>("game_sessions", { id });
+/** Adds a play session that was not recorded. */
+export const addGameSession = (id: string, startedAt: string, durationSeconds: number) =>
+  invoke<void>("add_game_session", { id, startedAt, durationSeconds });
+export const updateGameSession = (sessionId: number, startedAt: string, durationSeconds: number) =>
+  invoke<void>("update_game_session", { sessionId, startedAt, durationSeconds });
+export const deleteGameSession = (sessionId: number) =>
+  invoke<void>("delete_game_session", { sessionId });

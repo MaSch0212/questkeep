@@ -29,6 +29,9 @@ pub struct Settings {
     /// Watch the folders installed games are in, to notice installs and uninstalls done in the
     /// store clients.
     pub watch_install_folders: bool,
+    /// Look for plugin updates a little after start and every 12 hours (only when a plugin was
+    /// installed from the plugin registry). The "Check now" button works either way.
+    pub check_plugin_updates: bool,
     /// Download missing covers from store CDNs.
     pub download_covers: bool,
     /// Download descriptions, genres, release dates and backgrounds from stores.
@@ -97,17 +100,66 @@ pub struct Settings {
     pub system_notifications: bool,
     /// The tray icon and what its popup's quick-launch strip holds.
     pub tray: TraySettings,
+    /// What the start page shows.
+    pub start_page: StartPageSettings,
+}
+
+/// What the start page shows (each part can be switched off, up to an empty page).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", default)]
+#[ts(export)]
+pub struct StartPageSettings {
+    /// The faded, blurred background of the game played last.
+    pub background: bool,
+    /// The playtime chart and the installs per store.
+    pub statistics: bool,
+    pub recently_played: bool,
+    pub recently_added: bool,
+}
+
+impl Default for StartPageSettings {
+    fn default() -> Self {
+        Self {
+            background: true,
+            statistics: true,
+            recently_played: true,
+            recently_added: true,
+        }
+    }
 }
 
 /// The tray icon's look and the quick-launch strip of the tray popup.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", default)]
 #[ts(export)]
 pub struct TraySettings {
     pub icon: TrayIconStyle,
+    /// Rows of the popup's quick-launch strip (1 to 3, four entries each); the entries that do
+    /// not fit are in a menu behind its last tile.
+    pub quick_launch_rows: u8,
     /// Store launchers and apps in the quick-launch strip, in order. `None` until the user
     /// arranges it: then every installed store launcher, in store order.
     pub quick_launch: Option<Vec<QuickLaunchItem>>,
+}
+
+/// Rows of quick-launch tiles in the tray popup unless the user chose.
+pub const DEFAULT_QUICK_LAUNCH_ROWS: u8 = 3;
+
+impl Default for TraySettings {
+    fn default() -> Self {
+        Self {
+            icon: TrayIconStyle::default(),
+            quick_launch_rows: DEFAULT_QUICK_LAUNCH_ROWS,
+            quick_launch: None,
+        }
+    }
+}
+
+impl TraySettings {
+    /// The chosen number of rows, kept within 1 to 3.
+    pub fn rows(&self) -> u8 {
+        self.quick_launch_rows.clamp(1, 3)
+    }
 }
 
 /// The glyph in the notification area.
@@ -276,6 +328,7 @@ impl Default for Settings {
             scan_on_startup: true,
             auto_sync_minutes: 15,
             watch_install_folders: true,
+            check_plugin_updates: true,
             download_covers: true,
             fetch_metadata: true,
             providers: BTreeMap::new(),
@@ -305,6 +358,7 @@ impl Default for Settings {
             launcher_close_min_minutes: 2,
             system_notifications: true,
             tray: TraySettings::default(),
+            start_page: StartPageSettings::default(),
         }
     }
 }
@@ -599,6 +653,7 @@ mod tests {
             scan_on_startup: false,
             auto_sync_minutes: 60,
             watch_install_folders: false,
+            check_plugin_updates: false,
             download_covers: false,
             fetch_metadata: false,
             providers: BTreeMap::from([(
@@ -667,7 +722,14 @@ mod tests {
             system_notifications: false,
             tray: TraySettings {
                 icon: TrayIconStyle::Controller,
+                quick_launch_rows: 2,
                 quick_launch: Some(vec![QuickLaunchItem::Store { id: "steam".into() }]),
+            },
+            start_page: StartPageSettings {
+                background: false,
+                statistics: false,
+                recently_played: true,
+                recently_added: false,
             },
         };
         store.save(&custom).unwrap();

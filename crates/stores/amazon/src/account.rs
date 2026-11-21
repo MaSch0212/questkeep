@@ -53,6 +53,8 @@ const FUEL_PRODUCT_LINE: &str = "Twitch:FuelEntitlement";
 /// code in the query; other amazon.com pages (the login itself) load normally.
 pub const LOGIN_WINDOW: LoginWindow = LoginWindow {
     title: "Sign in to Amazon Games",
+    domains: &[],
+    rule: None,
     user_agent: Some(
         "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) @amzn/aga-electron-platform/1.0.0 Chrome/78.0.3904.130 Electron/7.1.9 Safari/537.36",
     ),

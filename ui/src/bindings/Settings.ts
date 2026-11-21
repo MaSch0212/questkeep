@@ -6,6 +6,7 @@ import type { LauncherClosePolicy } from "./LauncherClosePolicy";
 import type { MetadataPriority } from "./MetadataPriority";
 import type { PriceSite } from "./PriceSite";
 import type { SortPrefixes } from "./SortPrefixes";
+import type { StartPageSettings } from "./StartPageSettings";
 import type { StartupPage } from "./StartupPage";
 import type { TraySettings } from "./TraySettings";
 import type { WindowOnGameStart } from "./WindowOnGameStart";
@@ -25,6 +26,11 @@ autoSyncMinutes: number,
  * store clients.
  */
 watchInstallFolders: boolean, 
+/**
+ * Look for plugin updates a little after start and every 12 hours (only when a plugin was
+ * installed from the plugin registry). The "Check now" button works either way.
+ */
+checkPluginUpdates: boolean, 
 /**
  * Download missing covers from store CDNs.
  */
@@ -148,4 +154,8 @@ systemNotifications: boolean,
 /**
  * The tray icon and what its popup's quick-launch strip holds.
  */
-tray: TraySettings, };
+tray: TraySettings, 
+/**
+ * What the start page shows.
+ */
+startPage: StartPageSettings, };

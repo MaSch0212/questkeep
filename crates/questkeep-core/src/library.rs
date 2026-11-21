@@ -22,11 +22,11 @@ use crate::live::LiveData;
 use crate::metadata::MetadataResolver;
 use crate::model::{
     Achievements, ActionKind, BulkChange, CatalogHit, Category, CombinePlan, CompletionSettings,
-    Game, GameActivity, GameNews, GameQuery, GameUpdate, GroupBy, GroupMerge, GroupMergeMember,
-    HLTB_SOURCE, HiddenFilter, IGDB_SOURCE, ImportedGame, KindFilter, LibraryView, ListField,
-    MANUAL_SOURCE, METADATA_LINK_KEY, MetadataLink, NewManualGame, NewView, PlayAction,
-    ScanSummary, SectionOrder, SetupState, StartPage, SyncTimes, TriState, ValueCount, ViewSection,
-    ViewUiState, ViewUpdate, display_name_from_path, set_ignored_prefixes,
+    Game, GameActivity, GameNews, GameQuery, GameSession, GameUpdate, GroupBy, GroupMerge,
+    GroupMergeMember, HLTB_SOURCE, HiddenFilter, IGDB_SOURCE, ImportedGame, KindFilter,
+    LibraryView, ListField, MANUAL_SOURCE, METADATA_LINK_KEY, MetadataLink, NewManualGame, NewView,
+    PlayAction, ScanSummary, SectionOrder, SetupState, StartPage, SyncTimes, TriState, ValueCount,
+    ViewSection, ViewUiState, ViewUpdate, display_name_from_path, set_ignored_prefixes,
 };
 use crate::paths::DataPaths;
 use crate::providers::{LibraryProvider, ProviderError, ProviderInfo, ProviderRegistry};
@@ -328,12 +328,20 @@ impl Library {
         // Icons are shown from their absolute path; files that are gone count as missing, which
         // makes the shell queue a new icon job.
         let quick = self.settings().tray.quick_launch;
-        Ok(
-            tray::tray_games(&games, quick.as_deref()).map_images(|relative| {
+        // Covers come as their small tiles when those exist (older libraries are caught up in the
+        // background, see `game_state`), else the full cover.
+        Ok(tray::tray_games(&games, quick.as_deref())
+            .map_images(|relative| {
                 self.images
                     .resolve(&relative.to_string_lossy().replace('\\', "/"))
-            }),
-        )
+            })
+            .map_covers(|id, cover| self.images.tile_path(id).unwrap_or(cover)))
+    }
+
+    /// Brings the games' derived data (cover tiles, ...) up to date, see `game_state`. Blocking and
+    /// slow on the first start after an update: the shell runs it on a background thread.
+    pub fn migrate_game_states(&self, notify: impl Fn()) -> Result<crate::game_state::Report> {
+        crate::game_state::migrate(&self.db, &self.images, notify)
     }
 
     pub fn settings(&self) -> Settings {
@@ -548,6 +556,50 @@ impl Library {
             weeks,
             sessions: u32::try_from(count).unwrap_or(u32::MAX),
         })
+    }
+
+    /// The finished play sessions of a game (all its copies), newest first.
+    pub fn game_sessions(&self, id: Uuid) -> Result<Vec<GameSession>> {
+        self.db.entry_sessions(self.db.entry_of(id)?)
+    }
+
+    /// Adds a finished play session to a game (a session that was not recorded).
+    pub fn add_game_session(
+        &self,
+        id: Uuid,
+        started_at: chrono::DateTime<Utc>,
+        duration_seconds: u64,
+    ) -> Result<()> {
+        let entry = self.db.entry_of(id)?;
+        self.db.add_session(entry, started_at, duration_seconds)?;
+        self.events
+            .publish(CoreEvent::GamesChanged { ids: vec![entry] });
+        Ok(())
+    }
+
+    /// Changes when a play session started and how long it was credited.
+    pub fn update_game_session(
+        &self,
+        session_id: i64,
+        started_at: chrono::DateTime<Utc>,
+        duration_seconds: u64,
+    ) -> Result<()> {
+        let game = self
+            .db
+            .update_session(session_id, started_at, duration_seconds)?;
+        self.events.publish(CoreEvent::GamesChanged {
+            ids: vec![self.db.entry_of(game)?],
+        });
+        Ok(())
+    }
+
+    /// Deletes a play session; its time leaves the game's playtime.
+    pub fn delete_game_session(&self, session_id: i64) -> Result<()> {
+        let game = self.db.delete_session(session_id)?;
+        self.events.publish(CoreEvent::GamesChanged {
+            ids: vec![self.db.entry_of(game)?],
+        });
+        Ok(())
     }
 
     /// The start page (`"home"`) or view id that was open last.
@@ -2854,6 +2906,8 @@ mod tests {
         fn login_window(&self) -> crate::auth::LoginWindow {
             crate::auth::LoginWindow {
                 title: "Sign in to Account",
+                domains: &[],
+                rule: None,
                 user_agent: None,
                 script: None,
                 web_session: None,

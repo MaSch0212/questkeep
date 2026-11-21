@@ -136,7 +136,7 @@ fn restore_placement(app: &AppHandle, window: &WebviewWindow) {
     // the move across monitors with different DPI resized the window.
     let result = window
         .set_position(position)
-        .and_then(|()| window.set_size(PhysicalSize::new(placement.width, placement.height)))
+        .and_then(|()| set_size_exactly(window, placement.width, placement.height))
         .and_then(|()| window.set_position(position))
         .and_then(|()| {
             if placement.maximized {
@@ -153,6 +153,29 @@ fn restore_placement(app: &AppHandle, window: &WebviewWindow) {
         .placement
         .lock()
         .unwrap_or_else(PoisonError::into_inner) = Some(placement);
+}
+
+/// Sets the size and corrects what the platform added. On Windows an undecorated, resizable window
+/// ends up larger than requested (the invisible resize frame is added to the size), so every
+/// restore grew it by that frame. The size actually reached is read back and the request lowered
+/// by the difference.
+fn set_size_exactly(window: &WebviewWindow, width: u32, height: u32) -> tauri::Result<()> {
+    let (mut ask_w, mut ask_h) = (width, height);
+    for _ in 0..3 {
+        window.set_size(PhysicalSize::new(ask_w, ask_h))?;
+        let reached = window.inner_size()?;
+        if reached.width == width && reached.height == height {
+            break;
+        }
+        // Lower (or raise) the request by the overshoot.
+        let adjust = |ask: u32, reached: u32, want: u32| {
+            u32::try_from((i64::from(ask) + i64::from(want) - i64::from(reached)).max(1))
+                .unwrap_or(want)
+        };
+        ask_w = adjust(ask_w, reached.width, width);
+        ask_h = adjust(ask_h, reached.height, height);
+    }
+    Ok(())
 }
 
 /// Records the window's current rectangle unless it is minimized (then the position is
@@ -176,7 +199,9 @@ fn track_placement(app: &AppHandle) {
         }
         return;
     }
-    if let (Ok(position), Ok(size)) = (window.outer_position(), window.outer_size()) {
+    // `set_size` applies to the inner (client) area, so the inner size is what round-trips; the
+    // outer size would add the title bar and borders again on every restore.
+    if let (Ok(position), Ok(size)) = (window.outer_position(), window.inner_size()) {
         *placement = Some(WindowPlacement {
             x: position.x,
             y: position.y,

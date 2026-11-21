@@ -102,6 +102,59 @@ describe("NotificationBell", () => {
     expect(store.takeSettingsSection()).toBe("stores");
   });
 
+  it("shows a plugin update entry as information and opens the Plugin updates dialog", async () => {
+    await load([
+      entry({
+        id: "u",
+        level: "info",
+        source: "plugins",
+        message: "1 plugin update available: BSManager 0.1.0 → 0.2.0",
+        action: { type: "pluginUpdates" },
+      }),
+    ]);
+    render(() => <NotificationBell />);
+    expect(badge()).not.toHaveClass("titlebar__badge--error");
+    await fireEvent.click(screen.getByRole("button", { name: "Notifications, 1 unread" }));
+    const item = within(screen.getByRole("dialog", { name: "Notifications" })).getByRole(
+      "listitem",
+    );
+    expect(item).toHaveTextContent("BSManager 0.1.0 → 0.2.0");
+    expect(item).toHaveTextContent("Plugins");
+    expect(within(item).getByRole("img", { name: "Information" })).toHaveClass("notif__dot--info");
+    expect(store.pluginUpdatesOpen()).toBe(false);
+    await fireEvent.click(within(item).getByRole("button", { name: "View updates" }));
+    expect(store.pluginUpdatesOpen()).toBe(true);
+    expect(screen.queryByRole("dialog", { name: "Notifications" })).toBeNull();
+  });
+
+  it("keeps the badge for pending plugin updates after opening, until dismissed", async () => {
+    await load([
+      entry({ id: "w", message: "Warn" }),
+      entry({
+        id: "u",
+        level: "info",
+        source: "plugins",
+        message: "1 plugin update available",
+        action: { type: "pluginUpdates" },
+      }),
+    ]);
+    render(() => <NotificationBell />);
+    expect(badge()).toHaveTextContent("2");
+    await fireEvent.click(screen.getByRole("button", { name: "Notifications, 2 unread" }));
+    expect(api.markNotificationsRead).toHaveBeenCalled();
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Notifications, 1 needs attention" }),
+      ).toBeInTheDocument(),
+    );
+    expect(badge()).toHaveTextContent("1");
+    expect(badge()).not.toHaveClass("titlebar__badge--error");
+    await fireEvent.click(
+      screen.getByRole("button", { name: "Dismiss notification: 1 plugin update available" }),
+    );
+    await waitFor(() => expect(badge()).toBeNull());
+  });
+
   it("dismisses one entry and clears all", async () => {
     await load([entry({ id: "a", message: "One" }), entry({ id: "b", message: "Two" })]);
     render(() => <NotificationBell />);

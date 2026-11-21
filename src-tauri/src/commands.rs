@@ -18,7 +18,9 @@ use questkeep_core::model::{
 use questkeep_core::providers::ProviderInfo;
 use questkeep_core::settings::Settings;
 use questkeep_core::{AppInfo, CoreError};
-use questkeep_plugins::PluginInfo;
+use questkeep_plugins::{
+    PluginInfo, PluginUpdate, RegistryConfig, RegistryListing, RegistryPluginPreview,
+};
 use tauri::State;
 use uuid::Uuid;
 
@@ -163,9 +165,84 @@ pub async fn preview_plugin(
 pub async fn install_plugin(
     state: State<'_, Arc<AppState>>,
     path: String,
+    folders: Option<BTreeMap<String, String>>,
 ) -> CmdResult<PluginInfo> {
     blocking(state, move |s| {
-        Ok(s.plugins.install(&PathBuf::from(path))?)
+        Ok(s.plugins
+            .install_with_folders(&PathBuf::from(path), &folders.unwrap_or_default())?)
+    })
+    .await
+}
+
+/// The registry of this build, judged by this app's version.
+fn registry_config() -> RegistryConfig {
+    RegistryConfig::new(env!("CARGO_PKG_VERSION"))
+}
+
+/// The plugin registry for the plugin browser: every plugin with its compatible versions, what is
+/// installed and whether an update exists. Needs the network; when the registry can't be reached
+/// the last good copy comes back with `offline: true` (an error only without any copy). Also
+/// refreshes what `plugin_updates` reads.
+#[tauri::command]
+pub async fn fetch_plugin_registry(state: State<'_, Arc<AppState>>) -> CmdResult<RegistryListing> {
+    blocking(state, |s| {
+        Ok(s.plugins.registry_listing(&registry_config())?)
+    })
+    .await
+}
+
+/// Downloads a registry version into the plugin cache, checks its hash and returns the install
+/// preview (permissions, stores, extension) plus the registry's notes. Installs nothing.
+#[tauri::command]
+pub async fn preview_registry_plugin(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    version: String,
+) -> CmdResult<RegistryPluginPreview> {
+    blocking(state, move |s| {
+        Ok(s.plugins
+            .preview_registry_plugin(&registry_config(), &id, &version)?)
+    })
+    .await
+}
+
+/// Installs (or updates, or switches to another version of) a registry plugin, enables and loads
+/// it. Emits `pluginsChanged`.
+#[tauri::command]
+pub async fn install_registry_plugin(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    version: String,
+    folders: Option<BTreeMap<String, String>>,
+) -> CmdResult<PluginInfo> {
+    blocking(state, move |s| {
+        Ok(s.plugins.install_registry_plugin_with_folders(
+            &registry_config(),
+            &id,
+            &version,
+            &folders.unwrap_or_default(),
+        )?)
+    })
+    .await
+}
+
+/// Installed registry plugins that have a newer version, from the last loaded registry (no
+/// network), for the update badge.
+#[tauri::command]
+pub async fn plugin_updates(state: State<'_, Arc<AppState>>) -> CmdResult<Vec<PluginUpdate>> {
+    blocking(state, |s| Ok(s.plugins.plugin_updates(&registry_config()))).await
+}
+
+/// The "Check now" button: refreshes the registry index (whatever the automatic check's setting
+/// says; nothing is requested without a plugin from the registry) and returns the updates. A
+/// registry that can't be reached is an error. Emits `pluginUpdatesChanged` when the set changed.
+#[tauri::command]
+pub async fn check_plugin_updates_now(
+    state: State<'_, Arc<AppState>>,
+) -> CmdResult<questkeep_plugins::UpdateCheck> {
+    blocking(state, |s| {
+        Ok(s.plugins
+            .run_manual_check(&registry_config(), s.library.notifications())?)
     })
     .await
 }
@@ -193,6 +270,22 @@ pub async fn set_plugin_watch(
     watch: bool,
 ) -> CmdResult<PluginInfo> {
     blocking(state, move |s| Ok(s.plugins.set_watch(&id, watch)?)).await
+}
+
+/// Points one of the folders a plugin asks for (`permissions.folders`) at a folder, or back to its
+/// default with `path: None`, and loads the plugin's stores again. The path must be an existing
+/// folder outside Questkeep's data. Emits `pluginsChanged`; the caller rescans the plugin's stores.
+#[tauri::command]
+pub async fn set_plugin_folder(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    key: String,
+    path: Option<String>,
+) -> CmdResult<PluginInfo> {
+    blocking(state, move |s| {
+        Ok(s.plugins.set_folder(&id, &key, path.as_deref())?)
+    })
+    .await
 }
 
 /// Unloads the plugin and deletes its installed copy; `delete_data` also deletes what the plugin
@@ -1021,6 +1114,54 @@ pub async fn game_achievements(
 #[tauri::command]
 pub async fn game_activity(state: State<'_, Arc<AppState>>, id: String) -> CmdResult<GameActivity> {
     blocking(state, move |s| s.library.game_activity(parse_id(&id)?)).await
+}
+
+/// A game's finished play sessions, newest first (the sessions editor).
+#[tauri::command]
+pub async fn game_sessions(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+) -> CmdResult<Vec<questkeep_core::model::GameSession>> {
+    blocking(state, move |s| s.library.game_sessions(parse_id(&id)?)).await
+}
+
+/// Adds a play session that was not recorded.
+#[tauri::command]
+pub async fn add_game_session(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    started_at: chrono::DateTime<chrono::Utc>,
+    duration_seconds: u64,
+) -> CmdResult<()> {
+    blocking(state, move |s| {
+        s.library
+            .add_game_session(parse_id(&id)?, started_at, duration_seconds)
+    })
+    .await
+}
+
+/// Changes when a play session started and how long it counts.
+#[tauri::command]
+pub async fn update_game_session(
+    state: State<'_, Arc<AppState>>,
+    session_id: i64,
+    started_at: chrono::DateTime<chrono::Utc>,
+    duration_seconds: u64,
+) -> CmdResult<()> {
+    blocking(state, move |s| {
+        s.library
+            .update_game_session(session_id, started_at, duration_seconds)
+    })
+    .await
+}
+
+/// Deletes a play session and takes its time off the game.
+#[tauri::command]
+pub async fn delete_game_session(
+    state: State<'_, Arc<AppState>>,
+    session_id: i64,
+) -> CmdResult<()> {
+    blocking(state, move |s| s.library.delete_game_session(session_id)).await
 }
 
 /// What the Edit dialog needs: the user's edits, the automatic values and all links.

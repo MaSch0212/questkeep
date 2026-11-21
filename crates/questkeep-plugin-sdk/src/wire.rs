@@ -24,6 +24,9 @@
 //! | `has_owned_source` | `config` | `boolean` |
 //! | `configure` | `config` | `null` |
 //! | `run_add_game_option` | `optionId` | `null` |
+//! | `account_status` | | `AccountInfo` |
+//! | `sign_in_with_code` | `input` | `null` |
+//! | `sign_out` | | `null` |
 
 use serde::{Deserialize, Serialize};
 
@@ -52,10 +55,13 @@ pub enum Method {
     HasOwnedSource,
     Configure,
     RunAddGameOption,
+    AccountStatus,
+    SignInWithCode,
+    SignOut,
 }
 
 impl Method {
-    pub const ALL: [Method; 18] = [
+    pub const ALL: [Method; 21] = [
         Method::ScanInstalled,
         Method::ScanOwned,
         Method::ScanCategories,
@@ -74,6 +80,9 @@ impl Method {
         Method::HasOwnedSource,
         Method::Configure,
         Method::RunAddGameOption,
+        Method::AccountStatus,
+        Method::SignInWithCode,
+        Method::SignOut,
     ];
 
     /// The name on the wire: the provider method in snake_case.
@@ -97,6 +106,9 @@ impl Method {
             Method::HasOwnedSource => "has_owned_source",
             Method::Configure => "configure",
             Method::RunAddGameOption => "run_add_game_option",
+            Method::AccountStatus => "account_status",
+            Method::SignInWithCode => "sign_in_with_code",
+            Method::SignOut => "sign_out",
         }
     }
 
@@ -121,6 +133,9 @@ pub struct CallArgs {
     /// The add-game option to run (`run_add_game_option`).
     #[serde(skip_serializing_if = "String::is_empty")]
     pub option_id: String,
+    /// What the sign-in window captured, or the user pasted (`sign_in_with_code`).
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub input: String,
 }
 
 impl CallArgs {
@@ -161,6 +176,8 @@ pub struct ProviderDescriptor {
     pub installed: bool,
     pub settings: StoreSettings,
     pub add_game_options: Vec<AddGameOption>,
+    /// The store has an account the user can sign in to (needs `permissions.login`).
+    pub has_account: bool,
 }
 
 /// A possible source for a game image.

@@ -1,12 +1,13 @@
 import { fireEvent, render, screen, waitFor, within } from "@solidjs/testing-library";
 import { open } from "@tauri-apps/plugin-dialog";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { PluginFolder } from "../../bindings/PluginFolder";
 import type { PluginInfo } from "../../bindings/PluginInfo";
 import type { PluginPreview } from "../../bindings/PluginPreview";
 import * as api from "../../lib/api";
 import { resetPluginThemes, setThemeFetcher, syncPluginThemes } from "../../lib/pluginThemes";
 import { store } from "../../lib/store";
-import { makePlugin } from "../../test-utils";
+import { makePlugin, makePluginUpdate, NO_CHANGES } from "../../test-utils";
 import { PluginsSection } from "./PluginsSection";
 
 vi.mock("../../lib/api");
@@ -23,13 +24,59 @@ const makePreview = (overrides: Partial<PluginPreview> = {}): PluginPreview => (
   version: "1.2.0",
   description: "Games from the New Store.",
   author: "Someone",
+  icon: null,
   stores: 1,
   hasExtension: false,
   themes: [],
-  permissions: { read: [], http: [] },
+  permissions: {
+    read: [],
+    http: [],
+    folders: [],
+    filesystem: false,
+    registry: false,
+    launcher: [],
+    login: [],
+  },
+  folders: [],
   installedVersion: null,
   ...overrides,
 });
+
+const folder = (overrides: Partial<PluginFolder> = {}): PluginFolder => ({
+  key: "instances",
+  label: "BSManager instances folder",
+  hint: "The folder that contains your Beat Saber instances.",
+  mount: "/instances",
+  default: "~/BSManager/BSInstances",
+  defaultPath: null,
+  defaultExists: false,
+  path: null,
+  effectivePath: null,
+  exists: false,
+  ...overrides,
+});
+const withFolders = (...folders: PluginFolder[]) =>
+  makePlugin({
+    id: "bs",
+    name: "Beat Saber",
+    folders,
+    permissions: {
+      read: [],
+      http: [],
+      filesystem: false,
+      registry: false,
+      launcher: [],
+      login: [],
+      folders: folders.map(({ key, label, hint, default: d }) => ({
+        key,
+        label,
+        hint,
+        default: d,
+      })),
+    },
+  });
+const chooseButton = () =>
+  screen.getByRole("button", { name: "Choose the folder for BSManager instances folder" });
 
 const toasts = () => store.toasts().map((t) => t.message);
 
@@ -46,6 +93,7 @@ beforeEach(() => {
   store.reset();
   vi.mocked(api.scanLibrary).mockResolvedValue({ added: 2, updated: 0, uninstalled: 0 });
   vi.mocked(api.previewPlugin).mockResolvedValue(makePreview());
+  vi.mocked(api.pluginFileUrl).mockImplementation((id, path) => `qk://plugins/${id}/${path}`);
 });
 
 describe("PluginsSection", () => {
@@ -69,6 +117,31 @@ describe("PluginsSection", () => {
     expect(row("Alpha").getByText("Disabled")).toBeInTheDocument();
   });
 
+  it("shows a plugin's icon in its row, as an image from the plugin's files", async () => {
+    await show(
+      makePlugin({ id: "pic", name: "Pic", icon: "img/logo.svg", revision: 3 }),
+      makePlugin({ id: "plain", name: "Plain" }),
+    );
+    const img = screen.getByRole("group", { name: "Pic" }).querySelector("img");
+    expect(img).toHaveAttribute("src", "qk://plugins/pic/@3/img/logo.svg");
+    expect(api.pluginFileUrl).toHaveBeenCalledWith("pic", "@3/img/logo.svg");
+    // Without an icon the generic puzzle piece stays, and nothing is requested.
+    const plain = screen.getByRole("group", { name: "Plain" });
+    expect(plain.querySelector(".plugin-icon img")).toBeNull();
+    expect(plain.querySelector(".plugin-icon svg")).not.toBeNull();
+    expect(api.pluginFileUrl).not.toHaveBeenCalledWith("plain", expect.anything());
+  });
+
+  it("falls back to the generic icon when the image does not load", async () => {
+    await show(makePlugin({ id: "pic", name: "Pic", icon: "logo.png" }));
+    const group = screen.getByRole("group", { name: "Pic" });
+    const img = group.querySelector("img");
+    expect(img).not.toBeNull();
+    await fireEvent.error(img as HTMLImageElement);
+    expect(group.querySelector(".plugin-icon img")).toBeNull();
+    expect(group.querySelector(".plugin-icon svg")).not.toBeNull();
+  });
+
   it("shows why a plugin failed to load", async () => {
     await show(makePlugin({ loaded: false, error: "plugin.wasm is not a component" }));
     expect(screen.getByText("Failed to load")).toBeInTheDocument();
@@ -80,7 +153,15 @@ describe("PluginsSection", () => {
       makePlugin({
         source: "C:\\Dev\\x",
         sourceExists: false,
-        permissions: { read: ["%LOCALAPPDATA%/X"], http: ["api.x.com"] },
+        permissions: {
+          read: ["%LOCALAPPDATA%/X"],
+          http: ["api.x.com"],
+          folders: [],
+          filesystem: false,
+          registry: false,
+          launcher: [],
+          login: [],
+        },
       }),
     );
     const details = screen.getByRole("button", { name: "Details of Example Store" });
@@ -118,6 +199,26 @@ describe("PluginsSection", () => {
     expect(toasts()).toContain("Installed New Store.");
   });
 
+  it("shows the icon of the plugin in the install dialog, when it has one", async () => {
+    await show();
+    vi.mocked(open).mockResolvedValue("C:/Dev/new-plugin");
+    vi.mocked(api.previewPlugin).mockResolvedValueOnce(
+      makePreview({ icon: "data:image/svg+xml;base64,PHN2Zy8+" }),
+    );
+    await fireEvent.click(screen.getByRole("button", { name: "Install from folder…" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.querySelector(".plugin-icon img")).toHaveAttribute(
+      "src",
+      "data:image/svg+xml;base64,PHN2Zy8+",
+    );
+    await fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+    await fireEvent.click(screen.getByRole("button", { name: "Install from folder…" }));
+    const plain = await screen.findByRole("dialog");
+    expect(plain.querySelector(".plugin-icon img")).toBeNull();
+    expect(plain.querySelector(".plugin-icon svg")).not.toBeNull();
+  });
+
   it("shows what the plugin is before it is installed", async () => {
     await show();
     vi.mocked(open).mockResolvedValue("C:/Dev/new-plugin");
@@ -125,7 +226,15 @@ describe("PluginsSection", () => {
       makePreview({
         hasExtension: true,
         themes: ["Arcade", "Neon"],
-        permissions: { read: ["%APPDATA%/NewStore"], http: ["api.new.example"] },
+        permissions: {
+          read: ["%APPDATA%/NewStore"],
+          http: ["api.new.example"],
+          folders: [],
+          filesystem: false,
+          registry: false,
+          launcher: [],
+          login: [],
+        },
         installedVersion: "1.0.0",
       }),
     );
@@ -148,6 +257,36 @@ describe("PluginsSection", () => {
     // Installing is not a destructive action: no danger button, and Cancel has the focus.
     expect(shown.getByRole("button", { name: "Install" })).toHaveClass("btn--primary");
     expect(shown.getByRole("button", { name: "Cancel" })).toHaveFocus();
+  });
+
+  it("names broad access, sign-in domains and launcher programs before installing, and warns about unreviewed sources", async () => {
+    await show();
+    vi.mocked(open).mockResolvedValue("C:/Dev/new-plugin");
+    vi.mocked(api.previewPlugin).mockResolvedValue(
+      makePreview({
+        permissions: {
+          read: [],
+          http: ["api.new.example"],
+          folders: [],
+          filesystem: true,
+          registry: true,
+          launcher: ["steam.exe"],
+          login: ["new.example"],
+        },
+      }),
+    );
+    await fireEvent.click(screen.getByRole("button", { name: "Install from folder…" }));
+    const shown = within(await screen.findByRole("dialog"));
+    expect(shown.getByText("Can read every file on this PC (read-only)")).toBeInTheDocument();
+    expect(shown.getByText("Can read the Windows registry (read-only)")).toBeInTheDocument();
+    expect(shown.getByText("api.new.example")).toBeInTheDocument();
+    expect(shown.getByText("Sign-in windows may visit these web domains")).toBeInTheDocument();
+    expect(shown.getByText("new.example")).toBeInTheDocument();
+    expect(shown.getByText("Questkeep may close these programs after a game")).toBeInTheDocument();
+    expect(shown.getByText("steam.exe")).toBeInTheDocument();
+    // From a folder, nobody has reviewed it.
+    expect(shown.getByRole("alert")).toHaveTextContent(/not come from the plugin registry/);
+    expect(shown.queryByText("No extra permissions")).toBeNull();
   });
 
   it("says why a chosen folder is no plugin, without asking to install", async () => {
@@ -236,6 +375,162 @@ describe("PluginsSection", () => {
     expect(api.scanLibrary).not.toHaveBeenCalled();
   });
 
+  describe("folders the plugin asks for", () => {
+    it("shows what each folder is for and where it points", async () => {
+      await show(
+        withFolders(
+          folder({ effectivePath: "C:\\Users\\me\\BSManager\\BSInstances", exists: true }),
+          folder({ key: "mods", label: "Mods", hint: null, default: null }),
+          folder({
+            key: "saves",
+            label: "Saves",
+            hint: null,
+            path: "D:\\Saves",
+            effectivePath: "D:\\Saves",
+            exists: false,
+          }),
+        ),
+      );
+      const instances = within(screen.getByRole("group", { name: "BSManager instances folder" }));
+      expect(
+        instances.getByText("The folder that contains your Beat Saber instances."),
+      ).toBeVisible();
+      expect(instances.getByText("Default: C:\\Users\\me\\BSManager\\BSInstances")).toBeVisible();
+      expect(instances.queryByRole("alert")).toBeNull();
+      // No choice yet: nothing to go back to.
+      expect(instances.queryByRole("button", { name: /Use the default folder/ })).toBeNull();
+      expect(
+        within(screen.getByRole("group", { name: "Mods" })).getByText("Not set"),
+      ).toBeVisible();
+      const saves = within(screen.getByRole("group", { name: "Saves" }));
+      expect(saves.getByText("D:\\Saves")).toBeVisible();
+      expect(saves.getByRole("alert")).toHaveTextContent("This folder was not found");
+      expect(saves.getByRole("button", { name: "Use the default folder for Saves" })).toBeEnabled();
+    });
+
+    it("shows no folder block for a plugin that asks for none", async () => {
+      await show(makePlugin());
+      expect(screen.queryByText("Folders")).toBeNull();
+    });
+
+    it("chooses a folder, reloads the plugin's stores and scans them", async () => {
+      await show(withFolders(folder()));
+      vi.mocked(open).mockResolvedValue("D:\\BSInstances");
+      vi.mocked(api.setPluginFolder).mockResolvedValue(
+        makePlugin({
+          id: "bs",
+          name: "Beat Saber",
+          providers: ["bs-store"],
+          folders: [
+            folder({ path: "D:\\BSInstances", effectivePath: "D:\\BSInstances", exists: true }),
+          ],
+        }),
+      );
+      await fireEvent.click(chooseButton());
+      expect(open).toHaveBeenCalledWith(
+        expect.objectContaining({
+          directory: true,
+          title: "Choose the folder: BSManager instances folder",
+        }),
+      );
+      await waitFor(() =>
+        expect(api.setPluginFolder).toHaveBeenCalledWith("bs", "instances", "D:\\BSInstances"),
+      );
+      await waitFor(() => expect(api.scanLibrary).toHaveBeenCalledWith("bs-store"));
+      expect(toasts()).toContain("Beat Saber: BSManager instances folder is now D:\\BSInstances.");
+    });
+
+    it("starts the dialog in the folder that is set, if it exists", async () => {
+      await show(withFolders(folder({ effectivePath: "C:\\BS", exists: true })));
+      vi.mocked(open).mockResolvedValue(null);
+      await fireEvent.click(chooseButton());
+      expect(open).toHaveBeenCalledWith(expect.objectContaining({ defaultPath: "C:\\BS" }));
+    });
+
+    it("changes nothing when the folder dialog is cancelled", async () => {
+      await show(withFolders(folder()));
+      vi.mocked(open).mockResolvedValue(null);
+      await fireEvent.click(chooseButton());
+      await waitFor(() => expect(open).toHaveBeenCalled());
+      expect(api.setPluginFolder).not.toHaveBeenCalled();
+      expect(api.scanLibrary).not.toHaveBeenCalled();
+    });
+
+    it("shows why a folder was refused and scans nothing", async () => {
+      await show(withFolders(folder()));
+      vi.mocked(open).mockResolvedValue("C:\\Data");
+      vi.mocked(api.setPluginFolder).mockRejectedValue(
+        "That folder is Questkeep's own data folder, or contains it. Choose another folder.",
+      );
+      await fireEvent.click(chooseButton());
+      expect(await screen.findByRole("alert")).toHaveTextContent("own data folder");
+      expect(api.scanLibrary).not.toHaveBeenCalled();
+    });
+
+    it("goes back to the default folder", async () => {
+      await show(withFolders(folder({ path: "D:\\BS", effectivePath: "D:\\BS", exists: true })));
+      vi.mocked(api.setPluginFolder).mockResolvedValue(
+        makePlugin({ id: "bs", name: "Beat Saber", providers: ["bs-store"], folders: [folder()] }),
+      );
+      await fireEvent.click(
+        screen.getByRole("button", {
+          name: "Use the default folder for BSManager instances folder",
+        }),
+      );
+      await waitFor(() =>
+        expect(api.setPluginFolder).toHaveBeenCalledWith("bs", "instances", null),
+      );
+      await waitFor(() => expect(api.scanLibrary).toHaveBeenCalledWith("bs-store"));
+      expect(toasts()).toContain("Beat Saber: BSManager instances folder is back to its default.");
+    });
+
+    it("lists the folders in the install dialog", async () => {
+      await show();
+      vi.mocked(open).mockResolvedValue("C:/Dev/bs");
+      vi.mocked(api.previewPlugin).mockResolvedValue(
+        makePreview({
+          permissions: {
+            read: [],
+            http: [],
+            filesystem: false,
+            registry: false,
+            launcher: [],
+            login: [],
+            folders: [
+              {
+                key: "instances",
+                label: "BSManager instances folder",
+                hint: "Where your instances are.",
+                default: null,
+              },
+            ],
+          },
+          folders: [
+            {
+              key: "instances",
+              label: "BSManager instances folder",
+              hint: "Where your instances are.",
+              mount: "/instances",
+              default: null,
+              defaultPath: null,
+              defaultExists: false,
+              path: null,
+              effectivePath: null,
+              exists: false,
+            },
+          ],
+        }),
+      );
+      await fireEvent.click(screen.getByRole("button", { name: "Install from folder…" }));
+      const dialog = within(await screen.findByRole("dialog"));
+      expect(
+        dialog.getByText(/May read the folder you choose: BSManager instances folder/),
+      ).toBeVisible();
+      expect(dialog.getByText("Where your instances are.")).toBeVisible();
+      expect(dialog.queryByText("No extra permissions")).toBeNull();
+    });
+  });
+
   it("scans the stores after enabling a plugin", async () => {
     await show(makePlugin({ enabled: false, loaded: false }));
     vi.mocked(api.setPluginEnabled).mockResolvedValue(makePlugin());
@@ -247,10 +542,10 @@ describe("PluginsSection", () => {
   it("toggles reloading on change, unless the source is gone", async () => {
     await show(makePlugin(), makePlugin({ id: "gone", name: "Gone", sourceExists: false }));
     vi.mocked(api.setPluginWatch).mockResolvedValue(makePlugin({ watch: true }));
-    const watch = row("Example Store").getByRole("checkbox", { name: "Reload on change" });
+    const watch = row("Example Store").getByRole("switch", { name: "Reload on change" });
     await fireEvent.click(watch);
     await waitFor(() => expect(api.setPluginWatch).toHaveBeenCalledWith("example-store", true));
-    expect(row("Gone").getByRole("checkbox", { name: "Reload on change" })).toBeDisabled();
+    expect(row("Gone").getByRole("switch", { name: "Reload on change" })).toBeDisabled();
   });
 
   it("removes a plugin, optionally with its data", async () => {
@@ -305,5 +600,68 @@ describe("PluginsSection", () => {
     await fireEvent.click(row("Example Store").getByRole("button", { name: "Remove…" }));
     await fireEvent.click(screen.getByRole("button", { name: "Remove plugin" }));
     await waitFor(() => expect(api.removePlugin).toHaveBeenCalledWith("example-store", false));
+  });
+});
+
+const registryPlugin = (pinned = false) =>
+  makePlugin({ id: "ember", name: "Ember Pack", registry: { version: "1.0.0", pinned } });
+
+describe("PluginsSection: registry plugins", () => {
+  it("says where a registry plugin comes from and whether it is pinned", async () => {
+    await show(registryPlugin(true), makePlugin({ id: "local", name: "Local" }));
+    expect(row("Ember Pack").getByText("From the registry · v1.0.0")).toBeInTheDocument();
+    expect(row("Ember Pack").getByText("Pinned")).toBeInTheDocument();
+    expect(row("Local").queryByText(/From the registry/)).toBeNull();
+    expect(row("Local").queryByText("Pinned")).toBeNull();
+  });
+
+  it("offers the update from the row and installs it after the confirmation", async () => {
+    vi.mocked(api.pluginUpdates).mockResolvedValue([makePluginUpdate()]);
+    await store.loadPluginUpdates();
+    await show(registryPlugin());
+    vi.mocked(api.previewRegistryPlugin).mockResolvedValue({
+      preview: makePreview({
+        id: "ember",
+        name: "Ember Pack",
+        version: "1.1.0",
+        installedVersion: "1.0.0",
+      }),
+      released: null,
+      notes: null,
+      size: 1024,
+      pinned: false,
+      downgrade: false,
+      changes: NO_CHANGES,
+    });
+    vi.mocked(api.installRegistryPlugin).mockResolvedValue(
+      makePlugin({ id: "ember", name: "Ember Pack", providers: [] }),
+    );
+    expect(screen.getByRole("button", { name: /^Browse plugins…/ })).toHaveTextContent("1");
+    await fireEvent.click(row("Ember Pack").getByRole("button", { name: "Update to v1.1.0" }));
+    expect(api.previewRegistryPlugin).toHaveBeenCalledWith("ember", "1.1.0");
+    const dialog = await screen.findByRole("dialog");
+    await fireEvent.click(within(dialog).getByRole("button", { name: "Install" }));
+    await waitFor(() => expect(api.installRegistryPlugin).toHaveBeenCalledWith("ember", "1.1.0"));
+    await waitFor(() => expect(toasts()).toContain("Installed Ember Pack v1.1.0."));
+  });
+
+  it("shows no update button without an update, and the browse button without a badge", async () => {
+    vi.mocked(api.pluginUpdates).mockResolvedValue([]);
+    await show(registryPlugin());
+    expect(row("Ember Pack").queryByRole("button", { name: /Update to/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Browse plugins…" })).toHaveTextContent(
+      /^Browse plugins…$/,
+    );
+  });
+
+  it("opens the plugin browser", async () => {
+    await show();
+    vi.mocked(api.fetchPluginRegistry).mockResolvedValue({
+      offline: false,
+      fetchedAt: null,
+      plugins: [],
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "Browse plugins…" }));
+    expect(await screen.findByRole("dialog", { name: "Plugin browser" })).toBeInTheDocument();
   });
 });

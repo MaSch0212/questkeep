@@ -55,7 +55,8 @@ const en = {
   playtime: "Time played",
   hours: "Hours",
   minutes: "Minutes",
-  playtimeHint: "Store totals no longer change a time you set; sessions still add to it.",
+  playtimeHint:
+    "A store only raises this time when its total is larger; sessions add to it. Set 0 and sync to take the store's time.",
   yourOwn: "your own",
   releaseDate: "Release date",
   type: "Type",
@@ -165,7 +166,7 @@ export const gameEdit: Translations<typeof en> = {
     hours: "Stunden",
     minutes: "Minuten",
     playtimeHint:
-      "Store-Spielzeiten ändern eine selbst gesetzte Zeit nicht mehr; Sitzungen zählen weiter dazu.",
+      "Ein Store erhöht diese Zeit nur, wenn seine Spielzeit größer ist; Sitzungen zählen dazu. Mit 0 und Sync wird die Store-Zeit übernommen.",
     yourOwn: "eigener",
     releaseDate: "Erscheinungsdatum",
     type: "Typ",
@@ -271,7 +272,7 @@ export const gameEdit: Translations<typeof en> = {
     hours: "Heures",
     minutes: "Minutes",
     playtimeHint:
-      "Les totaux des boutiques ne modifient plus un temps que vous fixez ; les sessions s’y ajoutent toujours.",
+      "Une boutique n’augmente ce temps que si son total est supérieur ; les sessions s’y ajoutent. Mettez 0 et synchronisez pour reprendre le temps de la boutique.",
     yourOwn: "le vôtre",
     releaseDate: "Date de sortie",
     type: "Type",
@@ -377,7 +378,7 @@ export const gameEdit: Translations<typeof en> = {
     hours: "Ore",
     minutes: "Minuti",
     playtimeHint:
-      "I totali dei negozi non cambiano più un tempo impostato da te; le sessioni continuano ad aggiungersi.",
+      "Un negozio aumenta questo tempo solo se il suo totale è maggiore; le sessioni si aggiungono. Imposta 0 e sincronizza per riprendere il tempo del negozio.",
     yourOwn: "tuo",
     releaseDate: "Data di uscita",
     type: "Tipo",
@@ -483,7 +484,7 @@ export const gameEdit: Translations<typeof en> = {
     hours: "Horas",
     minutes: "Minutos",
     playtimeHint:
-      "Los totales de las tiendas ya no cambian un tiempo que fijes; las sesiones se siguen sumando.",
+      "Una tienda solo aumenta este tiempo si su total es mayor; las sesiones se suman. Pon 0 y sincroniza para tomar el tiempo de la tienda.",
     yourOwn: "propio",
     releaseDate: "Fecha de lanzamiento",
     type: "Tipo",
@@ -589,7 +590,7 @@ export const gameEdit: Translations<typeof en> = {
     hours: "Horas",
     minutes: "Minutos",
     playtimeHint:
-      "Os totais das lojas deixam de alterar um tempo definido por você; as sessões continuam a somar.",
+      "Uma loja só aumenta este tempo se o total dela for maior; as sessões somam. Defina 0 e sincronize para usar o tempo da loja.",
     yourOwn: "próprio",
     releaseDate: "Data de lançamento",
     type: "Tipo",

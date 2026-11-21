@@ -51,6 +51,8 @@ const STATS_BATCH: usize = 100;
 /// `oauth20_desktop.srf?code=...`.
 pub const LOGIN_WINDOW: LoginWindow = LoginWindow {
     title: "Sign in to Xbox",
+    domains: &[],
+    rule: None,
     user_agent: None,
     script: None,
     web_session: None,

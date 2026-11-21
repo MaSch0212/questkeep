@@ -9,8 +9,11 @@ import * as api from "../lib/api";
 import { errorMessage } from "../lib/errors";
 import {
   actionLabel,
+  badgeCount,
+  badgeHasSeenEntries,
   badgeKind,
   badgeText,
+  levelLabel,
   notificationTime,
   sourceLabel,
   unreadCount,
@@ -20,7 +23,8 @@ import { Popover, type PopoverAnchor } from "./Popover";
 
 const tr = translator(shellNotifications);
 
-const count = () => unreadCount(store.notifications());
+const unread = () => unreadCount(store.notifications());
+const count = () => badgeCount(store.notifications());
 const kind = () => badgeKind(store.notifications());
 
 /** What an entry's button does. */
@@ -37,13 +41,16 @@ function runAction(action: NotificationAction) {
     case "editScript":
       store.openScriptEditor(action.id);
       break;
+    case "pluginUpdates":
+      store.openPluginUpdates();
+      break;
   }
 }
 
 /**
- * The bell in the title bar: a badge with the unread count (red when one is an error) and a
- * popover with the entries, newest first. Opening it marks everything read; the entries that
- * were new stay highlighted until it closes. Ctrl+Shift+N, the command bar and a clicked system
+ * The bell in the title bar: a badge with the unread count (red when one is an error; pending
+ * plugin updates keep counting once read) and a popover with the entries, newest first. Opening
+ * it marks everything read; the entries that were new stay highlighted until it closes. Ctrl+Shift+N, the command bar and a clicked system
  * notification open it too (`store.showNotifications`).
  */
 export function NotificationBell() {
@@ -84,10 +91,15 @@ export function NotificationBell() {
 
   // Entries that arrive while the popover is open are read at once, as everything shown is.
   createEffect(() => {
-    if (anchor() !== null && count() > 0) store.markNotificationsRead();
+    if (anchor() !== null && unread() > 0) store.markNotificationsRead();
   });
 
-  const label = () => (count() > 0 ? tr("bellUnread", { count: count() }) : tr("bell"));
+  const label = () => {
+    if (count() === 0) return tr("bell");
+    return badgeHasSeenEntries(store.notifications())
+      ? tr("bellAttention", { count: count() })
+      : tr("bellUnread", { count: count() });
+  };
 
   return (
     <>
@@ -164,9 +176,12 @@ function Entry(props: {
     <li class="notif" classList={{ "notif--unread": props.unread }}>
       <span
         class="notif__dot"
-        classList={{ "notif__dot--error": props.entry.level === "error" }}
+        classList={{
+          "notif__dot--error": props.entry.level === "error",
+          "notif__dot--info": props.entry.level === "info",
+        }}
         role="img"
-        aria-label={props.entry.level === "error" ? tr("errorLabel") : tr("warningLabel")}
+        aria-label={levelLabel(props.entry.level)}
       />
       <div class="notif__main">
         <span>{props.entry.message}</span>

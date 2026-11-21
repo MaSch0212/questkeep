@@ -12,7 +12,13 @@ import { libraryFilters } from "../i18n/libraryFilters";
 import { pickedNames } from "../lib/filters";
 import { toggleSource } from "../lib/query";
 import { store } from "../lib/store";
-import { activeFilterCount, clearedFilters, NO_CATEGORY } from "../lib/views";
+import {
+  activeFilterCount,
+  clearedFilters,
+  DEFAULT_BASELINE,
+  EXPLORE_BASELINE,
+  NO_CATEGORY,
+} from "../lib/views";
 import { FilterTree } from "./FilterTree";
 import { Popover, type PopoverAnchor } from "./Popover";
 import { SearchPicker, type PickerItem } from "./SearchPicker";
@@ -124,6 +130,7 @@ const yesNo = (): readonly (readonly [TriState, string])[] => [
 ];
 
 const query = () => store.query();
+const baseline = () => (store.isExplore() ? EXPLORE_BASELINE : DEFAULT_BASELINE);
 const set = (patch: Partial<GameQuery>) => store.changeQuery(patch);
 
 /** The filter choices and the filter tree for a query (a view's, or an auto category's). */
@@ -250,7 +257,7 @@ export function FilterPanel(props: {
         <h2 class="filters__title">{tr("title")}</h2>
         <span class="filters__summary">
           {tr("summary", {
-            active: activeFilterCount(query()),
+            active: activeFilterCount(query(), baseline()),
             games: trCommon("gamesCount", { count: store.games().length }),
           })}
         </span>
@@ -266,7 +273,7 @@ export function FilterPanel(props: {
               descending: _descending,
               search: _search,
               ...cleared
-            } = clearedFilters(query());
+            } = clearedFilters(query(), baseline());
             set(cleared);
           }}
         >

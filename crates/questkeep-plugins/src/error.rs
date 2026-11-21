@@ -17,6 +17,9 @@ pub enum PluginError {
     },
     #[error("There is no plugin \"{0}\".")]
     NotFound(String),
+    /// The plugin registry or a download could not be reached or answered nonsense.
+    #[error("{0}")]
+    Network(String),
     /// A store of the plugin could not be loaded.
     #[error("{0}")]
     Load(String),

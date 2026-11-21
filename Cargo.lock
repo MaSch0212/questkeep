@@ -3830,17 +3830,23 @@ dependencies = [
 name = "questkeep-plugins"
 version = "0.6.0"
 dependencies = [
+ "base64 0.22.1",
+ "chrono",
  "notify",
  "questkeep-core",
  "questkeep-plugin-sdk",
  "questkeep-store-api",
+ "rusqlite",
+ "semver",
  "serde",
  "serde_json",
+ "sha2 0.11.1",
  "tempfile",
  "thiserror 2.0.21",
  "tracing",
  "ts-rs",
  "ureq",
+ "url",
  "wasmtime",
  "wasmtime-wasi",
  "zip",
@@ -3964,7 +3970,7 @@ dependencies = [
 
 [[package]]
 name = "questkeep-store-meta"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "dirs 7.0.0",
  "questkeep-store-api",

@@ -8,8 +8,9 @@
 //! Favorites
 //! (icon) Name                      rows, scrollable when there are many
 //! Quick launch
-//! [logo] [icon] [logo] [logo]      store launchers and apps, logo or icon above the name,
-//!                                  four per row
+//! [logo] [icon] [logo] [...]       store launchers and apps, logo or icon above the name,
+//!                                  four per row, up to the chosen number of rows; the last
+//!                                  tile opens a menu with the rest when they do not fit
 //! ─────────────────────────────
 //! [Open Questkeep] [Update to x.y]   [Exit]
 //! ```
@@ -27,6 +28,8 @@ pub const ROW_HEIGHT: f32 = 40.0;
 pub const ICON_SIZE: f32 = 28.0;
 /// Favorites rows visible at once; more scroll.
 pub const MAX_VISIBLE_ROWS: usize = 6;
+/// Most quick-launch rows the user can choose.
+pub const MAX_LAUNCHER_ROWS: usize = 3;
 pub const LAUNCHER_HEIGHT: f32 = 64.0;
 pub const LAUNCHER_ICON_SIZE: f32 = 24.0;
 pub const BUTTON_GAP: f32 = 8.0;
@@ -53,6 +56,8 @@ pub struct PopupTexts {
     pub open_launcher: String,
     /// What activating a game does, for screen readers.
     pub play: String,
+    /// The tile that opens the menu with the quick-launch entries that did not fit.
+    pub more: String,
 }
 
 impl Default for PopupTexts {
@@ -68,6 +73,7 @@ impl Default for PopupTexts {
             update: "Update to {version}".into(),
             open_launcher: "Open {name}".into(),
             play: "Play".into(),
+            more: "More".into(),
         }
     }
 }
@@ -122,6 +128,9 @@ pub enum Action {
     Launch(Uuid),
     /// Opens a store's launcher (provider id).
     OpenLauncher(String),
+    /// Opens the menu with the quick-launch entries that did not fit. Handled by the popup
+    /// itself; never handed to the app.
+    More,
     OpenWindow,
     /// Opens the window with its update dialog.
     ShowUpdate,
@@ -136,6 +145,8 @@ pub enum ItemKind {
     Row(usize),
     /// Quick-launch entry `n` (store launcher or app) as a tile.
     Launcher(usize),
+    /// The "..." tile after the last shown quick-launch entry.
+    More,
     OpenButton,
     /// Shown when an app update is available.
     UpdateButton,
@@ -157,6 +168,8 @@ pub struct Content {
     pub favorites: Vec<Uuid>,
     /// What each quick-launch tile does (open a store launcher, start an app).
     pub launchers: Vec<Action>,
+    /// Rows of quick-launch tiles (1 to [`MAX_LAUNCHER_ROWS`]); more entries go into the menu.
+    pub launcher_rows: usize,
     /// Version of an available app update.
     pub update: Option<String>,
     pub texts: PopupTexts,
@@ -176,6 +189,8 @@ pub struct Layout {
     pub favorites_clip: Option<Rect>,
     /// Largest valid favorites scroll offset.
     pub max_scroll: f32,
+    /// Index of the first quick-launch entry that is in the "..." menu instead of a tile.
+    pub overflow_from: Option<usize>,
 }
 
 /// Lays the popup out. `measure` returns the width of a label in logical pixels (button and pill
@@ -220,6 +235,7 @@ pub fn layout(content: &Content, scroll: f32, measure: impl Fn(&str) -> f32) -> 
 
     let mut favorites_clip = None;
     let mut max_scroll = 0.0;
+    let mut overflow_from = None;
     if !content.favorites.is_empty() {
         y += SECTION_GAP;
         labels.push((
@@ -251,20 +267,39 @@ pub fn layout(content: &Content, scroll: f32, measure: impl Fn(&str) -> f32) -> 
         ));
         y += LABEL_HEIGHT;
         let tile_w = (inner - TILE_GAP * (COLUMNS as f32 - 1.0)) / COLUMNS as f32;
-        for (i, action) in content.launchers.iter().enumerate() {
+        let capacity = content.launcher_rows.clamp(1, MAX_LAUNCHER_ROWS) * COLUMNS;
+        let more = content.launchers.len() > capacity;
+        // With a menu the last slot is its tile.
+        let shown = if more {
+            capacity - 1
+        } else {
+            content.launchers.len()
+        };
+        let tile = |i: usize| {
             let (row, col) = (i / COLUMNS, i % COLUMNS);
+            Rect::new(
+                PADDING + col as f32 * (tile_w + TILE_GAP),
+                y + row as f32 * (LAUNCHER_HEIGHT + TILE_GAP),
+                tile_w,
+                LAUNCHER_HEIGHT,
+            )
+        };
+        for (i, action) in content.launchers.iter().take(shown).enumerate() {
             items.push(Item {
                 kind: ItemKind::Launcher(i),
                 action: action.clone(),
-                rect: Rect::new(
-                    PADDING + col as f32 * (tile_w + TILE_GAP),
-                    y + row as f32 * (LAUNCHER_HEIGHT + TILE_GAP),
-                    tile_w,
-                    LAUNCHER_HEIGHT,
-                ),
+                rect: tile(i),
             });
         }
-        let rows = content.launchers.len().div_ceil(COLUMNS);
+        if more {
+            overflow_from = Some(shown);
+            items.push(Item {
+                kind: ItemKind::More,
+                action: Action::More,
+                rect: tile(shown),
+            });
+        }
+        let rows = (shown + usize::from(more)).div_ceil(COLUMNS);
         y += rows as f32 * LAUNCHER_HEIGHT + (rows as f32 - 1.0) * TILE_GAP;
     }
 
@@ -306,6 +341,7 @@ pub fn layout(content: &Content, scroll: f32, measure: impl Fn(&str) -> f32) -> 
         separator_y,
         favorites_clip,
         max_scroll,
+        overflow_from,
     }
 }
 
@@ -505,6 +541,7 @@ mod tests {
             launchers: (0..launchers)
                 .map(|i| Action::OpenLauncher(format!("store{i}")))
                 .collect(),
+            launcher_rows: MAX_LAUNCHER_ROWS,
             update: None,
             texts: PopupTexts::default(),
         }
@@ -644,6 +681,45 @@ mod tests {
         assert!((tiles[4].y - tiles[0].bottom() - TILE_GAP).abs() < 0.01);
         assert!(tiles.iter().all(|t| t.right() <= WIDTH - PADDING + 0.01));
         assert!(tiles[5].bottom() < l.separator_y);
+    }
+
+    #[test]
+    fn launchers_beyond_the_rows_go_into_a_menu_behind_the_last_tile() {
+        let launcher_tiles = |l: &Layout| {
+            l.items
+                .iter()
+                .filter(|i| matches!(i.kind, ItemKind::Launcher(_)))
+                .count()
+        };
+        // 12 fit in three rows without a menu.
+        let l = layout(&content(0, 0, 12), 0.0, measure);
+        assert_eq!(launcher_tiles(&l), 12);
+        assert_eq!(l.overflow_from, None);
+
+        // 13 do not: 11 tiles and the "..." tile, which takes the twelfth slot.
+        let l = layout(&content(0, 0, 13), 0.0, measure);
+        assert_eq!(launcher_tiles(&l), 11);
+        assert_eq!(l.overflow_from, Some(11));
+        let more = l.items.iter().find(|i| i.kind == ItemKind::More).unwrap();
+        assert_eq!(more.action, Action::More);
+        let first = l
+            .items
+            .iter()
+            .find(|i| i.kind == ItemKind::Launcher(0))
+            .unwrap();
+        assert!((more.rect.y - first.rect.y - 2.0 * (LAUNCHER_HEIGHT + TILE_GAP)).abs() < 0.01);
+
+        // One row: three tiles and the menu tile.
+        let mut c = content(0, 0, 5);
+        c.launcher_rows = 1;
+        let l = layout(&c, 0.0, measure);
+        assert_eq!(launcher_tiles(&l), 3);
+        assert_eq!(l.overflow_from, Some(3));
+        // Out-of-range settings are clamped.
+        c.launcher_rows = 0;
+        assert_eq!(layout(&c, 0.0, measure).overflow_from, Some(3));
+        c.launcher_rows = 9;
+        assert_eq!(layout(&c, 0.0, measure).overflow_from, None);
     }
 
     #[test]

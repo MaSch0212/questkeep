@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "description": "Shows what a theme plugin can do: its own light and dark palette, options, a file of its own and a different layout. Use it as a starting point for your own.",
   "author": "Questkeep",
+  "icon": "icon.svg",
   "apiVersion": 1,
   "themes": [
     {

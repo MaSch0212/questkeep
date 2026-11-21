@@ -8,7 +8,7 @@ extensible alternative to Playnite. This document is the agreed spec from the v0
 
 | Item | Value |
 |---|---|
-| Repository | `MaSch0212/questkeep` on GitHub, public |
+| Repository | `questkeep/questkeep` on GitHub, public |
 | Description | Lightweight, extensible game library manager and launcher (Tauri + Rust + SolidJS) |
 | License | MIT, `Copyright (c) 2026 Marc Schmidt` |
 | Third-party notices | Playnite and PlayniteExtensions (MIT, Josef Nemec) in `THIRD_PARTY_NOTICES.md` |

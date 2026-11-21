@@ -7,13 +7,25 @@
 //! written with `questkeep-plugin-sdk`. Extensions and themes are only carried along here: the
 //! UI loads them.
 
+pub mod access;
 pub mod error;
 pub mod install;
 pub mod manager;
 pub mod manifest;
+pub mod registry;
+pub mod update_check;
 pub mod wasm;
 
+pub use access::PluginServices;
 pub use error::PluginError;
-pub use manager::{PluginInfo, PluginManager, PluginPermissions, PluginPreview};
+pub use install::RegistryState;
+pub use manager::{
+    FolderRequest, PluginFolder, PluginInfo, PluginManager, PluginPermissions, PluginPreview,
+};
 pub use manifest::PluginManifest;
+pub use registry::{
+    PluginChanges, PluginUpdate, RegistryConfig, RegistryListing, RegistryPluginPreview,
+    RegistryPluginView,
+};
+pub use update_check::{CheckKind, UpdateCheck, spawn_scheduler};
 pub use wasm::CallLimits;

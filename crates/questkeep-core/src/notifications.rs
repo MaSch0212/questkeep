@@ -23,6 +23,8 @@ pub const KEEP: usize = 100;
 pub enum NotificationLevel {
     Error,
     Warning,
+    /// Good to know, nothing went wrong (plugin updates).
+    Info,
 }
 
 /// What the entry is about (shown next to its time).
@@ -38,6 +40,8 @@ pub enum NotificationSource {
     Launchers,
     /// Store syncs.
     Sync,
+    /// Plugins (updates found by the check).
+    Plugins,
     /// Anything else.
     App,
 }
@@ -60,6 +64,8 @@ pub enum NotificationAction {
     },
     /// Opens Settings › Stores and accounts at a store.
     StoreSettings { store: String },
+    /// Opens the Plugin updates dialog.
+    PluginUpdates,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -116,6 +122,17 @@ impl NewNotification {
     ) -> Self {
         Self {
             level: NotificationLevel::Warning,
+            ..Self::error(source, title, message)
+        }
+    }
+
+    pub fn info(
+        source: NotificationSource,
+        title: impl Into<String>,
+        message: impl Into<String>,
+    ) -> Self {
+        Self {
+            level: NotificationLevel::Info,
             ..Self::error(source, title, message)
         }
     }
@@ -234,6 +251,9 @@ impl Notifications {
             NotificationLevel::Warning => {
                 tracing::info!(message = %notification.message, "warning notification")
             }
+            NotificationLevel::Info => {
+                tracing::info!(message = %notification.message, "notification")
+            }
         }
         self.change(|items| {
             items.insert(0, notification.clone());
@@ -253,33 +273,82 @@ impl Notifications {
         self.change(|items| items.retain(|n| n.id != id));
     }
 
+    /// Removes the entries that carry `action` (a newer entry replaces them).
+    pub fn dismiss_with_action(&self, action: &NotificationAction) {
+        self.change(|items| items.retain(|n| n.action.as_ref() != Some(action)));
+    }
+
     pub fn clear(&self) {
         self.change(Vec::clear);
     }
 
+    /// The entries that carry `action`, newest first.
+    pub fn with_action(&self, action: &NotificationAction) -> Vec<Notification> {
+        self.lock()
+            .iter()
+            .filter(|n| n.action.as_ref() == Some(action))
+            .cloned()
+            .collect()
+    }
+
+    /// Changes the entry `id` in place (its place in the list and its id stay). Returns whether
+    /// there is such an entry.
+    pub fn modify(&self, id: Uuid, edit: impl FnOnce(&mut Notification)) -> bool {
+        let mut found = false;
+        self.change(|items| {
+            if let Some(entry) = items.iter_mut().find(|n| n.id == id) {
+                edit(entry);
+                entry.id = id;
+                found = true;
+            }
+        });
+        found
+    }
+
     fn change(&self, edit: impl FnOnce(&mut Vec<Notification>)) {
-        let snapshot = {
+        {
             let mut items = self.lock();
             let before = items.clone();
             edit(&mut items);
             if *items == before {
                 return;
             }
-            items.clone()
-        };
-        if let Some(path) = &self.path {
-            let written = serde_json::to_vec_pretty(&snapshot)
-                .map_err(std::io::Error::other)
-                .and_then(|bytes| {
-                    let tmp = path.with_extension("json.tmp");
-                    std::fs::write(&tmp, bytes)?;
-                    std::fs::rename(&tmp, path)
-                });
-            if let Err(err) = written {
+            // Written while the lock is held: two changes at once must not interleave their
+            // files, or an older list could replace a newer one on disk.
+            if let Some(path) = &self.path
+                && let Err(err) = save(path, &items)
+            {
                 tracing::warn!(%err, "could not save the notifications");
             }
         }
         self.events.publish(CoreEvent::NotificationsChanged);
+    }
+}
+
+/// Writes `items` to `path` (to a temporary file first, then renamed over the old one). Windows
+/// refuses to replace a file another program has open for a moment (a virus scanner, a backup),
+/// so a refused rename is tried again a few times.
+fn save(path: &std::path::Path, items: &[Notification]) -> std::io::Result<()> {
+    let bytes = serde_json::to_vec_pretty(items).map_err(std::io::Error::other)?;
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, bytes)?;
+    let mut attempt = 0;
+    loop {
+        match std::fs::rename(&tmp, path) {
+            Err(err)
+                if attempt < 5
+                    && (err.kind() == std::io::ErrorKind::PermissionDenied
+                        || (cfg!(windows) && err.raw_os_error() == Some(32))) =>
+            {
+                attempt += 1;
+                std::thread::sleep(std::time::Duration::from_millis(40 * attempt));
+            }
+            Err(err) => {
+                let _ = std::fs::remove_file(&tmp);
+                return Err(err);
+            }
+            Ok(()) => return Ok(()),
+        }
     }
 }
 
@@ -315,6 +384,80 @@ mod tests {
         assert_eq!(reopened.list().len(), KEEP - 1);
         reopened.clear();
         assert!(Notifications::open(&path, &bus).list().is_empty());
+    }
+
+    #[test]
+    fn entries_with_an_action_can_be_replaced() {
+        let bus = EventBus::new();
+        let notes = Notifications::in_memory(&bus);
+        notes.post(
+            NewNotification::info(NotificationSource::Plugins, "t", "old")
+                .action(NotificationAction::PluginUpdates),
+        );
+        notes.post(NewNotification::warning(
+            NotificationSource::App,
+            "t",
+            "other",
+        ));
+        notes.dismiss_with_action(&NotificationAction::PluginUpdates);
+        let list = notes.list();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].message, "other");
+    }
+
+    #[test]
+    fn an_entry_can_be_changed_in_place() {
+        let bus = EventBus::new();
+        let notes = Notifications::in_memory(&bus);
+        let mine = notes.post(
+            NewNotification::info(NotificationSource::Plugins, "t", "old")
+                .action(NotificationAction::PluginUpdates),
+        );
+        notes.post(NewNotification::warning(
+            NotificationSource::App,
+            "t",
+            "other",
+        ));
+        assert!(notes.modify(mine.id, |n| {
+            n.message = "new".into();
+            n.id = Uuid::new_v4();
+        }));
+        let list = notes.list();
+        assert_eq!(list[1].id, mine.id, "keeps its place and id");
+        assert_eq!(list[1].message, "new");
+        assert!(!notes.modify(Uuid::new_v4(), |n| n.message = "x".into()));
+        assert_eq!(
+            notes.with_action(&NotificationAction::PluginUpdates).len(),
+            1
+        );
+    }
+
+    #[test]
+    fn concurrent_changes_leave_the_newest_list_on_disk() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("n.json");
+        let bus = EventBus::new();
+        let notes = Notifications::open(&path, &bus);
+        let threads: Vec<_> = (0..8)
+            .map(|t| {
+                let notes = notes.clone();
+                std::thread::spawn(move || {
+                    for i in 0..10 {
+                        notes.post(NewNotification::warning(
+                            NotificationSource::App,
+                            "t",
+                            format!("{t}-{i}"),
+                        ));
+                    }
+                })
+            })
+            .collect();
+        for thread in threads {
+            thread.join().unwrap();
+        }
+        assert_eq!(notes.list().len(), 80);
+        assert_eq!(Notifications::open(&path, &bus).list(), notes.list());
+        assert!(!path.with_extension("json.tmp").exists());
     }
 
     #[test]

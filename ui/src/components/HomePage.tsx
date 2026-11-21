@@ -6,6 +6,12 @@ import { activateGame } from "../lib/actions";
 import { formatPlaytime } from "../lib/format";
 import { dayLabel, hoursLabel, oneDecimal, relativeDay } from "../lib/startPage";
 import { store } from "../lib/store";
+import SettingsIcon from "lucide-solid/icons/settings";
+import type { StartPageSettings } from "../bindings/StartPageSettings";
+import { getSettings, saveSettings } from "../lib/api";
+import { errorMessage } from "../lib/errors";
+import { Menu, type MenuEntry } from "./Menu";
+import type { PopoverAnchor } from "./Popover";
 import { GameTile, tileDomId } from "./GameTile";
 import { SourceIcon, sourceName } from "./SourceIcon";
 
@@ -13,6 +19,7 @@ const tr = translator(shellHome);
 
 const data = () => store.startData();
 const px = (value: string) => Number.parseFloat(value) || 0;
+const options = () => store.startPageSettings();
 const days = () => data()?.playtime ?? [];
 const stores = () => data()?.stores ?? [];
 
@@ -21,6 +28,7 @@ const stores = () => data()?.stores ?? [];
  * Opening a game (Enter) shows it in a view, like the command bar does.
  */
 export function HomePage() {
+  const [menu, setMenu] = createSignal<PopoverAnchor | null>(null);
   const [coverWidth, setCoverWidth] = createSignal(160);
   let shelves: HTMLDivElement | undefined;
 
@@ -48,7 +56,8 @@ export function HomePage() {
         px(scrollerStyle.paddingBottom) +
         px(scrollerStyle.borderTopWidth) +
         px(scrollerStyle.borderBottomWidth);
-      const perShelf = (element.clientHeight - px(style.rowGap)) / 2;
+      const count = element.querySelectorAll(".shelf").length || 1;
+      const perShelf = (element.clientHeight - px(style.rowGap) * (count - 1)) / count;
       const room = perShelf - chrome - strip;
       setCoverWidth(Math.round(Math.min(maxHeight / ratio, Math.max(min, room / ratio))));
     };
@@ -58,34 +67,124 @@ export function HomePage() {
     onCleanup(() => observer.disconnect());
   });
 
+  // The game played last gives the page its background.
+  const backgroundGame = () => data()?.recentlyPlayed[0]?.game;
+  const background = () => {
+    const game = backgroundGame();
+    return options().background && game ? store.backgroundUrl(game) : null;
+  };
+
+  /** The parts of the page as switches, then the settings page. */
+  const menuEntries = (): MenuEntry[] => {
+    return [
+      { kind: "heading", label: tr("menuShow") },
+      startPart("background", tr("menuBackground")),
+      startPart("recentlyPlayed", tr("recentlyPlayed")),
+      startPart("recentlyAdded", tr("recentlyAdded")),
+      startPart("statistics", tr("menuStatistics")),
+      { kind: "separator" },
+      {
+        label: tr("startPageSettings"),
+        icon: () => <SettingsIcon class="icon" aria-hidden="true" />,
+        onSelect: () => store.showSettingsSection("general"),
+      },
+    ];
+  };
+
   return (
-    <section class="home" aria-label={tr("startPage")}>
-      <div
-        class="home__shelves"
-        ref={(el) => (shelves = el)}
-        style={{ "--qk-shelf-cover-width": `${coverWidth()}px` }}
-      >
-        <Shelf
-          title={tr("recentlyPlayed")}
-          games={data()?.recentlyPlayed ?? []}
-          empty={tr("nothingPlayed")}
-        />
-        <Shelf
-          title={tr("recentlyAdded")}
-          games={data()?.recentlyAdded ?? []}
-          empty={tr("noGames")}
-        />
-      </div>
-      <div class="home__stats">
-        <PlaytimePanel />
-        <StoresPanel />
-      </div>
+    <section
+      class="home"
+      aria-label={tr("startPage")}
+      onContextMenu={(event) => {
+        // A game card has its own menu.
+        if (event.defaultPrevented) return;
+        event.preventDefault();
+        setMenu({ x: event.clientX, y: event.clientY });
+      }}
+    >
+      <Show when={menu()}>
+        {(anchor) => (
+          <Menu
+            anchor={anchor()}
+            label={tr("startPage")}
+            entries={menuEntries()}
+            onClose={() => setMenu(null)}
+          />
+        )}
+      </Show>
+      <Show when={background()}>
+        {(url) => (
+          <div class="home__bg" aria-hidden="true">
+            <img src={url()} alt="" />
+          </div>
+        )}
+      </Show>
+      <Show when={options().recentlyPlayed || options().recentlyAdded}>
+        <div
+          class="home__shelves"
+          ref={(el) => (shelves = el)}
+          style={{ "--qk-shelf-cover-width": `${coverWidth()}px` }}
+        >
+          <Show when={options().recentlyPlayed}>
+            <Shelf
+              title={tr("recentlyPlayed")}
+              games={data()?.recentlyPlayed ?? []}
+              empty={tr("nothingPlayed")}
+            />
+          </Show>
+          <Show when={options().recentlyAdded}>
+            <Shelf
+              title={tr("recentlyAdded")}
+              games={data()?.recentlyAdded ?? []}
+              empty={tr("noGames")}
+            />
+          </Show>
+        </div>
+      </Show>
+      <Show when={options().statistics}>
+        <div class="home__stats">
+          <PlaytimePanel />
+          <StoresPanel />
+        </div>
+      </Show>
     </section>
   );
 }
 
+/** Switches one part of the start page on or off and saves it like the settings page does. */
+async function setStartPart(field: keyof StartPageSettings, value: boolean) {
+  try {
+    const settings = await getSettings();
+    const next = { ...settings, startPage: { ...settings.startPage, [field]: value } };
+    await saveSettings(next);
+    store.applySettings(next);
+  } catch (error) {
+    store.pushToast("error", errorMessage(error));
+  }
+}
+
+/** A switch in the start page menu. */
+const startPart = (field: keyof StartPageSettings, label: string): MenuEntry => ({
+  label,
+  checked: options()[field],
+  keepOpen: true,
+  onSelect: () => void setStartPart(field, !options()[field]),
+});
+
+/** A game's context menu; it isn't in the open view, so the menu gets the game itself. */
+function menuAt(game: ShelfGame["game"], anchor: { x: number; y: number }) {
+  store.openContextMenu(game.id, anchor, game);
+}
+
 function Shelf(props: { title: string; games: ShelfGame[]; empty: string }) {
   const [selected, setSelected] = createSignal<string | null>(null);
+  // Which sides have more cards to scroll to: those edges fade out instead of a scrollbar.
+  const [fade, setFade] = createSignal({ start: false, end: false });
+  function updateFade() {
+    if (!scroller) return;
+    const max = scroller.scrollWidth - scroller.clientWidth;
+    setFade({ start: scroller.scrollLeft > 1, end: scroller.scrollLeft < max - 1 });
+  }
   let scroller: HTMLDivElement | undefined;
   const headingId = `shelf-${props.title.toLowerCase().replace(/\s+/g, "-")}`;
   const domKey = (id: string) => `${headingId}-${id}`;
@@ -110,6 +209,16 @@ function Shelf(props: { title: string; games: ShelfGame[]; empty: string }) {
     } else if (event.key === "Home" || event.key === "End") {
       event.preventDefault();
       select((event.key === "Home" ? ids[0] : ids.at(-1)) ?? "");
+    } else if (event.key === "ContextMenu" || (event.key === "F10" && event.shiftKey)) {
+      const game = selectedGame();
+      if (!game) return;
+      event.preventDefault();
+      const tile = document.getElementById(tileDomId(domKey(game.id)));
+      const rect = tile?.getBoundingClientRect();
+      menuAt(
+        game,
+        rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : { x: 0, y: 0 },
+      );
     } else if (event.key === "Enter" || event.key === "F5") {
       const game = selectedGame();
       if (!game) return;
@@ -134,7 +243,22 @@ function Shelf(props: { title: string; games: ShelfGame[]; empty: string }) {
       </h2>
       <div
         class="shelf__scroller"
-        ref={(el) => (scroller = el)}
+        classList={{
+          "shelf__scroller--fade-start": fade().start,
+          "shelf__scroller--fade-end": fade().end,
+        }}
+        ref={(el) => {
+          scroller = el;
+          onMount(() => {
+            updateFade();
+            if (typeof ResizeObserver === "undefined") return;
+            const observer = new ResizeObserver(updateFade);
+            observer.observe(el);
+            if (el.firstElementChild) observer.observe(el.firstElementChild);
+            onCleanup(() => observer.disconnect());
+          });
+        }}
+        onScroll={updateFade}
         role="grid"
         tabindex="0"
         aria-labelledby={headingId}
@@ -161,6 +285,10 @@ function Shelf(props: { title: string; games: ShelfGame[]; empty: string }) {
                     store.openGamePage(item.game);
                   }}
                   onLaunch={(id) => void activateGame(id)}
+                  onContextMenu={(event) => {
+                    setSelected(item.game.id);
+                    menuAt(item.game, { x: event.clientX, y: event.clientY });
+                  }}
                 />
               )}
             </For>

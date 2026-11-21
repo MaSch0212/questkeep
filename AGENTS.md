@@ -106,7 +106,8 @@ crates/questkeep-core/src/     all app logic; sees stores only through the store
                                (mod.rs), installed runtimes (runtimes.rs), QK_* variables
                                and {Placeholders} (variables.rs)
   notifications.rs             the notification bell's entries (notifications.json, last 100)
-  images/                      cover/background cache (mod.rs) + cover and metadata fetchers (fetcher.rs)
+  images/                      cover/background cache (mod.rs; also the cover tiles the tray popup reads) + cover and metadata fetchers (fetcher.rs)
+  game_state.rs                games.state_version: brings derived data (cover tiles) up to date in the background after start
   events.rs                    EventBus + CoreEvent
   platform/                    executable icons, URI opening, processes, argument handling (cfg-gated)
   programs/                    installed programs for Add game (Apps list + Start menu, lnk.rs
@@ -169,14 +170,16 @@ ui/src/
   both. Commands stay thin; logic goes into core with tests.
 - **UI:** no literal colors/sizes outside `theme.css` and the built-in themes in `ui/src/themes/`
   (the one other sanctioned place); labeled buttons; keyboard paths for every
-  action. Pure logic goes into `lib/` with vitest tests. Tooltips: `data-tooltip="…"` on the
+  action. **Reordering is done by drag and drop only**: a grip handle on the row, no up/down buttons
+  (Alt+Up/Down on the focused row stays as the keyboard path). Pure logic goes into `lib/` with vitest tests. Tooltips: `data-tooltip="…"` on the
   element (shown by `TooltipLayer`), never the native `title` attribute.
 - **Dependencies:** pnpm installs only versions at least 2 days old (`minimumReleaseAge`); Cargo
   has `min-publish-age = "2 days"`. Prefer major-only ranges in `package.json`.
 - **Releases:** changesets in `.changeset/` + the manual Release workflow; see `docs/RELEASING.md`.
   Docs/CI-only changes need no changeset.
 - Record non-obvious choices in `docs/DECISIONS.md` (one or two lines of rationale) and ideas in
-  `docs/ROADMAP.md`.
+  `docs/ROADMAP.md`. In DECISIONS.md, add the entry at the end of the section for its topic, never at
+  the end of the file (the last section is not a catch-all); start a new `##` section for a new topic.
 - **Roadmap:** when a change finishes a roadmap item or a notable feature, add a short line under
   `## Done in the next release` in `docs/ROADMAP.md` (create the heading above `## Next` if it's
   missing) and drop finished items from Next/Later. Never write a version number there: the
@@ -185,7 +188,7 @@ ui/src/
 ## Wiki
 
 The wiki (user manual, developer manual, plugin tutorials and references) is a separate repo,
-cloned next to this one as `../questkeep.wiki` (https://github.com/MaSch0212/questkeep.wiki.git).
+cloned next to this one as `../questkeep.wiki` (https://github.com/questkeep/questkeep.wiki.git).
 Read it for context on how features are meant to work and how they are explained to users.
 
 - **Keep it current.** A change that alters something the wiki describes (UI labels, settings,
@@ -194,7 +197,7 @@ Read it for context on how features are meant to work and how they are explained
 - **Layout.** `user/` and `developer/` hold the pages; GitHub flattens folders, so links are by
   page name (`[Stores](Stores)`, `[Parameters](Theme-Reference#parameters)`). Every page must
   be listed in `_Sidebar.md` and in its manual's `_Sidebar.md`. Images live in `images/` and are
-  embedded as `https://raw.githubusercontent.com/wiki/MaSch0212/questkeep/images/<name>.png`.
+  embedded as `https://raw.githubusercontent.com/wiki/questkeep/questkeep/images/<name>.png`.
 - **Code in tutorials** must build and run against the current API; test it before changing it.
 - **Screenshots.** Take them yourself from the hidden test instance with the demo library
   (`docs/screenshots.md`), and only when they show no personal data: no account names, real library, local

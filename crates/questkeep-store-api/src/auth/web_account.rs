@@ -393,6 +393,8 @@ mod tests {
         capture_prefix: PREFIX,
         window: LoginWindow {
             title: "Sign in to Test Store",
+            domains: &[],
+            rule: None,
             user_agent: None,
             script: None,
             web_session: Some(super::super::WebSessionPage {

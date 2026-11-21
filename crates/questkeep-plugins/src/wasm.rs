@@ -12,8 +12,10 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock};
 use std::time::Duration;
 
 use questkeep_plugin_sdk::wire::{self, CallArgs, Method, ProviderDescriptor};
+use questkeep_store_api::auth::{AccountAuth, AccountStatus, AuthError, LoginWindow, WebSession};
 use questkeep_store_api::model::{
-    Achievements, AddGameOption, GameMetadata, GameNews, ImportedGame, LauncherProcess, PlayAction,
+    AccountInfo, Achievements, ActionKind, AddGameOption, GameMetadata, GameNews, ImportedGame,
+    LauncherClose, LauncherProcess, PlayAction, TrackingMode,
 };
 use questkeep_store_api::settings::StoreSettings;
 use questkeep_store_api::{ImageCandidate, LibraryProvider, ProviderError};
@@ -22,6 +24,10 @@ use wasmtime::component::{Component, HasSelf, Linker, ResourceTable};
 use wasmtime::{Engine, Store, StoreLimits, StoreLimitsBuilder};
 use wasmtime_wasi::{FsPerms, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 
+use crate::access::{
+    LoginSetup, PluginServices, StoreId, check_secret, gate_launcher, is_protected,
+    known_folder_path, secret_entry,
+};
 use crate::error::{PluginError, Result};
 use crate::manifest::{DATA_MOUNT, HostRule, PLUGIN_MOUNT, host_allowed, is_valid_id};
 
@@ -74,7 +80,8 @@ fn is_slow(method: Method) -> bool {
         | Method::Achievements
         | Method::CoverCandidates
         | Method::BackgroundCandidates
-        | Method::IconCandidates => true,
+        | Method::IconCandidates
+        | Method::SignInWithCode => true,
         Method::InstallAction
         | Method::UninstallAction
         | Method::LauncherPage
@@ -82,7 +89,9 @@ fn is_slow(method: Method) -> bool {
         | Method::CoversAreLowQuality
         | Method::HasOwnedSource
         | Method::Configure
-        | Method::RunAddGameOption => false,
+        | Method::RunAddGameOption
+        | Method::AccountStatus
+        | Method::SignOut => false,
     }
 }
 
@@ -163,16 +172,32 @@ impl Drop for LiveGuard {
 }
 
 /// What one plugin's stores may reach.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub(crate) struct Sandbox {
     pub plugin_id: String,
     /// The installed copy, mounted read-only at `/plugin`.
     pub plugin_dir: PathBuf,
     /// The plugin's own data, mounted read-write at `/data`.
     pub data_dir: PathBuf,
-    /// The declared folders: host path (already expanded) and guest path, read-only.
+    /// The folders the user may let the plugin read (`permissions.read` and the chosen or default
+    /// `permissions.folders`): host path (already expanded) and guest path, read-only.
     pub mounts: Vec<(PathBuf, String)>,
     pub hosts: Vec<HostRule>,
+    /// `permissions.filesystem`: the whole file system is in `mounts` (below `/host`).
+    pub filesystem: bool,
+    /// `permissions.registry`.
+    pub registry: bool,
+    pub home: Option<PathBuf>,
+    /// Folders no path of a store may lead into when Questkeep launches or installs something:
+    /// the installed plugins and their data, which plugins write to.
+    pub protected: Vec<PathBuf>,
+    /// `permissions.launcher.processNames`.
+    pub launcher_names: Vec<String>,
+    /// `permissions.login`, built into the window the shell opens.
+    pub login: Option<LoginSetup>,
+    pub services: PluginServices,
+    /// The id of the store this sandbox belongs to, known once the plugin has said it.
+    pub store_id: StoreId,
 }
 
 impl Sandbox {
@@ -215,15 +240,62 @@ impl Sandbox {
     }
 
     /// The real file behind a path the plugin sees, or `None` for a path outside its mounts.
+    /// Good for what the host only reads (images).
     fn host_path(&self, guest: &str) -> Option<PathBuf> {
+        self.resolve(guest, true)
+    }
+
+    /// What a path the plugin returns as a file of a game is on this PC: below a folder mount
+    /// (`permissions.read` and `folders`) it is the real path, anything else is returned as it
+    /// is. `/plugin` and `/data` never translate: the plugin writes `/data`, so a path there
+    /// must not become something Questkeep launches. The same goes for every path that leads into
+    /// the installed plugins or their data, also through the whole-file-system mount.
+    fn translate(&self, path: &str) -> String {
+        match self.resolve(path, false) {
+            Some(host) if is_protected(&host, &self.protected) => path.to_string(),
+            Some(host) => host.display().to_string(),
+            None => path.to_string(),
+        }
+    }
+
+    fn translate_action(&self, mut action: PlayAction) -> PlayAction {
+        if action.kind == ActionKind::File {
+            action.target = self.translate(&action.target);
+        }
+        action.working_dir = action.working_dir.map(|dir| self.translate(&dir));
+        if action.tracking == TrackingMode::Directory {
+            action.tracking_path = action.tracking_path.map(|dir| self.translate(&dir));
+        }
+        action
+    }
+
+    fn translate_game(&self, mut game: ImportedGame) -> ImportedGame {
+        game.install_dir = game.install_dir.map(|dir| self.translate(&dir));
+        game.play_action = game.play_action.map(|a| self.translate_action(a));
+        game
+    }
+
+    /// The launcher as far as the manifest declares its processes, its command's paths
+    /// translated.
+    fn translate_launcher(&self, process: LauncherProcess) -> Option<LauncherProcess> {
+        let mut process = gate_launcher(process, &self.launcher_names)?;
+        if let LauncherClose::Command(action) = process.close {
+            process.close = LauncherClose::Command(self.translate_action(action));
+        }
+        Some(process)
+    }
+
+    /// `own`: `/plugin` and `/data` count as mounts too.
+    fn resolve(&self, guest: &str, own: bool) -> Option<PathBuf> {
         let guest = guest.replace('\\', "/");
         if !guest.starts_with('/') || guest.split('/').any(|part| part == "..") {
             return None;
         }
-        let mut roots: Vec<(&str, &Path)> = vec![
-            (PLUGIN_MOUNT, &self.plugin_dir),
-            (DATA_MOUNT, &self.data_dir),
-        ];
+        let mut roots: Vec<(&str, &Path)> = Vec::new();
+        if own {
+            roots.push((PLUGIN_MOUNT, &self.plugin_dir));
+            roots.push((DATA_MOUNT, &self.data_dir));
+        }
         roots.extend(
             self.mounts
                 .iter()
@@ -252,6 +324,66 @@ struct HostState {
     plugin_id: Arc<str>,
     hosts: Arc<[HostRule]>,
     http: ureq::Agent,
+    sandbox: Arc<Sandbox>,
+}
+
+/// What a store needs for its website session: its login setup, the service and the store id.
+type WebSessionParts<'a> = (&'a LoginSetup, &'a Arc<dyn WebSession>, &'a str);
+
+impl HostState {
+    fn registry_allowed(&self) -> std::result::Result<(), String> {
+        if self.sandbox.registry {
+            Ok(())
+        } else {
+            Err(
+                "the plugin has no permission to read the registry (permissions.registry in \
+                 plugin.json)"
+                    .into(),
+            )
+        }
+    }
+
+    fn filesystem_allowed(&self) -> std::result::Result<(), String> {
+        if self.sandbox.filesystem {
+            Ok(())
+        } else {
+            Err(
+                "the plugin has no permission to read the file system (permissions.filesystem \
+                 in plugin.json)"
+                    .into(),
+            )
+        }
+    }
+
+    fn web_session(&self) -> std::result::Result<WebSessionParts<'_>, String> {
+        let login = self.sandbox.login.as_ref().ok_or(
+            "the plugin has no permission to use a website session (permissions.login in \
+             plugin.json)",
+        )?;
+        if login.window.web_session.is_none() {
+            return Err(
+                "the plugin declares no website session (permissions.login.session)".into(),
+            );
+        }
+        let web = self
+            .sandbox
+            .services
+            .web
+            .as_ref()
+            .ok_or("website sessions are not available here")?;
+        let store = self
+            .sandbox
+            .store_id
+            .get()
+            .ok_or("the store is not ready yet")?;
+        Ok((login, web, store))
+    }
+}
+
+/// A path of this PC as the plugin sees it.
+fn guest(native: &Path) -> String {
+    questkeep_plugin_sdk::host_path(&native.to_string_lossy())
+        .unwrap_or_else(|| native.display().to_string())
 }
 
 impl WasiView for HostState {
@@ -272,6 +404,115 @@ impl host::Host for HostState {
             host::LogLevel::Warn => tracing::warn!(plugin, "{message}"),
             host::LogLevel::Error => tracing::error!(plugin, "{message}"),
         }
+    }
+
+    fn platform(&mut self) -> String {
+        if cfg!(windows) {
+            "windows"
+        } else if cfg!(target_os = "macos") {
+            "macos"
+        } else {
+            "linux"
+        }
+        .into()
+    }
+
+    fn known_folder(&mut self, name: String) -> Option<String> {
+        self.filesystem_allowed().ok()?;
+        known_folder_path(&name, self.sandbox.home.as_deref()).map(|p| guest(&p))
+    }
+
+    fn registry_read(&mut self, path: String) -> std::result::Result<Option<String>, String> {
+        self.registry_allowed()?;
+        Ok(questkeep_store_api::platform::registry_value(&path))
+    }
+
+    fn registry_enum(&mut self, path: String) -> std::result::Result<Vec<String>, String> {
+        self.registry_allowed()?;
+        Ok(questkeep_store_api::platform::registry_subkeys(&path))
+    }
+
+    fn uninstall_entries(&mut self) -> std::result::Result<Vec<host::UninstallEntry>, String> {
+        self.registry_allowed()?;
+        Ok(questkeep_store_api::platform::uninstall_entries()
+            .into_iter()
+            .map(|e| host::UninstallEntry {
+                key: e.key,
+                display_name: e.display_name,
+                publisher: e.publisher,
+                install_location: e.install_location,
+                uninstall_string: e.uninstall_string,
+                display_icon: e.display_icon,
+            })
+            .collect())
+    }
+
+    fn appx_packages(&mut self) -> std::result::Result<Vec<host::AppxPackage>, String> {
+        self.registry_allowed()?;
+        Ok(questkeep_store_api::platform::appx_packages()
+            .into_iter()
+            .map(|p| host::AppxPackage {
+                full_name: p.full_name,
+                root: guest(&p.root),
+                app_ids: p.app_ids,
+            })
+            .collect())
+    }
+
+    fn sqlite_query(
+        &mut self,
+        path: String,
+        sql: String,
+        params: Vec<String>,
+    ) -> std::result::Result<String, String> {
+        self.filesystem_allowed()?;
+        let host_path = self
+            .sandbox
+            .host_path(&path)
+            .ok_or_else(|| format!("\"{path}\" is not a path below /host"))?;
+        let rows = questkeep_store_api::sqlite::query_rows(&host_path, "database", &sql, &params)
+            .map_err(|e| e.to_string())?;
+        serde_json::to_string(&rows).map_err(|e| e.to_string())
+    }
+
+    fn secret_get(&mut self, key: String) -> std::result::Result<Option<String>, String> {
+        check_secret(&key, None)?;
+        self.sandbox
+            .services
+            .secrets
+            .load(&secret_entry(&self.plugin_id, &key))
+            .map_err(|e| e.to_string())
+    }
+
+    fn secret_set(&mut self, key: String, value: String) -> std::result::Result<(), String> {
+        check_secret(&key, Some(&value))?;
+        self.sandbox
+            .services
+            .secrets
+            .save(&secret_entry(&self.plugin_id, &key), &value)
+            .map_err(|e| e.to_string())
+    }
+
+    fn secret_delete(&mut self, key: String) -> std::result::Result<(), String> {
+        check_secret(&key, None)?;
+        self.sandbox
+            .services
+            .secrets
+            .delete(&secret_entry(&self.plugin_id, &key))
+            .map_err(|e| e.to_string())
+    }
+
+    fn session_refresh(&mut self) -> std::result::Result<Option<String>, String> {
+        let (login, web, store) = self.web_session()?;
+        web.refresh(store, &login.window)
+    }
+
+    fn session_renew(&mut self) -> std::result::Result<Option<String>, String> {
+        let (login, web, store) = self.web_session()?;
+        let Some(url) = login.window.web_session.and_then(|page| page.renew_url) else {
+            return Ok(None);
+        };
+        web.renew(store, &login.window, url)
     }
 
     fn http_request(
@@ -416,6 +657,11 @@ pub struct WasmProvider {
 impl WasmProvider {
     /// Compiles the component, starts it and asks what it is.
     pub(crate) fn load(runtime: Arc<Runtime>, wasm: &Path, sandbox: Sandbox) -> Result<Self> {
+        // Each store of a plugin has its own id, and so its own website session.
+        let sandbox = Sandbox {
+            store_id: StoreId::default(),
+            ..sandbox
+        };
         let file = wasm
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
@@ -448,6 +694,7 @@ impl WasmProvider {
         })?;
 
         let plugin = &sandbox.plugin_id;
+        let _ = sandbox.store_id.set(described.id.clone());
         let own_id = described.id == *plugin
             || described
                 .id
@@ -642,6 +889,12 @@ impl WasmProvider {
         }
     }
 
+    /// A play action of a store call, its file paths translated.
+    fn action(&self, method: Method, args: &CallArgs) -> Option<PlayAction> {
+        let action: Option<PlayAction> = self.call_or_default(method, args);
+        action.map(|a| self.sandbox.translate_action(a))
+    }
+
     fn images(&self, method: Method, source_game_id: &str) -> Vec<ImageCandidate> {
         self.call_or_default::<Vec<wire::ImageCandidate>>(method, &CallArgs::game(source_game_id))
             .into_iter()
@@ -675,6 +928,7 @@ fn instantiate(
         plugin_id: sandbox.plugin_id.as_str().into(),
         hosts: sandbox.hosts.clone().into(),
         http: http_agent(),
+        sandbox: Arc::new(sandbox.clone()),
     };
     let mut store = Store::new(&runtime.engine, state);
     store.limiter(|state| &mut state.limits);
@@ -707,7 +961,11 @@ impl LibraryProvider for WasmProvider {
     }
 
     fn scan_installed(&self) -> std::result::Result<Vec<ImportedGame>, ProviderError> {
-        self.call(Method::ScanInstalled, &CallArgs::none())
+        let games: Vec<ImportedGame> = self.call(Method::ScanInstalled, &CallArgs::none())?;
+        Ok(games
+            .into_iter()
+            .map(|g| self.sandbox.translate_game(g))
+            .collect())
     }
 
     fn can_scan_owned(&self) -> bool {
@@ -718,11 +976,15 @@ impl LibraryProvider for WasmProvider {
         &self,
         config: &serde_json::Value,
     ) -> std::result::Result<Vec<ImportedGame>, ProviderError> {
-        self.call(Method::ScanOwned, &CallArgs::config(config))
+        let games: Vec<ImportedGame> = self.call(Method::ScanOwned, &CallArgs::config(config))?;
+        Ok(games
+            .into_iter()
+            .map(|g| self.sandbox.translate_game(g))
+            .collect())
     }
 
     fn install_action(&self, source_game_id: &str) -> Option<PlayAction> {
-        self.call_or_default(Method::InstallAction, &CallArgs::game(source_game_id))
+        self.action(Method::InstallAction, &CallArgs::game(source_game_id))
     }
 
     fn can_uninstall(&self) -> bool {
@@ -730,7 +992,7 @@ impl LibraryProvider for WasmProvider {
     }
 
     fn uninstall_action(&self, source_game_id: &str) -> Option<PlayAction> {
-        self.call_or_default(Method::UninstallAction, &CallArgs::game(source_game_id))
+        self.action(Method::UninstallAction, &CallArgs::game(source_game_id))
     }
 
     fn has_launcher_pages(&self) -> bool {
@@ -742,7 +1004,7 @@ impl LibraryProvider for WasmProvider {
     }
 
     fn launcher_page(&self, source_game_id: &str) -> Option<PlayAction> {
-        self.call_or_default(Method::LauncherPage, &CallArgs::game(source_game_id))
+        self.action(Method::LauncherPage, &CallArgs::game(source_game_id))
     }
 
     fn scan_categories(
@@ -809,15 +1071,22 @@ impl LibraryProvider for WasmProvider {
             args: args.to_string(),
             ..CallArgs::game(source_game_id)
         };
-        self.call_or_default(Method::LaunchWithArgs, &call)
+        self.action(Method::LaunchWithArgs, &call)
     }
 
     fn launcher(&self) -> Option<PlayAction> {
-        self.described().launcher.clone()
+        let action = self.described().launcher.clone()?;
+        Some(self.sandbox.translate_action(action))
     }
 
     fn launcher_process(&self) -> Option<LauncherProcess> {
-        self.described().launcher_process.clone()
+        let process = self.described().launcher_process.clone()?;
+        self.sandbox.translate_launcher(process)
+    }
+
+    fn account(&self) -> Option<&dyn AccountAuth> {
+        (self.sandbox.login.is_some() && self.described().has_account)
+            .then_some(self as &dyn AccountAuth)
     }
 
     fn is_installed(&self) -> bool {
@@ -847,6 +1116,72 @@ impl LibraryProvider for WasmProvider {
             ..CallArgs::none()
         };
         self.call(Method::RunAddGameOption, &args)
+    }
+}
+
+impl AccountAuth for WasmProvider {
+    fn status(&self) -> AccountStatus {
+        let info: AccountInfo = self.call_or_default(Method::AccountStatus, &CallArgs::none());
+        AccountStatus {
+            provider: self.id.clone(),
+            name: self.name.clone(),
+            signed_in: info.signed_in,
+            display_name: info.display_name,
+            supports_code_sign_in: info.supports_code_sign_in,
+            code_url: info.code_url,
+            code_hint: info.code_hint,
+        }
+    }
+
+    fn login_url(&self) -> String {
+        self.sandbox
+            .login
+            .as_ref()
+            .map(|login| login.url.clone())
+            .unwrap_or_default()
+    }
+
+    fn login_window(&self) -> LoginWindow {
+        self.sandbox
+            .login
+            .as_ref()
+            .map(|login| login.window)
+            .unwrap_or(LoginWindow {
+                title: "",
+                // No login permission: a window that can go nowhere.
+                domains: &["invalid"],
+                rule: None,
+                user_agent: None,
+                script: None,
+                web_session: None,
+                capture: |_| None,
+            })
+    }
+
+    fn sign_in_with_code(&self, input: &str) -> std::result::Result<(), AuthError> {
+        let args = CallArgs {
+            input: input.to_string(),
+            ..CallArgs::none()
+        };
+        self.call::<()>(Method::SignInWithCode, &args)
+            .map_err(|e| match e {
+                ProviderError::Network(m) => AuthError::Network(m),
+                other => AuthError::Rejected(other.to_string()),
+            })
+    }
+
+    fn sign_out(&self) -> std::result::Result<(), AuthError> {
+        self.call::<()>(Method::SignOut, &CallArgs::none())
+            .map_err(|e| AuthError::Rejected(e.to_string()))?;
+        let has_session = self
+            .sandbox
+            .login
+            .as_ref()
+            .is_some_and(|login| login.window.web_session.is_some());
+        if let (true, Some(web)) = (has_session, self.sandbox.services.web.as_ref()) {
+            web.clear(&self.id).map_err(AuthError::Storage)?;
+        }
+        Ok(())
     }
 }
 
@@ -922,6 +1257,7 @@ mod tests {
                 (PathBuf::from("/games/deep"), "/store/deep".into()),
             ],
             hosts: Vec::new(),
+            ..Sandbox::default()
         };
         let path = |guest: &str| sandbox.host_path(guest);
         assert_eq!(
@@ -952,6 +1288,114 @@ mod tests {
         ] {
             assert_eq!(path(outside), None, "{outside}");
         }
+    }
+
+    fn folder_sandbox() -> Sandbox {
+        Sandbox {
+            plugin_id: "p".into(),
+            plugin_dir: PathBuf::from("/host/plugins/p"),
+            data_dir: PathBuf::from("/host/plugin-data/p"),
+            mounts: vec![
+                (PathBuf::from("/games/instances"), "/instances".into()),
+                (PathBuf::from("/games/more"), "/instances/more".into()),
+            ],
+            hosts: Vec::new(),
+            ..Sandbox::default()
+        }
+    }
+
+    #[test]
+    fn paths_below_a_folder_mount_become_real_paths() {
+        let sandbox = folder_sandbox();
+        let host = |guest: &str| PathBuf::from(sandbox.translate(guest));
+        assert_eq!(
+            host("/instances/My Instance/Beat Saber.exe"),
+            PathBuf::from("/games/instances/My Instance/Beat Saber.exe")
+        );
+        // The mount itself, with trailing slashes and dots, and the longest mount wins.
+        assert_eq!(host("/instances"), PathBuf::from("/games/instances"));
+        assert_eq!(host("/instances/"), PathBuf::from("/games/instances"));
+        assert_eq!(
+            host("/instances//a/./b/"),
+            PathBuf::from("/games/instances/a/b")
+        );
+        assert_eq!(host("/instances/more/x"), PathBuf::from("/games/more/x"));
+        assert_eq!(
+            host("\\instances\\a\\b.exe"),
+            PathBuf::from("/games/instances/a/b.exe")
+        );
+    }
+
+    #[test]
+    fn other_paths_stay_as_they_are() {
+        let sandbox = folder_sandbox();
+        for same in [
+            // Escapes out of the mount are not resolved, not even partly.
+            "/instances/../x",
+            "/instances/a/../../x",
+            "/instances/..",
+            // Not below a mount: the name has to match whole parts, and case.
+            "/instancesx/a.exe",
+            "/Instances/a.exe",
+            "/INSTANCES",
+            "/other/a.exe",
+            "C:/Games/a.exe",
+            "D:\\Games\\a.exe",
+            "relative/a.exe",
+            "",
+            // The plugin's own folders never become launchable: it writes /data.
+            "/data/evil.exe",
+            "/plugin/a.exe",
+        ] {
+            assert_eq!(sandbox.translate(same), same);
+        }
+        // Images may still come from the plugin's own folders.
+        assert_eq!(
+            sandbox.host_path("/data/a.png"),
+            Some(PathBuf::from("/host/plugin-data/p/a.png"))
+        );
+    }
+
+    #[test]
+    fn play_actions_and_games_translate_their_file_paths() {
+        let sandbox = folder_sandbox();
+        let mut action = PlayAction::file("/instances/Game/Game.exe");
+        action.working_dir = Some("/instances/Game".into());
+        action.args = Some("/instances/not-a-path".into());
+        action.tracking = TrackingMode::Directory;
+        action.tracking_path = Some("/instances/Game".into());
+        let done = sandbox.translate_action(action.clone());
+        assert_eq!(
+            PathBuf::from(&done.target),
+            PathBuf::from("/games/instances/Game/Game.exe")
+        );
+        assert_eq!(
+            PathBuf::from(done.working_dir.unwrap()),
+            PathBuf::from("/games/instances/Game")
+        );
+        assert_eq!(
+            PathBuf::from(done.tracking_path.unwrap()),
+            PathBuf::from("/games/instances/Game")
+        );
+        assert_eq!(done.args.as_deref(), Some("/instances/not-a-path"));
+        // A URI is not a path; a tracked name is not either.
+        let mut uri = PlayAction::uri("/instances/x");
+        uri.tracking = TrackingMode::Name;
+        uri.tracking_path = Some("/instances/x".into());
+        assert_eq!(sandbox.translate_action(uri.clone()), uri);
+
+        let mut game = ImportedGame::installed("1", "G");
+        game.install_dir = Some("/instances/Game".into());
+        game.play_action = Some(PlayAction::file("/instances/Game/Game.exe"));
+        let game = sandbox.translate_game(game);
+        assert_eq!(
+            PathBuf::from(game.install_dir.unwrap()),
+            PathBuf::from("/games/instances/Game")
+        );
+        assert_eq!(
+            PathBuf::from(game.play_action.unwrap().target),
+            PathBuf::from("/games/instances/Game/Game.exe")
+        );
     }
 
     #[test]

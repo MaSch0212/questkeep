@@ -8,7 +8,13 @@ import { libraryFilterPills } from "../i18n/libraryFilterPills";
 import { libraryFilters } from "../i18n/libraryFilters";
 import { emptyGroup, joinerWord, removeAt, treePills, type PillPart } from "../lib/filters";
 import { store } from "../lib/store";
-import { clearedFilters, NO_CATEGORY } from "../lib/views";
+import {
+  clearedFilters,
+  DEFAULT_BASELINE,
+  EXPLORE_BASELINE,
+  NO_CATEGORY,
+  type FilterBaseline,
+} from "../lib/views";
 
 const tr = translator(libraryFilterPills);
 const trCommon = translator(libraryCommon);
@@ -20,7 +26,7 @@ interface QuickPill {
 }
 
 /** The quick filters that are set, each as a pill. */
-function quickPills(query: GameQuery): QuickPill[] {
+function quickPills(query: GameQuery, baseline: FilterBaseline): QuickPill[] {
   const pills: QuickPill[] = [];
   if (query.sources.length > 0) {
     const names = query.sources.map((id) => store.valueName("source", id));
@@ -38,11 +44,11 @@ function quickPills(query: GameQuery): QuickPill[] {
       clear: { categories: [] },
     });
   }
-  if (query.kind !== "games") {
-    pills.push({
-      parts: [{ label: query.kind === "apps" ? tr("apps") : tr("gamesAndApps"), value: "" }],
-      clear: { kind: "games" },
-    });
+  if (query.kind !== baseline.kind) {
+    const label = { apps: tr("apps"), both: tr("gamesAndApps"), games: tr("gamesOnly") }[
+      query.kind
+    ];
+    pills.push({ parts: [{ label, value: "" }], clear: { kind: baseline.kind } });
   }
   if (query.installed !== "any") {
     pills.push({
@@ -64,13 +70,13 @@ function quickPills(query: GameQuery): QuickPill[] {
       clear: { played: "any" },
     });
   }
-  if (query.hidden !== "visible") {
-    pills.push({
-      parts: [
-        { label: query.hidden === "all" ? tr("hiddenIncluded") : tr("onlyHidden"), value: "" },
-      ],
-      clear: { hidden: "visible" },
-    });
+  if (query.hidden !== baseline.hidden) {
+    const label = {
+      all: tr("hiddenIncluded"),
+      hidden: tr("onlyHidden"),
+      visible: tr("hiddenExcluded"),
+    }[query.hidden];
+    pills.push({ parts: [{ label, value: "" }], clear: { hidden: baseline.hidden } });
   }
   return pills;
 }
@@ -108,7 +114,8 @@ function PillText(props: {
 const describe = (parts: PillPart[]) =>
   parts.map((p) => (p.value ? `${p.label}: ${p.value}` : p.label)).join(", ");
 
-const quick = () => quickPills(store.query());
+const baseline = () => (store.isExplore() ? EXPLORE_BASELINE : DEFAULT_BASELINE);
+const quick = () => quickPills(store.query(), baseline());
 const tree = () => treePills(store.query().filter, store.valueName);
 
 /**
@@ -176,7 +183,7 @@ export function FilterPills() {
           type="button"
           class="pill pill--clear"
           onClick={() => {
-            const cleared = clearedFilters(store.query());
+            const cleared = clearedFilters(store.query(), baseline());
             store.changeQuery({
               sources: cleared.sources,
               categories: cleared.categories,
