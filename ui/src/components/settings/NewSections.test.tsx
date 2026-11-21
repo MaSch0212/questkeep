@@ -341,6 +341,7 @@ function makeSettings(overrides: Partial<Settings> = {}): Settings {
     launcherCloseMinMinutes: 2,
     systemNotifications: true,
     tray: { icon: "questkeep", quickLaunchRows: 3, quickLaunch: null },
+    startPage: { background: true, statistics: true, recentlyPlayed: true, recentlyAdded: true },
     detectExternalLaunches: true,
     showStartPage: true,
     showStatistics: true,

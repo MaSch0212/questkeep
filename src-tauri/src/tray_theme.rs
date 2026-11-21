@@ -35,6 +35,18 @@ pub fn light_taskbar() -> bool {
     }
 }
 
+/// Whether apps (the webview's `prefers-color-scheme`) currently use the light theme.
+pub fn light_apps() -> bool {
+    #[cfg(windows)]
+    {
+        windows_impl::light_apps()
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
+}
+
 /// Calls `on_change` with the new value whenever the taskbar theme changes (Windows only; a
 /// no-op elsewhere). Runs on its own thread for the lifetime of the process.
 pub fn watch(on_change: impl Fn(bool) + Send + 'static) {
@@ -64,8 +76,16 @@ mod windows_impl {
     const VALUE: &str = "SystemUsesLightTheme";
 
     pub fn light_taskbar() -> bool {
+        light(VALUE)
+    }
+
+    pub fn light_apps() -> bool {
+        light("AppsUseLightTheme")
+    }
+
+    fn light(name: &str) -> bool {
         let key = wide(KEY);
-        let value = wide(VALUE);
+        let value = wide(name);
         let mut data: u32 = 0;
         let mut size = std::mem::size_of::<u32>() as u32;
         // SAFETY: valid NUL-terminated strings and a correctly sized output buffer.

@@ -193,6 +193,7 @@ mod tests {
 
     fn data() -> PopupData {
         PopupData {
+            light: false,
             games: PopupGames {
                 recent: vec![game(1, "Hades"), game(2, "Celeste")],
                 favorites: vec![game(3, "Hollow Knight")],

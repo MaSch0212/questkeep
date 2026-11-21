@@ -104,7 +104,7 @@ export function GeneralSection(props: { model: SettingsModel }) {
             />
           </fieldset>
           <fieldset class="fieldset settings-group">
-            <legend class="fieldset__legend">{tr("startPage")}</legend>
+            <legend class="fieldset__legend">{tr("pagesGroup")}</legend>
             <label class="check check--switch">
               <input
                 type="checkbox"
@@ -116,6 +116,34 @@ export function GeneralSection(props: { model: SettingsModel }) {
               />
               <span>{tr("showStartPage")}</span>
             </label>
+            <Show when={current().showStartPage}>
+              <For
+                each={
+                  [
+                    ["background", "startBackground"],
+                    ["recentlyPlayed", "startRecentlyPlayed"],
+                    ["recentlyAdded", "startRecentlyAdded"],
+                    ["statistics", "startStats"],
+                  ] as const
+                }
+              >
+                {([field, label]) => (
+                  <label class="check check--switch check--sub">
+                    <input
+                      type="checkbox"
+                      role="switch"
+                      checked={current().startPage[field]}
+                      onChange={(e) =>
+                        void props.model.update({
+                          startPage: { ...current().startPage, [field]: e.currentTarget.checked },
+                        })
+                      }
+                    />
+                    <span>{tr(label)}</span>
+                  </label>
+                )}
+              </For>
+            </Show>
             <label class="check check--switch">
               <input
                 type="checkbox"

@@ -29,7 +29,7 @@ import {
 } from "../lib/viewOptions";
 import { readCssPx } from "../lib/layoutMode";
 import { fitToolbar } from "../lib/toolbarFit";
-import { activeFilterCount, shownName } from "../lib/views";
+import { activeFilterCount, DEFAULT_BASELINE, EXPLORE_BASELINE, shownName } from "../lib/views";
 import type { ViewMode } from "../lib/viewMode";
 import { FilterPanel } from "./FilterPanel";
 import { KeywordFilter, type KeywordFilterHandle } from "./KeywordFilter";
@@ -131,7 +131,8 @@ const groupEntries = (): MenuEntry[] => [
   },
 ];
 
-const filters = () => activeFilterCount(store.query());
+const filters = () =>
+  activeFilterCount(store.query(), store.isExplore() ? EXPLORE_BASELINE : DEFAULT_BASELINE);
 const sortName = () => sortLabel(store.query().sort);
 const sortButtonLabel = () =>
   tr(store.query().descending ? "sortDescending" : "sortAscending", { sort: sortName() });

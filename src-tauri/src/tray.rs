@@ -427,7 +427,17 @@ fn show_popup(app: &AppHandle, rect: &tauri::Rect) {
         icon: g.icon,
         cover: g.cover,
     };
+    // The popup follows the app's own light/dark choice; "system" is the apps setting.
+    let light = match app
+        .try_state::<Arc<AppState>>()
+        .map(|state| state.library.settings().appearance.scheme)
+    {
+        Some(questkeep_core::settings::ColorScheme::Light) => true,
+        Some(questkeep_core::settings::ColorScheme::Dark) => false,
+        _ => crate::tray_theme::light_apps(),
+    };
     let data = PopupData {
+        light,
         games: PopupGames {
             recent: model.games.recent.into_iter().map(game).collect(),
             favorites: model.games.favorites.into_iter().map(game).collect(),

@@ -372,6 +372,12 @@
   --qk-home-track-height: 8px;
   --qk-home-store-name-width: 104px;
   --qk-home-min-height: 560px; /* below this the start page scrolls */
+  --qk-home-bg-blur: 28px; /* the last played game's background behind the start page */
+  --qk-home-bg-opacity: 0.3;
+  --qk-shelf-shadow-room: 32px; /* beside and below the cards, for their hover shadow */
+  --qk-shelf-fade-size: 96px; /* the fade at a shelf edge that has more cards */
+  --qk-mask-opaque: #000; /* any opaque color: masks only use its alpha */
+  --qk-sessions-minutes-width: 96px; /* the minutes field of the play sessions editor */
   --qk-shelf-cover-min-width: 90px;
   --qk-shelf-cover-max-height: 300px;
   --qk-shelf-lift-room: 6px; /* room above the cards so a raised card is not clipped */

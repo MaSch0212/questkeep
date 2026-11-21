@@ -69,6 +69,20 @@ pub struct GameActivity {
     pub sessions: u32,
 }
 
+/// One finished play session of a game or one of its copies (the sessions editor).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct GameSession {
+    #[ts(type = "number")]
+    pub id: i64,
+    pub started_at: DateTime<Utc>,
+    pub ended_at: DateTime<Utc>,
+    /// The credited time, which can be shorter than the span (system sleep).
+    #[ts(type = "number")]
+    pub duration_seconds: u64,
+}
+
 /// Whether the first-run setup or the "no IGDB key" hint should show.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]

@@ -5,6 +5,7 @@ import EyeOff from "lucide-solid/icons/eye-off";
 import Eye from "lucide-solid/icons/eye";
 import FolderOpen from "lucide-solid/icons/folder-open";
 import PackageMinus from "lucide-solid/icons/package-minus";
+import Clock from "lucide-solid/icons/clock";
 import Pencil from "lucide-solid/icons/pencil";
 import Play from "lucide-solid/icons/play";
 import RefreshCw from "lucide-solid/icons/refresh-cw";
@@ -31,6 +32,8 @@ import { scriptsText } from "../i18n/scripts";
 import { createGameActions, runAction } from "../lib/gameActions";
 import { launcherPageCopies, playCopy } from "../lib/copies";
 import { store } from "../lib/store";
+import { gameSessions } from "../i18n/gameSessions";
+import { SessionsDialog } from "./SessionsDialog";
 import { CombinePicker } from "./CombinePicker";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { EditGameDialog } from "./EditGameDialog";
@@ -42,8 +45,9 @@ import { SourceIcon, sourceName } from "./SourceIcon";
 
 const tr = translator(shellMenus);
 const trScripts = translator(scriptsText);
+const trSessions = translator(gameSessions);
 
-type Step = "menu" | "edit" | "combine" | "uninstall" | "remove";
+type Step = "menu" | "edit" | "sessions" | "combine" | "uninstall" | "remove";
 
 const iconOf = (Icon: typeof Play) => () => <Icon class="icon" aria-hidden="true" />;
 /** A profile's store icon, or a play symbol for an executable. */
@@ -204,6 +208,11 @@ export function GameContextMenu(props: {
       onSelect: () => void report(refreshMetadata(game().id), tr("refreshingMetadata")),
     },
     {
+      label: trSessions("edit"),
+      icon: iconOf(Clock),
+      onSelect: () => setStep("sessions"),
+    },
+    {
       label: tr("combineWith"),
       icon: iconOf(Combine),
       onSelect: () => setStep("combine"),
@@ -277,11 +286,16 @@ export function GameContextMenu(props: {
           anchor={props.anchor}
           inside={() => []}
           onPick={(other) => {
+            // Read before closing: closing unmounts this menu, and its props can't be read after.
+            const ids = [game().id, other.id];
             props.onDone(false);
-            store.openCombine([game().id, other.id]);
+            store.openCombine(ids);
           }}
           onClose={(returnFocus) => props.onDone(returnFocus)}
         />
+      </Show>
+      <Show when={step() === "sessions"}>
+        <SessionsDialog game={game()} onClose={() => props.onDone(true)} />
       </Show>
       <Show when={step() === "edit"}>
         <EditGameDialog game={game()} onClose={() => props.onDone(true)} />

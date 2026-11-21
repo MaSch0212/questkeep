@@ -95,6 +95,10 @@ Plugins can have an optional icon (`icon` in `plugin.json`), shown in Settings >
 Plugins can ask for folders you choose (`permissions.folders`, Settings > Plugins > Folders), mounted
 read-only for their stores, and paths their stores return below such a folder become real paths.
 
+Start page settings (background of the game played last, recently played, recently added,
+statistics), the game's menu on start page cards, editable play sessions per game, icons in the tray
+popup's More menu, and hidden games in Explore.
+
 ## Next
 
 - **Verify on Linux**: Heroic Amazon (Nile) and sideloaded games, owned games from Heroic/Lutris.

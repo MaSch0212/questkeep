@@ -27,25 +27,27 @@ use windows::Win32::Graphics::Dwm::{
 };
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_UNKNOWN;
 use windows::Win32::Graphics::Gdi::{
-    ClientToScreen, GetMonitorInfoW, InvalidateRect, MONITOR_DEFAULTTONEAREST, MONITORINFO,
+    BI_RGB, BITMAPINFO, BITMAPINFOHEADER, ClientToScreen, CreateDIBSection, DIB_RGB_COLORS,
+    DeleteObject, GetMonitorInfoW, HBITMAP, InvalidateRect, MONITOR_DEFAULTTONEAREST, MONITORINFO,
     MonitorFromPoint, ScreenToClient, UpdateWindow, ValidateRect,
 };
-use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress, LoadLibraryW};
 use windows::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     GetKeyState, TME_LEAVE, TRACKMOUSEEVENT, TrackMouseEvent, VK_DOWN, VK_END, VK_ESCAPE, VK_HOME,
     VK_LEFT, VK_RETURN, VK_RIGHT, VK_SHIFT, VK_SPACE, VK_TAB, VK_UP,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    AppendMenuW, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyMenu, DestroyWindow,
-    DispatchMessageW, GetCursorPos, GetMessageW, IDC_ARROW, LoadCursorW, MF_STRING, MSG,
-    PostMessageW, PostQuitMessage, RegisterClassExW, SW_SHOW, SetForegroundWindow, ShowWindow,
-    TPM_LEFTALIGN, TPM_NONOTIFY, TPM_RETURNCMD, TPM_TOPALIGN, TrackPopupMenu, TranslateMessage,
-    WA_INACTIVE, WM_ACTIVATE, WM_APP, WM_CLOSE, WM_DESTROY, WM_DISPLAYCHANGE, WM_DPICHANGED,
-    WM_ERASEBKGND, WM_GETOBJECT, WM_KEYDOWN, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE,
-    WM_MOUSEWHEEL, WM_PAINT, WNDCLASSEXW, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
+    CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyMenu, DestroyWindow, DispatchMessageW,
+    GetCursorPos, GetMessageW, IDC_ARROW, InsertMenuItemW, LoadCursorW, MENUITEMINFOW, MFT_STRING,
+    MIIM_BITMAP, MIIM_FTYPE, MIIM_ID, MIIM_STRING, MSG, PostMessageW, PostQuitMessage,
+    RegisterClassExW, SW_SHOW, SetForegroundWindow, ShowWindow, TPM_LEFTALIGN, TPM_NONOTIFY,
+    TPM_RETURNCMD, TPM_TOPALIGN, TrackPopupMenu, TranslateMessage, WA_INACTIVE, WM_ACTIVATE,
+    WM_APP, WM_CLOSE, WM_DESTROY, WM_DISPLAYCHANGE, WM_DPICHANGED, WM_ERASEBKGND, WM_GETOBJECT,
+    WM_KEYDOWN, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_PAINT, WNDCLASSEXW,
+    WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
 };
-use windows::core::{HSTRING, PCWSTR, Result, w};
+use windows::core::{HSTRING, PCSTR, Result, w};
 
 use accesskit::{
     Action as A11yAction, ActionHandler, ActionRequest, ActivationHandler, TreeUpdate,
@@ -54,8 +56,9 @@ use accesskit_windows::Adapter;
 
 use super::a11y;
 use super::layout::{self, Action, Layout, Nav, ScreenRect, navigate};
-use super::render::{Bitmaps, Frame, Renderer, ViewState};
-use super::{PopupData, Prepared, prepare};
+use super::render::{Bitmaps, Frame, Renderer, ViewState, border_colorref};
+use super::{Pixels, PopupData, Prepared, prepare};
+use questkeep_imaging::{load_icon_rgba, scale_icon};
 
 /// `WM_MOUSELEAVE` (declared in a `windows` feature this crate does not otherwise need).
 const WM_MOUSELEAVE: u32 = 0x02A3;
@@ -217,6 +220,7 @@ fn run_with(
 ) -> Result<Option<Action>> {
     register_class()?;
     let (work, scale) = monitor_for(anchor);
+    let light = data.light;
     let renderer = Renderer::new()?;
     let layout = layout::layout(&data.content(), 0.0, |t| renderer.measure(t));
     let images = prepare(&data, &layout, scale);
@@ -266,7 +270,7 @@ fn run_with(
             Some(instance.into()),
             None,
         )?;
-        style_window(hwnd);
+        style_window(hwnd, light);
         // Must exist before the first WM_GETOBJECT (screen readers ask as soon as it shows).
         STATE.with(|s| {
             if let Some(state) = s.borrow_mut().as_mut() {
@@ -315,11 +319,10 @@ fn set_cloaked(hwnd: HWND, cloaked: bool) {
 
 /// Windows 11 look: rounded corners, dark frame, a border in the theme's border color. Older
 /// systems ignore the attributes.
-fn style_window(hwnd: HWND) {
+fn style_window(hwnd: HWND, light: bool) {
     let corner = DWMWCP_ROUND;
-    let dark: i32 = 1;
-    // COLORREF is 0x00BBGGRR; the theme border is #2a2f3a.
-    let border = COLORREF(0x003a_2f2a);
+    let dark = i32::from(!light);
+    let border = COLORREF(border_colorref(light));
     // SAFETY: each attribute gets a pointer to a value of the documented type and size.
     unsafe {
         let _ = DwmSetWindowAttribute(
@@ -722,7 +725,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
 /// (Windows flips it up when there is no room). Returns whether an entry was chosen (its
 /// action is stored, so the popup closes).
 fn open_more_menu(hwnd: HWND, item: usize) -> bool {
-    let Some((rect, scale, entries)) = STATE.with(|s| {
+    let Some((rect, scale, entries, icons, light)) = STATE.with(|s| {
         let guard = s.try_borrow().ok()?;
         let state = guard.as_ref()?;
         let rect = state.layout.items.get(item)?.rect;
@@ -734,7 +737,27 @@ fn open_more_menu(hwnd: HWND, item: usize) -> bool {
             .skip(from)
             .map(|l| (l.name.replace('&', "&&"), l.action()))
             .collect();
-        Some((rect, state.scale, entries))
+        // A small icon per entry: the app's own icon, else the store's logo.
+        let side = (16.0 * state.scale).round().max(16.0) as u32;
+        let light = state.data.light;
+        let icons: Vec<Option<Vec<u8>>> = state
+            .data
+            .launchers
+            .iter()
+            .skip(from)
+            .map(|l| {
+                let image = l
+                    .image
+                    .as_deref()
+                    .and_then(|p| load_icon_rgba(p).and_then(|icon| scale_icon(&icon, side)));
+                match image {
+                    Some(icon) => Some(Pixels::from_rgba(&icon).bgra),
+                    None if !l.icon.is_empty() => state.renderer.menu_icon(&l.icon, side, light),
+                    None => None,
+                }
+            })
+            .collect();
+        Some((rect, state.scale, entries, icons, state.data.light))
     }) else {
         return false;
     };
@@ -744,9 +767,30 @@ fn open_more_menu(hwnd: HWND, item: usize) -> bool {
         let Ok(menu) = CreatePopupMenu() else {
             return false;
         };
+        // The menu would follow the system theme; show it in the popup's.
+        let previous_mode = set_menu_mode(light);
+        let side = (16.0 * scale).round().max(16.0) as i32;
+        let mut bitmaps = Vec::new();
         for (n, (name, _)) in entries.iter().enumerate() {
             let text = HSTRING::from(name.as_str());
-            let _ = AppendMenuW(menu, MF_STRING, n + 1, PCWSTR(text.as_ptr()));
+            let bitmap = icons
+                .get(n)
+                .and_then(|pixels| pixels.as_deref())
+                .and_then(|pixels| menu_bitmap(pixels, side));
+            let mut info = MENUITEMINFOW {
+                cbSize: std::mem::size_of::<MENUITEMINFOW>() as u32,
+                fMask: MIIM_STRING | MIIM_ID | MIIM_FTYPE,
+                fType: MFT_STRING,
+                wID: n as u32 + 1,
+                dwTypeData: windows::core::PWSTR(text.as_ptr().cast_mut()),
+                ..Default::default()
+            };
+            if let Some(bitmap) = bitmap {
+                info.fMask |= MIIM_BITMAP;
+                info.hbmpItem = bitmap;
+                bitmaps.push(bitmap);
+            }
+            let _ = InsertMenuItemW(menu, n as u32, true, &info);
         }
         let mut at = POINT {
             x: (rect.x * scale).round() as i32,
@@ -767,6 +811,10 @@ fn open_more_menu(hwnd: HWND, item: usize) -> bool {
             0
         };
         let _ = DestroyMenu(menu);
+        restore_menu_mode(previous_mode);
+        for bitmap in bitmaps {
+            let _ = DeleteObject(bitmap.into());
+        }
         usize::try_from(command).ok().filter(|c| *c > 0)
     };
     let Some(action) = chosen
@@ -783,6 +831,88 @@ fn open_more_menu(hwnd: HWND, item: usize) -> bool {
         }
     });
     true
+}
+
+/// `uxtheme.dll` ordinals that set how the process's menus are themed (undocumented, but used by
+/// many apps and stable since Windows 10 1903).
+const SET_PREFERRED_APP_MODE: usize = 135;
+const FLUSH_MENU_THEMES: usize = 136;
+/// `PreferredAppMode` values: 2 forces dark menus, 3 forces light ones.
+const FORCE_DARK: i32 = 2;
+const FORCE_LIGHT: i32 = 3;
+
+/// Looks up an exported function of `uxtheme.dll` by ordinal.
+unsafe fn uxtheme_fn(ordinal: usize) -> Option<unsafe extern "system" fn() -> isize> {
+    // SAFETY: a system library name and a documented-by-convention ordinal lookup; the result is
+    // only called with the signature each caller knows for that ordinal.
+    unsafe {
+        let module = LoadLibraryW(w!("uxtheme.dll")).ok()?;
+        GetProcAddress(module, PCSTR(ordinal as *const u8))
+    }
+}
+
+/// Makes menus light or dark regardless of the system theme. Returns the mode that was set before
+/// (for [`restore_menu_mode`]), or `None` when the system does not offer this.
+unsafe fn set_menu_mode(light: bool) -> Option<i32> {
+    // SAFETY: ordinal 135 is `int SetPreferredAppMode(int)`, 136 is `void FlushMenuThemes()`.
+    unsafe {
+        let set = uxtheme_fn(SET_PREFERRED_APP_MODE)?;
+        let set: unsafe extern "system" fn(i32) -> i32 = std::mem::transmute(set);
+        let previous = set(if light { FORCE_LIGHT } else { FORCE_DARK });
+        if let Some(flush) = uxtheme_fn(FLUSH_MENU_THEMES) {
+            let flush: unsafe extern "system" fn() = std::mem::transmute(flush);
+            flush();
+        }
+        Some(previous)
+    }
+}
+
+/// Puts the menu theming back the way `set_menu_mode` found it.
+unsafe fn restore_menu_mode(previous: Option<i32>) {
+    let Some(previous) = previous else { return };
+    // SAFETY: as in `set_menu_mode`.
+    unsafe {
+        if let Some(set) = uxtheme_fn(SET_PREFERRED_APP_MODE) {
+            let set: unsafe extern "system" fn(i32) -> i32 = std::mem::transmute(set);
+            set(previous);
+        }
+        if let Some(flush) = uxtheme_fn(FLUSH_MENU_THEMES) {
+            let flush: unsafe extern "system" fn() = std::mem::transmute(flush);
+            flush();
+        }
+    }
+}
+
+/// A top-down 32-bit bitmap for a menu item from premultiplied BGRA pixels (`side` x `side`).
+fn menu_bitmap(pixels: &[u8], side: i32) -> Option<HBITMAP> {
+    let len = usize::try_from(side).ok()?.pow(2) * 4;
+    if pixels.len() != len {
+        return None;
+    }
+    let info = BITMAPINFO {
+        bmiHeader: BITMAPINFOHEADER {
+            biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+            biWidth: side,
+            biHeight: -side,
+            biPlanes: 1,
+            biBitCount: 32,
+            biCompression: BI_RGB.0,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let mut bits = std::ptr::null_mut();
+    // SAFETY: the DIB section owns `len` bytes at `bits` (checked above to match the source);
+    // the pointer is only written through right here.
+    unsafe {
+        let bitmap = CreateDIBSection(None, &info, DIB_RGB_COLORS, &mut bits, None, 0).ok()?;
+        if bits.is_null() {
+            let _ = DeleteObject(bitmap.into());
+            return None;
+        }
+        std::ptr::copy_nonoverlapping(pixels.as_ptr(), bits.cast::<u8>(), len);
+        Some(bitmap)
+    }
 }
 
 #[cfg(test)]
@@ -803,6 +933,7 @@ mod tests {
     #[test]
     fn screen_readers_see_and_invoke_the_items() {
         let data = PopupData {
+            light: false,
             games: PopupGames {
                 recent: vec![PopupGame {
                     id: Uuid::from_u128(1),

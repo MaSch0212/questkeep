@@ -91,6 +91,8 @@ impl PopupLauncher {
 /// What the popup shows.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PopupData {
+    /// The popup uses the light palette (the app is set to light); dark when false.
+    pub light: bool,
     pub games: PopupGames,
     pub launchers: Vec<PopupLauncher>,
     /// Rows of quick-launch tiles (1 to 3); entries that do not fit go into a menu.

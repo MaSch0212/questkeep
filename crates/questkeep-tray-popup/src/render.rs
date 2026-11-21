@@ -15,9 +15,11 @@ use windows::Win32::Graphics::Direct2D::Common::{
 use windows::Win32::Graphics::Direct2D::{
     D2D1_ANTIALIAS_MODE_PER_PRIMITIVE, D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR,
     D2D1_BITMAP_PROPERTIES, D2D1_DRAW_TEXT_OPTIONS_CLIP, D2D1_EXTEND_MODE_CLAMP,
-    D2D1_FACTORY_TYPE_SINGLE_THREADED, D2D1_GAMMA_2_2, D2D1_LINEAR_GRADIENT_BRUSH_PROPERTIES,
-    D2D1_ROUNDED_RECT, D2D1CreateFactory, ID2D1Bitmap, ID2D1Brush, ID2D1DeviceContext5,
-    ID2D1Factory, ID2D1RenderTarget,
+    D2D1_FACTORY_TYPE_SINGLE_THREADED, D2D1_FEATURE_LEVEL_DEFAULT, D2D1_GAMMA_2_2,
+    D2D1_LINEAR_GRADIENT_BRUSH_PROPERTIES, D2D1_RENDER_TARGET_PROPERTIES,
+    D2D1_RENDER_TARGET_TYPE_SOFTWARE, D2D1_RENDER_TARGET_USAGE_NONE, D2D1_ROUNDED_RECT,
+    D2D1CreateFactory, ID2D1Bitmap, ID2D1Brush, ID2D1DeviceContext5, ID2D1Factory,
+    ID2D1RenderTarget,
 };
 use windows::Win32::Graphics::DirectWrite::{
     DWRITE_FACTORY_TYPE_SHARED, DWRITE_FONT_STRETCH_NORMAL, DWRITE_FONT_STYLE_NORMAL,
@@ -28,6 +30,13 @@ use windows::Win32::Graphics::DirectWrite::{
     DWRITE_WORD_WRAPPING_WRAP, DWriteCreateFactory, IDWriteFactory, IDWriteTextFormat,
 };
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
+use windows::Win32::Graphics::Imaging::{
+    CLSID_WICImagingFactory, GUID_WICPixelFormat32bppPBGRA, IWICImagingFactory,
+    WICBitmapCacheOnLoad,
+};
+use windows::Win32::System::Com::{
+    CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx,
+};
 use windows::Win32::UI::Shell::SHCreateMemStream;
 use windows::core::{Interface, Result, w};
 use windows_numerics::{Matrix3x2, Vector2};
@@ -35,20 +44,60 @@ use windows_numerics::{Matrix3x2, Vector2};
 use super::layout::{self, ItemKind, Layout, Rect};
 use super::{PopupData, Prepared, row_icon_rect, snap};
 
-/// Colors of the dark app theme (`ui/src/theme.css`), as 0xRRGGBB.
+/// Colors that do not change with the theme, as 0xRRGGBB.
 mod color {
-    pub const SURFACE: u32 = 0x171a20;
-    pub const RAISED: u32 = 0x1e222a;
-    pub const HOVER: u32 = 0x262b35;
-    pub const BORDER: u32 = 0x2a2f3a;
-    pub const TEXT: u32 = 0xe6e8ec;
-    pub const MUTED: u32 = 0x9aa1ae;
-    pub const FAINT: u32 = 0x6c7381;
-    pub const ACCENT: u32 = 0x7c9cff;
-    pub const ACCENT_HOVER: u32 = 0x96b0ff;
-    pub const ACCENT_CONTRAST: u32 = 0x0e1220;
-    pub const COVER_BG: u32 = 0x0d0f13;
     pub const WHITE: u32 = 0xffffff;
+    pub const COVER_BG: u32 = 0x0d0f13;
+}
+
+/// The popup's colors for one color scheme (`ui/src/theme.css`), as 0xRRGGBB.
+struct Palette {
+    surface: u32,
+    raised: u32,
+    hover: u32,
+    border: u32,
+    text: u32,
+    muted: u32,
+    faint: u32,
+    accent: u32,
+    accent_hover: u32,
+    accent_contrast: u32,
+}
+
+const DARK: Palette = Palette {
+    surface: 0x171a20,
+    raised: 0x1e222a,
+    hover: 0x262b35,
+    border: 0x2a2f3a,
+    text: 0xe6e8ec,
+    muted: 0x9aa1ae,
+    faint: 0x6c7381,
+    accent: 0x7c9cff,
+    accent_hover: 0x96b0ff,
+    accent_contrast: 0x0e1220,
+};
+
+const LIGHT: Palette = Palette {
+    surface: 0xfafbfc,
+    raised: 0xffffff,
+    hover: 0xe9ebf0,
+    border: 0xd5d9e2,
+    text: 0x1b1e26,
+    muted: 0x565d6b,
+    faint: 0x747b8a,
+    accent: 0x3d5fd9,
+    accent_hover: 0x5575e6,
+    accent_contrast: 0xffffff,
+};
+
+const fn palette(light: bool) -> &'static Palette {
+    if light { &LIGHT } else { &DARK }
+}
+
+/// The border color of the popup window as a `COLORREF` (0x00BBGGRR).
+pub fn border_colorref(light: bool) -> u32 {
+    let hex = palette(light).border;
+    ((hex & 0xff) << 16) | (hex & 0xff00) | (hex >> 16)
 }
 
 const TILE_RADIUS: f32 = 8.0;
@@ -244,6 +293,64 @@ impl Renderer {
         &self.factory
     }
 
+    /// An SVG logo as premultiplied BGRA pixels (`side` x `side`) in the text color of the
+    /// popup's scheme (the native overflow menu follows it).
+    pub fn menu_icon(&self, markup: &str, side: u32, light: bool) -> Option<Vec<u8>> {
+        let tone = palette(light).text;
+        let markup = markup.replace("currentColor", &format!("#{tone:06x}"));
+        // SAFETY: COM is initialized for this thread first (a repeat is harmless); every
+        // object is created and used inside this call, and drawing happens between
+        // BeginDraw and EndDraw.
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+            let wic: IWICImagingFactory =
+                CoCreateInstance(&CLSID_WICImagingFactory, None, CLSCTX_INPROC_SERVER).ok()?;
+            let bitmap = wic
+                .CreateBitmap(
+                    side,
+                    side,
+                    &GUID_WICPixelFormat32bppPBGRA,
+                    WICBitmapCacheOnLoad,
+                )
+                .ok()?;
+            let props = D2D1_RENDER_TARGET_PROPERTIES {
+                r#type: D2D1_RENDER_TARGET_TYPE_SOFTWARE,
+                pixelFormat: D2D1_PIXEL_FORMAT {
+                    format: DXGI_FORMAT_B8G8R8A8_UNORM,
+                    alphaMode: D2D1_ALPHA_MODE_PREMULTIPLIED,
+                },
+                dpiX: 96.0,
+                dpiY: 96.0,
+                usage: D2D1_RENDER_TARGET_USAGE_NONE,
+                minLevel: D2D1_FEATURE_LEVEL_DEFAULT,
+            };
+            let target = self
+                .factory
+                .CreateWicBitmapRenderTarget(&bitmap, &props)
+                .ok()?;
+            let context: ID2D1DeviceContext5 = target.cast().ok()?;
+            let stream = SHCreateMemStream(Some(markup.as_bytes()))?;
+            let document = context
+                .CreateSvgDocument(
+                    &stream,
+                    D2D_SIZE_F {
+                        width: side as f32,
+                        height: side as f32,
+                    },
+                )
+                .ok()?;
+            target.BeginDraw();
+            target.Clear(None);
+            context.DrawSvgDocument(&document);
+            target.EndDraw(None, None).ok()?;
+            let mut pixels = vec![0u8; (side * side * 4) as usize];
+            bitmap
+                .CopyPixels(std::ptr::null(), side * 4, &mut pixels)
+                .ok()?;
+            Some(pixels)
+        }
+    }
+
     /// Width of a button or pill label in logical pixels.
     pub fn measure(&self, text: &str) -> f32 {
         let text = wide(text);
@@ -436,16 +543,17 @@ impl Painter<'_> {
         bitmaps: &mut Bitmaps,
         state: &ViewState,
     ) -> Result<()> {
+        let pal = palette(data.light);
         let t = self.target;
         // SAFETY: as above.
         unsafe {
             t.SetTransform(&Matrix3x2::identity());
-            t.Clear(Some(&rgb(color::SURFACE, 1.0)));
+            t.Clear(Some(&rgb(pal.surface, 1.0)));
         }
-        let muted = self.brush(color::MUTED, 1.0)?;
-        let text = self.brush(color::TEXT, 1.0)?;
-        let faint = self.brush(color::FAINT, 1.0)?;
-        let focus = self.brush(color::ACCENT, 1.0)?;
+        let muted = self.brush(pal.muted, 1.0)?;
+        let text = self.brush(pal.text, 1.0)?;
+        let faint = self.brush(pal.faint, 1.0)?;
+        let focus = self.brush(pal.accent, 1.0)?;
 
         for (label, r) in &layout.labels {
             let r = Rect::new(r.x + 2.0, r.y + 4.0, r.w, r.h - 4.0);
@@ -504,8 +612,7 @@ impl Painter<'_> {
                         );
                     }
                     if hovered || focused {
-                        let bg =
-                            self.brush(if pressed { color::BORDER } else { color::HOVER }, 1.0)?;
+                        let bg = self.brush(if pressed { pal.border } else { pal.hover }, 1.0)?;
                         self.fill(r, ROW_RADIUS, &bg);
                     }
                     let icon = snapped(row_icon_rect(&item.rect), self.scale);
@@ -541,16 +648,16 @@ impl Painter<'_> {
                     };
                     let bg = self.brush(
                         if pressed {
-                            color::BORDER
+                            pal.border
                         } else if hovered {
-                            color::HOVER
+                            pal.hover
                         } else {
-                            color::RAISED
+                            pal.raised
                         },
                         1.0,
                     )?;
                     self.fill(r, TILE_RADIUS, &bg);
-                    let border = self.brush(color::BORDER, 1.0)?;
+                    let border = self.brush(pal.border, 1.0)?;
                     self.stroke(inflate(r, -0.5), TILE_RADIUS, &border, 1.0);
                     let size = layout::LAUNCHER_ICON_SIZE;
                     let icon = snapped(
@@ -562,7 +669,7 @@ impl Painter<'_> {
                         Some(b) => self.fill_bitmap(icon, BITMAP_ICON_RADIUS, &b)?,
                         None => {
                             if launcher.icon.is_empty()
-                                || self.svg(&launcher.icon, icon, color::TEXT).is_err()
+                                || self.svg(&launcher.icon, icon, pal.text).is_err()
                             {
                                 let initial: String = launcher.name.chars().take(1).collect();
                                 self.text(&initial, &self.renderer.letter, icon, &text);
@@ -583,16 +690,16 @@ impl Painter<'_> {
                 ItemKind::More => {
                     let bg = self.brush(
                         if pressed {
-                            color::BORDER
+                            pal.border
                         } else if hovered {
-                            color::HOVER
+                            pal.hover
                         } else {
-                            color::RAISED
+                            pal.raised
                         },
                         1.0,
                     )?;
                     self.fill(r, TILE_RADIUS, &bg);
-                    let border = self.brush(color::BORDER, 1.0)?;
+                    let border = self.brush(pal.border, 1.0)?;
                     self.stroke(inflate(r, -0.5), TILE_RADIUS, &border, 1.0);
                     let size = layout::LAUNCHER_ICON_SIZE;
                     let icon = snapped(
@@ -614,14 +721,14 @@ impl Painter<'_> {
                 ItemKind::OpenButton => {
                     let bg = self.brush(
                         if hovered {
-                            color::ACCENT_HOVER
+                            pal.accent_hover
                         } else {
-                            color::ACCENT
+                            pal.accent
                         },
                         if pressed { 0.85 } else { 1.0 },
                     )?;
                     self.fill(r, BUTTON_RADIUS, &bg);
-                    let fg = self.brush(color::ACCENT_CONTRAST, 1.0)?;
+                    let fg = self.brush(pal.accent_contrast, 1.0)?;
                     self.centered_text(&data.texts.open, r, &fg);
                     if focused {
                         self.stroke(inflate(r, 2.5), BUTTON_RADIUS + 2.5, &focus, FOCUS_WIDTH);
@@ -633,16 +740,16 @@ impl Painter<'_> {
                     };
                     let bg = self.brush(
                         if pressed {
-                            color::BORDER
+                            pal.border
                         } else if hovered {
-                            color::HOVER
+                            pal.hover
                         } else {
-                            color::RAISED
+                            pal.raised
                         },
                         1.0,
                     )?;
                     self.fill(r, BUTTON_RADIUS, &bg);
-                    let accent = self.brush(color::ACCENT, 1.0)?;
+                    let accent = self.brush(pal.accent, 1.0)?;
                     self.stroke(inflate(r, -0.5), BUTTON_RADIUS, &accent, 1.0);
                     self.centered_text(&data.texts.update_label(version), r, &accent);
                     if focused {
@@ -651,8 +758,7 @@ impl Painter<'_> {
                 }
                 ItemKind::ExitButton => {
                     if hovered || focused {
-                        let bg =
-                            self.brush(if pressed { color::BORDER } else { color::HOVER }, 1.0)?;
+                        let bg = self.brush(if pressed { pal.border } else { pal.hover }, 1.0)?;
                         self.fill(r, BUTTON_RADIUS, &bg);
                     }
                     self.centered_text(&data.texts.exit, r, if hovered { &text } else { &muted });
@@ -673,7 +779,7 @@ impl Painter<'_> {
                 .map_or(0.0, |i| clip.y - i.rect.y);
             let thumb_h = (clip.h * clip.h / total).max(24.0);
             let thumb_y = clip.y + (clip.h - thumb_h) * (scrolled / layout.max_scroll);
-            let thumb = self.brush(color::FAINT, 0.6)?;
+            let thumb = self.brush(pal.faint, 0.6)?;
             self.fill(
                 Rect::new(clip.right() + 4.0, thumb_y, 3.0, thumb_h),
                 1.5,
@@ -681,7 +787,7 @@ impl Painter<'_> {
             );
         }
 
-        let line = self.brush(color::BORDER, 1.0)?;
+        let line = self.brush(pal.border, 1.0)?;
         let y = snap(layout.separator_y, self.scale) + 0.5 / self.scale;
         // SAFETY: as above.
         unsafe {
@@ -873,6 +979,7 @@ mod tests {
             )
         };
         PopupData {
+            light: false,
             games: PopupGames {
                 recent: covers
                     .iter()
@@ -904,6 +1011,7 @@ mod tests {
             let dir = tempfile::tempdir().unwrap();
             let (cover, icon) = sample_images(dir.path());
             let data = PopupData {
+                light: false,
                 games: PopupGames {
                     recent: vec![
                         game(

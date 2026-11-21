@@ -52,8 +52,8 @@ export function exploreView(preset: Partial<GameQuery> = {}): LibraryView {
       return tr("explore");
     },
     icon: "compass",
-    // Explore looks through everything: games and apps.
-    query: { ...defaultQuery(), kind: "both", ...preset },
+    // Explore looks through everything: games, apps and hidden games.
+    query: { ...defaultQuery(), ...EXPLORE_BASELINE, ...preset },
     layout: "list",
     group: "none",
     groupList: false,
@@ -131,22 +131,37 @@ export function withoutDraft(drafts: Drafts, id: string): Drafts {
   return Object.fromEntries(Object.entries(drafts).filter(([key]) => key !== id));
 }
 
+/** The kind and hidden settings that count as "no filter": games only and no hidden games,
+ *  except in Explore, which looks through everything. */
+export interface FilterBaseline {
+  kind: GameQuery["kind"];
+  hidden: GameQuery["hidden"];
+}
+export const DEFAULT_BASELINE: FilterBaseline = { kind: "games", hidden: "visible" };
+export const EXPLORE_BASELINE: FilterBaseline = { kind: "both", hidden: "all" };
+
 /** How many filters (not sort or layout) a query sets: shown on the Filters button. */
-export function activeFilterCount(query: GameQuery): number {
+export function activeFilterCount(
+  query: GameQuery,
+  baseline: FilterBaseline = DEFAULT_BASELINE,
+): number {
   return (
     (query.sources.length > 0 ? 1 : 0) +
     (query.categories.length > 0 ? 1 : 0) +
     (query.favorite !== "any" ? 1 : 0) +
     (query.installed !== "any" ? 1 : 0) +
     (query.played !== "any" ? 1 : 0) +
-    (query.hidden !== "visible" ? 1 : 0) +
-    (query.kind !== "games" ? 1 : 0) +
+    (query.hidden !== baseline.hidden ? 1 : 0) +
+    (query.kind !== baseline.kind ? 1 : 0) +
     activeTreeCount(query.filter)
   );
 }
 
 /** The filters of a query, with sort and layout kept. */
-export function clearedFilters(query: GameQuery): GameQuery {
+export function clearedFilters(
+  query: GameQuery,
+  baseline: FilterBaseline = DEFAULT_BASELINE,
+): GameQuery {
   return {
     ...query,
     sources: [],
@@ -154,8 +169,8 @@ export function clearedFilters(query: GameQuery): GameQuery {
     favorite: "any",
     installed: "any",
     played: "any",
-    hidden: "visible",
-    kind: "games",
+    hidden: baseline.hidden,
+    kind: baseline.kind,
     filter: emptyGroup(),
   };
 }

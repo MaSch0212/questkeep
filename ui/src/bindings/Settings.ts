@@ -6,6 +6,7 @@ import type { LauncherClosePolicy } from "./LauncherClosePolicy";
 import type { MetadataPriority } from "./MetadataPriority";
 import type { PriceSite } from "./PriceSite";
 import type { SortPrefixes } from "./SortPrefixes";
+import type { StartPageSettings } from "./StartPageSettings";
 import type { StartupPage } from "./StartupPage";
 import type { TraySettings } from "./TraySettings";
 import type { WindowOnGameStart } from "./WindowOnGameStart";
@@ -153,4 +154,8 @@ systemNotifications: boolean,
 /**
  * The tray icon and what its popup's quick-launch strip holds.
  */
-tray: TraySettings, };
+tray: TraySettings, 
+/**
+ * What the start page shows.
+ */
+startPage: StartPageSettings, };

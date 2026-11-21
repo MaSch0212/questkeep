@@ -4114,12 +4114,34 @@ ul {
   flex: 1;
   min-width: 0;
   overflow-y: auto;
+  /* The shelves reach past the page padding for their card shadows; that must not scroll. */
+  overflow-x: hidden;
 }
 .home__shelves,
 .home__stats {
   padding: 0 var(--qk-space-5);
 }
+/* The background of the game played last: faded and blurred, under everything else. */
+.home__bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.home__bg img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: var(--qk-home-bg-opacity);
+  filter: blur(var(--qk-home-bg-blur));
+  transform: scale(1.1); /* hides the soft edges the blur leaves */
+}
+.home__shelves,
+.home__stats {
+  position: relative;
+}
 .home {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--qk-space-4);
@@ -4150,7 +4172,10 @@ ul {
   display: flex;
   overflow-x: auto;
   overflow-y: hidden;
-  padding: var(--qk-shelf-lift-room) var(--qk-space-1) var(--qk-space-2);
+  /* Room around the cards for their shadow (the scroller clips), taken back by the margin. */
+  padding: var(--qk-shelf-lift-room) calc(var(--qk-space-1) + var(--qk-shelf-shadow-room))
+    calc(var(--qk-space-2) + var(--qk-shelf-shadow-room));
+  margin: 0 calc(var(--qk-shelf-shadow-room) * -1) calc(var(--qk-shelf-shadow-room) * -1);
   outline: none;
 }
 /* Centered while the cards fit; scrolls from the left edge when they don't. */
@@ -8239,4 +8264,93 @@ label[for="quick-launch-add"] {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+}
+
+/* Play sessions editor */
+.sessions__add {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--qk-space-3);
+  margin: var(--qk-space-3) 0;
+}
+.sessions__minutes {
+  width: var(--qk-sessions-minutes-width);
+}
+.sessions__summary {
+  margin: var(--qk-space-3) 0 var(--qk-space-2);
+  color: var(--qk-color-text-muted);
+  font-size: var(--qk-font-size-sm);
+}
+.sessions__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--qk-color-border);
+  border-radius: var(--qk-radius-md);
+}
+.sessions__row {
+  display: flex;
+  align-items: center;
+  gap: var(--qk-space-3);
+  /* Tall enough for the inputs of a row being edited, so the list does not jump. */
+  min-height: calc(var(--qk-control-height) + var(--qk-space-2));
+  padding: var(--qk-space-1) var(--qk-space-3);
+  border-bottom: 1px solid var(--qk-color-border);
+}
+.sessions__row:last-child {
+  border-bottom: 0;
+}
+.sessions__when {
+  flex: 1;
+}
+.sessions__length {
+  color: var(--qk-color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.sessions__row--editing .input:first-child {
+  flex: 1;
+}
+.sessions__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--qk-space-3);
+}
+.sessions__foot > :last-child {
+  margin-left: auto;
+}
+.sessions__pager {
+  display: flex;
+  align-items: center;
+  gap: var(--qk-space-3);
+  color: var(--qk-color-text-muted);
+  font-size: var(--qk-font-size-sm);
+}
+
+/* Shelves have no scrollbar: the side with more cards fades out instead. */
+.shelf__scroller {
+  scrollbar-width: none;
+  --qk-shelf-fade-start-size: 0px;
+  --qk-shelf-fade-end-size: 0px;
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    var(--qk-mask-opaque) var(--qk-shelf-fade-start-size),
+    var(--qk-mask-opaque) calc(100% - var(--qk-shelf-fade-end-size)),
+    transparent
+  );
+}
+.shelf__scroller::-webkit-scrollbar {
+  display: none;
+}
+.shelf__scroller--fade-start {
+  --qk-shelf-fade-start-size: var(--qk-shelf-fade-size);
+}
+.shelf__scroller--fade-end {
+  --qk-shelf-fade-end-size: var(--qk-shelf-fade-size);
+}
+
+/* A setting that belongs to the one above it: indented. */
+.settings-group > .check--sub {
+  padding-left: calc(var(--qk-space-3) + var(--qk-space-5));
 }

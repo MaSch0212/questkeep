@@ -100,6 +100,32 @@ pub struct Settings {
     pub system_notifications: bool,
     /// The tray icon and what its popup's quick-launch strip holds.
     pub tray: TraySettings,
+    /// What the start page shows.
+    pub start_page: StartPageSettings,
+}
+
+/// What the start page shows (each part can be switched off, up to an empty page).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", default)]
+#[ts(export)]
+pub struct StartPageSettings {
+    /// The faded, blurred background of the game played last.
+    pub background: bool,
+    /// The playtime chart and the installs per store.
+    pub statistics: bool,
+    pub recently_played: bool,
+    pub recently_added: bool,
+}
+
+impl Default for StartPageSettings {
+    fn default() -> Self {
+        Self {
+            background: true,
+            statistics: true,
+            recently_played: true,
+            recently_added: true,
+        }
+    }
 }
 
 /// The tray icon's look and the quick-launch strip of the tray popup.
@@ -332,6 +358,7 @@ impl Default for Settings {
             launcher_close_min_minutes: 2,
             system_notifications: true,
             tray: TraySettings::default(),
+            start_page: StartPageSettings::default(),
         }
     }
 }
@@ -697,6 +724,12 @@ mod tests {
                 icon: TrayIconStyle::Controller,
                 quick_launch_rows: 2,
                 quick_launch: Some(vec![QuickLaunchItem::Store { id: "steam".into() }]),
+            },
+            start_page: StartPageSettings {
+                background: false,
+                statistics: false,
+                recently_played: true,
+                recently_added: false,
             },
         };
         store.save(&custom).unwrap();
