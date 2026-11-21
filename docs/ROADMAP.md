@@ -72,7 +72,7 @@ autocomplete, game details as variables and placeholders); closing store launche
 runs; the notification bell with system notifications for errors in the background; the Edit
 dialog asks before Escape or a click outside discard changes.
 
-## Done in the next release
+## Done in v0.7
 
 Store plugins can do what the built-in stores do: read every file and the registry (declared,
 shown at install, reviewed in the registry), read other programs' SQLite databases, keep tokens in
