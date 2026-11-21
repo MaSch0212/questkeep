@@ -59,6 +59,10 @@ pub(crate) fn drop_cover_icon(
 }
 
 const ALLOWED_EXTENSIONS: [&str; 5] = ["jpg", "jpeg", "png", "webp", "gif"];
+/// Size of a cover tile in pixels (2:3): sharp for the tray popup's tiles up to 300 % display
+/// scaling. Changing it needs a new game state version (`game_state`) so the tiles are redone.
+pub const TILE_WIDTH: u32 = 270;
+pub const TILE_HEIGHT: u32 = 405;
 /// Upper bound for user-picked and downloaded images.
 pub const MAX_IMAGE_BYTES: u64 = 20 * 1024 * 1024;
 
@@ -124,6 +128,7 @@ impl ImageCache {
         self.remove_image(kind, id)?;
         let relative = Self::relative(kind, id, &ext);
         std::fs::copy(source, self.paths.absolute(&relative))?;
+        self.refresh_tile_for(kind, id, &relative);
         Ok(relative)
     }
 
@@ -142,11 +147,64 @@ impl ImageCache {
         std::fs::write(&tmp, bytes)?;
         self.remove_image(kind, id)?;
         std::fs::rename(&tmp, &target)?;
+        self.refresh_tile_for(kind, id, &relative);
         Ok(relative)
+    }
+
+    /// Relative path of a game's cover tile.
+    fn tile_relative(id: Uuid) -> String {
+        format!("images/tiles/{id}.jpg")
+    }
+
+    /// The game's cover tile (a small JPEG made from the cover, for the tray popup), if it exists.
+    pub fn tile_path(&self, id: Uuid) -> Option<PathBuf> {
+        self.resolve(&Self::tile_relative(id))
+    }
+
+    /// Makes (or replaces) the cover tile from the cover at `cover_relative`. Returns whether a
+    /// tile exists afterwards: an unreadable cover leaves none, and a tile of an earlier cover is
+    /// removed so it never shows the wrong image.
+    pub fn refresh_tile(&self, id: Uuid, cover_relative: &str) -> Result<bool> {
+        let source = self.paths.absolute(cover_relative);
+        let target = self.paths.absolute(&Self::tile_relative(id));
+        let Some(bytes) = questkeep_imaging::cover_tile_jpeg(&source, TILE_WIDTH, TILE_HEIGHT)
+        else {
+            self.remove_tile(id)?;
+            return Ok(false);
+        };
+        if let Some(dir) = target.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        let tmp = target.with_extension("jpg.part");
+        std::fs::write(&tmp, bytes)?;
+        std::fs::rename(&tmp, &target)?;
+        Ok(true)
+    }
+
+    /// Deletes the game's cover tile.
+    pub fn remove_tile(&self, id: Uuid) -> Result<()> {
+        match std::fs::remove_file(self.paths.absolute(&Self::tile_relative(id))) {
+            Ok(()) => Ok(()),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(err) => Err(err.into()),
+        }
+    }
+
+    /// Makes the tile after a cover was written; a failure only costs the tray popup its fast path.
+    fn refresh_tile_for(&self, kind: ImageKind, id: Uuid, cover_relative: &str) {
+        if kind != ImageKind::Cover {
+            return;
+        }
+        if let Err(err) = self.refresh_tile(id, cover_relative) {
+            tracing::warn!(%err, %id, "could not make the cover tile");
+        }
     }
 
     /// Deletes a game's cached image of one kind (any extension).
     pub fn remove_image(&self, kind: ImageKind, id: Uuid) -> Result<()> {
+        if kind == ImageKind::Cover {
+            self.remove_tile(id)?;
+        }
         for ext in ALLOWED_EXTENSIONS {
             let path = self.paths.absolute(&Self::relative(kind, id, ext));
             match std::fs::remove_file(&path) {
@@ -205,6 +263,40 @@ mod tests {
         cache.remove_all(id).unwrap();
         assert!(cache.resolve(&rel2).is_none());
         assert!(cache.resolve(&bg).is_none());
+    }
+
+    #[test]
+    fn covers_get_a_tile_that_follows_them() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = DataPaths::new(tmp.path().join("data"));
+        paths.ensure_dirs().unwrap();
+        let cache = ImageCache::new(paths);
+        let id = Uuid::new_v4();
+
+        let png = tmp.path().join("cover.png");
+        image::RgbaImage::from_pixel(400, 600, image::Rgba([10, 120, 200, 255]))
+            .save(&png)
+            .unwrap();
+        cache.import_image(ImageKind::Cover, id, &png).unwrap();
+        let tile = cache.tile_path(id).expect("tile made with the cover");
+        let size = image::ImageReader::open(&tile)
+            .unwrap()
+            .with_guessed_format()
+            .unwrap()
+            .into_dimensions()
+            .unwrap();
+        assert_eq!(size, (TILE_WIDTH, TILE_HEIGHT));
+
+        // A cover that cannot be read leaves no tile of the old cover behind.
+        cache
+            .store_image(ImageKind::Cover, id, "png", b"broken")
+            .unwrap();
+        assert!(cache.tile_path(id).is_none());
+
+        cache.import_image(ImageKind::Cover, id, &png).unwrap();
+        assert!(cache.tile_path(id).is_some());
+        cache.remove_image(ImageKind::Cover, id).unwrap();
+        assert!(cache.tile_path(id).is_none(), "removed with the cover");
     }
 
     #[test]

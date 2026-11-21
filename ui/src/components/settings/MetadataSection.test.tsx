@@ -5,6 +5,7 @@ import type { Settings } from "../../bindings/Settings";
 import * as api from "../../lib/api";
 import { store } from "../../lib/store";
 import { MetadataSection } from "./MetadataSection";
+import { SourcePriority } from "./SourcePriority";
 import { createSettingsModel } from "./useSettings";
 
 vi.mock("../../lib/api");
@@ -39,7 +40,8 @@ function makeSettings(overrides: Partial<Settings> = {}): Settings {
     launcherCloseDelaySeconds: 60,
     launcherCloseMinMinutes: 2,
     systemNotifications: true,
-    tray: { icon: "questkeep", quickLaunch: null },
+    tray: { icon: "questkeep", quickLaunchRows: 3, quickLaunch: null },
+    startPage: { background: true, statistics: true, recentlyPlayed: true, recentlyAdded: true },
     detectExternalLaunches: true,
     showStartPage: true,
     showStatistics: true,
@@ -59,7 +61,12 @@ function makeSettings(overrides: Partial<Settings> = {}): Settings {
 
 function Harness() {
   const model = createSettingsModel();
-  return <MetadataSection model={model} />;
+  return (
+    <>
+      <MetadataSection model={model} />
+      <SourcePriority model={model} />
+    </>
+  );
 }
 
 const toasts = () => store.toasts().map((t) => t.message);
@@ -152,8 +159,10 @@ describe("SourcePriority", () => {
     expect(await screen.findByRole("list", { name: "Source order for all fields" })).toBeVisible();
     await fireEvent.click(screen.getByRole("button", { name: "Genres" }));
     expect(screen.getByText(/Uses the default order: IGDB › Steam › GOG/)).toBeInTheDocument();
-    await fireEvent.click(screen.getByRole("checkbox", { name: /Genres: use its own order/ }));
-    await fireEvent.click(screen.getByRole("button", { name: "Move GOG up" }));
+    await fireEvent.click(screen.getByRole("switch", { name: /Genres: use its own order/ }));
+    // Rows move by dragging, or Alt+Up on the focused row.
+    const gog = document.querySelector<HTMLElement>('[data-source="gog"]');
+    await fireEvent.keyDown(gog as HTMLElement, { key: "ArrowUp", altKey: true });
     await waitFor(
       () =>
         expect(api.saveSettings).toHaveBeenLastCalledWith(

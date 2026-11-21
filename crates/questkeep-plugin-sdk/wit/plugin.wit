@@ -27,8 +27,67 @@ interface host {
     body: list<u8>,
   }
 
+  /// One program of the Windows "Apps" list.
+  record uninstall-entry {
+    key: string,
+    display-name: option<string>,
+    publisher: option<string>,
+    install-location: option<string>,
+    uninstall-string: option<string>,
+    display-icon: option<string>,
+  }
+
+  /// An installed Store app package (`root` is a path as the plugin sees it).
+  record appx-package {
+    full-name: string,
+    root: string,
+    app-ids: list<string>,
+  }
+
   /// Writes a line to Questkeep's log.
   log: func(level: log-level, message: string);
+
+  /// `windows`, `linux` or `macos`.
+  platform: func() -> string;
+
+  /// A folder of this PC as the plugin sees it (below `/host`): `home`, `local-app-data`,
+  /// `app-data`, `program-data`, `program-files`, `program-files-x86`, `config`, `data`.
+  /// Needs `permissions.filesystem`; `none` without it, or when the folder does not exist on
+  /// this platform.
+  known-folder: func(name: string) -> option<string>;
+
+  /// A registry string, given as `HKEY_LOCAL_MACHINE\Key\Path\Value` (a trailing `\` reads the
+  /// key's default value). Needs `permissions.registry`; `none` when it is missing or not
+  /// Windows.
+  registry-read: func(path: string) -> result<option<string>, string>;
+
+  /// The names of a registry key's subkeys. Needs `permissions.registry`.
+  registry-enum: func(path: string) -> result<list<string>, string>;
+
+  /// The programs of the Windows "Apps" list. Needs `permissions.registry`.
+  uninstall-entries: func() -> result<list<uninstall-entry>, string>;
+
+  /// The Store app packages of the current user. Needs `permissions.registry`.
+  appx-packages: func() -> result<list<appx-package>, string>;
+
+  /// Runs one read-only SQL statement on another program's SQLite database (a path as the plugin
+  /// sees it; needs `permissions.filesystem`). Opened read-only; a database its owner holds a
+  /// lock on is read from a temporary copy. Parameters are bound as text. The answer is JSON:
+  /// `{"columns": [...], "rows": [[...]]}` with numbers, text and null (a blob is
+  /// `{"blob": "<hex>"}`).
+  sqlite-query: func(path: string, sql: string, params: list<string>) -> result<string, string>;
+
+  /// The plugin's own secrets, kept in the system keyring under the plugin's id.
+  secret-get: func(key: string) -> result<option<string>, string>;
+  secret-set: func(key: string, value: string) -> result<_, string>;
+  secret-delete: func(key: string) -> result<_, string>;
+
+  /// Loads the store's session page (`permissions.login.session`) in a hidden window and returns
+  /// what its script reported, or `none` when the website session is signed out.
+  session-refresh: func() -> result<option<string>, string>;
+
+  /// The same for the session's renewal page (`session.renewUrl`).
+  session-renew: func() -> result<option<string>, string>;
 
   /// Sends an HTTP request through the app. Fails (with a readable message) when the host is
   /// not declared, the request could not be sent or the answer is too large; an answer with an

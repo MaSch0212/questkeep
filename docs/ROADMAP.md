@@ -74,14 +74,25 @@ dialog asks before Escape or a click outside discard changes.
 
 ## Done in the next release
 
+Store plugins can do what the built-in stores do: read every file and the registry (declared,
+shown at install, reviewed in the registry), read other programs' SQLite databases, keep tokens in
+the keyring, sign the user in through windows locked to declared domains and declare the launcher
+programs Questkeep may close. Plugins installed from a folder or zip show a warning.
+
+Faster tray popup (about 28 ms instead of 140 ms, and no 500+ ms first open): drawn by the CPU
+rasterizer instead of a GPU device per window, and fed small cover tiles made when a cover is
+stored. Games from earlier versions get theirs in the background (`games.state_version`).
+
 New store: Meta Horizon Link (the Meta Quest PC app): installed PC VR apps from its library
 folders, owned ones from its local cache without a sign-in, store art, details and PC playtime.
 
-Also: Edit game has a Time played field (a set time wins over store totals) and a Name for
+Also: Edit game has a Time played field (a store only raises it when its total is larger, so 0 plus a sync takes the store's time back) and a Name for
 metadata field (metadata and artwork searches; a trailing "(2010)" becomes the year); EA imports
 play time and last played from its account, and duplicate editions are imported once; Settings
 has a Tray group (tray icon choice) and the tray's Quick launch holds store launchers and picked
-apps in your order; Explore shows games and apps by default.
+apps in your order, dragged into place; the popup's quick launch has 1 to 3 rows and puts entries that do not fit into a menu behind its last tile (...); Explore shows games and apps by default. Apps say Start instead of Play. The window keeps its height when it is closed and reopened.
+
+Settings are restructured: pages grouped under App, Library and System, one page at a time (General, Appearance, Window and tray, Stores and accounts, Organizing, Artwork and metadata, Price comparison, Scripts, Plugins, Backups, Updates and about), settings in cards with switches for the ones that save at once, the content width capped, Quick launch edited in a dialog, and a search box with a dropdown of results that jumps to a page or a single setting.
 
 Plugin browser: install and update community plugins from the registry. Questkeep checks for plugin
 updates at start and every 12 hours (switch and "Check now" in Settings > Plugins), keeps the
@@ -92,6 +103,10 @@ Plugins can have an optional icon (`icon` in `plugin.json`), shown in Settings >
 
 Plugins can ask for folders you choose (`permissions.folders`, Settings > Plugins > Folders), mounted
 read-only for their stores, and paths their stores return below such a folder become real paths.
+
+Start page settings (background of the game played last, recently played, recently added,
+statistics), the game's menu on start page cards, editable play sessions per game, icons in the tray
+popup's More menu, and hidden games in Explore.
 
 ## Next
 

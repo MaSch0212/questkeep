@@ -1,5 +1,3 @@
-import ChevronDown from "lucide-solid/icons/chevron-down";
-import ChevronUp from "lucide-solid/icons/chevron-up";
 import GripVertical from "lucide-solid/icons/grip-vertical";
 import RefreshCw from "lucide-solid/icons/refresh-cw";
 import { createResource, createSignal, For, onCleanup, Show } from "solid-js";
@@ -81,26 +79,6 @@ function OrderList(props: {
             <GripVertical class="icon source-order__grip" aria-hidden="true" />
             <span class="source-order__rank">{index() + 1}</span>
             <span class="source-order__name">{props.name(id)}</span>
-            <button
-              type="button"
-              class="icon-btn icon-btn--small"
-              aria-label={tr("moveUp", { name: props.name(id) })}
-              data-tooltip={tr("moveUpTitle")}
-              disabled={index() === 0}
-              onClick={() => move(id, -1)}
-            >
-              <ChevronUp class="icon" aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              class="icon-btn icon-btn--small"
-              aria-label={tr("moveDown", { name: props.name(id) })}
-              data-tooltip={tr("moveDownTitle")}
-              disabled={index() === props.order.length - 1}
-              onClick={() => move(id, 1)}
-            >
-              <ChevronDown class="icon" aria-hidden="true" />
-            </button>
           </li>
         )}
       </For>
@@ -154,7 +132,6 @@ export function SourcePriority(props: { model: SettingsModel }) {
 
   return (
     <div class="form">
-      <h3 class="fieldset__legend">{tr("sourcePriority")}</h3>
       <p class="muted">{tr("priorityIntro")}</p>
       <Show when={sources()} fallback={<p class="muted">{tr("loading")}</p>}>
         <div class="source-priority">
@@ -204,9 +181,10 @@ export function SourcePriority(props: { model: SettingsModel }) {
                 const order = () => effectiveOrder(priority(), field().id, ids());
                 return (
                   <>
-                    <label class="check">
+                    <label class="check check--switch">
                       <input
                         type="checkbox"
+                        role="switch"
                         checked={own()}
                         onChange={(event) =>
                           change(

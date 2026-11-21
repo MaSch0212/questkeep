@@ -39,7 +39,8 @@ function makeSettings(overrides: Partial<Settings> = {}): Settings {
     launcherCloseDelaySeconds: 60,
     launcherCloseMinMinutes: 2,
     systemNotifications: true,
-    tray: { icon: "questkeep", quickLaunch: null },
+    tray: { icon: "questkeep", quickLaunchRows: 3, quickLaunch: null },
+    startPage: { background: true, statistics: true, recentlyPlayed: true, recentlyAdded: true },
     detectExternalLaunches: true,
     showStartPage: true,
     showStatistics: true,
@@ -83,6 +84,12 @@ beforeEach(() => {
   vi.mocked(api.accountStatus).mockResolvedValue([]);
 });
 
+/** Renders the settings at the page that holds `section`. */
+function renderSettings(section: string) {
+  store.showSettingsSection(section);
+  return render(() => <SettingsPage />);
+}
+
 /** Opens the Steam key form in the Accounts section (a key is saved, so it says "Change"). */
 async function openSteamKey() {
   vi.mocked(api.listProviders).mockResolvedValue([
@@ -100,7 +107,7 @@ async function openSteamKey() {
       codeHint: null,
     },
   ]);
-  render(() => <SettingsPage />);
+  renderSettings("stores");
   expect(await screen.findByText("Using a Steam Web API key")).toBeInTheDocument();
   await fireEvent.click(await screen.findByRole("button", { name: "Steam settings" }));
   await fireEvent.click(screen.getByRole("button", { name: "Change Steam key" }));
@@ -110,34 +117,39 @@ describe("SettingsPage", () => {
   it("is organised in headed sections with a section nav", () => {
     render(() => <SettingsPage />);
     const nav = within(screen.getByRole("navigation", { name: "Settings sections" }));
-    for (const name of ["General", "Stores and accounts", "About"]) {
-      expect(screen.getByRole("heading", { name })).toBeInTheDocument();
-      expect(nav.getByRole("button", { name })).toBeInTheDocument();
+    // The nav is grouped and one page is shown at a time.
+    for (const name of ["App", "Library", "System"]) {
+      expect(nav.getByRole("heading", { name })).toBeInTheDocument();
     }
-    expect(screen.queryByRole("heading", { name: "Developer" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "General", level: 2 })).toBeInTheDocument();
+    expect(nav.getByRole("button", { name: "General" })).toHaveAttribute("aria-current", "page");
+    expect(screen.queryByRole("heading", { name: "Stores and accounts" })).toBeNull();
+    fireEvent.click(nav.getByRole("button", { name: "Stores and accounts" }));
+    expect(
+      screen.getByRole("heading", { name: "Stores and accounts", level: 2 }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "General", level: 2 })).toBeNull();
+    // A page with several parts names them.
+    fireEvent.click(nav.getByRole("button", { name: "Organizing" }));
+    expect(screen.getByRole("heading", { name: "Categories", level: 3 })).toBeInTheDocument();
+    expect(nav.queryByRole("button", { name: "Developer" })).toBeNull();
   });
 
   it("marks a section asked for from elsewhere, also while the page is open", async () => {
     store.showSettingsSection("plugins");
     render(() => <SettingsPage />);
     const nav = within(screen.getByRole("navigation", { name: "Settings sections" }));
-    expect(nav.getByRole("button", { name: "Plugins" })).toHaveAttribute(
-      "aria-current",
-      "location",
-    );
+    expect(nav.getByRole("button", { name: "Plugins" })).toHaveAttribute("aria-current", "page");
     // The link under Plugins that leads to the themes.
     await fireEvent.click(screen.getByRole("button", { name: "Open Appearance" }));
-    expect(nav.getByRole("button", { name: "Appearance" })).toHaveAttribute(
-      "aria-current",
-      "location",
-    );
+    expect(nav.getByRole("button", { name: "Appearance" })).toHaveAttribute("aria-current", "page");
     expect(nav.getByRole("button", { name: "Plugins" })).not.toHaveAttribute("aria-current");
     expect(store.takeSettingsSection()).toBeNull();
   });
 
   it("toggles store metadata downloads", async () => {
-    render(() => <SettingsPage />);
-    await fireEvent.click(await screen.findByRole("checkbox", { name: "Download store metadata" }));
+    renderSettings("metadata");
+    await fireEvent.click(await screen.findByRole("switch", { name: "Download store metadata" }));
     await waitFor(() =>
       expect(api.saveSettings).toHaveBeenCalledWith(
         expect.objectContaining({ fetchMetadata: false }),
@@ -146,8 +158,8 @@ describe("SettingsPage", () => {
   });
 
   it("saves the tray toggles", async () => {
-    render(() => <SettingsPage />);
-    const closeToTray = await screen.findByRole("checkbox", {
+    renderSettings("windowTray");
+    const closeToTray = await screen.findByRole("switch", {
       name: "Close to the tray instead of quitting",
     });
     expect(closeToTray).toBeChecked();
@@ -157,7 +169,7 @@ describe("SettingsPage", () => {
         expect.objectContaining({ closeToTray: false }),
       ),
     );
-    await fireEvent.click(screen.getByRole("checkbox", { name: "Minimize to the tray" }));
+    await fireEvent.click(screen.getByRole("switch", { name: "Minimize to the tray" }));
     await waitFor(() =>
       expect(api.saveSettings).toHaveBeenLastCalledWith(
         expect.objectContaining({ minimizeToTray: true }),
@@ -167,7 +179,7 @@ describe("SettingsPage", () => {
 
   it("turns the start page off and chooses the page shown on start", async () => {
     render(() => <SettingsPage />);
-    const show = await screen.findByRole("checkbox", { name: "Show the start page" });
+    const show = await screen.findByRole("switch", { name: "Show the start page" });
     const startup = screen.getByRole("combobox", { name: "When Questkeep opens, show" });
     expect(startup).toHaveValue("start");
     await fireEvent.click(show);
@@ -188,11 +200,11 @@ describe("SettingsPage", () => {
   });
 
   it("enables start-minimized only while start-with-system is on", async () => {
-    render(() => <SettingsPage />);
-    const startWithSystem = await screen.findByRole("checkbox", {
+    renderSettings("windowTray");
+    const startWithSystem = await screen.findByRole("switch", {
       name: "Start Questkeep when I sign in to my computer",
     });
-    const minimized = screen.getByRole("checkbox", { name: "Start minimized to the tray" });
+    const minimized = screen.getByRole("switch", { name: "Start minimized to the tray" });
     expect(minimized).toBeDisabled();
     await fireEvent.click(startWithSystem);
     await waitFor(() =>
@@ -211,8 +223,8 @@ describe("SettingsPage", () => {
 
   it("reverts a toggle and shows the reason when saving fails", async () => {
     vi.mocked(api.saveSettings).mockRejectedValue("Could not change the start-with-system setting");
-    render(() => <SettingsPage />);
-    const startWithSystem = await screen.findByRole("checkbox", {
+    renderSettings("windowTray");
+    const startWithSystem = await screen.findByRole("switch", {
       name: "Start Questkeep when I sign in to my computer",
     });
     await fireEvent.click(startWithSystem);
@@ -227,7 +239,7 @@ describe("SettingsPage", () => {
   it("opens the data and logs folders through the app, not the opener plugin", async () => {
     vi.mocked(api.openAppFolder).mockResolvedValue(undefined);
     await loadAppInfo("D:\\data", "D:\\data\\logs");
-    render(() => <SettingsPage />);
+    renderSettings("about");
     const [dataButton, logsButton] = await screen.findAllByRole("button", {
       name: "Open folder",
     });
@@ -240,7 +252,7 @@ describe("SettingsPage", () => {
   it("shows an error toast when a folder cannot be opened", async () => {
     vi.mocked(api.openAppFolder).mockRejectedValue("Could not open the folder: nope");
     await loadAppInfo("d", "l");
-    render(() => <SettingsPage />);
+    renderSettings("about");
     const [dataButton] = await screen.findAllByRole("button", { name: "Open folder" });
     await fireEvent.click(dataButton as HTMLElement);
     await waitFor(() =>
@@ -290,7 +302,13 @@ describe("SettingsPage", () => {
         launcherCloseDelaySeconds: 60,
         launcherCloseMinMinutes: 2,
         systemNotifications: true,
-        tray: { icon: "questkeep", quickLaunch: null },
+        tray: { icon: "questkeep", quickLaunchRows: 3, quickLaunch: null },
+        startPage: {
+          background: true,
+          statistics: true,
+          recentlyPlayed: true,
+          recentlyAdded: true,
+        },
         detectExternalLaunches: true,
         showStartPage: true,
         showStatistics: true,
@@ -353,9 +371,9 @@ describe("GOG Galaxy launch option", () => {
       updated: 1,
       uninstalled: 0,
     });
-    render(() => <SettingsPage />);
+    renderSettings("stores");
     await fireEvent.click(await screen.findByRole("button", { name: "GOG settings" }));
-    const toggle = await screen.findByRole("checkbox", {
+    const toggle = await screen.findByRole("switch", {
       name: "Launch GOG games through GOG Galaxy",
     });
     expect((toggle as HTMLInputElement).checked).toBe(false);
@@ -397,9 +415,9 @@ describe("GOG Galaxy launch option", () => {
     ]);
     await store.init();
     vi.mocked(api.scanLibrary).mockResolvedValue({ added: 0, updated: 0, uninstalled: 0 });
-    render(() => <SettingsPage />);
+    renderSettings("stores");
     await fireEvent.click(await screen.findByRole("button", { name: "Xbox settings" }));
-    const toggle = await screen.findByRole("checkbox", {
+    const toggle = await screen.findByRole("switch", {
       name: "Don't import Game Pass games from my Xbox account",
     });
     expect((toggle as HTMLInputElement).checked).toBe(false);
@@ -433,9 +451,9 @@ describe("GOG Galaxy launch option", () => {
     ]);
     await store.init();
     vi.mocked(api.scanLibrary).mockResolvedValue({ added: 0, updated: 0, uninstalled: 0 });
-    render(() => <SettingsPage />);
+    renderSettings("stores");
     await fireEvent.click(await screen.findByRole("button", { name: "Ubisoft Connect settings" }));
-    const toggle = await screen.findByRole("checkbox", {
+    const toggle = await screen.findByRole("switch", {
       name: "Import Ubisoft Connect games that are not installed",
     });
     expect((toggle as HTMLInputElement).checked).toBe(false);
@@ -447,8 +465,8 @@ describe("GOG Galaxy launch option", () => {
 
   it("is hidden without the GOG provider", async () => {
     await loadAppInfo("C:/data", "C:/data/logs");
-    render(() => <SettingsPage />);
-    await screen.findByText("Close to the tray instead of quitting");
+    renderSettings("stores");
+    await screen.findByRole("heading", { name: "Stores and accounts", level: 2 });
     expect(screen.queryByText("Launch GOG games through GOG Galaxy")).toBeNull();
   });
 });
@@ -457,9 +475,9 @@ const savedSettings = () => vi.mocked(api.saveSettings).mock.calls.at(-1)?.[0];
 
 describe("Launch automation settings", () => {
   it("sets what happens to the window when a game starts", async () => {
-    render(() => <SettingsPage />);
+    renderSettings("windowTray");
     const group = await screen.findByRole("radiogroup", { name: "When a game starts" });
-    const restore = screen.getByRole("checkbox", {
+    const restore = screen.getByRole("switch", {
       name: "Bring Questkeep back when the game closes",
     });
     // Nothing happens to the window, so there is nothing to bring back.
@@ -475,7 +493,7 @@ describe("Launch automation settings", () => {
   });
 
   it("saves the launcher delays as whole numbers and keeps the old value for bad input", async () => {
-    render(() => <SettingsPage />);
+    renderSettings("windowTray");
     const delay = await screen.findByLabelText("Wait before closing store launchers");
     const minimum = screen.getByLabelText("Don't close launchers after sessions shorter than");
     expect(delay).toHaveValue(60);
@@ -494,7 +512,7 @@ describe("Launch automation settings", () => {
 
   it("turns system notifications off", async () => {
     render(() => <SettingsPage />);
-    const box = await screen.findByRole("checkbox", {
+    const box = await screen.findByRole("switch", {
       name: "Show system notifications while Questkeep is in the background",
     });
     expect(box).toBeChecked();
@@ -522,7 +540,7 @@ describe("Launch automation settings", () => {
       makeProvider({ id: "prism", name: "Prism Launcher" }),
     ]);
     await store.loadProviders();
-    render(() => <SettingsPage />);
+    renderSettings("stores");
 
     const steam = await screen.findByRole("group", { name: "Steam" });
     await fireEvent.click(within(steam).getByRole("button", { name: "Steam settings" }));
@@ -561,5 +579,49 @@ describe("Launch automation settings", () => {
     // Prism has no launcher to close: no row to expand.
     const prism = screen.queryByRole("group", { name: "Prism Launcher" });
     expect(prism ? within(prism).queryByRole("radiogroup") : null).toBeNull();
+  });
+});
+
+describe("Settings search", () => {
+  it("finds a setting on another page, opens that page and says when nothing matches", async () => {
+    render(() => <SettingsPage />);
+    const search = screen.getByRole("combobox", { name: "Search settings" });
+    await fireEvent.input(search, { target: { value: "minimize tray" } });
+    const results = within(screen.getByRole("listbox", { name: "Search results" }));
+    await fireEvent.click(results.getByRole("option", { name: /Minimize to the tray/ }));
+    // The page holding it is shown, the search is cleared and the pages are back.
+    expect(await screen.findByRole("switch", { name: "Minimize to the tray" })).toBeInTheDocument();
+    expect(search).toHaveValue("");
+    const nav = within(screen.getByRole("navigation", { name: "Settings sections" }));
+    expect(nav.getByRole("button", { name: "Window and tray" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+
+    await fireEvent.input(search, { target: { value: "zzzz" } });
+    expect(screen.getByText("No settings found")).toBeInTheDocument();
+    await fireEvent.keyDown(search, { key: "Escape" });
+    expect(search).toHaveValue("");
+  });
+
+  it("opens the first result with Enter, also for a page name", async () => {
+    render(() => <SettingsPage />);
+    const search = screen.getByRole("combobox", { name: "Search settings" });
+    await fireEvent.input(search, { target: { value: "tray" } });
+    // The arrow keys move through the results, Enter opens the highlighted one.
+    const options = within(screen.getByRole("listbox", { name: "Search results" })).getAllByRole(
+      "option",
+    );
+    expect(options[0]).toHaveAttribute("aria-selected", "true");
+    await fireEvent.keyDown(search, { key: "ArrowDown" });
+    expect(options[1]).toHaveAttribute("aria-selected", "true");
+    await fireEvent.keyDown(search, { key: "ArrowUp" });
+    expect(options[0]).toHaveAttribute("aria-selected", "true");
+    await fireEvent.keyDown(search, { key: "ArrowUp" });
+    expect(options.at(-1)).toHaveAttribute("aria-selected", "true");
+    await fireEvent.input(search, { target: { value: "backups" } });
+    await fireEvent.keyDown(search, { key: "Enter" });
+    const nav = within(screen.getByRole("navigation", { name: "Settings sections" }));
+    expect(nav.getByRole("button", { name: "Backups" })).toHaveAttribute("aria-current", "page");
   });
 });

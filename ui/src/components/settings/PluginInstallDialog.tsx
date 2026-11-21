@@ -13,6 +13,7 @@ import { formatReleaseDate, formatSize } from "../../lib/format";
 import {
   applyFolderChoice,
   installFolderMap,
+  permissionsAsked,
   withFolderChoice,
   type FolderChoices,
 } from "../../lib/plugins";
@@ -78,10 +79,9 @@ export function PluginInstallDialog(props: PluginInstallDialogProps) {
     if (folder) setChoices((current) => withFolderChoice(current, folder, null));
   }
 
-  const hasPermissions = () =>
-    plugin().permissions.read.length > 0 ||
-    plugin().permissions.http.length > 0 ||
-    plugin().permissions.folders.length > 0;
+  const hasPermissions = () => permissionsAsked(plugin().permissions);
+  /** A plugin that did not come through the reviewed registry and can run code. */
+  const unreviewed = () => !props.registry && (plugin().stores > 0 || plugin().hasExtension);
 
   return (
     <Modal title={tr("installTitle")} onClose={props.onClose}>
@@ -110,6 +110,11 @@ export function PluginInstallDialog(props: PluginInstallDialogProps) {
         </div>
         <Show when={plugin().description}>
           {(description) => <p class="plugin__description">{description()}</p>}
+        </Show>
+        <Show when={unreviewed()}>
+          <p class="plugin-preview__replaces" data-plugin-unreviewed role="alert">
+            {tr("unreviewedWarning")}
+          </p>
         </Show>
         <Show when={plugin().installedVersion}>
           {(version) => (
@@ -173,6 +178,16 @@ export function PluginInstallDialog(props: PluginInstallDialogProps) {
                 when={hasPermissions()}
                 fallback={<span class="muted">{tr("noPermissions")}</span>}
               >
+                <Show when={plugin().permissions.filesystem || plugin().permissions.registry}>
+                  <ul class="plugin__perms selectable" data-plugin-broad-access>
+                    <Show when={plugin().permissions.filesystem}>
+                      <li>{tr("permFilesystem")}</li>
+                    </Show>
+                    <Show when={plugin().permissions.registry}>
+                      <li>{tr("permRegistry")}</li>
+                    </Show>
+                  </ul>
+                </Show>
                 <Show when={plugin().permissions.read.length > 0}>
                   <span class="plugin__perm-title">{tr("readFolders")}</span>
                   <ul class="plugin__perms selectable">
@@ -190,6 +205,18 @@ export function PluginInstallDialog(props: PluginInstallDialogProps) {
                   <span class="plugin__perm-title">{tr("httpHosts")}</span>
                   <ul class="plugin__perms selectable">
                     <For each={plugin().permissions.http}>{(host) => <li>{host}</li>}</For>
+                  </ul>
+                </Show>
+                <Show when={plugin().permissions.login.length > 0}>
+                  <span class="plugin__perm-title">{tr("permLogin")}</span>
+                  <ul class="plugin__perms selectable" data-plugin-login-domains>
+                    <For each={plugin().permissions.login}>{(domain) => <li>{domain}</li>}</For>
+                  </ul>
+                </Show>
+                <Show when={plugin().permissions.launcher.length > 0}>
+                  <span class="plugin__perm-title">{tr("permLauncher")}</span>
+                  <ul class="plugin__perms selectable" data-plugin-launcher-names>
+                    <For each={plugin().permissions.launcher}>{(name) => <li>{name}</li>}</For>
                   </ul>
                 </Show>
               </Show>

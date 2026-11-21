@@ -26,7 +26,7 @@ use questkeep_core::launcher::Launcher;
 use questkeep_core::paths::DataPaths;
 use questkeep_core::providers::ProviderRegistry;
 use questkeep_core::tray::{self as tray_logic, MINIMIZED_ARG};
-use questkeep_plugins::PluginManager;
+use questkeep_plugins::{PluginManager, PluginServices};
 use tauri::{Emitter, Manager, RunEvent};
 use tauri_plugin_autostart::MacosLauncher;
 use tracing_appender::non_blocking::WorkerGuard;
@@ -184,16 +184,23 @@ fn build_state(app: &tauri::AppHandle) -> Result<(AppState, Option<WorkerGuard>)
     } else {
         Arc::new(KeyringTokenStore::new())
     };
+    let web_session = Arc::new(signin::ShellWebSession::new(
+        app.clone(),
+        paths.webview_dir(),
+    ));
     let providers = ProviderRegistry::with_stores(questkeep_stores::builtin(
         keyring.clone(),
         Some(&paths.cache_dir()),
-        Some(Arc::new(signin::ShellWebSession::new(
-            app.clone(),
-            paths.webview_dir(),
-        ))),
+        Some(web_session.clone()),
     ));
-    // Plugin stores are added to the very registry the library and the fetchers use.
+    // Plugin stores are added to the very registry the library and the fetchers use. They keep
+    // their secrets in the same keyring (under their own names) and use the same hidden windows
+    // for website sessions.
     let plugins = PluginManager::new(paths.clone(), providers.clone(), events.clone());
+    plugins.set_services(PluginServices {
+        secrets: keyring.clone(),
+        web: Some(web_session),
+    });
     let library = Library::open(paths, providers.clone(), events.clone(), keyring)
         .map_err(|e| e.to_string())?;
     match library.database().recover_open_sessions() {
@@ -254,6 +261,19 @@ fn spawn_startup_tasks(state: Arc<AppState>) {
             || questkeep_plugins::RegistryConfig::new(env!("CARGO_PKG_VERSION")),
             move || settings_state.library.settings().check_plugin_updates,
         );
+    }
+    // Games from before an update get the files newer versions make for them (cover tiles for the
+    // tray popup, ...) while the app is already usable; the tray picks them up when done.
+    let migrating = state.clone();
+    let spawned = std::thread::Builder::new()
+        .name("game-state".into())
+        .spawn(move || {
+            if let Err(err) = migrating.library.migrate_game_states(tray::games_changed) {
+                tracing::warn!(%err, "could not bring the games' data up to date");
+            }
+        });
+    if let Err(err) = spawned {
+        tracing::warn!(%err, "could not start the game state migration");
     }
     let watcher = state.clone();
     tauri::async_runtime::spawn_blocking(move || {
@@ -489,6 +509,10 @@ pub fn run() {
             commands::game_news,
             commands::game_achievements,
             commands::game_activity,
+            commands::game_sessions,
+            commands::add_game_session,
+            commands::update_game_session,
+            commands::delete_game_session,
             commands::game_edit_info,
             commands::save_game_edits,
             commands::set_user_image,

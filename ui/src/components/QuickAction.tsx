@@ -63,7 +63,11 @@ export function QuickAction(props: QuickActionProps) {
             <Play class="icon icon--filled" aria-hidden="true" />
           </Show>
           <span>
-            {kind() === "play" ? tr("play") : kind() === "install" ? tr("install") : tr("running")}
+            {kind() === "play"
+              ? tr(props.game.kind === "app" ? "start" : "play")
+              : kind() === "install"
+                ? tr("install")
+                : tr("running")}
           </span>
         </button>
       )}

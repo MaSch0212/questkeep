@@ -797,6 +797,14 @@ pub struct PluginChanges {
     pub new_read: Vec<String>,
     /// Folders the plugin now asks the user for.
     pub new_folders: Vec<FolderRequest>,
+    /// The new version may now read every file of this PC.
+    pub adds_filesystem: bool,
+    /// The new version may now read the registry.
+    pub adds_registry: bool,
+    /// Programs Questkeep may now close after a game.
+    pub new_launcher: Vec<String>,
+    /// Hosts the sign-in windows may now visit.
+    pub new_login: Vec<String>,
     /// The new version runs an extension (JavaScript in the app) the installed one did not.
     pub adds_extension: bool,
     /// The new version brings more stores than the installed one.
@@ -821,17 +829,29 @@ impl PluginChanges {
         let new_folders = added(&old.permissions.folders, &new.permissions.folders, |f| {
             f.key.clone()
         });
+        let new_launcher = added(&old.permissions.launcher, &new.permissions.launcher, lower);
+        let new_login = added(&old.permissions.login, &new.permissions.login, lower);
+        let adds_filesystem = new.permissions.filesystem && !old.permissions.filesystem;
+        let adds_registry = new.permissions.registry && !old.permissions.registry;
         let adds_extension = new.has_extension && !old.has_extension;
         let adds_store = new.stores > old.stores;
         let needs_review = !new_http.is_empty()
             || !new_read.is_empty()
             || !new_folders.is_empty()
+            || !new_launcher.is_empty()
+            || !new_login.is_empty()
+            || adds_filesystem
+            || adds_registry
             || adds_extension
             || adds_store;
         Self {
             new_http,
             new_read,
             new_folders,
+            adds_filesystem,
+            adds_registry,
+            new_launcher,
+            new_login,
             adds_extension,
             adds_store,
             needs_review,
@@ -2162,6 +2182,7 @@ mod tests {
                         default: None,
                     })
                     .collect(),
+                ..PluginPermissions::default()
             },
             stores,
             has_extension: ext,

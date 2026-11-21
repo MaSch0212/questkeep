@@ -1,8 +1,9 @@
-import { createEffect, createSignal, For, onCleanup, onMount, type Component } from "solid-js";
+import SearchIcon from "lucide-solid/icons/search";
+import { createEffect, createMemo, createSignal, For, Show, type Component } from "solid-js";
 import { Dynamic } from "solid-js/web";
 import { translator } from "../../i18n";
 import { settingsPage } from "../../i18n/settingsPage";
-import { activeSection } from "../../lib/scrollSpy";
+import { searchEntries, type SearchEntry } from "../../lib/settingsSearch";
 import { store } from "../../lib/store";
 import { AboutSection } from "./AboutSection";
 import { AccountsSection } from "./AccountsSection";
@@ -20,146 +21,261 @@ import { PluginsSection } from "./PluginsSection";
 import { PluginUpdateCheck } from "./PluginUpdateCheck";
 import { PriceSitesSection } from "./PriceSitesSection";
 import { ScriptsSection } from "./ScriptsSection";
+import { settingEntries } from "./settingsIndex";
+import { SourcePriority } from "./SourcePriority";
 import { UpdatesSection } from "./UpdatesSection";
 import { createSettingsModel, type SettingsModel } from "./useSettings";
+import { WindowTraySection } from "./WindowTraySection";
 
 const tr = translator(settingsPage);
 
-interface SectionDef {
+type TitleKey =
+  | "general"
+  | "appearance"
+  | "windowTray"
+  | "stores"
+  | "organizing"
+  | "categories"
+  | "groupMerges"
+  | "completion"
+  | "artworkMetadata"
+  | "artwork"
+  | "metadata"
+  | "sourcePriority"
+  | "priceSites"
+  | "scripts"
+  | "plugins"
+  | "developer"
+  | "backups"
+  | "updatesAbout"
+  | "updates"
+  | "about";
+
+/** One block of a page; its id is also what other parts of the app ask for (`showSettingsSection`). */
+interface PartDef {
   id: string;
-  /** A message key, or the text itself (a plugin's name). */
-  title:
-    | (() => string)
-    | "general"
-    | "appearance"
-    | "stores"
-    | "categories"
-    | "groupMerges"
-    | "completion"
-    | "artwork"
-    | "metadata"
-    | "priceSites"
-    | "scripts"
-    | "plugins"
-    | "developer"
-    | "backups"
-    | "updates"
-    | "about";
-  /** Hidden sections are left out of the page and the section nav. */
-  visible?: () => boolean;
+  title: TitleKey;
   component: Component<{ model: SettingsModel }>;
 }
 
-/** To add a settings section: write one component and add one entry here. */
-const SECTIONS: SectionDef[] = [
-  { id: "general", title: "general", component: GeneralSection },
-  { id: "appearance", title: "appearance", component: AppearanceSection },
-  { id: "stores", title: "stores", component: AccountsSection },
-  { id: "categories", title: "categories", component: CategoriesSection },
-  { id: "groupMerges", title: "groupMerges", component: GroupMergesSection },
-  { id: "completion", title: "completion", component: CompletionSection },
-  { id: "artwork", title: "artwork", component: ArtworkSection },
-  { id: "metadata", title: "metadata", component: MetadataSection },
-  { id: "priceSites", title: "priceSites", component: PriceSitesSection },
-  { id: "scripts", title: "scripts", component: ScriptsSection },
+interface PageDef {
+  id: string;
+  /** A message key, or the text itself (a plugin name). */
+  title: TitleKey | (() => string);
+  group: "app" | "library" | "system";
+  /** Hidden pages are left out of the nav. */
+  visible?: () => boolean;
+  parts: PartDef[];
+}
+
+/** To add a settings page: write one component and add one entry here. */
+const PAGES: PageDef[] = [
+  {
+    id: "general",
+    title: "general",
+    group: "app",
+    parts: [{ id: "general", title: "general", component: GeneralSection }],
+  },
+  {
+    id: "appearance",
+    title: "appearance",
+    group: "app",
+    parts: [{ id: "appearance", title: "appearance", component: AppearanceSection }],
+  },
+  {
+    id: "windowTray",
+    title: "windowTray",
+    group: "app",
+    parts: [{ id: "windowTray", title: "windowTray", component: WindowTraySection }],
+  },
+  {
+    id: "stores",
+    title: "stores",
+    group: "library",
+    parts: [{ id: "stores", title: "stores", component: AccountsSection }],
+  },
+  {
+    id: "organizing",
+    title: "organizing",
+    group: "library",
+    parts: [
+      { id: "categories", title: "categories", component: CategoriesSection },
+      { id: "groupMerges", title: "groupMerges", component: GroupMergesSection },
+      { id: "completion", title: "completion", component: CompletionSection },
+    ],
+  },
+  {
+    id: "artworkMetadata",
+    title: "artworkMetadata",
+    group: "library",
+    parts: [
+      { id: "artwork", title: "artwork", component: ArtworkSection },
+      { id: "metadata", title: "metadata", component: MetadataSection },
+      { id: "sourcePriority", title: "sourcePriority", component: SourcePriority },
+    ],
+  },
+  {
+    id: "priceSites",
+    title: "priceSites",
+    group: "library",
+    parts: [{ id: "priceSites", title: "priceSites", component: PriceSitesSection }],
+  },
+  {
+    id: "scripts",
+    title: "scripts",
+    group: "library",
+    parts: [{ id: "scripts", title: "scripts", component: ScriptsSection }],
+  },
   {
     id: "plugins",
     title: "plugins",
-    component: (p) => <PluginsSection updateCheck={<PluginUpdateCheck model={p.model} />} />,
+    group: "system",
+    parts: [
+      {
+        id: "plugins",
+        title: "plugins",
+        component: (p) => <PluginsSection updateCheck={<PluginUpdateCheck model={p.model} />} />,
+      },
+    ],
   },
   {
     id: "developer",
     title: "developer",
+    group: "system",
     visible: () => store.appInfo()?.devTools === true,
-    component: DeveloperSection,
+    parts: [{ id: "developer", title: "developer", component: DeveloperSection }],
   },
-  { id: "backups", title: "backups", component: BackupsSection },
-  { id: "updates", title: "updates", component: UpdatesSection },
-  { id: "about", title: "about", component: AboutSection },
+  {
+    id: "backups",
+    title: "backups",
+    group: "system",
+    parts: [{ id: "backups", title: "backups", component: BackupsSection }],
+  },
+  {
+    id: "updatesAbout",
+    title: "updatesAbout",
+    group: "system",
+    parts: [
+      { id: "updates", title: "updates", component: UpdatesSection },
+      { id: "about", title: "about", component: AboutSection },
+    ],
+  },
 ];
 
-/** One section per plugin with settings; kept, so the page does not rebuild them. */
-const pluginSections = new Map<string, SectionDef>();
-function pluginSection(pluginId: string): SectionDef {
-  let section = pluginSections.get(pluginId);
-  if (!section) {
-    section = {
-      id: `plugin-${pluginId}`,
+const GROUPS = ["app", "library", "system"] as const;
+const GROUP_TITLES = {
+  app: "groupApp",
+  library: "groupLibrary",
+  system: "groupSystem",
+} as const;
+
+/** One page per plugin with settings; kept, so the page does not rebuild them. */
+const pluginPages = new Map<string, PageDef>();
+function pluginPage(pluginId: string): PageDef {
+  let page = pluginPages.get(pluginId);
+  if (!page) {
+    const id = `plugin-${pluginId}`;
+    page = {
+      id,
       title: () => store.plugins().find((p) => p.id === pluginId)?.name ?? pluginId,
-      component: () => <PluginSettings plugin={pluginId} />,
+      group: "system",
+      parts: [{ id, title: "plugins", component: () => <PluginSettings plugin={pluginId} /> }],
     };
-    pluginSections.set(pluginId, section);
+    pluginPages.set(pluginId, page);
   }
-  return section;
+  return page;
 }
 
-const sectionDomId = (id: string) => `settings-${id}`;
-const sectionTitle = (section: SectionDef) =>
-  typeof section.title === "function" ? section.title() : tr(section.title);
-const visibleSections = () => [
-  ...SECTIONS.filter((s) => s.visible?.() ?? true),
-  ...pluginsWithSettings().map(pluginSection),
+const partDomId = (id: string) => `settings-${id}`;
+const pageTitle = (page: PageDef) =>
+  typeof page.title === "function" ? page.title() : tr(page.title);
+const visiblePages = () => [
+  ...PAGES.filter((p) => p.visible?.() ?? true),
+  ...pluginsWithSettings().map(pluginPage),
 ];
 
+/** Scrolls to the text `label` on the page, flashes it and focuses its control. */
+function highlight(label: string) {
+  const root = document.querySelector(".settings__scroll");
+  const found = [...(root?.querySelectorAll<HTMLElement>("label, legend, span, h3, p") ?? [])].find(
+    (el) => el.textContent?.trim() === label,
+  );
+  if (!found) return;
+  found.scrollIntoView?.({ block: "center" });
+  found.classList.add("settings-found");
+  setTimeout(() => found.classList.remove("settings-found"), 1800);
+  const control = found instanceof HTMLLabelElement ? found.control : null;
+  control?.focus({ preventScroll: true });
+}
+
+const pageName = (id: string) => {
+  const page = visiblePages().find((p) => p.id === id);
+  return page ? pageTitle(page) : "";
+};
+
+/** The settings: one page at a time, the pages grouped in the nav. */
 export function SettingsPage() {
   const model = createSettingsModel();
-  let scroller: HTMLDivElement | undefined;
-  /** The section at the top of the view, marked in the menu. */
-  const [current, setCurrent] = createSignal<string | null>(visibleSections()[0]?.id ?? null);
-  /** A menu jump scrolls smoothly past other sections: the menu keeps its pick until it stops. */
-  let jumping: ReturnType<typeof setTimeout> | undefined;
+  const [currentId, setCurrentId] = createSignal<string>(PAGES[0]?.id ?? "general");
+  const current = createMemo(
+    () => visiblePages().find((p) => p.id === currentId()) ?? visiblePages()[0],
+  );
 
-  function follow() {
-    if (!scroller || jumping !== undefined) return;
-    const view = scroller.getBoundingClientRect();
-    const boxes = visibleSections().flatMap((section) => {
-      const element = document.getElementById(sectionDomId(section.id));
-      return element
-        ? [{ id: section.id, top: element.getBoundingClientRect().top - view.top }]
-        : [];
-    });
-    const id = activeSection(boxes, {
-      height: scroller.clientHeight,
-      remaining: scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop,
-    });
-    if (id !== null) setCurrent(id);
+  /** Shows the page that holds the page or part `id` and scrolls to the part. */
+  function show(id: string) {
+    const page = visiblePages().find((p) => p.id === id || p.parts.some((part) => part.id === id));
+    if (!page) return;
+    setCurrentId(page.id);
+    queueMicrotask(() => document.getElementById(partDomId(id))?.scrollIntoView?.());
   }
 
-  function endJump() {
-    clearTimeout(jumping);
-    jumping = undefined;
+  const [query, setQuery] = createSignal("");
+  const [listOpen, setListOpen] = createSignal(false);
+  /** The highlighted result: moved with the arrow keys, opened with Enter. */
+  const [active, setActive] = createSignal(0);
+  /** Pages and single settings, in the current language. */
+  const entries = createMemo<SearchEntry[]>(() => [
+    ...visiblePages().map((p) => ({ id: `page:${p.id}`, page: p.id, label: pageTitle(p) })),
+    ...settingEntries(),
+  ]);
+  const results = createMemo(() => searchEntries(entries(), query()));
+
+  /** Opens a search result: its page, scrolled to the setting, which flashes. */
+  function open(entry: SearchEntry) {
+    setQuery("");
+    setListOpen(false);
+    show(entry.part ?? entry.page);
+    if (entry.id.startsWith("page:")) return;
+    setTimeout(() => highlight(entry.label), 60);
   }
 
-  function jumpTo(id: string) {
-    setCurrent(id);
-    clearTimeout(jumping);
-    // `scrollend` ends it; the timer covers a jump that doesn't scroll at all.
-    jumping = setTimeout(endJump, 1000);
-    document.getElementById(sectionDomId(id))?.scrollIntoView?.({ behavior: "smooth" });
+  const showList = () => listOpen() && query().trim() !== "";
+
+  function onSearchKey(e: KeyboardEvent) {
+    const count = results().length;
+    if (e.key === "Escape") {
+      if (query() !== "") e.preventDefault();
+      setQuery("");
+      setListOpen(false);
+    } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      if (query().trim() === "") return;
+      e.preventDefault();
+      setListOpen(true);
+      if (count > 0) setActive((a) => (a + (e.key === "ArrowDown" ? 1 : count - 1)) % count);
+    } else if (e.key === "Enter") {
+      const entry = results()[active()];
+      if (entry) {
+        e.preventDefault();
+        open(entry);
+      }
+    }
   }
 
-  // A section asked for from elsewhere: shown at once when the page opens with it, scrolled to
-  // when the page is already open (a link inside the settings).
-  let opened = false;
+  // A section asked for from elsewhere (a link in the app, or one inside the settings).
   createEffect(() => {
     const section = store.takeSettingsSection();
-    const first = !opened;
-    opened = true;
-    if (!section) return;
-    if (first) {
-      document.getElementById(sectionDomId(section))?.scrollIntoView?.();
-      setCurrent(section);
-    } else jumpTo(section);
+    if (section) show(section);
   });
-  // Sections change their height without a scroll (settings and themes arrive after the page).
-  onMount(() => {
-    const content = scroller?.firstElementChild;
-    if (!content || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(() => follow());
-    observer.observe(content);
-    onCleanup(() => observer.disconnect());
-  });
-  onCleanup(() => clearTimeout(jumping));
 
   return (
     <section class="settings" aria-label={tr("settings")}>
@@ -168,46 +284,119 @@ export function SettingsPage() {
       </header>
       <div class="settings__body">
         <nav class="settings__nav" aria-label={tr("sections")}>
-          <ul>
-            <For each={visibleSections()}>
-              {(section) => (
-                <li>
-                  <button
-                    type="button"
-                    class="nav-item"
-                    classList={{ "nav-item--active": current() === section.id }}
-                    aria-current={current() === section.id ? "location" : undefined}
-                    onClick={() => jumpTo(section.id)}
-                  >
-                    {sectionTitle(section)}
-                  </button>
-                </li>
-              )}
-            </For>
-          </ul>
-        </nav>
-        <div
-          class="settings__scroll"
-          ref={(el) => (scroller = el)}
-          onScroll={follow}
-          on:scrollend={endJump}
-        >
-          <div class="settings__sections">
-            <For each={visibleSections()}>
-              {(section) => (
-                <section
-                  id={sectionDomId(section.id)}
-                  class="settings-section"
-                  aria-labelledby={`${sectionDomId(section.id)}-heading`}
+          <div class="settings__search">
+            <SearchIcon class="icon" aria-hidden="true" />
+            <input
+              type="search"
+              role="combobox"
+              class="settings__search-input"
+              aria-label={tr("searchSettings")}
+              aria-expanded={showList()}
+              aria-controls="settings-search-results"
+              aria-autocomplete="list"
+              aria-activedescendant={
+                showList() && results().length > 0 ? `settings-result-${active()}` : undefined
+              }
+              placeholder={tr("searchSettings")}
+              value={query()}
+              onInput={(e) => {
+                setQuery(e.currentTarget.value);
+                setActive(0);
+                setListOpen(true);
+              }}
+              onFocus={() => setListOpen(true)}
+              onBlur={() => setListOpen(false)}
+              onKeyDown={onSearchKey}
+            />
+            <Show when={showList()}>
+              <ul
+                class="settings__results"
+                id="settings-search-results"
+                role="listbox"
+                aria-label={tr("searchResults")}
+              >
+                <For
+                  each={results()}
+                  fallback={<li class="settings__no-results muted">{tr("noResults")}</li>}
                 >
-                  <h2 id={`${sectionDomId(section.id)}-heading`} class="settings-section__title">
-                    {sectionTitle(section)}
-                  </h2>
-                  <Dynamic component={section.component} model={model} />
-                </section>
+                  {(entry, index) => (
+                    <li
+                      id={`settings-result-${index()}`}
+                      role="option"
+                      class="settings__result"
+                      classList={{ "settings__result--active": active() === index() }}
+                      aria-selected={active() === index()}
+                      // Keeps the focus in the box, so the list stays open for the click.
+                      onMouseDown={(e) => e.preventDefault()}
+                      onMouseEnter={() => setActive(index())}
+                      onClick={() => open(entry)}
+                    >
+                      <span>{entry.label}</span>
+                      <Show when={!entry.id.startsWith("page:")}>
+                        <small class="muted">{pageName(entry.page)}</small>
+                      </Show>
+                    </li>
+                  )}
+                </For>
+              </ul>
+            </Show>
+          </div>
+          <div class="settings__pages">
+            <For each={GROUPS}>
+              {(group) => (
+                <Show when={visiblePages().some((p) => p.group === group)}>
+                  <h2 class="settings__group">{tr(GROUP_TITLES[group])}</h2>
+                  <ul>
+                    <For each={visiblePages().filter((p) => p.group === group)}>
+                      {(page) => (
+                        <li>
+                          <button
+                            type="button"
+                            class="nav-item"
+                            classList={{ "nav-item--active": current()?.id === page.id }}
+                            aria-current={current()?.id === page.id ? "page" : undefined}
+                            onClick={() => setCurrentId(page.id)}
+                          >
+                            {pageTitle(page)}
+                          </button>
+                        </li>
+                      )}
+                    </For>
+                  </ul>
+                </Show>
               )}
             </For>
           </div>
+        </nav>
+        <div class="settings__scroll">
+          <Show when={current()} keyed>
+            {(page) => (
+              <div class="settings__sections">
+                <h2 class="visually-hidden">{pageTitle(page)}</h2>
+                <For each={page.parts}>
+                  {(part) => (
+                    <section
+                      id={partDomId(part.id)}
+                      class="settings-section"
+                      aria-labelledby={
+                        page.parts.length > 1 ? `${partDomId(part.id)}-heading` : undefined
+                      }
+                      aria-label={page.parts.length > 1 ? undefined : pageTitle(page)}
+                    >
+                      <Show when={page.parts.length > 1}>
+                        <h3 id={`${partDomId(part.id)}-heading`} class="settings-part__title">
+                          {tr(part.title)}
+                        </h3>
+                      </Show>
+                      <div classList={{ "settings-card": page.parts.length > 1 }}>
+                        <Dynamic component={part.component} model={model} />
+                      </div>
+                    </section>
+                  )}
+                </For>
+              </div>
+            )}
+          </Show>
         </div>
       </div>
     </section>

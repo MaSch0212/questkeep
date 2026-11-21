@@ -2,6 +2,10 @@ import type { Translations } from ".";
 
 const en = {
   startPage: "Start page",
+  startPageSettings: "Start page settings…",
+  menuShow: "Show",
+  menuBackground: "Background image",
+  menuStatistics: "Statistics",
   recentlyPlayed: "Recently played",
   nothingPlayed: "Nothing played yet",
   recentlyAdded: "Recently added",
@@ -26,6 +30,10 @@ export const shellHome: Translations<typeof en> = {
   en,
   de: {
     startPage: "Startseite",
+    startPageSettings: "Startseiten-Einstellungen…",
+    menuShow: "Anzeigen",
+    menuBackground: "Hintergrundbild",
+    menuStatistics: "Statistiken",
     recentlyPlayed: "Zuletzt gespielt",
     nothingPlayed: "Noch nichts gespielt",
     recentlyAdded: "Zuletzt hinzugefügt",
@@ -46,6 +54,10 @@ export const shellHome: Translations<typeof en> = {
   },
   fr: {
     startPage: "Page d'accueil",
+    startPageSettings: "Paramètres de la page d’accueil…",
+    menuShow: "Afficher",
+    menuBackground: "Image d’arrière-plan",
+    menuStatistics: "Statistiques",
     recentlyPlayed: "Joués récemment",
     nothingPlayed: "Rien n'a encore été joué",
     recentlyAdded: "Ajoutés récemment",
@@ -67,6 +79,10 @@ export const shellHome: Translations<typeof en> = {
   },
   it: {
     startPage: "Pagina iniziale",
+    startPageSettings: "Impostazioni della pagina iniziale…",
+    menuShow: "Mostra",
+    menuBackground: "Immagine di sfondo",
+    menuStatistics: "Statistiche",
     recentlyPlayed: "Giocati di recente",
     nothingPlayed: "Ancora nulla di giocato",
     recentlyAdded: "Aggiunti di recente",
@@ -88,6 +104,10 @@ export const shellHome: Translations<typeof en> = {
   },
   es: {
     startPage: "Página de inicio",
+    startPageSettings: "Ajustes de la página de inicio…",
+    menuShow: "Mostrar",
+    menuBackground: "Imagen de fondo",
+    menuStatistics: "Estadísticas",
     recentlyPlayed: "Jugados recientemente",
     nothingPlayed: "Aún no has jugado a nada",
     recentlyAdded: "Añadidos recientemente",
@@ -109,6 +129,10 @@ export const shellHome: Translations<typeof en> = {
   },
   pt: {
     startPage: "Página inicial",
+    startPageSettings: "Configurações da página inicial…",
+    menuShow: "Mostrar",
+    menuBackground: "Imagem de fundo",
+    menuStatistics: "Estatísticas",
     recentlyPlayed: "Jogados recentemente",
     nothingPlayed: "Nada jogado ainda",
     recentlyAdded: "Adicionados recentemente",

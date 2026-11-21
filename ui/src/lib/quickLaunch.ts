@@ -32,3 +32,18 @@ export function withQuickItem(
 ): QuickLaunchItem[] {
   return items.some((i) => quickKey(i) === quickKey(item)) ? [...items] : [...items, item];
 }
+
+/** `items` with the entry `fromKey` moved to where the entry `toKey` is (dragging). */
+export function moveQuickItemTo(
+  items: readonly QuickLaunchItem[],
+  fromKey: string,
+  toKey: string,
+): QuickLaunchItem[] {
+  const from = items.findIndex((i) => quickKey(i) === fromKey);
+  const to = items.findIndex((i) => quickKey(i) === toKey);
+  if (from < 0 || to < 0 || from === to) return [...items];
+  const copy = [...items];
+  const [moved] = copy.splice(from, 1);
+  if (moved) copy.splice(to, 0, moved);
+  return copy;
+}

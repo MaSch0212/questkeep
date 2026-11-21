@@ -22,6 +22,7 @@ import type { Notification } from "../bindings/Notification";
 import type { NotificationLevel } from "../bindings/NotificationLevel";
 import type { NotificationSource } from "../bindings/NotificationSource";
 import type { GameActivity } from "../bindings/GameActivity";
+import type { GameSession } from "../bindings/GameSession";
 import type { GameEditInfo } from "../bindings/GameEditInfo";
 import type { GameEdits } from "../bindings/GameEdits";
 import type { ImageOption } from "../bindings/ImageOption";
@@ -443,3 +444,13 @@ export const runScriptDraft = (script: ScriptInput, gameId: string, run: string)
   invoke<void>("run_script_draft", { script, gameId, run });
 /** Stops a run from the script dialog; false when it already ended. */
 export const stopScriptRun = (run: string) => invoke<boolean>("stop_script_run", { run });
+
+/** A game's finished play sessions, newest first. */
+export const gameSessions = (id: string) => invoke<GameSession[]>("game_sessions", { id });
+/** Adds a play session that was not recorded. */
+export const addGameSession = (id: string, startedAt: string, durationSeconds: number) =>
+  invoke<void>("add_game_session", { id, startedAt, durationSeconds });
+export const updateGameSession = (sessionId: number, startedAt: string, durationSeconds: number) =>
+  invoke<void>("update_game_session", { sessionId, startedAt, durationSeconds });
+export const deleteGameSession = (sessionId: number) =>
+  invoke<void>("delete_game_session", { sessionId });

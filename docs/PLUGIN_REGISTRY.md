@@ -169,13 +169,29 @@ and says that the app needs an update.
   not stop the rest. The dialog lists what happened per plugin, and the updated plugins' stores are
   scanned like after a single update.
 - **`changes`** (in `RegistryPluginPreview`) compares the version with the *installed* manifest:
-  `newHttp` (hosts), `newRead` (folders), `newFolders` (`permissions.folders` keys), `addsExtension`,
-  `addsStore` (more stores than installed) and `needsReview` (any of them). Hosts and paths compare
-  ignoring case; removing a permission is not a change. A plugin that is not installed has no
-  changes.
+  `newHttp` (hosts), `newRead` (folders), `newFolders` (`permissions.folders` keys),
+  `addsFilesystem` and `addsRegistry` (the broad read permissions), `newLogin` (sign-in domains),
+  `newLauncher` (programs Questkeep may close), `addsExtension`, `addsStore` (more stores than
+  installed) and `needsReview` (any of them). Hosts, domains, names and paths compare ignoring
+  case; removing a permission is not a change. A plugin that is not installed has no changes.
 
 ## Trust
 
-Stores run sandboxed; extensions run as trusted code. Every plugin is reviewed in a PR to the
-registry before it is listed, and every file is pinned by hash. A compromised plugin repository
-cannot change what a listed version contains. Signing `index.json` is a later step (ROADMAP).
+Stores run sandboxed, but a store that declares `permissions.filesystem` or `permissions.registry`
+can read everything the user can; extensions run as trusted code. What stands between a plugin and
+the user's data is the review of every plugin in a PR to the registry before it is listed, and
+every file is pinned by hash. A compromised plugin repository cannot change what a listed version
+contains. Signing `index.json` is a later step (ROADMAP).
+
+Review rules for a plugin that declares `filesystem` or `registry` (what it reads can only leave
+the PC through the web hosts it lists, so those get the most attention):
+
+- No wildcard hosts and no shared-hosting domains (`*.github.io`, `*.pages.dev`, storage buckets
+  and similar) in `permissions.http` or `login.domains`: anyone can put content on them.
+- `http://localhost` needs a stated reason.
+- Hosts are the store's own (API, CDN, sign-in); every host is explained in the PR.
+- Tokens go to `secrets`, never to `/data`.
+- An update that adds `filesystem`, `registry`, a host, a sign-in domain or a launcher program is
+  reviewed again like a new plugin (the app does not apply it in "Update all" either).
+
+Plugins installed from a folder or zip skip the review; the install dialog warns about that.

@@ -287,9 +287,10 @@ function ParamField(props: {
             )}
           </Match>
           <Match when={props.param.type === "toggle"}>
-            <label class="check">
+            <label class="check check--switch">
               <input
                 type="checkbox"
+                role="switch"
                 id={id()}
                 aria-describedby={describedBy()}
                 checked={props.value === true}
@@ -365,25 +366,29 @@ export function AppearanceSection(props: { model: SettingsModel }) {
 
   return (
     <Show when={props.model.settings()} fallback={<p class="muted">{tr("loading")}</p>}>
-      <div class="settings-row">
-        <span id="appearance-mode-label">{tr("mode")}</span>
-        <div class="choice" role="radiogroup" aria-labelledby="appearance-mode-label">
-          <For each={SCHEMES}>
-            {(scheme) => (
-              <label class="choice__option">
-                <input
-                  type="radio"
-                  name="appearance-scheme"
-                  value={scheme}
-                  checked={current().scheme === scheme}
-                  onChange={() => change({ ...current(), scheme })}
-                />
-                <span>{tr(scheme)}</span>
-              </label>
-            )}
-          </For>
+      <fieldset class="fieldset settings-group">
+        <legend class="fieldset__legend" id="appearance-mode-label">
+          {tr("mode")}
+        </legend>
+        <div class="settings-row">
+          <div class="choice" role="radiogroup" aria-labelledby="appearance-mode-label">
+            <For each={SCHEMES}>
+              {(scheme) => (
+                <label class="choice__option">
+                  <input
+                    type="radio"
+                    name="appearance-scheme"
+                    value={scheme}
+                    checked={current().scheme === scheme}
+                    onChange={() => change({ ...current(), scheme })}
+                  />
+                  <span>{tr(scheme)}</span>
+                </label>
+              )}
+            </For>
+          </div>
         </div>
-      </div>
+      </fieldset>
       <fieldset class="fieldset settings-group">
         <legend class="fieldset__legend">{tr("theme")}</legend>
         <div class="theme-picker" role="radiogroup" aria-label={tr("theme")}>

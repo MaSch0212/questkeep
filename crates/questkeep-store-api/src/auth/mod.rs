@@ -16,8 +16,8 @@ use ts_rs::TS;
 
 pub use http::{Http, HttpRequest, HttpResponse, Method, UreqHttp, redact_secrets};
 pub use login_window::{
-    CAPTURE_PREFIX, LoginWindow, Navigation, WebSessionPage, capture_param, capture_whole,
-    is_capture,
+    CAPTURE_PREFIX, CaptureRule, LoginWindow, Navigation, WebSessionPage, capture_param,
+    capture_whole, is_capture,
 };
 pub use session::{AccountSession, Clock, REFRESH_MARGIN_SECS, RefreshFn, system_clock};
 pub use store::{KEYRING_SERVICE, KeyringTokenStore, MemoryTokenStore, TokenSet, TokenStore};

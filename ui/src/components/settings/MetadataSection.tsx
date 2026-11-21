@@ -3,7 +3,6 @@ import { translator } from "../../i18n";
 import { settingsGeneral } from "../../i18n/settingsGeneral";
 import { settingsKeys } from "../../i18n/settingsKeys";
 import { IgdbFields, IgdbSteps } from "./KeyFields";
-import { SourcePriority } from "./SourcePriority";
 import type { SettingsModel } from "./useSettings";
 
 const tr = translator(settingsKeys);
@@ -12,9 +11,10 @@ const general = translator(settingsGeneral);
 export function MetadataSection(props: { model: SettingsModel }) {
   return (
     <Show when={props.model.settings()} fallback={<p class="muted">{tr("loading")}</p>}>
-      <label class="check">
+      <label class="check check--switch">
         <input
           type="checkbox"
+          role="switch"
           checked={props.model.settings()?.fetchMetadata ?? false}
           onChange={(e) => void props.model.toggle("fetchMetadata", e.currentTarget.checked)}
         />
@@ -37,7 +37,6 @@ export function MetadataSection(props: { model: SettingsModel }) {
           </button>
         </div>
       </form>
-      <SourcePriority model={props.model} />
     </Show>
   );
 }

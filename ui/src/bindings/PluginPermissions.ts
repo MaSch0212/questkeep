@@ -17,4 +17,20 @@ http: Array<string>,
  * Folders the user chooses for the plugin: it may read each one that is set (or has a
  * default), nothing else of them.
  */
-folders: Array<FolderRequest>, };
+folders: Array<FolderRequest>, 
+/**
+ * The stores may read every file of this PC (`permissions.filesystem`).
+ */
+filesystem: boolean, 
+/**
+ * The stores may read the registry (`permissions.registry`).
+ */
+registry: boolean, 
+/**
+ * Programs Questkeep may close after a game (`permissions.launcher.processNames`).
+ */
+launcher: Array<string>, 
+/**
+ * The hosts the sign-in windows may visit (`permissions.login.domains`).
+ */
+login: Array<string>, };

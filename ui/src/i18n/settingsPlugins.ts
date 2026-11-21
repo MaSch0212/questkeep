@@ -10,7 +10,7 @@ const en = {
   filterPlugin: "Questkeep plugin",
   installTitle: "Install this plugin?",
   installMessage:
-    "Plugins are third-party code. A store runs sandboxed and can only read the folders and reach the web hosts it declares, but the games it reports are started as programs on this computer. An extension is JavaScript that runs inside the app with the app's own rights. A theme is CSS that restyles the app. Only install plugins you trust.",
+    "Plugins are third-party code. A store runs sandboxed: it can only read the folders and reach the web hosts it declares. A store that declares access to all files or the registry can read your whole PC and send what it finds to the web hosts it lists, so check those hosts above. The games a store reports are started as programs on this computer. An extension is JavaScript that runs inside the app with the app's own rights. A theme is CSS that restyles the app. Only install plugins you trust.",
   installConfirm: "Install",
   installReplaces: "Replaces the installed version {version}.",
   installThemes: "Themes",
@@ -52,6 +52,12 @@ const en = {
   folderSet: "{name}: {label} is now {path}.",
   folderReset: "{name}: {label} is back to its default.",
   folderRequest: "May read the folder you choose: {label}",
+  permFilesystem: "Can read every file on this PC (read-only)",
+  permRegistry: "Can read the Windows registry (read-only)",
+  permLauncher: "Questkeep may close these programs after a game",
+  permLogin: "Sign-in windows may visit these web domains",
+  unreviewedWarning:
+    "This plugin does not come from the plugin registry, so nobody has reviewed it. Only install plugins from authors and sources you trust.",
   installFolders: "Choose the folders",
   installFoldersHint:
     "Choose where the plugin finds its data. It can read these folders (read-only) and nothing else of them.",
@@ -99,7 +105,7 @@ export const settingsPlugins: Translations<typeof en> = {
     filterPlugin: "Questkeep-Plugin",
     installTitle: "Dieses Plugin installieren?",
     installMessage:
-      "Plugins sind Code von Dritten. Ein Store läuft in einer Sandbox und kann nur die Ordner lesen und die Webhosts erreichen, die er angibt, aber die Spiele, die er meldet, werden als Programme auf diesem Computer gestartet. Eine Erweiterung ist JavaScript, das innerhalb der App mit den Rechten der App läuft. Ein Theme ist CSS, das das Aussehen der App verändert. Installiere nur Plugins, denen du vertraust.",
+      "Plugins sind Code von Dritten. Ein Store läuft in einer Sandbox: Er kann nur die Ordner lesen und die Webhosts erreichen, die er angibt. Ein Store, der Zugriff auf alle Dateien oder die Registry angibt, kann deinen ganzen PC lesen und das Gefundene an die Webhosts senden, die er auflistet – prüfe diese Hosts weiter oben. Die Spiele, die ein Store meldet, werden als Programme auf diesem Computer gestartet. Eine Erweiterung ist JavaScript, das innerhalb der App mit den Rechten der App läuft. Ein Theme ist CSS, das das Aussehen der App verändert. Installiere nur Plugins, denen du vertraust.",
     installConfirm: "Installieren",
     installReplaces: "Ersetzt die installierte Version {version}.",
     installThemes: "Themes",
@@ -141,6 +147,12 @@ export const settingsPlugins: Translations<typeof en> = {
     folderSet: "{name}: {label} ist jetzt {path}.",
     folderReset: "{name}: {label} verwendet wieder den Standard.",
     folderRequest: "Darf den Ordner lesen, den du wählst: {label}",
+    permFilesystem: "Darf jede Datei auf diesem PC lesen (nur lesend)",
+    permRegistry: "Darf die Windows-Registry lesen (nur lesend)",
+    permLauncher: "Questkeep darf diese Programme nach einem Spiel schließen",
+    permLogin: "Anmeldefenster dürfen diese Web-Domains besuchen",
+    unreviewedWarning:
+      "Dieses Plugin stammt nicht aus der Plugin-Registry und wurde deshalb von niemandem geprüft. Installiere nur Plugins von Autoren und Quellen, denen du vertraust.",
     installFolders: "Ordner auswählen",
     installFoldersHint:
       "Lege fest, wo das Plugin seine Daten findet. Es kann diese Ordner lesen (nur lesend), sonst nichts davon.",
@@ -185,7 +197,7 @@ export const settingsPlugins: Translations<typeof en> = {
     filterPlugin: "Plugin Questkeep",
     installTitle: "Installer ce plugin ?",
     installMessage:
-      "Les plugins sont du code tiers. Une boutique s'exécute dans un bac à sable et ne peut lire que les dossiers et joindre que les hôtes web qu'elle déclare, mais les jeux qu'elle signale sont lancés comme des programmes sur cet ordinateur. Une extension est du JavaScript qui s'exécute dans l'application avec les droits de l'application. Un thème est du CSS qui change l'apparence de l'application. N'installez que des plugins de confiance.",
+      "Les plugins sont du code tiers. Une boutique s'exécute dans un bac à sable : elle ne peut lire que les dossiers et joindre que les hôtes web qu'elle déclare. Une boutique qui déclare un accès à tous les fichiers ou au registre peut lire tout votre PC et envoyer ce qu'elle trouve aux hôtes web qu'elle indique, vérifiez donc ces hôtes ci-dessus. Les jeux qu'une boutique signale sont lancés comme des programmes sur cet ordinateur. Une extension est du JavaScript qui s'exécute dans l'application avec les droits de l'application. Un thème est du CSS qui change l'apparence de l'application. N'installez que des plugins de confiance.",
     installConfirm: "Installer",
     installReplaces: "Remplace la version installée {version}.",
     installThemes: "Thèmes",
@@ -228,6 +240,12 @@ export const settingsPlugins: Translations<typeof en> = {
     folderSet: "{name} : {label} est maintenant {path}.",
     folderReset: "{name} : {label} utilise de nouveau sa valeur par défaut.",
     folderRequest: "Peut lire le dossier que vous choisissez : {label}",
+    permFilesystem: "Peut lire tous les fichiers de ce PC (lecture seule)",
+    permRegistry: "Peut lire le registre Windows (lecture seule)",
+    permLauncher: "Questkeep peut fermer ces programmes après une partie",
+    permLogin: "Les fenêtres de connexion peuvent visiter ces domaines web",
+    unreviewedWarning:
+      "Ce plugin ne vient pas du registre des plugins, personne ne l'a donc vérifié. N'installez que des plugins d'auteurs et de sources de confiance.",
     installFolders: "Choisir les dossiers",
     installFoldersHint:
       "Indiquez où le plugin trouve ses données. Il peut lire ces dossiers en lecture seule, et rien d’autre.",
@@ -273,7 +291,7 @@ export const settingsPlugins: Translations<typeof en> = {
     filterPlugin: "Plugin Questkeep",
     installTitle: "Installare questo plugin?",
     installMessage:
-      "I plugin sono codice di terze parti. Uno store gira in una sandbox e può leggere solo le cartelle e contattare solo gli host web che dichiara, ma i giochi che segnala vengono avviati come programmi su questo computer. Un'estensione è JavaScript che gira dentro l'app con i diritti dell'app. Un tema è CSS che cambia l'aspetto dell'app. Installa solo plugin di cui ti fidi.",
+      "I plugin sono codice di terze parti. Uno store gira in una sandbox: può leggere solo le cartelle e contattare solo gli host web che dichiara. Uno store che dichiara l'accesso a tutti i file o al registro può leggere tutto il tuo PC e inviare ciò che trova agli host web che elenca, quindi controlla questi host qui sopra. I giochi che uno store segnala vengono avviati come programmi su questo computer. Un'estensione è JavaScript che gira dentro l'app con i diritti dell'app. Un tema è CSS che cambia l'aspetto dell'app. Installa solo plugin di cui ti fidi.",
     installConfirm: "Installa",
     installReplaces: "Sostituisce la versione installata {version}.",
     installThemes: "Temi",
@@ -316,6 +334,12 @@ export const settingsPlugins: Translations<typeof en> = {
     folderSet: "{name}: {label} ora è {path}.",
     folderReset: "{name}: {label} è tornata al valore predefinito.",
     folderRequest: "Può leggere la cartella che scegli: {label}",
+    permFilesystem: "Può leggere tutti i file di questo PC (sola lettura)",
+    permRegistry: "Può leggere il registro di Windows (sola lettura)",
+    permLauncher: "Questkeep può chiudere questi programmi dopo una partita",
+    permLogin: "Le finestre di accesso possono visitare questi domini web",
+    unreviewedWarning:
+      "Questo plugin non proviene dal registro dei plugin, quindi nessuno lo ha controllato. Installa solo plugin di autori e fonti di cui ti fidi.",
     installFolders: "Scegli le cartelle",
     installFoldersHint:
       "Scegli dove il plugin trova i suoi dati. Può leggere queste cartelle in sola lettura, e nient’altro.",
@@ -360,7 +384,7 @@ export const settingsPlugins: Translations<typeof en> = {
     filterPlugin: "Complemento de Questkeep",
     installTitle: "¿Instalar este complemento?",
     installMessage:
-      "Los complementos son código de terceros. Una tienda se ejecuta en un entorno aislado y solo puede leer las carpetas y contactar los servidores web que declara, pero los juegos que informa se inician como programas en este equipo. Una extensión es JavaScript que se ejecuta dentro de la aplicación con los permisos de la aplicación. Un tema es CSS que cambia el aspecto de la aplicación. Instala solo complementos en los que confíes.",
+      "Los complementos son código de terceros. Una tienda se ejecuta en un entorno aislado: solo puede leer las carpetas y contactar los servidores web que declara. Una tienda que declara acceso a todos los archivos o al registro puede leer todo tu equipo y enviar lo que encuentra a los servidores web que enumera, así que revisa esos servidores más arriba. Los juegos que informa una tienda se inician como programas en este equipo. Una extensión es JavaScript que se ejecuta dentro de la aplicación con los permisos de la aplicación. Un tema es CSS que cambia el aspecto de la aplicación. Instala solo complementos en los que confíes.",
     installConfirm: "Instalar",
     installReplaces: "Reemplaza la versión instalada {version}.",
     installThemes: "Temas",
@@ -402,6 +426,12 @@ export const settingsPlugins: Translations<typeof en> = {
     folderSet: "{name}: {label} ahora es {path}.",
     folderReset: "{name}: {label} vuelve a su valor predeterminado.",
     folderRequest: "Puede leer la carpeta que elijas: {label}",
+    permFilesystem: "Puede leer todos los archivos de este equipo (solo lectura)",
+    permRegistry: "Puede leer el registro de Windows (solo lectura)",
+    permLauncher: "Questkeep puede cerrar estos programas después de una partida",
+    permLogin: "Las ventanas de inicio de sesión pueden visitar estos dominios web",
+    unreviewedWarning:
+      "Este complemento no viene del registro de complementos, así que nadie lo ha revisado. Instala solo complementos de autores y fuentes en los que confíes.",
     installFolders: "Elegir las carpetas",
     installFoldersHint:
       "Elige dónde encuentra el plugin sus datos. Puede leer estas carpetas (solo lectura) y nada más.",
@@ -446,7 +476,7 @@ export const settingsPlugins: Translations<typeof en> = {
     filterPlugin: "Plugin do Questkeep",
     installTitle: "Instalar este plugin?",
     installMessage:
-      "Plugins são código de terceiros. Uma loja roda em um ambiente isolado e só pode ler as pastas e acessar os hosts web que declara, mas os jogos que ela informa são iniciados como programas neste computador. Uma extensão é JavaScript que roda dentro do app com os direitos do app. Um tema é CSS que muda a aparência do app. Instale apenas plugins em que você confia.",
+      "Plugins são código de terceiros. Uma loja roda em um ambiente isolado: só pode ler as pastas e acessar os hosts web que declara. Uma loja que declara acesso a todos os arquivos ou ao registro pode ler todo o seu PC e enviar o que encontra aos hosts web que lista, então confira esses hosts acima. Os jogos que uma loja informa são iniciados como programas neste computador. Uma extensão é JavaScript que roda dentro do app com os direitos do app. Um tema é CSS que muda a aparência do app. Instale apenas plugins em que você confia.",
     installConfirm: "Instalar",
     installReplaces: "Substitui a versão instalada {version}.",
     installThemes: "Temas",
@@ -489,6 +519,12 @@ export const settingsPlugins: Translations<typeof en> = {
     folderSet: "{name}: {label} agora é {path}.",
     folderReset: "{name}: {label} voltou ao padrão.",
     folderRequest: "Pode ler a pasta que você escolher: {label}",
+    permFilesystem: "Pode ler todos os arquivos deste PC (somente leitura)",
+    permRegistry: "Pode ler o registro do Windows (somente leitura)",
+    permLauncher: "O Questkeep pode fechar estes programas depois de um jogo",
+    permLogin: "As janelas de login podem visitar estes domínios web",
+    unreviewedWarning:
+      "Este plugin não vem do registro de plugins, então ninguém o revisou. Instale apenas plugins de autores e fontes em que você confia.",
     installFolders: "Escolher as pastas",
     installFoldersHint:
       "Escolha onde o plugin encontra seus dados. Ele pode ler estas pastas (somente leitura) e mais nada.",

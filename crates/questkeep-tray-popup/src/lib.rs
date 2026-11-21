@@ -80,7 +80,7 @@ impl PopupLauncher {
         }
     }
 
-    fn action(&self) -> Action {
+    pub(crate) fn action(&self) -> Action {
         match &self.target {
             LauncherTarget::Store(id) => Action::OpenLauncher(id.clone()),
             LauncherTarget::Game(id) => Action::Launch(*id),
@@ -91,8 +91,12 @@ impl PopupLauncher {
 /// What the popup shows.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PopupData {
+    /// The popup uses the light palette (the app is set to light); dark when false.
+    pub light: bool,
     pub games: PopupGames,
     pub launchers: Vec<PopupLauncher>,
+    /// Rows of quick-launch tiles (1 to 3); entries that do not fit go into a menu.
+    pub launcher_rows: usize,
     /// Version of an available app update.
     pub update: Option<String>,
     pub texts: PopupTexts,
@@ -104,6 +108,7 @@ impl PopupData {
             recent: self.games.recent.iter().map(|g| g.id).collect(),
             favorites: self.games.favorites.iter().map(|g| g.id).collect(),
             launchers: self.launchers.iter().map(PopupLauncher::action).collect(),
+            launcher_rows: self.launcher_rows,
             update: self.update.clone(),
             texts: self.texts.clone(),
         }

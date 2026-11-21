@@ -7,6 +7,7 @@
 //! written with `questkeep-plugin-sdk`. Extensions and themes are only carried along here: the
 //! UI loads them.
 
+pub mod access;
 pub mod error;
 pub mod install;
 pub mod manager;
@@ -15,6 +16,7 @@ pub mod registry;
 pub mod update_check;
 pub mod wasm;
 
+pub use access::PluginServices;
 pub use error::PluginError;
 pub use install::RegistryState;
 pub use manager::{

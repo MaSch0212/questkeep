@@ -52,6 +52,27 @@ run sandboxed by Questkeep.
   resolved, and `/plugin` and `/data` never become launchable paths.
 - `permissions.http`: hosts the store may request over https. `*.example.com` covers every
   subdomain; `http://localhost` also allows plain http for that host. Redirects are not followed.
+- `permissions.filesystem: "read"`: every file of the PC, read-only, below `/host` (`C:\Games` is
+  `/host/c/Games`, `/home/me` is `/host/home/me`). Use `questkeep_plugin_sdk::known_folder("…")`
+  to find usual places (`local-app-data`, `program-data`, `config`, …) and
+  `questkeep_plugin_sdk::host_path(r"C:\Program Files\Steam")` to turn a path read from the
+  registry or a config file into the plugin's view of it. `sqlite::query(path, sql, params)` reads
+  other programs' SQLite databases (read-only; locked databases work).
+- `permissions.registry: "read"`: `registry::read`, `registry::subkeys`,
+  `registry::uninstall_entries()` and `registry::appx_packages()` (Windows; empty elsewhere).
+- Secrets: `secrets::get/set/delete` keep tokens in the system keyring under the plugin's name
+  (no permission needed). Keep tokens there, not in `/data`.
+- `permissions.launcher.processNames`: the launcher's executable names; only these can be closed
+  after a game (see `Provider::launcher_process`).
+- `permissions.login` with `has_account`, `account_status`, `sign_in_with_code` and `sign_out`:
+  a sign-in window locked to the declared `domains`, an optional website session
+  (`session::refresh()`). Details and the manifest block:
+  [`docs/PLUGINS.md`](../../docs/PLUGINS.md#accounts-and-sign-in).
+
+A store that declares `filesystem` or `registry` can read everything the user can; the web hosts
+it lists are the only way for that to leave the PC and are shown in the install dialog, and the
+registry reviews them. The test store [`sandbox_probe`](../../crates/questkeep-plugin-sdk/examples/sandbox_probe.rs)
+uses each of these and is what the app's plugin tests run.
 
 ## Writing a store
 

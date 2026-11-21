@@ -7,6 +7,11 @@ import type { TrayIconStyle } from "./TrayIconStyle";
  */
 export type TraySettings = { icon: TrayIconStyle, 
 /**
+ * Rows of the popup's quick-launch strip (1 to 3, four entries each); the entries that do
+ * not fit are in a menu behind its last tile.
+ */
+quickLaunchRows: number, 
+/**
  * Store launchers and apps in the quick-launch strip, in order. `None` until the user
  * arranges it: then every installed store launcher, in store order.
  */

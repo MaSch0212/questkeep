@@ -101,6 +101,19 @@ fn clean_name(name: &str) -> String {
         .join(" ")
 }
 
+/// A title for comparing offers and installs: without trademark signs, case and a trailing
+/// release year ("Mass Effect 3 (2012)" and "Mass Effect™ 3" match).
+fn title_key(name: &str) -> String {
+    let name = clean_name(name);
+    let trimmed = name.trim_end();
+    let without_year = trimmed
+        .strip_suffix(')')
+        .and_then(|s| s.rsplit_once(" ("))
+        .filter(|(_, year)| year.len() == 4 && year.bytes().all(|b| b.is_ascii_digit()))
+        .map_or(trimmed, |(head, _)| head);
+    without_year.to_lowercase()
+}
+
 pub fn parse_manifest(xml: &str) -> Manifest {
     let content_ids = elements(xml, "contentIDs")
         .first()
@@ -438,15 +451,23 @@ fn owned_games(
     installs: &[Install],
     times: &std::collections::HashMap<String, account::PlayTime>,
 ) -> Vec<ImportedGame> {
+    // The offer's install: by content id, else by title (an install's manifest may list other
+    // ids than the offer, which would import the game twice, as owned and as installed).
     let install_of = |offer: &account::OwnedOffer| {
         let id = offer.content_id.as_ref().unwrap_or(&offer.offer_id);
-        installs.iter().find(|i| i.content_ids.contains(id))
+        installs
+            .iter()
+            .find(|i| i.content_ids.contains(id))
+            .or_else(|| {
+                let title = title_key(&offer.title);
+                installs.iter().find(|i| title_key(&i.name) == title)
+            })
     };
     let key = |offer: &account::OwnedOffer| {
         offer
             .slug
             .clone()
-            .unwrap_or_else(|| clean_name(&offer.title).to_lowercase())
+            .unwrap_or_else(|| title_key(&offer.title))
     };
     // Installed offers first (a stable sort keeps EA's order otherwise).
     offers.sort_by_key(|o| install_of(o).is_none());
@@ -522,6 +543,29 @@ mod tests {
         assert_eq!(ids, ["1019025", "71183", "1005288"]);
         assert_eq!(games[1].playtime_seconds, Some(3600));
         assert_eq!(games[0].playtime_seconds, None);
+    }
+
+    #[test]
+    fn owned_offer_matches_its_install_by_title_when_content_ids_differ() {
+        let install = |id: &str, name: &str| Install {
+            id: id.into(),
+            content_ids: vec![id.into()],
+            name: name.into(),
+            dir: PathBuf::from(r"C:\Games\ME"),
+            exe: None,
+            uninstall: None,
+        };
+        let installs = vec![
+            install("i2", "Mass Effect™ 2"),
+            install("i3", "Mass Effect™ 3"),
+        ];
+        let offers = vec![
+            offer("o2", "71073", "Mass Effect 2 (2010)", None),
+            offer("o3", "71183", "Mass Effect 3 (2012)", Some("mass-effect-3")),
+        ];
+        let games = owned_games(offers, &installs, &std::collections::HashMap::new());
+        let ids: Vec<&str> = games.iter().map(|g| g.source_game_id.as_str()).collect();
+        assert_eq!(ids, ["i2", "i3"]);
     }
 
     #[test]

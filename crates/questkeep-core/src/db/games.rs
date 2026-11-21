@@ -29,6 +29,16 @@ pub(super) const COLUMNS: &str = "id, name, sorting_name, source, source_game_id
     (SELECT group_concat(category_id, char(31)) FROM game_category_links WHERE game_id = games.id) \
     AS category_ids";
 
+/// What `game_state` needs of a game to bring its derived data up to date.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StateRow {
+    pub id: Uuid,
+    /// The cover, relative to the data dir.
+    pub cover_path: Option<String>,
+    /// How far the game's derived data is up to date.
+    pub state_version: u32,
+}
+
 /// A game row's type: the user's choice, else the store's.
 pub(super) const KIND_SQL: &str = "COALESCE(games.kind_user, games.kind)";
 
@@ -40,8 +50,6 @@ fn scanned_kind(game: &ImportedGame) -> Option<GameKind> {
 
 /// `extra` key set when the user renamed a store game, so re-scans keep their name.
 pub(super) const USER_RENAMED: &str = "userRenamed";
-/// `extra` flag of a row whose playtime the user set: store-reported totals no longer change it.
-pub(super) const USER_PLAYTIME: &str = "userPlaytime";
 
 /// An installed game row to notice when started outside Questkeep (see
 /// [`Database::launch_detection_dirs`]).
@@ -780,6 +788,44 @@ impl Database {
         Ok(())
     }
 
+    /// The games whose derived data is older than `current` (see `game_state`), the most recently
+    /// played first (those are the ones the tray shows).
+    pub fn games_below_state(&self, current: u32) -> Result<Vec<StateRow>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT id, cover_path, state_version FROM games WHERE state_version < ?1 \
+             ORDER BY last_played IS NULL, last_played DESC, favorite DESC",
+        )?;
+        let rows = stmt
+            .query_map([current], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, u32>(2)?,
+                ))
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(rows
+            .into_iter()
+            .filter_map(|(id, cover_path, state_version)| {
+                Some(StateRow {
+                    id: Uuid::parse_str(&id).ok()?,
+                    cover_path,
+                    state_version,
+                })
+            })
+            .collect())
+    }
+
+    /// Records that the game's derived data is up to date as of `version`.
+    pub fn set_state_version(&self, id: Uuid, version: u32) -> Result<()> {
+        self.conn().execute(
+            "UPDATE games SET state_version = ?2 WHERE id = ?1",
+            params![id.to_string(), version],
+        )?;
+        Ok(())
+    }
+
     /// Sets (or clears) the icon path, stored relative to the data dir.
     pub fn set_icon_path(&self, id: Uuid, relative: Option<&str>) -> Result<()> {
         let changed = self.conn().execute(
@@ -823,8 +869,6 @@ impl Database {
             playtime_seconds: i64,
             last_played: Option<DateTime<Utc>>,
             user_renamed: bool,
-            /// The user set the playtime: the store's total doesn't raise it.
-            user_playtime: bool,
             /// The store's kind as last scanned.
             kind: String,
         }
@@ -848,7 +892,6 @@ impl Database {
                         .unwrap_or(false)
                 };
                 let user_renamed = flag(USER_RENAMED);
-                let user_playtime = flag(USER_PLAYTIME);
                 Ok((
                     r.get::<_, String>(6)?,
                     Existing {
@@ -860,7 +903,6 @@ impl Database {
                         playtime_seconds: r.get(7)?,
                         last_played: r.get(8)?,
                         user_renamed,
-                        user_playtime,
                         kind: r.get(9)?,
                     },
                 ))
@@ -886,13 +928,10 @@ impl Database {
                     } else {
                         &game.name
                     };
-                    // Store playtime and last played merge as maximum with our own tracking,
-                    // unless the user set the playtime.
-                    let playtime = if row.user_playtime {
-                        row.playtime_seconds
-                    } else {
-                        row.playtime_seconds.max(store_playtime)
-                    };
+                    // Store playtime and last played merge as maximum with our own tracking
+                    // (also after the user edited the playtime: setting it to 0 and syncing
+                    // again takes the store's total back).
+                    let playtime = row.playtime_seconds.max(store_playtime);
                     let last_played = row.last_played.max(game.last_played);
                     let kind = scanned_kind(game).map_or(row.kind.as_str(), |k| k.as_str());
                     let changed = *name != row.name
@@ -1127,14 +1166,13 @@ impl Database {
     }
 
     /// Sets an entry's total playtime as the user wants it: all of it on the entry's own row
-    /// (copies combined into it drop theirs), and every row marked so store-reported totals no
-    /// longer raise it. Sessions played later still add to it.
+    /// (copies combined into it drop theirs). Sessions played later add to it, and a store total
+    /// larger than it raises it again at the next sync (so 0 plus a sync resets to the store).
     pub fn set_user_playtime(&self, entry_id: Uuid, seconds: u64) -> Result<()> {
         let seconds = i64::try_from(seconds).unwrap_or(i64::MAX);
         let changed = self.conn().execute(
-            &format!(
-                "UPDATE games SET playtime_seconds = CASE WHEN id = ?1 THEN ?2 ELSE 0 END,                  extra = json_set(CASE WHEN json_valid(extra) AND json_type(extra) = 'object'                  THEN extra ELSE '{{}}' END, '$.{USER_PLAYTIME}', json('true'))                  WHERE id = ?1 OR merged_into = ?1"
-            ),
+            "UPDATE games SET playtime_seconds = CASE WHEN id = ?1 THEN ?2 ELSE 0 END \
+             WHERE id = ?1 OR merged_into = ?1",
             params![entry_id.to_string(), seconds],
         )?;
         if changed == 0 {
@@ -1819,14 +1857,22 @@ mod tests {
             .unwrap();
         assert_eq!(db.get_game(g.id).unwrap().playtime_seconds, 5000);
 
-        // A playtime the user set wins over store totals; sessions still add to it.
-        db.set_user_playtime(g.id, 120).unwrap();
-        db.upsert_imported("steam", &[with_stats(9000, earlier)], now)
+        // A user-set playtime behaves the same: a smaller store total keeps it, a larger one
+        // raises it, and 0 plus a sync takes the store's total back.
+        db.set_user_playtime(g.id, 9000).unwrap();
+        db.upsert_imported("steam", &[with_stats(5000, earlier)], now)
             .unwrap();
-        assert_eq!(db.get_game(g.id).unwrap().playtime_seconds, 120);
+        assert_eq!(db.get_game(g.id).unwrap().playtime_seconds, 9000);
+        db.upsert_imported("steam", &[with_stats(9500, earlier)], now)
+            .unwrap();
+        assert_eq!(db.get_game(g.id).unwrap().playtime_seconds, 9500);
+        db.set_user_playtime(g.id, 0).unwrap();
+        db.upsert_imported("steam", &[with_stats(5000, earlier)], now)
+            .unwrap();
+        assert_eq!(db.get_game(g.id).unwrap().playtime_seconds, 5000);
         let s = db.begin_session(g.id, now).unwrap();
         db.finish_session(s, now, 30).unwrap();
-        assert_eq!(db.get_game(g.id).unwrap().playtime_seconds, 150);
+        assert_eq!(db.get_game(g.id).unwrap().playtime_seconds, 5030);
         assert!(db.set_user_playtime(Uuid::new_v4(), 1).is_err());
     }
 

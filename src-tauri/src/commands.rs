@@ -1116,6 +1116,54 @@ pub async fn game_activity(state: State<'_, Arc<AppState>>, id: String) -> CmdRe
     blocking(state, move |s| s.library.game_activity(parse_id(&id)?)).await
 }
 
+/// A game's finished play sessions, newest first (the sessions editor).
+#[tauri::command]
+pub async fn game_sessions(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+) -> CmdResult<Vec<questkeep_core::model::GameSession>> {
+    blocking(state, move |s| s.library.game_sessions(parse_id(&id)?)).await
+}
+
+/// Adds a play session that was not recorded.
+#[tauri::command]
+pub async fn add_game_session(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    started_at: chrono::DateTime<chrono::Utc>,
+    duration_seconds: u64,
+) -> CmdResult<()> {
+    blocking(state, move |s| {
+        s.library
+            .add_game_session(parse_id(&id)?, started_at, duration_seconds)
+    })
+    .await
+}
+
+/// Changes when a play session started and how long it counts.
+#[tauri::command]
+pub async fn update_game_session(
+    state: State<'_, Arc<AppState>>,
+    session_id: i64,
+    started_at: chrono::DateTime<chrono::Utc>,
+    duration_seconds: u64,
+) -> CmdResult<()> {
+    blocking(state, move |s| {
+        s.library
+            .update_game_session(session_id, started_at, duration_seconds)
+    })
+    .await
+}
+
+/// Deletes a play session and takes its time off the game.
+#[tauri::command]
+pub async fn delete_game_session(
+    state: State<'_, Arc<AppState>>,
+    session_id: i64,
+) -> CmdResult<()> {
+    blocking(state, move |s| s.library.delete_game_session(session_id)).await
+}
+
 /// What the Edit dialog needs: the user's edits, the automatic values and all links.
 #[tauri::command]
 pub async fn game_edit_info(

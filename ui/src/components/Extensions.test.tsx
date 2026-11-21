@@ -230,7 +230,7 @@ describe("plugin settings", () => {
     api.settings.onChange(heard);
     render(() => <PluginSettings plugin="ext" />);
 
-    const greet = screen.getByRole("checkbox", { name: "Say hello" });
+    const greet = screen.getByRole("switch", { name: "Say hello" });
     expect(greet).toBeChecked();
     expect(greet).toHaveAccessibleDescription("On start.");
     expect(screen.getByRole("spinbutton", { name: "Size" })).toHaveValue(5);
@@ -290,7 +290,7 @@ describe("plugin settings", () => {
     await api.settings.set("size", 7);
     expect(screen.getByRole("spinbutton", { name: "Size" })).toHaveValue(7);
     vi.mocked(app.savePluginSettings).mockRejectedValueOnce("disk full");
-    await fireEvent.click(screen.getByRole("checkbox", { name: "Say hello" }));
+    await fireEvent.click(screen.getByRole("switch", { name: "Say hello" }));
     await waitFor(() =>
       expect(store.toasts().map((t) => t.message)).toEqual([
         "The setting could not be saved: disk full",
@@ -337,13 +337,12 @@ describe("plugin settings", () => {
     const nav = within(screen.getByRole("navigation", { name: "Settings sections" }));
     expect(nav.getByRole("button", { name: "Ext" })).toBeInTheDocument();
     expect(nav.queryByRole("button", { name: "Plain" })).toBeNull();
+    fireEvent.click(nav.getByRole("button", { name: "Ext" }));
     const section = document.getElementById("settings-plugin-ext");
     expect(section).not.toBeNull();
-    expect(within(section as HTMLElement).getByRole("heading", { name: "Ext" })).toHaveClass(
-      "settings-section__title",
-    );
+    expect(screen.getByRole("heading", { name: "Ext", level: 2 })).toBeInTheDocument();
     expect(
-      within(section as HTMLElement).getByRole("checkbox", { name: "Say hello" }),
+      within(section as HTMLElement).getByRole("switch", { name: "Say hello" }),
     ).toBeInTheDocument();
     disposePlugin("ext");
     expect(document.getElementById("settings-plugin-ext")).toBeNull();

@@ -35,7 +35,8 @@ function makeSettings(overrides: Partial<Settings> = {}): Settings {
     launcherCloseDelaySeconds: 60,
     launcherCloseMinMinutes: 2,
     systemNotifications: true,
-    tray: { icon: "questkeep", quickLaunch: null },
+    tray: { icon: "questkeep", quickLaunchRows: 3, quickLaunch: null },
+    startPage: { background: true, statistics: true, recentlyPlayed: true, recentlyAdded: true },
     detectExternalLaunches: true,
     showStartPage: true,
     showStatistics: true,
@@ -64,7 +65,7 @@ const toasts = () => store.toasts().map((t) => t.message);
 async function show(settings = makeSettings()) {
   vi.mocked(api.getSettings).mockResolvedValue(settings);
   render(() => <Harness />);
-  return screen.findByRole("checkbox", { name: "Check for plugin updates" });
+  return screen.findByRole("switch", { name: "Check for plugin updates" });
 }
 
 beforeEach(() => {

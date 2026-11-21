@@ -12,7 +12,7 @@ those commands and events.
 ## Plugins (`crates/questkeep-plugins`, `crates/questkeep-plugin-sdk`)
 
 A plugin is a folder (or zip) with a `plugin.json`: id, name, version, `apiVersion`, its stores
-(`providers: [{ wasm }]`), what they may reach (`permissions.read`, `permissions.http`, `permissions.folders`: folders the user chooses) and,
+(`providers: [{ wasm }]`), what they may reach (`permissions.read`, `permissions.http`, `permissions.folders`: folders the user chooses; `filesystem` and `registry`: read-only host access, see `access.rs` and the host functions in `wit/plugin.wit`; `launcher` process names; `login`: the sign-in windows, built into a `LoginWindow` that the shell opens; secrets go to the keyring through `PluginServices`) and,
 for the UI, `extension` and `themes` (carried along untouched). Installing copies it to
 `<data>/plugins/<id>/` (staged next to it, then swapped, so a copy is whole or absent) and
 `<data>/plugins/plugins.json` remembers `{ id, source, enabled, watch, registry?, folders? }` (`folders`: the user's choice per declared folder key, host-side so a plugin can't grant itself folders; kept across updates). Paths a store returns below a `read`/`folders` mount (`/instances/...`) are translated to real paths in `wasm.rs` (never `/plugin` or `/data`). `PluginManager`

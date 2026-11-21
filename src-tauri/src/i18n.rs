@@ -119,7 +119,7 @@ pub fn menu_texts(lang: Lang) -> MenuTexts {
 #[cfg(windows)]
 pub fn popup_texts(lang: Lang) -> questkeep_tray_popup::PopupTexts {
     let menu = menu_texts(lang);
-    let (recent, empty_recent, exit_app, update, open_launcher, play) = match lang {
+    let (recent, empty_recent, exit_app, update, open_launcher, play, more) = match lang {
         Lang::En => (
             "Recently played",
             "No recently played games yet",
@@ -127,6 +127,7 @@ pub fn popup_texts(lang: Lang) -> questkeep_tray_popup::PopupTexts {
             "Update to {version}",
             "Open {name}",
             "Play",
+            "More",
         ),
         Lang::De => (
             "Zuletzt gespielt",
@@ -135,6 +136,7 @@ pub fn popup_texts(lang: Lang) -> questkeep_tray_popup::PopupTexts {
             "Auf {version} aktualisieren",
             "{name} öffnen",
             "Spielen",
+            "Mehr",
         ),
         Lang::Fr => (
             "Joués récemment",
@@ -143,6 +145,7 @@ pub fn popup_texts(lang: Lang) -> questkeep_tray_popup::PopupTexts {
             "Mettre à jour vers {version}",
             "Ouvrir {name}",
             "Jouer",
+            "Plus",
         ),
         Lang::It => (
             "Giocati di recente",
@@ -151,6 +154,7 @@ pub fn popup_texts(lang: Lang) -> questkeep_tray_popup::PopupTexts {
             "Aggiorna a {version}",
             "Apri {name}",
             "Gioca",
+            "Altro",
         ),
         Lang::Es => (
             "Jugados recientemente",
@@ -159,6 +163,7 @@ pub fn popup_texts(lang: Lang) -> questkeep_tray_popup::PopupTexts {
             "Actualizar a {version}",
             "Abrir {name}",
             "Jugar",
+            "Más",
         ),
         Lang::Pt => (
             "Jogados recentemente",
@@ -167,6 +172,7 @@ pub fn popup_texts(lang: Lang) -> questkeep_tray_popup::PopupTexts {
             "Atualizar para {version}",
             "Abrir {name}",
             "Jogar",
+            "Mais",
         ),
     };
     questkeep_tray_popup::PopupTexts {
@@ -180,6 +186,7 @@ pub fn popup_texts(lang: Lang) -> questkeep_tray_popup::PopupTexts {
         update: update.into(),
         open_launcher: open_launcher.into(),
         play: play.into(),
+        more: more.into(),
     }
 }
 

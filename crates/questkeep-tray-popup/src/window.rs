@@ -18,7 +18,7 @@ use windows::Win32::Graphics::Direct2D::Common::{
 };
 use windows::Win32::Graphics::Direct2D::{
     D2D1_FEATURE_LEVEL_DEFAULT, D2D1_HWND_RENDER_TARGET_PROPERTIES, D2D1_PRESENT_OPTIONS_NONE,
-    D2D1_RENDER_TARGET_PROPERTIES, D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1_RENDER_TARGET_USAGE_NONE,
+    D2D1_RENDER_TARGET_PROPERTIES, D2D1_RENDER_TARGET_TYPE_SOFTWARE, D2D1_RENDER_TARGET_USAGE_NONE,
     ID2D1HwndRenderTarget,
 };
 use windows::Win32::Graphics::Dwm::{
@@ -27,24 +27,27 @@ use windows::Win32::Graphics::Dwm::{
 };
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_UNKNOWN;
 use windows::Win32::Graphics::Gdi::{
-    GetMonitorInfoW, InvalidateRect, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromPoint,
-    ScreenToClient, UpdateWindow, ValidateRect,
+    BI_RGB, BITMAPINFO, BITMAPINFOHEADER, ClientToScreen, CreateDIBSection, DIB_RGB_COLORS,
+    DeleteObject, GetMonitorInfoW, HBITMAP, InvalidateRect, MONITOR_DEFAULTTONEAREST, MONITORINFO,
+    MonitorFromPoint, ScreenToClient, UpdateWindow, ValidateRect,
 };
-use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress, LoadLibraryW};
 use windows::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     GetKeyState, TME_LEAVE, TRACKMOUSEEVENT, TrackMouseEvent, VK_DOWN, VK_END, VK_ESCAPE, VK_HOME,
     VK_LEFT, VK_RETURN, VK_RIGHT, VK_SHIFT, VK_SPACE, VK_TAB, VK_UP,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetCursorPos, GetMessageW,
-    IDC_ARROW, LoadCursorW, MSG, PostMessageW, PostQuitMessage, RegisterClassExW, SW_SHOW,
-    SetForegroundWindow, ShowWindow, TranslateMessage, WA_INACTIVE, WM_ACTIVATE, WM_APP, WM_CLOSE,
-    WM_DESTROY, WM_DISPLAYCHANGE, WM_DPICHANGED, WM_ERASEBKGND, WM_GETOBJECT, WM_KEYDOWN,
-    WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_PAINT, WNDCLASSEXW,
+    CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyMenu, DestroyWindow, DispatchMessageW,
+    GetCursorPos, GetMessageW, IDC_ARROW, InsertMenuItemW, LoadCursorW, MENUITEMINFOW, MFT_STRING,
+    MIIM_BITMAP, MIIM_FTYPE, MIIM_ID, MIIM_STRING, MSG, PostMessageW, PostQuitMessage,
+    RegisterClassExW, SW_SHOW, SetForegroundWindow, ShowWindow, TPM_LEFTALIGN, TPM_NONOTIFY,
+    TPM_RETURNCMD, TPM_TOPALIGN, TrackPopupMenu, TranslateMessage, WA_INACTIVE, WM_ACTIVATE,
+    WM_APP, WM_CLOSE, WM_DESTROY, WM_DISPLAYCHANGE, WM_DPICHANGED, WM_ERASEBKGND, WM_GETOBJECT,
+    WM_KEYDOWN, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_PAINT, WNDCLASSEXW,
     WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
 };
-use windows::core::{Result, w};
+use windows::core::{HSTRING, PCSTR, Result, w};
 
 use accesskit::{
     Action as A11yAction, ActionHandler, ActionRequest, ActivationHandler, TreeUpdate,
@@ -53,8 +56,9 @@ use accesskit_windows::Adapter;
 
 use super::a11y;
 use super::layout::{self, Action, Layout, Nav, ScreenRect, navigate};
-use super::render::{Bitmaps, Frame, Renderer, ViewState};
-use super::{PopupData, Prepared, prepare};
+use super::render::{Bitmaps, Frame, Renderer, ViewState, border_colorref};
+use super::{Pixels, PopupData, Prepared, prepare};
+use questkeep_imaging::{load_icon_rgba, scale_icon};
 
 /// `WM_MOUSELEAVE` (declared in a `windows` feature this crate does not otherwise need).
 const WM_MOUSELEAVE: u32 = 0x02A3;
@@ -120,7 +124,7 @@ pub fn show(anchor: ScreenRect, data: PopupData, on_action: impl Fn(Action) + Se
     let spawned = std::thread::Builder::new()
         .name("tray-popup".into())
         .spawn(move || {
-            let action = match run(anchor, data) {
+            let action = match run_with(anchor, data, true, |_| {}) {
                 Ok(action) => action,
                 Err(err) => {
                     tracing::error!(%err, "tray popup failed");
@@ -202,23 +206,32 @@ fn monitor_for(anchor: ScreenRect) -> (ScreenRect, f32) {
     }
 }
 
-fn run(anchor: ScreenRect, data: PopupData) -> Result<Option<Action>> {
-    run_with(anchor, data, true, |_| {})
-}
-
-/// Creates the popup and runs its message loop until it closes. `visible: false` never shows
-/// or activates it (tests); `on_created` gets the window before the loop starts.
+/// Creates the popup and runs its message loop until it closes; `on_created` gets the window
+/// before the loop starts.
 fn run_with(
     anchor: ScreenRect,
     data: PopupData,
     visible: bool,
     on_created: impl FnOnce(HWND),
 ) -> Result<Option<Action>> {
+    let started = Instant::now();
+    // Milliseconds since the previous call, for the timing log.
+    let mut mark = started;
+    let mut lap = move || {
+        let ms = mark.elapsed().as_secs_f32() * 1000.0;
+        mark = Instant::now();
+        ms
+    };
     register_class()?;
     let (work, scale) = monitor_for(anchor);
+    let light = data.light;
+    let _ = lap();
     let renderer = Renderer::new()?;
+    let renderer_ms = lap();
     let layout = layout::layout(&data.content(), 0.0, |t| renderer.measure(t));
+    let layout_ms = lap();
     let images = prepare(&data, &layout, scale);
+    let images_ms = lap();
     let layout_empty = layout.items.is_empty();
     let (w, h) = (
         (layout.width * scale).round() as i32,
@@ -265,7 +278,7 @@ fn run_with(
             Some(instance.into()),
             None,
         )?;
-        style_window(hwnd);
+        style_window(hwnd, light);
         // Must exist before the first WM_GETOBJECT (screen readers ask as soon as it shows).
         STATE.with(|s| {
             if let Some(state) = s.borrow_mut().as_mut() {
@@ -279,18 +292,31 @@ fn run_with(
         *OPEN
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(hwnd.0 as isize);
+        let window_ms = lap();
         if visible {
-            // The first frame needs the Direct2D device, which takes a moment; shown right away
-            // the popup would flash as an empty frame. So it is shown cloaked (DWM composes it
-            // but nothing appears), painted, and uncloaked once DWM has that frame.
+            // The first frame takes a moment; shown right away the popup would flash as an empty
+            // frame. So it is shown cloaked (DWM composes it but nothing appears), painted, and
+            // uncloaked once DWM has that frame.
             set_cloaked(hwnd, true);
             let _ = ShowWindow(hwnd, SW_SHOW);
             let _ = UpdateWindow(hwnd);
+            let paint_ms = lap();
             let _ = DwmFlush();
+            let flush_ms = lap();
             set_cloaked(hwnd, false);
             // The shell lets the tray icon's process take the foreground after a click on its
             // icon; without activation the popup could not notice clicks elsewhere.
             let _ = SetForegroundWindow(hwnd);
+            tracing::debug!(
+                renderer_ms,
+                layout_ms,
+                images_ms,
+                window_ms,
+                paint_ms,
+                flush_ms,
+                total_ms = started.elapsed().as_millis() as u64,
+                "tray popup: opened"
+            );
         }
         on_created(hwnd);
 
@@ -314,11 +340,10 @@ fn set_cloaked(hwnd: HWND, cloaked: bool) {
 
 /// Windows 11 look: rounded corners, dark frame, a border in the theme's border color. Older
 /// systems ignore the attributes.
-fn style_window(hwnd: HWND) {
+fn style_window(hwnd: HWND, light: bool) {
     let corner = DWMWCP_ROUND;
-    let dark: i32 = 1;
-    // COLORREF is 0x00BBGGRR; the theme border is #2a2f3a.
-    let border = COLORREF(0x003a_2f2a);
+    let dark = i32::from(!light);
+    let border = COLORREF(border_colorref(light));
     // SAFETY: each attribute gets a pointer to a value of the documented type and size.
     unsafe {
         let _ = DwmSetWindowAttribute(
@@ -348,6 +373,8 @@ enum Effect {
     None,
     Redraw,
     Close,
+    /// Opens the menu of the quick-launch entries behind the "..." tile (layout item index).
+    Menu(usize),
 }
 
 fn with_state(f: impl FnOnce(&mut State) -> Effect) -> Effect {
@@ -385,9 +412,13 @@ fn hover_at_cursor(hwnd: HWND, state: &mut State) -> Effect {
 }
 
 fn paint(hwnd: HWND, state: &mut State) -> Result<()> {
+    let created_at = state.target.is_none().then(Instant::now);
     if state.target.is_none() {
         let props = D2D1_RENDER_TARGET_PROPERTIES {
-            r#type: D2D1_RENDER_TARGET_TYPE_DEFAULT,
+            // The CPU rasterizer: the default creates a GPU device for every popup window, which
+            // took about 115 ms. The popup is small and static, so software drawing is plenty
+            // and needs no GPU device or driver memory.
+            r#type: D2D1_RENDER_TARGET_TYPE_SOFTWARE,
             pixelFormat: D2D1_PIXEL_FORMAT {
                 format: DXGI_FORMAT_UNKNOWN,
                 alphaMode: D2D1_ALPHA_MODE_UNKNOWN,
@@ -421,6 +452,8 @@ fn paint(hwnd: HWND, state: &mut State) -> Result<()> {
     let Some(target) = state.target.clone() else {
         return Ok(());
     };
+    let target_ms = created_at.map(|t| t.elapsed().as_secs_f32() * 1000.0);
+    let draw_started = Instant::now();
     // SAFETY: drawing between BeginDraw and EndDraw on this thread's target.
     let result = unsafe {
         target.BeginDraw();
@@ -432,7 +465,16 @@ fn paint(hwnd: HWND, state: &mut State) -> Result<()> {
             scale: state.scale,
         };
         let drawn = state.renderer.draw(&target, &frame, &mut state.bitmaps);
+        let draw_ms = draw_started.elapsed().as_secs_f32() * 1000.0;
         let ended = target.EndDraw(None, None);
+        if let Some(target_ms) = target_ms {
+            tracing::debug!(
+                target_ms,
+                draw_ms,
+                end_draw_ms = draw_started.elapsed().as_secs_f32() * 1000.0 - draw_ms,
+                "tray popup: first paint"
+            );
+        }
         drawn.and(ended)
     };
     if let Err(err) = result {
@@ -528,6 +570,7 @@ fn sync_a11y() {
 
 fn activate(state: &mut State, index: usize) -> Effect {
     match state.layout.items.get(index) {
+        Some(item) if item.action == Action::More => Effect::Menu(index),
         Some(item) => {
             state.action = Some(item.action.clone());
             Effect::Close
@@ -702,8 +745,210 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
         Effect::Close => unsafe {
             let _ = DestroyWindow(hwnd);
         },
+        Effect::Menu(index) => {
+            if open_more_menu(hwnd, index) {
+                // SAFETY: as above; the menu loop has ended and no borrow is held.
+                unsafe {
+                    let _ = DestroyWindow(hwnd);
+                }
+            }
+        }
     }
     LRESULT(0)
+}
+
+/// Shows the native menu of the quick-launch entries that did not fit, below the "..." tile
+/// (Windows flips it up when there is no room). Returns whether an entry was chosen (its
+/// action is stored, so the popup closes).
+fn open_more_menu(hwnd: HWND, item: usize) -> bool {
+    let Some((rect, scale, entries, icons, light)) = STATE.with(|s| {
+        let guard = s.try_borrow().ok()?;
+        let state = guard.as_ref()?;
+        let rect = state.layout.items.get(item)?.rect;
+        let from = state.layout.overflow_from?;
+        let entries: Vec<(String, Action)> = state
+            .data
+            .launchers
+            .iter()
+            .skip(from)
+            .map(|l| (l.name.replace('&', "&&"), l.action()))
+            .collect();
+        // A small icon per entry: the app's own icon, else the store's logo.
+        let side = (16.0 * state.scale).round().max(16.0) as u32;
+        let light = state.data.light;
+        let icons: Vec<Option<Vec<u8>>> = state
+            .data
+            .launchers
+            .iter()
+            .skip(from)
+            .map(|l| {
+                let image = l
+                    .image
+                    .as_deref()
+                    .and_then(|p| load_icon_rgba(p).and_then(|icon| scale_icon(&icon, side)));
+                match image {
+                    Some(icon) => Some(Pixels::from_rgba(&icon).bgra),
+                    None if !l.icon.is_empty() => state.renderer.menu_icon(&l.icon, side, light),
+                    None => None,
+                }
+            })
+            .collect();
+        Some((rect, state.scale, entries, icons, state.data.light))
+    }) else {
+        return false;
+    };
+    // SAFETY: creating, showing and destroying a menu owned by this thread's window; every
+    // pointer passed is valid for its call.
+    let chosen = unsafe {
+        let Ok(menu) = CreatePopupMenu() else {
+            return false;
+        };
+        // The menu would follow the system theme; show it in the popup's.
+        let previous_mode = set_menu_mode(light);
+        let side = (16.0 * scale).round().max(16.0) as i32;
+        let mut bitmaps = Vec::new();
+        for (n, (name, _)) in entries.iter().enumerate() {
+            let text = HSTRING::from(name.as_str());
+            let bitmap = icons
+                .get(n)
+                .and_then(|pixels| pixels.as_deref())
+                .and_then(|pixels| menu_bitmap(pixels, side));
+            let mut info = MENUITEMINFOW {
+                cbSize: std::mem::size_of::<MENUITEMINFOW>() as u32,
+                fMask: MIIM_STRING | MIIM_ID | MIIM_FTYPE,
+                fType: MFT_STRING,
+                wID: n as u32 + 1,
+                dwTypeData: windows::core::PWSTR(text.as_ptr().cast_mut()),
+                ..Default::default()
+            };
+            if let Some(bitmap) = bitmap {
+                info.fMask |= MIIM_BITMAP;
+                info.hbmpItem = bitmap;
+                bitmaps.push(bitmap);
+            }
+            let _ = InsertMenuItemW(menu, n as u32, true, &info);
+        }
+        let mut at = POINT {
+            x: (rect.x * scale).round() as i32,
+            y: (rect.bottom() * scale).round() as i32,
+        };
+        let command = if ClientToScreen(hwnd, &mut at).as_bool() {
+            TrackPopupMenu(
+                menu,
+                TPM_RETURNCMD | TPM_NONOTIFY | TPM_LEFTALIGN | TPM_TOPALIGN,
+                at.x,
+                at.y,
+                None,
+                hwnd,
+                None,
+            )
+            .0
+        } else {
+            0
+        };
+        let _ = DestroyMenu(menu);
+        restore_menu_mode(previous_mode);
+        for bitmap in bitmaps {
+            let _ = DeleteObject(bitmap.into());
+        }
+        usize::try_from(command).ok().filter(|c| *c > 0)
+    };
+    let Some(action) = chosen
+        .and_then(|c| entries.into_iter().nth(c - 1))
+        .map(|(_, a)| a)
+    else {
+        return false;
+    };
+    STATE.with(|s| {
+        if let Ok(mut guard) = s.try_borrow_mut()
+            && let Some(state) = guard.as_mut()
+        {
+            state.action = Some(action);
+        }
+    });
+    true
+}
+
+/// `uxtheme.dll` ordinals that set how the process's menus are themed (undocumented, but used by
+/// many apps and stable since Windows 10 1903).
+const SET_PREFERRED_APP_MODE: usize = 135;
+const FLUSH_MENU_THEMES: usize = 136;
+/// `PreferredAppMode` values: 2 forces dark menus, 3 forces light ones.
+const FORCE_DARK: i32 = 2;
+const FORCE_LIGHT: i32 = 3;
+
+/// Looks up an exported function of `uxtheme.dll` by ordinal.
+unsafe fn uxtheme_fn(ordinal: usize) -> Option<unsafe extern "system" fn() -> isize> {
+    // SAFETY: a system library name and a documented-by-convention ordinal lookup; the result is
+    // only called with the signature each caller knows for that ordinal.
+    unsafe {
+        let module = LoadLibraryW(w!("uxtheme.dll")).ok()?;
+        GetProcAddress(module, PCSTR(ordinal as *const u8))
+    }
+}
+
+/// Makes menus light or dark regardless of the system theme. Returns the mode that was set before
+/// (for [`restore_menu_mode`]), or `None` when the system does not offer this.
+unsafe fn set_menu_mode(light: bool) -> Option<i32> {
+    // SAFETY: ordinal 135 is `int SetPreferredAppMode(int)`, 136 is `void FlushMenuThemes()`.
+    unsafe {
+        let set = uxtheme_fn(SET_PREFERRED_APP_MODE)?;
+        let set: unsafe extern "system" fn(i32) -> i32 = std::mem::transmute(set);
+        let previous = set(if light { FORCE_LIGHT } else { FORCE_DARK });
+        if let Some(flush) = uxtheme_fn(FLUSH_MENU_THEMES) {
+            let flush: unsafe extern "system" fn() = std::mem::transmute(flush);
+            flush();
+        }
+        Some(previous)
+    }
+}
+
+/// Puts the menu theming back the way `set_menu_mode` found it.
+unsafe fn restore_menu_mode(previous: Option<i32>) {
+    let Some(previous) = previous else { return };
+    // SAFETY: as in `set_menu_mode`.
+    unsafe {
+        if let Some(set) = uxtheme_fn(SET_PREFERRED_APP_MODE) {
+            let set: unsafe extern "system" fn(i32) -> i32 = std::mem::transmute(set);
+            set(previous);
+        }
+        if let Some(flush) = uxtheme_fn(FLUSH_MENU_THEMES) {
+            let flush: unsafe extern "system" fn() = std::mem::transmute(flush);
+            flush();
+        }
+    }
+}
+
+/// A top-down 32-bit bitmap for a menu item from premultiplied BGRA pixels (`side` x `side`).
+fn menu_bitmap(pixels: &[u8], side: i32) -> Option<HBITMAP> {
+    let len = usize::try_from(side).ok()?.pow(2) * 4;
+    if pixels.len() != len {
+        return None;
+    }
+    let info = BITMAPINFO {
+        bmiHeader: BITMAPINFOHEADER {
+            biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+            biWidth: side,
+            biHeight: -side,
+            biPlanes: 1,
+            biBitCount: 32,
+            biCompression: BI_RGB.0,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let mut bits = std::ptr::null_mut();
+    // SAFETY: the DIB section owns `len` bytes at `bits` (checked above to match the source);
+    // the pointer is only written through right here.
+    unsafe {
+        let bitmap = CreateDIBSection(None, &info, DIB_RGB_COLORS, &mut bits, None, 0).ok()?;
+        if bits.is_null() {
+            let _ = DeleteObject(bitmap.into());
+            return None;
+        }
+        std::ptr::copy_nonoverlapping(pixels.as_ptr(), bits.cast::<u8>(), len);
+        Some(bitmap)
+    }
 }
 
 #[cfg(test)]
@@ -724,6 +969,7 @@ mod tests {
     #[test]
     fn screen_readers_see_and_invoke_the_items() {
         let data = PopupData {
+            light: false,
             games: PopupGames {
                 recent: vec![PopupGame {
                     id: Uuid::from_u128(1),
@@ -738,6 +984,7 @@ mod tests {
                 "Steam",
                 crate::test_icons::STEAM,
             )],
+            launcher_rows: 3,
             update: None,
             texts: PopupTexts::default(),
         };

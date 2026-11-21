@@ -6,6 +6,36 @@ use uuid::Uuid;
 
 use super::Database;
 use crate::error::{CoreError, Result};
+use crate::model::GameSession;
+
+fn to_i64(seconds: u64) -> i64 {
+    i64::try_from(seconds).unwrap_or(i64::MAX)
+}
+
+/// When a session that started at `started_at` and was credited `seconds` ended.
+fn session_end(started_at: DateTime<Utc>, seconds: u64) -> Result<DateTime<Utc>> {
+    i64::try_from(seconds)
+        .ok()
+        .and_then(chrono::Duration::try_seconds)
+        .and_then(|d| started_at.checked_add_signed(d))
+        .ok_or_else(|| CoreError::Invalid("The session is too long.".into()))
+}
+
+fn parse_game_id(id: &str) -> Result<Uuid> {
+    Uuid::parse_str(id).map_err(|e| CoreError::Invalid(format!("Corrupt session game id: {e}")))
+}
+
+/// The game and credited seconds of a finished session.
+fn finished_session(tx: &rusqlite::Transaction<'_>, session_id: i64) -> Result<(String, i64)> {
+    tx.query_row(
+        "SELECT game_id, COALESCE(duration_seconds, 0) FROM play_sessions \
+         WHERE id = ?1 AND ended_at IS NOT NULL",
+        [session_id],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    )
+    .optional()?
+    .ok_or_else(|| CoreError::Invalid("This session no longer exists.".into()))
+}
 
 /// A session that has not been finished yet.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -117,6 +147,115 @@ impl Database {
         Ok(sessions)
     }
 
+    /// The finished sessions of a library entry (all its copies), newest first.
+    pub fn entry_sessions(&self, entry: Uuid) -> Result<Vec<GameSession>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT id, started_at, ended_at, duration_seconds FROM play_sessions \
+             WHERE ended_at IS NOT NULL \
+             AND game_id IN (SELECT id FROM games WHERE id = ?1 OR merged_into = ?1) \
+             ORDER BY started_at DESC, id DESC",
+        )?;
+        let sessions = stmt
+            .query_map([entry.to_string()], |r| {
+                let started_at: DateTime<Utc> = r.get(1)?;
+                let ended_at: DateTime<Utc> = r.get(2)?;
+                let credited = r
+                    .get::<_, Option<i64>>(3)?
+                    .unwrap_or_else(|| (ended_at - started_at).num_seconds());
+                Ok(GameSession {
+                    id: r.get(0)?,
+                    started_at,
+                    ended_at,
+                    duration_seconds: u64::try_from(credited).unwrap_or_default(),
+                })
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(sessions)
+    }
+
+    /// Adds a finished session to a game (its playtime and play count grow, last played moves
+    /// up when the session is newer).
+    pub fn add_session(
+        &self,
+        game_id: Uuid,
+        started_at: DateTime<Utc>,
+        duration_seconds: u64,
+    ) -> Result<i64> {
+        let ended_at = session_end(started_at, duration_seconds)?;
+        let duration = to_i64(duration_seconds);
+        let mut conn = self.conn();
+        let tx = conn.transaction()?;
+        tx.execute(
+            "INSERT INTO play_sessions (game_id, started_at, last_seen_at, ended_at, \
+             duration_seconds) VALUES (?1, ?2, ?3, ?3, ?4)",
+            params![game_id.to_string(), started_at, ended_at, duration],
+        )?;
+        let id = tx.last_insert_rowid();
+        tx.execute(
+            "UPDATE games SET playtime_seconds = playtime_seconds + ?2, \
+             play_count = play_count + 1, \
+             last_played = MAX(COALESCE(last_played, ?3), ?3) WHERE id = ?1",
+            params![game_id.to_string(), duration, ended_at],
+        )?;
+        tx.commit()?;
+        Ok(id)
+    }
+
+    /// Changes a finished session; the game's playtime follows by the difference.
+    pub fn update_session(
+        &self,
+        session_id: i64,
+        started_at: DateTime<Utc>,
+        duration_seconds: u64,
+    ) -> Result<Uuid> {
+        let ended_at = session_end(started_at, duration_seconds)?;
+        let duration = to_i64(duration_seconds);
+        let mut conn = self.conn();
+        let tx = conn.transaction()?;
+        let (game_id, before) = finished_session(&tx, session_id)?;
+        tx.execute(
+            "UPDATE play_sessions SET started_at = ?2, last_seen_at = ?3, ended_at = ?3, \
+             duration_seconds = ?4 WHERE id = ?1",
+            params![session_id, started_at, ended_at, duration],
+        )?;
+        tx.execute(
+            "UPDATE games SET playtime_seconds = MAX(0, playtime_seconds + ?2 - ?3), \
+             last_played = MAX(COALESCE(last_played, ?4), ?4) WHERE id = ?1",
+            params![game_id, duration, before, ended_at],
+        )?;
+        tx.commit()?;
+        parse_game_id(&game_id)
+    }
+
+    /// Deletes a finished session and takes its time and its play count off the game.
+    pub fn delete_session(&self, session_id: i64) -> Result<Uuid> {
+        let mut conn = self.conn();
+        let tx = conn.transaction()?;
+        let (game_id, before) = finished_session(&tx, session_id)?;
+        let ended_at: DateTime<Utc> = tx.query_row(
+            "SELECT ended_at FROM play_sessions WHERE id = ?1",
+            [session_id],
+            |r| r.get(0),
+        )?;
+        tx.execute("DELETE FROM play_sessions WHERE id = ?1", [session_id])?;
+        tx.execute(
+            "UPDATE games SET playtime_seconds = MAX(0, playtime_seconds - ?2), \
+             play_count = MAX(0, play_count - 1) WHERE id = ?1",
+            params![game_id, before],
+        )?;
+        // Last played is recalculated only when the deleted session was the latest one (a
+        // store's own, newer date stays).
+        tx.execute(
+            "UPDATE games SET last_played = (SELECT MAX(ended_at) FROM play_sessions \
+                 WHERE game_id = ?1 AND ended_at IS NOT NULL) \
+             WHERE id = ?1 AND last_played = ?2",
+            params![game_id, ended_at],
+        )?;
+        tx.commit()?;
+        parse_game_id(&game_id)
+    }
+
     /// Closes sessions left open by a crash, crediting the time up to their last heartbeat.
     /// Sessions without any recorded time are dropped. Returns the ids of games whose playtime
     /// changed.
@@ -160,6 +299,38 @@ mod tests {
             )
             .unwrap();
         (db, g.id)
+    }
+
+    #[test]
+    fn sessions_can_be_added_edited_and_deleted() {
+        let (db, id) = setup();
+        let t0 = Utc::now() - Duration::days(3);
+        let a = db.add_session(id, t0, 600).unwrap();
+        let b = db.add_session(id, t0 + Duration::hours(5), 1200).unwrap();
+        let g = db.get_game(id).unwrap();
+        assert_eq!((g.playtime_seconds, g.play_count), (1800, 2));
+        assert_eq!(
+            g.last_played,
+            Some(t0 + Duration::hours(5) + Duration::seconds(1200))
+        );
+        let listed = db.entry_sessions(id).unwrap();
+        assert_eq!(listed.iter().map(|s| s.id).collect::<Vec<_>>(), [b, a]);
+
+        db.update_session(a, t0, 900).unwrap();
+        assert_eq!(db.get_game(id).unwrap().playtime_seconds, 2100);
+
+        db.delete_session(b).unwrap();
+        let g = db.get_game(id).unwrap();
+        assert_eq!((g.playtime_seconds, g.play_count), (900, 1));
+        assert_eq!(g.last_played, Some(t0 + Duration::seconds(900)));
+
+        db.delete_session(a).unwrap();
+        let g = db.get_game(id).unwrap();
+        assert_eq!(
+            (g.playtime_seconds, g.play_count, g.last_played),
+            (0, 0, None)
+        );
+        assert!(db.delete_session(a).is_err());
     }
 
     #[test]

@@ -14,6 +14,7 @@ use questkeep_store_api::LibraryProvider;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use crate::access::{LoginSetup, PluginServices, filesystem_mounts};
 use crate::error::{PluginError, Result};
 use crate::install::{self, RegistryState, StateEntry};
 use crate::manifest::{FolderPermission, PluginManifest, expand_path, folder_path};
@@ -132,6 +133,38 @@ pub struct PluginPermissions {
     /// Folders the user chooses for the plugin: it may read each one that is set (or has a
     /// default), nothing else of them.
     pub folders: Vec<FolderRequest>,
+    /// The stores may read every file of this PC (`permissions.filesystem`).
+    pub filesystem: bool,
+    /// The stores may read the registry (`permissions.registry`).
+    pub registry: bool,
+    /// Programs Questkeep may close after a game (`permissions.launcher.processNames`).
+    pub launcher: Vec<String>,
+    /// The hosts the sign-in windows may visit (`permissions.login.domains`).
+    pub login: Vec<String>,
+}
+
+impl PluginPermissions {
+    /// What the manifest asks for.
+    pub fn of(manifest: &PluginManifest) -> Self {
+        let permissions = &manifest.permissions;
+        Self {
+            read: permissions.read.iter().map(|r| r.path.clone()).collect(),
+            http: permissions.http.clone(),
+            folders: permissions.folders.iter().map(Into::into).collect(),
+            filesystem: permissions.filesystem.is_some(),
+            registry: permissions.registry.is_some(),
+            launcher: permissions
+                .launcher
+                .as_ref()
+                .map(|l| l.process_names.clone())
+                .unwrap_or_default(),
+            login: permissions
+                .login
+                .as_ref()
+                .map(|l| l.domains.clone())
+                .unwrap_or_default(),
+        }
+    }
 }
 
 /// A plugin that is about to be installed, for the install dialog.
@@ -213,13 +246,7 @@ impl Plugin {
                 .filter(|_| self.entry.enabled)
                 .map(|m| m.themes.clone())
                 .unwrap_or_default(),
-            permissions: manifest
-                .map(|m| PluginPermissions {
-                    read: m.permissions.read.iter().map(|r| r.path.clone()).collect(),
-                    http: m.permissions.http.clone(),
-                    folders: m.permissions.folders.iter().map(Into::into).collect(),
-                })
-                .unwrap_or_default(),
+            permissions: manifest.map(PluginPermissions::of).unwrap_or_default(),
             folders: manifest
                 .map(|m| {
                     let home = home_dir();
@@ -241,6 +268,8 @@ struct Inner {
     limits: CallLimits,
     /// Started with the first store plugin.
     runtime: OnceLock<std::result::Result<Arc<Runtime>, String>>,
+    /// The keyring and website sessions the stores use; set once by the app before loading.
+    services: OnceLock<PluginServices>,
     /// In install order.
     plugins: Mutex<Vec<Plugin>>,
     /// One change at a time (a watched reload may come in at any moment).
@@ -276,11 +305,19 @@ impl PluginManager {
                 events,
                 limits,
                 runtime: OnceLock::new(),
+                services: OnceLock::new(),
                 plugins: Mutex::new(Vec::new()),
                 changing: Mutex::new(()),
                 registry_ops: Mutex::new(()),
             }),
         }
+    }
+
+    /// Hands the stores the app's keyring and website sessions. Call before
+    /// [`load_enabled`](Self::load_enabled); only the first call counts. Without it stores use the
+    /// system keyring and have no website sessions.
+    pub fn set_services(&self, services: PluginServices) {
+        let _ = self.inner.services.set(services);
     }
 
     /// Reads the plugin list and loads the enabled plugins (once, at startup). A plugin that
@@ -326,11 +363,7 @@ impl PluginManager {
                 .manifest
                 .as_ref()
                 .map(|m| registry::PluginShape {
-                    permissions: PluginPermissions {
-                        read: m.permissions.read.iter().map(|r| r.path.clone()).collect(),
-                        http: m.permissions.http.clone(),
-                        folders: m.permissions.folders.iter().map(Into::into).collect(),
-                    },
+                    permissions: PluginPermissions::of(m),
                     stores: m.providers.len() as u32,
                     has_extension: m.extension.is_some(),
                 })
@@ -382,21 +415,7 @@ impl PluginManager {
                         .to_string()
                 })
                 .collect(),
-            permissions: PluginPermissions {
-                read: manifest
-                    .permissions
-                    .read
-                    .iter()
-                    .map(|r| r.path.clone())
-                    .collect(),
-                http: manifest.permissions.http.clone(),
-                folders: manifest
-                    .permissions
-                    .folders
-                    .iter()
-                    .map(Into::into)
-                    .collect(),
-            },
+            permissions: PluginPermissions::of(manifest),
             folders: manifest
                 .permissions
                 .folders
@@ -1038,8 +1057,35 @@ impl Inner {
                     )?;
                     Some((path, folder.mount.clone()))
                 }))
+                // The whole file system, read-only, below /host.
+                .chain(
+                    manifest
+                        .permissions
+                        .filesystem
+                        .is_some()
+                        .then(filesystem_mounts)
+                        .into_iter()
+                        .flatten(),
+                )
                 .collect(),
             hosts: manifest.host_rules(),
+            filesystem: manifest.permissions.filesystem.is_some(),
+            registry: manifest.permissions.registry.is_some(),
+            home: home.clone(),
+            protected: vec![
+                self.paths.plugins_dir(),
+                self.paths.plugin_data_dir(),
+                dir.to_path_buf(),
+            ],
+            launcher_names: manifest
+                .permissions
+                .launcher
+                .as_ref()
+                .map(|l| l.process_names.clone())
+                .unwrap_or_default(),
+            login: LoginSetup::new(manifest, dir)?,
+            services: self.services.get().cloned().unwrap_or_default(),
+            store_id: Default::default(),
         };
         let mut providers: Vec<Arc<WasmProvider>> = Vec::new();
         for entry in &manifest.providers {

@@ -389,6 +389,16 @@ export function PluginsSection(props: { updateCheck?: JSX.Element }) {
                           when={hasPermissions(plugin)}
                           fallback={<span class="muted">{tr("noPermissions")}</span>}
                         >
+                          <Show when={plugin.permissions.filesystem || plugin.permissions.registry}>
+                            <ul class="plugin__perms selectable">
+                              <Show when={plugin.permissions.filesystem}>
+                                <li>{tr("permFilesystem")}</li>
+                              </Show>
+                              <Show when={plugin.permissions.registry}>
+                                <li>{tr("permRegistry")}</li>
+                              </Show>
+                            </ul>
+                          </Show>
                           <Show when={plugin.permissions.read.length > 0}>
                             <span class="plugin__perm-title">{tr("readFolders")}</span>
                             <ul class="plugin__perms selectable">
@@ -408,6 +418,22 @@ export function PluginsSection(props: { updateCheck?: JSX.Element }) {
                             <span class="plugin__perm-title">{tr("httpHosts")}</span>
                             <ul class="plugin__perms selectable">
                               <For each={plugin.permissions.http}>{(host) => <li>{host}</li>}</For>
+                            </ul>
+                          </Show>
+                          <Show when={plugin.permissions.login.length > 0}>
+                            <span class="plugin__perm-title">{tr("permLogin")}</span>
+                            <ul class="plugin__perms selectable">
+                              <For each={plugin.permissions.login}>
+                                {(domain) => <li>{domain}</li>}
+                              </For>
+                            </ul>
+                          </Show>
+                          <Show when={plugin.permissions.launcher.length > 0}>
+                            <span class="plugin__perm-title">{tr("permLauncher")}</span>
+                            <ul class="plugin__perms selectable">
+                              <For each={plugin.permissions.launcher}>
+                                {(name) => <li>{name}</li>}
+                              </For>
                             </ul>
                           </Show>
                         </Show>
@@ -436,12 +462,13 @@ export function PluginsSection(props: { updateCheck?: JSX.Element }) {
                       )}
                     </Show>
                     <label
-                      class="check"
+                      class="check check--switch"
                       classList={{ "check--disabled": !plugin.sourceExists }}
                       data-tooltip={plugin.sourceExists ? tr("watchHint") : tr("watchGone")}
                     >
                       <input
                         type="checkbox"
+                        role="switch"
                         checked={plugin.watch}
                         disabled={!plugin.sourceExists || working()}
                         onChange={(event) => void setWatch(plugin, event.currentTarget.checked)}

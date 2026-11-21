@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { parseQuickKey, quickKey, quickLaunchItems, withQuickItem } from "./quickLaunch";
+import {
+  moveQuickItemTo,
+  parseQuickKey,
+  quickKey,
+  quickLaunchItems,
+  withQuickItem,
+} from "./quickLaunch";
 
 describe("quick launch", () => {
   it("starts from the installed launchers until the user arranges it", () => {
@@ -21,5 +27,15 @@ describe("quick launch", () => {
     expect(parseQuickKey("")).toBeNull();
     expect(withQuickItem([app], app)).toEqual([app]);
     expect(withQuickItem([], app)).toEqual([app]);
+  });
+
+  it("moves an entry to where another one is", () => {
+    const a = { kind: "store" as const, id: "a" };
+    const b = { kind: "store" as const, id: "b" };
+    const c = { kind: "game" as const, id: "c" };
+    expect(moveQuickItemTo([a, b, c], "store:a", "game:c")).toEqual([b, c, a]);
+    expect(moveQuickItemTo([a, b, c], "game:c", "store:a")).toEqual([c, a, b]);
+    expect(moveQuickItemTo([a, b, c], "store:a", "store:a")).toEqual([a, b, c]);
+    expect(moveQuickItemTo([a, b, c], "store:x", "store:a")).toEqual([a, b, c]);
   });
 });

@@ -19,6 +19,20 @@ body {
   font-size: var(--qk-font-size-md);
   line-height: var(--qk-line-height);
   overflow: hidden;
+  /* An app, not a page: nothing is selectable unless it is worth copying (see below). */
+  user-select: none;
+}
+/* What can be selected and copied: text fields, texts the user may want to quote and anything
+   marked `.selectable`. */
+input,
+textarea,
+[contenteditable],
+.selectable,
+.description__text,
+.facts dd,
+.run-output__text,
+.toast__message {
+  user-select: text;
 }
 
 button,
@@ -28,7 +42,7 @@ select {
   color: inherit;
 }
 
-:focus-visible {
+:where(html[data-keyboard-focus]) :focus-visible {
   outline: var(--qk-focus-ring-width) solid var(--qk-color-accent);
   outline-offset: var(--qk-focus-ring-offset);
 }
@@ -219,6 +233,9 @@ ul {
 }
 .check {
   display: flex;
+  /* Only the box and its text toggle, not the empty space to the right. */
+  width: fit-content;
+  max-width: 100%;
   align-items: center;
   gap: var(--qk-space-2);
   padding: var(--qk-space-1) var(--qk-space-2);
@@ -226,6 +243,40 @@ ul {
 }
 .check input {
   accent-color: var(--qk-color-accent);
+}
+/* A checkbox drawn as a switch: for settings that apply the moment they are clicked. */
+.check--switch input {
+  appearance: none;
+  position: relative;
+  flex: none;
+  box-sizing: border-box;
+  width: var(--qk-switch-width);
+  height: var(--qk-switch-height);
+  margin: 0;
+  border: 1px solid var(--qk-color-border);
+  border-radius: var(--qk-switch-radius);
+  background: var(--qk-color-border);
+  cursor: inherit;
+  transition: background-color var(--qk-switch-duration);
+}
+.check--switch input::before {
+  content: "";
+  position: absolute;
+  top: calc(var(--qk-switch-knob-inset) - 1px);
+  left: calc(var(--qk-switch-knob-inset) - 1px);
+  width: calc(var(--qk-switch-height) - 2 * var(--qk-switch-knob-inset));
+  height: calc(var(--qk-switch-height) - 2 * var(--qk-switch-knob-inset));
+  border-radius: inherit;
+  background: var(--qk-color-text-muted);
+  transition: transform var(--qk-switch-duration);
+}
+.check--switch input:checked {
+  border-color: var(--qk-color-accent);
+  background: var(--qk-color-accent);
+}
+.check--switch input:checked::before {
+  background: var(--qk-color-accent-contrast);
+  transform: translateX(calc(var(--qk-switch-width) - var(--qk-switch-height)));
 }
 .check--nested {
   padding-left: var(--qk-space-6);
@@ -491,6 +542,8 @@ ul {
 }
 /* Grid */
 .grid {
+  /* Shift-click selects a range of games, not text. */
+  user-select: none;
   position: relative;
   flex: 1;
   min-width: 0;
@@ -861,6 +914,7 @@ ul {
 
 /* List view */
 .list {
+  user-select: none;
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -869,6 +923,8 @@ ul {
 }
 .list__header,
 .list-row {
+  /* Shift-click selects a range of games, not text. */
+  user-select: none;
   display: grid;
   grid-template-columns: var(--qk-list-columns);
   align-items: center;
@@ -959,7 +1015,7 @@ ul {
   z-index: 1;
 }
 .list__resize:hover,
-.list__resize:focus-visible {
+:where(html[data-keyboard-focus]) .list__resize:focus-visible {
   background: var(--qk-color-accent-soft);
   box-shadow: inset 1px 0 0 var(--qk-color-accent);
   outline: none;
@@ -1087,6 +1143,8 @@ ul {
   margin: auto;
 }
 .compact-row {
+  /* Shift-click selects a range of games, not text. */
+  user-select: none;
   display: flex;
   align-items: center;
   gap: var(--qk-space-2);
@@ -1501,6 +1559,7 @@ ul {
 }
 .facts {
   display: grid;
+  align-items: center;
   grid-template-columns: max-content minmax(0, 1fr);
   gap: var(--qk-space-2) var(--qk-space-4);
 }
@@ -1711,6 +1770,16 @@ ul {
   padding: var(--qk-space-1) var(--qk-space-2);
   border: 1px solid var(--qk-color-border);
   border-radius: var(--qk-radius-md);
+}
+.quick-launch__item[draggable="true"] {
+  cursor: grab;
+}
+.quick-launch__item--dragging {
+  opacity: var(--qk-dimmed-opacity);
+}
+.quick-launch__grip {
+  flex: none;
+  color: var(--qk-color-text-faint);
 }
 .quick-launch__icon {
   display: grid;
@@ -2140,7 +2209,7 @@ ul {
 .image-picker__item[aria-selected="true"] {
   border-color: var(--qk-color-accent);
 }
-.image-picker__item:focus-visible {
+:where(html[data-keyboard-focus]) .image-picker__item:focus-visible {
   outline: 2px solid var(--qk-color-accent);
   outline-offset: 1px;
 }
@@ -2410,21 +2479,73 @@ ul {
   display: flex;
   flex-direction: column;
   gap: var(--qk-space-3);
-  padding-bottom: var(--qk-space-5);
+}
+.settings__group {
+  margin: var(--qk-space-4) var(--qk-space-2) var(--qk-space-1);
+  font-size: var(--qk-font-size-xs);
+  font-weight: var(--qk-font-weight-bold);
+  letter-spacing: var(--qk-letter-spacing-caps);
+  text-transform: uppercase;
+  color: var(--qk-color-text-muted);
+}
+.settings__group:first-child {
+  margin-top: 0;
+}
+.settings-part__title {
+  margin: var(--qk-space-2) 0 0;
+  font-size: var(--qk-font-size-md);
+}
+/* A group of settings as a card: a small title, then one row per setting. */
+.settings-group {
+  position: relative;
+  gap: 0;
+  margin: var(--qk-space-6) 0 0;
+  border: 1px solid var(--qk-color-border);
+  border-radius: var(--qk-radius-lg);
+  background: var(--qk-color-surface);
+}
+/* The title sits above the card, in line with the text inside it. */
+.settings-group .fieldset__legend {
+  position: absolute;
+  bottom: 100%;
+  left: calc(var(--qk-space-3) + 1px);
+  margin: 0;
+  padding: 0 0 var(--qk-space-1);
+}
+.settings-group > .check,
+.settings-group > .settings-row {
+  min-height: var(--qk-control-height);
+  padding: var(--qk-space-2) var(--qk-space-3);
   border-bottom: 1px solid var(--qk-color-border);
 }
-.settings-section:last-child {
+.settings-group > :last-child {
   border-bottom: 0;
 }
-.settings-group {
-  gap: var(--qk-space-1);
-  margin: var(--qk-space-2) 0;
-}
-.settings-group .fieldset__legend {
-  margin-bottom: 0;
-}
 .settings-group .field__hint {
-  padding: 0 var(--qk-space-2);
+  margin: 0;
+  padding: var(--qk-space-1) var(--qk-space-3) var(--qk-space-2);
+}
+/* Switches sit at the end of their row, the text first. */
+.settings-group > .check--switch {
+  flex-direction: row-reverse;
+  justify-content: flex-end;
+  width: auto;
+  max-width: none;
+  gap: var(--qk-space-3);
+}
+.settings-group > .check--switch > span {
+  flex: 1;
+}
+.settings-group > .check--nested {
+  padding-left: var(--qk-space-6);
+}
+.settings-group > .settings-row > label:first-child,
+.settings-row__label {
+  flex: 1;
+}
+.settings-group .settings-row__input {
+  flex: none;
+  width: var(--qk-settings-select-width);
 }
 .settings-row {
   display: flex;
@@ -2469,9 +2590,6 @@ ul {
 }
 .backup-list__item .btn {
   margin-left: auto;
-}
-.settings-section__title {
-  font-size: var(--qk-font-size-lg);
 }
 .scan-row {
   display: flex;
@@ -2545,7 +2663,7 @@ ul {
   cursor: pointer;
 }
 .menu__item:hover:not(:disabled),
-.menu__item:focus-visible,
+:where(html[data-keyboard-focus]) .menu__item:focus-visible,
 .menu__item--open {
   background: var(--qk-color-surface-hover);
   outline: none;
@@ -2723,7 +2841,7 @@ ul {
 }
 .titlebar__brand:hover .titlebar__brand-arrow,
 .titlebar__brand--open .titlebar__brand-arrow,
-.titlebar__brand:focus-visible .titlebar__brand-arrow {
+:where(html[data-keyboard-focus]) .titlebar__brand:focus-visible .titlebar__brand-arrow {
   opacity: 1;
 }
 .titlebar__tool {
@@ -3386,7 +3504,7 @@ ul {
   background: var(--qk-color-surface-hover);
 }
 /* Inside the option: the control clips its options, so an outer ring would be cut off. */
-.segmented__option:focus-visible {
+:where(html[data-keyboard-focus]) .segmented__option:focus-visible {
   outline-offset: calc(-1 * var(--qk-focus-ring-width));
 }
 .segmented__option--on,
@@ -3566,7 +3684,7 @@ ul {
 .group-header:hover {
   background: linear-gradient(90deg, var(--qk-color-group-band-hover), var(--qk-color-surface) 70%);
 }
-.group-header:focus-visible {
+:where(html[data-keyboard-focus]) .group-header:focus-visible {
   outline: 2px solid var(--qk-color-accent);
   outline-offset: -2px;
 }
@@ -3800,7 +3918,7 @@ ul {
   cursor: pointer;
 }
 .category-list__separate:hover,
-.category-list__separate:focus-visible {
+:where(html[data-keyboard-focus]) .category-list__separate:focus-visible {
   color: var(--qk-color-text);
   background: var(--qk-color-surface-hover);
 }
@@ -3996,12 +4114,34 @@ ul {
   flex: 1;
   min-width: 0;
   overflow-y: auto;
+  /* The shelves reach past the page padding for their card shadows; that must not scroll. */
+  overflow-x: hidden;
 }
 .home__shelves,
 .home__stats {
   padding: 0 var(--qk-space-5);
 }
+/* The background of the game played last: faded and blurred, under everything else. */
+.home__bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.home__bg img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: var(--qk-home-bg-opacity);
+  filter: blur(var(--qk-home-bg-blur));
+  transform: scale(1.1); /* hides the soft edges the blur leaves */
+}
+.home__shelves,
+.home__stats {
+  position: relative;
+}
 .home {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--qk-space-4);
@@ -4032,7 +4172,10 @@ ul {
   display: flex;
   overflow-x: auto;
   overflow-y: hidden;
-  padding: var(--qk-shelf-lift-room) var(--qk-space-1) var(--qk-space-2);
+  /* Room around the cards for their shadow (the scroller clips), taken back by the margin. */
+  padding: var(--qk-shelf-lift-room) calc(var(--qk-space-1) + var(--qk-shelf-shadow-room))
+    calc(var(--qk-space-2) + var(--qk-shelf-shadow-room));
+  margin: 0 calc(var(--qk-shelf-shadow-room) * -1) calc(var(--qk-shelf-shadow-room) * -1);
   outline: none;
 }
 /* Centered while the cards fit; scrolls from the left edge when they don't. */
@@ -4839,7 +4982,7 @@ ul {
 .source-order__row + .source-order__row {
   border-top: 1px solid var(--qk-color-border);
 }
-.source-order__row:focus-visible {
+:where(html[data-keyboard-focus]) .source-order__row:focus-visible {
   outline: 2px solid var(--qk-color-accent);
   outline-offset: -2px;
 }
@@ -5293,7 +5436,7 @@ ul {
   text-decoration: none;
 }
 .news__item:hover,
-.news__item:focus-visible {
+:where(html[data-keyboard-focus]) .news__item:focus-visible {
   background: var(--qk-color-surface-hover);
 }
 .news__thumb {
@@ -5495,11 +5638,11 @@ ul {
   transition: background var(--qk-duration-fast) var(--qk-easing);
 }
 .splitter:hover::after,
-.splitter:focus-visible::after,
+:where(html[data-keyboard-focus]) .splitter:focus-visible::after,
 .splitter--dragging::after {
   background: var(--qk-color-accent);
 }
-.splitter:focus-visible {
+:where(html[data-keyboard-focus]) .splitter:focus-visible {
   outline: none;
 }
 .splitter__value {
@@ -5751,7 +5894,7 @@ ul {
   cursor: pointer;
 }
 .apps__app:hover,
-.apps__app:focus-visible {
+:where(html[data-keyboard-focus]) .apps__app:focus-visible {
   background: var(--qk-color-surface-hover);
   color: var(--qk-color-text);
 }
@@ -5884,6 +6027,8 @@ ul {
 
 /* Group list: the open view's groups beside the games */
 .group-list {
+  /* Shift-click selects a range of groups, not text. */
+  user-select: none;
   flex: none;
   width: var(--qk-group-list-width);
   min-height: 0;
@@ -5899,10 +6044,10 @@ ul {
   padding: 0;
   list-style: none;
 }
-.group-list__items:focus-visible {
+:where(html[data-keyboard-focus]) .group-list__items:focus-visible {
   outline: none;
 }
-.group-list__items:focus-visible .nav-item--active {
+:where(html[data-keyboard-focus]) .group-list__items:focus-visible .nav-item--active {
   box-shadow: inset 0 0 0 var(--qk-focus-ring-width) var(--qk-color-accent);
 }
 
@@ -6024,7 +6169,7 @@ ul {
   color: var(--qk-color-text);
   background: var(--qk-color-surface-active);
 }
-.segmented__item:focus-visible {
+:where(html[data-keyboard-focus]) .segmented__item:focus-visible {
   outline: var(--qk-focus-ring-width) solid var(--qk-color-accent);
 }
 .stats-legend {
@@ -6606,8 +6751,8 @@ ul {
   color: var(--qk-color-text);
   background: var(--qk-color-surface-active);
 }
-.choice__option:has(input:focus-visible),
-.theme-card:has(input:focus-visible) {
+:where(html[data-keyboard-focus]) .choice__option:has(input:focus-visible),
+:where(html[data-keyboard-focus]) .theme-card:has(input:focus-visible) {
   outline: var(--qk-focus-ring-width) solid var(--qk-color-accent);
   outline-offset: var(--qk-focus-ring-offset);
 }
@@ -6767,7 +6912,8 @@ ul {
 .appearance-actions {
   display: flex;
   justify-content: flex-end;
-  padding: var(--qk-space-2) var(--qk-space-2) 0;
+  padding: var(--qk-space-3);
+  border-top: 1px solid var(--qk-color-border);
 }
 
 /* Theme cards: the pickable part (a label around an invisible radio) and the card's actions. */
@@ -7656,7 +7802,7 @@ ul {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.run-output__text:focus-visible {
+:where(html[data-keyboard-focus]) .run-output__text:focus-visible {
   outline: 2px solid var(--qk-color-accent);
 }
 .run-output__stderr {
@@ -7849,4 +7995,362 @@ ul {
   flex: 1 1 100%;
   flex-wrap: wrap;
   gap: var(--qk-space-2);
+}
+
+/* Pages with several parts show each part as a card. */
+.settings-card {
+  padding: var(--qk-space-4);
+  border: 1px solid var(--qk-color-border);
+  border-radius: var(--qk-radius-lg);
+  background: var(--qk-color-surface);
+}
+.settings-section > .muted:first-child {
+  margin: 0;
+}
+/* A part of a page: its title above, its content in a card. */
+.settings-part__title {
+  margin: var(--qk-space-4) 0 calc(var(--qk-space-2) * -1);
+  padding: 0 calc(var(--qk-space-4) + 1px);
+  font-size: var(--qk-font-size-xs);
+  font-weight: var(--qk-font-weight-bold);
+  letter-spacing: var(--qk-letter-spacing-caps);
+  text-transform: uppercase;
+  color: var(--qk-color-text-muted);
+}
+.settings-card > .check--switch {
+  flex-direction: row-reverse;
+  width: auto;
+  max-width: none;
+  gap: var(--qk-space-3);
+  padding-inline: 0;
+}
+.settings-card > .check--switch > span {
+  flex: 1;
+}
+.plugin-update-check {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-2);
+  padding: var(--qk-space-3);
+  border: 1px solid var(--qk-color-border);
+  border-radius: var(--qk-radius-lg);
+  background: var(--qk-color-surface);
+}
+.plugin-update-check .field__hint {
+  margin: 0;
+}
+
+/* Expand and collapse (details/summary): a chevron that turns, a roomy hit area. */
+.appearance-advanced > summary,
+.script-advanced > summary,
+.theme-editor__group > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--qk-space-2);
+  list-style: none;
+  border-radius: var(--qk-radius-md);
+  cursor: pointer;
+  user-select: none;
+}
+.appearance-advanced > summary::-webkit-details-marker,
+.script-advanced > summary::-webkit-details-marker,
+.theme-editor__group > summary::-webkit-details-marker {
+  display: none;
+}
+.appearance-advanced > summary::before,
+.script-advanced > summary::before,
+.theme-editor__group > summary::before {
+  content: "";
+  flex: none;
+  box-sizing: border-box;
+  width: var(--qk-chevron-size);
+  height: var(--qk-chevron-size);
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--qk-switch-duration);
+}
+.appearance-advanced[open] > summary::before,
+.script-advanced[open] > summary::before,
+.theme-editor__group[open] > summary::before {
+  transform: rotate(45deg);
+}
+.appearance-advanced > summary,
+.script-advanced > summary {
+  padding: var(--qk-space-2) var(--qk-space-3);
+}
+.appearance-advanced > summary:hover,
+.script-advanced > summary:hover,
+.theme-editor__group > summary:hover {
+  background: var(--qk-color-surface-hover);
+  color: var(--qk-color-text);
+}
+.appearance-advanced {
+  border-top: 1px solid var(--qk-color-border);
+}
+.appearance-advanced .settings-row,
+.appearance-advanced .field__hint {
+  padding-inline: var(--qk-space-3);
+}
+label[for="quick-launch-add"] {
+  white-space: nowrap;
+}
+
+/* A row whose control is wide (chips): the label above, the control across the card. */
+.settings-group > .settings-row--stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--qk-space-2);
+}
+.settings-row--stacked > * {
+  max-width: none;
+}
+/* A label with a sub-text under it. */
+.settings-row__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  gap: var(--qk-space-1);
+}
+.settings-row__text .field__hint {
+  margin: 0;
+  padding: 0;
+}
+/* A number input with its unit inside, at the end of the row. */
+.input-unit {
+  position: relative;
+  flex: none;
+}
+.input-unit .input {
+  width: calc(var(--qk-settings-number-width) + 4.5em);
+  padding-right: 5em;
+  appearance: textfield;
+}
+.input-unit .input::-webkit-inner-spin-button,
+.input-unit .input::-webkit-outer-spin-button {
+  appearance: none;
+  margin: 0;
+}
+.input-unit__unit {
+  position: absolute;
+  top: 50%;
+  right: var(--qk-space-3);
+  transform: translateY(-50%);
+  font-size: var(--qk-font-size-sm);
+  color: var(--qk-color-text-muted);
+  pointer-events: none;
+}
+
+.segmented__option--icon {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--qk-space-2);
+}
+.segmented__option--icon .icon {
+  width: var(--qk-icon-size, 1em);
+  height: var(--qk-icon-size, 1em);
+}
+.quick-launch__add {
+  min-width: 0;
+}
+.quick-launch__add select {
+  flex: 1;
+  min-width: 0;
+  max-width: none;
+}
+.quick-launch__add {
+  flex: 1;
+}
+.settings-row:has(> .quick-launch__add) {
+  flex-wrap: wrap;
+}
+.quick-launch__add {
+  flex: 1 1 14rem;
+}
+.quick-launch__add select {
+  flex: 1 1 0;
+  width: 0;
+}
+.quick-launch__add .btn {
+  flex: none;
+}
+.quick-launch__add .settings-row__input {
+  flex: 1 1 0;
+  width: 0;
+}
+
+/* The search in the settings header, with its dropdown of results. */
+.settings__search {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--qk-space-2);
+  margin-bottom: var(--qk-space-3);
+  padding: 0 var(--qk-space-2);
+  border: 1px solid var(--qk-color-border);
+  border-radius: var(--qk-radius-md);
+  background: var(--qk-color-surface);
+  color: var(--qk-color-text-muted);
+}
+.settings__search:focus-within {
+  border-color: var(--qk-color-accent);
+}
+.settings__search-input {
+  flex: 1;
+  min-width: 0;
+  height: var(--qk-control-height);
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--qk-color-text);
+  font: inherit;
+}
+.settings__results {
+  position: absolute;
+  top: calc(100% + var(--qk-space-1));
+  left: 0;
+  z-index: 20;
+  width: max(100%, var(--qk-settings-results-width));
+  display: flex;
+  flex-direction: column;
+  max-height: 60vh;
+  margin: 0;
+  padding: var(--qk-space-1);
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--qk-color-border);
+  border-radius: var(--qk-radius-md);
+  background: var(--qk-color-surface-raised);
+  box-shadow: var(--qk-shadow-popover);
+}
+.settings__result {
+  display: flex;
+  flex-direction: column;
+  padding: var(--qk-space-2) var(--qk-space-3);
+  border-radius: var(--qk-radius-sm);
+  color: var(--qk-color-text);
+  cursor: pointer;
+}
+.settings__result--active {
+  background: var(--qk-color-surface-hover);
+}
+.settings__no-results {
+  padding: var(--qk-space-2) var(--qk-space-3);
+}
+.settings-found {
+  border-radius: var(--qk-radius-sm);
+  animation: settings-found 1.8s ease-out;
+}
+@keyframes settings-found {
+  from {
+    background: color-mix(in srgb, var(--qk-color-accent) 40%, transparent);
+    box-shadow: 0 0 0 var(--qk-space-1) color-mix(in srgb, var(--qk-color-accent) 40%, transparent);
+  }
+  to {
+    background: transparent;
+    box-shadow: 0 0 0 var(--qk-space-1) transparent;
+  }
+}
+
+/* The nav: the search stays on top, the pages scroll below it, the results float over the page. */
+.settings__nav {
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+}
+.settings__pages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Play sessions editor */
+.sessions__add {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--qk-space-3);
+  margin: var(--qk-space-3) 0;
+}
+.sessions__minutes {
+  width: var(--qk-sessions-minutes-width);
+}
+.sessions__summary {
+  margin: var(--qk-space-3) 0 var(--qk-space-2);
+  color: var(--qk-color-text-muted);
+  font-size: var(--qk-font-size-sm);
+}
+.sessions__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--qk-color-border);
+  border-radius: var(--qk-radius-md);
+}
+.sessions__row {
+  display: flex;
+  align-items: center;
+  gap: var(--qk-space-3);
+  /* Tall enough for the inputs of a row being edited, so the list does not jump. */
+  min-height: calc(var(--qk-control-height) + var(--qk-space-2));
+  padding: var(--qk-space-1) var(--qk-space-3);
+  border-bottom: 1px solid var(--qk-color-border);
+}
+.sessions__row:last-child {
+  border-bottom: 0;
+}
+.sessions__when {
+  flex: 1;
+}
+.sessions__length {
+  color: var(--qk-color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.sessions__row--editing .input:first-child {
+  flex: 1;
+}
+.sessions__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--qk-space-3);
+}
+.sessions__foot > :last-child {
+  margin-left: auto;
+}
+.sessions__pager {
+  display: flex;
+  align-items: center;
+  gap: var(--qk-space-3);
+  color: var(--qk-color-text-muted);
+  font-size: var(--qk-font-size-sm);
+}
+
+/* Shelves have no scrollbar: the side with more cards fades out instead. */
+.shelf__scroller {
+  scrollbar-width: none;
+  --qk-shelf-fade-start-size: 0px;
+  --qk-shelf-fade-end-size: 0px;
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    var(--qk-mask-opaque) var(--qk-shelf-fade-start-size),
+    var(--qk-mask-opaque) calc(100% - var(--qk-shelf-fade-end-size)),
+    transparent
+  );
+}
+.shelf__scroller::-webkit-scrollbar {
+  display: none;
+}
+.shelf__scroller--fade-start {
+  --qk-shelf-fade-start-size: var(--qk-shelf-fade-size);
+}
+.shelf__scroller--fade-end {
+  --qk-shelf-fade-end-size: var(--qk-shelf-fade-size);
+}
+
+/* A setting that belongs to the one above it: indented. */
+.settings-group > .check--sub {
+  padding-left: calc(var(--qk-space-3) + var(--qk-space-5));
 }

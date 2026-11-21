@@ -304,6 +304,7 @@
   --qk-split-breakpoint: 1100px;
   --qk-settings-nav-width: 200px;
   --qk-settings-content-width: 720px;
+  --qk-settings-results-width: 340px;
   --qk-settings-select-width: 300px;
   --qk-settings-number-width: 80px;
   /* Settings → Appearance: theme cards with their preview, and the theme option rows. */
@@ -371,6 +372,12 @@
   --qk-home-track-height: 8px;
   --qk-home-store-name-width: 104px;
   --qk-home-min-height: 560px; /* below this the start page scrolls */
+  --qk-home-bg-blur: 28px; /* the last played game's background behind the start page */
+  --qk-home-bg-opacity: 0.3;
+  --qk-shelf-shadow-room: 32px; /* beside and below the cards, for their hover shadow */
+  --qk-shelf-fade-size: 96px; /* the fade at a shelf edge that has more cards */
+  --qk-mask-opaque: #000; /* any opaque color: masks only use its alpha */
+  --qk-sessions-minutes-width: 96px; /* the minutes field of the play sessions editor */
   --qk-shelf-cover-min-width: 90px;
   --qk-shelf-cover-max-height: 300px;
   --qk-shelf-lift-room: 6px; /* room above the cards so a raised card is not clipped */
@@ -385,6 +392,12 @@
   --qk-dialog-width: 520px;
   --qk-toast-width: 340px;
   --qk-focus-ring-width: 2px;
+  --qk-switch-width: 36px;
+  --qk-switch-height: 20px;
+  --qk-switch-knob-inset: 3px;
+  --qk-chevron-size: 7px;
+  --qk-switch-radius: 999px;
+  --qk-switch-duration: 120ms;
   --qk-focus-ring-offset: 2px;
   --qk-details-cover-width: 180px;
   --qk-scrollbar-size: 10px;

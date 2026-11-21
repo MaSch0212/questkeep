@@ -19,6 +19,13 @@ const REPORT_SIGNED_OUT: &str = "REPORT_SIGNED_OUT";
 pub struct LoginWindow {
     /// Window title, e.g. `Sign in to GOG`.
     pub title: &'static str,
+    /// Host names the window may visit (each also covers its subdomains). Empty: any https page,
+    /// which is what the built-in stores use; plugins always list their domains.
+    pub domains: &'static [&'static str],
+    /// A capture rule on top of [`capture`](Self::capture): a navigation to an address starting
+    /// with the rule's prefix hands over one of its query parameters. Plugins use it; the
+    /// built-in stores write a `capture` function instead.
+    pub rule: Option<&'static CaptureRule>,
     /// The window's user agent; `None` keeps the webview's own.
     pub user_agent: Option<&'static str>,
     /// Runs on every page of the login window.
@@ -29,6 +36,14 @@ pub struct LoginWindow {
     /// Recognizes the navigation that carries the result. `Some(value)` cancels the navigation
     /// and hands `value` over; an empty value only cancels it (the store sent no code).
     pub capture: fn(&str) -> Option<String>,
+}
+
+/// The navigation that ends a sign-in, as data: an address starting with `prefix` whose query
+/// holds `param`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CaptureRule {
+    pub prefix: &'static str,
+    pub param: &'static str,
 }
 
 /// A store website session: the page that renews it and the script that reports it.
@@ -69,7 +84,11 @@ pub enum Navigation {
 impl LoginWindow {
     /// Only https pages load; capture addresses never do.
     pub fn navigation(&self, url: &str) -> Navigation {
-        if let Some(value) = (self.capture)(url) {
+        let captured = self
+            .rule
+            .and_then(|rule| capture_param(url, url.starts_with(rule.prefix), rule.param))
+            .or_else(|| (self.capture)(url));
+        if let Some(value) = captured {
             return if value.is_empty() {
                 Navigation::Block
             } else {
@@ -78,12 +97,42 @@ impl LoginWindow {
         }
         if url.starts_with(CAPTURE_PREFIX) {
             Navigation::Block
-        } else if url.starts_with("https://") || url == "about:blank" {
+        } else if url == "about:blank" || (url.starts_with("https://") && self.host_allowed(url)) {
             Navigation::Allow
         } else {
             Navigation::Block
         }
     }
+
+    /// Whether the address is on one of the window's `domains` (any host when there are none).
+    fn host_allowed(&self, url: &str) -> bool {
+        if self.domains.is_empty() {
+            return true;
+        }
+        let Some(host) = https_host(url) else {
+            return false;
+        };
+        self.domains.iter().any(|domain| {
+            let domain = domain.to_ascii_lowercase();
+            host == domain
+                || host
+                    .strip_suffix(&domain)
+                    .is_some_and(|prefix| prefix.ends_with('.'))
+        })
+    }
+}
+
+/// The lowercase host of an `https://` address; `None` for other addresses and for ones with
+/// user info (`https://trusted.com@evil.net/`).
+fn https_host(url: &str) -> Option<String> {
+    let rest = url.strip_prefix("https://")?;
+    let authority = rest.split(['/', '?', '#']).next()?;
+    if authority.is_empty() || authority.contains('@') {
+        return None;
+    }
+    let host = authority.split(':').next()?.to_ascii_lowercase();
+    let host = host.trim_end_matches('.');
+    (!host.is_empty()).then(|| host.to_string())
 }
 
 /// A capture address itself (not a look-alike that merely starts with it).
@@ -109,6 +158,8 @@ mod tests {
     fn window(capture: fn(&str) -> Option<String>) -> LoginWindow {
         LoginWindow {
             title: "Sign in",
+            domains: &[],
+            rule: None,
             user_agent: None,
             script: None,
             web_session: None,
@@ -137,6 +188,55 @@ mod tests {
         ] {
             assert_eq!(w.navigation(url), Navigation::Block, "{url}");
         }
+    }
+
+    #[test]
+    fn a_window_with_domains_visits_only_those_and_their_subdomains() {
+        let w = LoginWindow {
+            domains: &["gog.com"],
+            ..window(|_| None)
+        };
+        for url in [
+            "https://gog.com/",
+            "https://auth.GOG.com/auth?x=1",
+            "https://a.b.gog.com:8443/p#f",
+            "about:blank",
+        ] {
+            assert_eq!(w.navigation(url), Navigation::Allow, "{url}");
+        }
+        for url in [
+            "https://evil.net/",
+            "https://notgog.com/",
+            "https://gog.com.evil.net/",
+            "https://gog.com@evil.net/",
+            "https://evil.net/?next=https://gog.com/",
+            "http://gog.com/",
+        ] {
+            assert_eq!(w.navigation(url), Navigation::Block, "{url}");
+        }
+    }
+
+    #[test]
+    fn a_capture_rule_hands_a_parameter_over() {
+        static RULE: CaptureRule = CaptureRule {
+            prefix: "https://embed.gog.com/ok",
+            param: "code",
+        };
+        let w = LoginWindow {
+            domains: &["gog.com"],
+            rule: Some(&RULE),
+            ..window(|_| None)
+        };
+        assert_eq!(
+            w.navigation("https://embed.gog.com/ok?code=abc"),
+            Navigation::Capture("abc".into())
+        );
+        // No code: the navigation is only cancelled.
+        assert_eq!(w.navigation("https://embed.gog.com/ok"), Navigation::Block);
+        assert_eq!(
+            w.navigation("https://embed.gog.com/other?code=abc"),
+            Navigation::Allow
+        );
     }
 
     #[test]

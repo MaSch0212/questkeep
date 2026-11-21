@@ -10,6 +10,7 @@ pub mod backup;
 pub mod db;
 pub mod error;
 pub mod events;
+pub mod game_state;
 pub mod images;
 pub mod install_folders;
 pub mod installs;

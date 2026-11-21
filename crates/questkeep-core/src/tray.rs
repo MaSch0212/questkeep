@@ -177,6 +177,20 @@ impl TrayGames {
         ids
     }
 
+    /// Replaces every cover path with `swap(game id, path)` (the tray popup shows a smaller copy).
+    pub fn map_covers(mut self, swap: impl Fn(Uuid, PathBuf) -> PathBuf) -> Self {
+        for game in self
+            .recent
+            .iter_mut()
+            .chain(&mut self.favorites)
+            .chain(&mut self.pinned)
+        {
+            let id = game.id;
+            game.cover = game.cover.take().map(|p| swap(id, p));
+        }
+        self
+    }
+
     /// Replaces every icon and cover path with `resolve(path)` (`None` drops it).
     pub fn map_images(mut self, resolve: impl Fn(&std::path::Path) -> Option<PathBuf>) -> Self {
         for game in self

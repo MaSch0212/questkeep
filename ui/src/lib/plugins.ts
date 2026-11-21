@@ -39,10 +39,19 @@ export function sortPlugins(plugins: readonly PluginInfo[]): PluginInfo[] {
 
 /** Whether the plugin asks for access beyond its own folders. */
 export function hasPermissions(plugin: PluginInfo): boolean {
+  return permissionsAsked(plugin.permissions);
+}
+
+/** Whether these permissions ask for anything beyond the plugin's own folders. */
+export function permissionsAsked(permissions: PluginInfo["permissions"]): boolean {
   return (
-    plugin.permissions.read.length > 0 ||
-    plugin.permissions.http.length > 0 ||
-    plugin.permissions.folders.length > 0
+    permissions.read.length > 0 ||
+    permissions.http.length > 0 ||
+    permissions.folders.length > 0 ||
+    permissions.filesystem ||
+    permissions.registry ||
+    permissions.launcher.length > 0 ||
+    permissions.login.length > 0
   );
 }
 
