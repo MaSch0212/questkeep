@@ -10,7 +10,7 @@ const en = {
   filterPlugin: "Questkeep plugin",
   installTitle: "Install this plugin?",
   installMessage:
-    "Plugins are third-party code. A store runs sandboxed: it can only read the folders and reach the web hosts it declares. A store that declares access to all files or the registry can read your whole PC and send what it finds to the web hosts it lists, so check those hosts below. The games a store reports are started as programs on this computer. An extension is JavaScript that runs inside the app with the app's own rights. A theme is CSS that restyles the app. Only install plugins you trust.",
+    "Plugins are third-party code. A store runs sandboxed: it can only read the folders and reach the web hosts it declares. A store that declares access to all files or the registry can read your whole PC and send what it finds to the web hosts it lists, so check those hosts above. The games a store reports are started as programs on this computer. An extension is JavaScript that runs inside the app with the app's own rights. A theme is CSS that restyles the app. Only install plugins you trust.",
   installConfirm: "Install",
   installReplaces: "Replaces the installed version {version}.",
   installThemes: "Themes",
@@ -105,7 +105,7 @@ export const settingsPlugins: Translations<typeof en> = {
     filterPlugin: "Questkeep-Plugin",
     installTitle: "Dieses Plugin installieren?",
     installMessage:
-      "Plugins sind Code von Dritten. Ein Store läuft in einer Sandbox: Er kann nur die Ordner lesen und die Webhosts erreichen, die er angibt. Ein Store, der Zugriff auf alle Dateien oder die Registry angibt, kann deinen ganzen PC lesen und das Gefundene an die Webhosts senden, die er auflistet – prüfe diese Hosts weiter unten. Die Spiele, die ein Store meldet, werden als Programme auf diesem Computer gestartet. Eine Erweiterung ist JavaScript, das innerhalb der App mit den Rechten der App läuft. Ein Theme ist CSS, das das Aussehen der App verändert. Installiere nur Plugins, denen du vertraust.",
+      "Plugins sind Code von Dritten. Ein Store läuft in einer Sandbox: Er kann nur die Ordner lesen und die Webhosts erreichen, die er angibt. Ein Store, der Zugriff auf alle Dateien oder die Registry angibt, kann deinen ganzen PC lesen und das Gefundene an die Webhosts senden, die er auflistet – prüfe diese Hosts weiter oben. Die Spiele, die ein Store meldet, werden als Programme auf diesem Computer gestartet. Eine Erweiterung ist JavaScript, das innerhalb der App mit den Rechten der App läuft. Ein Theme ist CSS, das das Aussehen der App verändert. Installiere nur Plugins, denen du vertraust.",
     installConfirm: "Installieren",
     installReplaces: "Ersetzt die installierte Version {version}.",
     installThemes: "Themes",
@@ -197,7 +197,7 @@ export const settingsPlugins: Translations<typeof en> = {
     filterPlugin: "Plugin Questkeep",
     installTitle: "Installer ce plugin ?",
     installMessage:
-      "Les plugins sont du code tiers. Une boutique s'exécute dans un bac à sable : elle ne peut lire que les dossiers et joindre que les hôtes web qu'elle déclare. Une boutique qui déclare un accès à tous les fichiers ou au registre peut lire tout votre PC et envoyer ce qu'elle trouve aux hôtes web qu'elle indique, vérifiez donc ces hôtes ci-dessous. Les jeux qu'une boutique signale sont lancés comme des programmes sur cet ordinateur. Une extension est du JavaScript qui s'exécute dans l'application avec les droits de l'application. Un thème est du CSS qui change l'apparence de l'application. N'installez que des plugins de confiance.",
+      "Les plugins sont du code tiers. Une boutique s'exécute dans un bac à sable : elle ne peut lire que les dossiers et joindre que les hôtes web qu'elle déclare. Une boutique qui déclare un accès à tous les fichiers ou au registre peut lire tout votre PC et envoyer ce qu'elle trouve aux hôtes web qu'elle indique, vérifiez donc ces hôtes ci-dessus. Les jeux qu'une boutique signale sont lancés comme des programmes sur cet ordinateur. Une extension est du JavaScript qui s'exécute dans l'application avec les droits de l'application. Un thème est du CSS qui change l'apparence de l'application. N'installez que des plugins de confiance.",
     installConfirm: "Installer",
     installReplaces: "Remplace la version installée {version}.",
     installThemes: "Thèmes",
@@ -291,7 +291,7 @@ export const settingsPlugins: Translations<typeof en> = {
     filterPlugin: "Plugin Questkeep",
     installTitle: "Installare questo plugin?",
     installMessage:
-      "I plugin sono codice di terze parti. Uno store gira in una sandbox: può leggere solo le cartelle e contattare solo gli host web che dichiara. Uno store che dichiara l'accesso a tutti i file o al registro può leggere tutto il tuo PC e inviare ciò che trova agli host web che elenca, quindi controlla questi host qui sotto. I giochi che uno store segnala vengono avviati come programmi su questo computer. Un'estensione è JavaScript che gira dentro l'app con i diritti dell'app. Un tema è CSS che cambia l'aspetto dell'app. Installa solo plugin di cui ti fidi.",
+      "I plugin sono codice di terze parti. Uno store gira in una sandbox: può leggere solo le cartelle e contattare solo gli host web che dichiara. Uno store che dichiara l'accesso a tutti i file o al registro può leggere tutto il tuo PC e inviare ciò che trova agli host web che elenca, quindi controlla questi host qui sopra. I giochi che uno store segnala vengono avviati come programmi su questo computer. Un'estensione è JavaScript che gira dentro l'app con i diritti dell'app. Un tema è CSS che cambia l'aspetto dell'app. Installa solo plugin di cui ti fidi.",
     installConfirm: "Installa",
     installReplaces: "Sostituisce la versione installata {version}.",
     installThemes: "Temi",
@@ -384,7 +384,7 @@ export const settingsPlugins: Translations<typeof en> = {
     filterPlugin: "Complemento de Questkeep",
     installTitle: "¿Instalar este complemento?",
     installMessage:
-      "Los complementos son código de terceros. Una tienda se ejecuta en un entorno aislado: solo puede leer las carpetas y contactar los servidores web que declara. Una tienda que declara acceso a todos los archivos o al registro puede leer todo tu equipo y enviar lo que encuentra a los servidores web que enumera, así que revisa esos servidores más abajo. Los juegos que informa una tienda se inician como programas en este equipo. Una extensión es JavaScript que se ejecuta dentro de la aplicación con los permisos de la aplicación. Un tema es CSS que cambia el aspecto de la aplicación. Instala solo complementos en los que confíes.",
+      "Los complementos son código de terceros. Una tienda se ejecuta en un entorno aislado: solo puede leer las carpetas y contactar los servidores web que declara. Una tienda que declara acceso a todos los archivos o al registro puede leer todo tu equipo y enviar lo que encuentra a los servidores web que enumera, así que revisa esos servidores más arriba. Los juegos que informa una tienda se inician como programas en este equipo. Una extensión es JavaScript que se ejecuta dentro de la aplicación con los permisos de la aplicación. Un tema es CSS que cambia el aspecto de la aplicación. Instala solo complementos en los que confíes.",
     installConfirm: "Instalar",
     installReplaces: "Reemplaza la versión instalada {version}.",
     installThemes: "Temas",
@@ -476,7 +476,7 @@ export const settingsPlugins: Translations<typeof en> = {
     filterPlugin: "Plugin do Questkeep",
     installTitle: "Instalar este plugin?",
     installMessage:
-      "Plugins são código de terceiros. Uma loja roda em um ambiente isolado: só pode ler as pastas e acessar os hosts web que declara. Uma loja que declara acesso a todos os arquivos ou ao registro pode ler todo o seu PC e enviar o que encontra aos hosts web que lista, então confira esses hosts abaixo. Os jogos que uma loja informa são iniciados como programas neste computador. Uma extensão é JavaScript que roda dentro do app com os direitos do app. Um tema é CSS que muda a aparência do app. Instale apenas plugins em que você confia.",
+      "Plugins são código de terceiros. Uma loja roda em um ambiente isolado: só pode ler as pastas e acessar os hosts web que declara. Uma loja que declara acesso a todos os arquivos ou ao registro pode ler todo o seu PC e enviar o que encontra aos hosts web que lista, então confira esses hosts acima. Os jogos que uma loja informa são iniciados como programas neste computador. Uma extensão é JavaScript que roda dentro do app com os direitos do app. Um tema é CSS que muda a aparência do app. Instale apenas plugins em que você confia.",
     installConfirm: "Instalar",
     installReplaces: "Substitui a versão instalada {version}.",
     installThemes: "Temas",
