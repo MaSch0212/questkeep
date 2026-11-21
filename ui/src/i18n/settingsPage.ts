@@ -3,6 +3,9 @@ import type { Translations } from ".";
 const en = {
   settings: "Settings",
   sections: "Settings sections",
+  searchSettings: "Search settings",
+  searchResults: "Search results",
+  noResults: "No settings found",
   loading: "Loading…",
   general: "General",
   appearance: "Appearance",
@@ -46,6 +49,9 @@ export const settingsPage: Translations<typeof en> = {
   de: {
     settings: "Einstellungen",
     sections: "Einstellungsbereiche",
+    searchSettings: "Einstellungen durchsuchen",
+    searchResults: "Suchergebnisse",
+    noResults: "Keine Einstellung gefunden",
     loading: "Wird geladen…",
     general: "Allgemein",
     appearance: "Darstellung",
@@ -85,6 +91,9 @@ export const settingsPage: Translations<typeof en> = {
   fr: {
     settings: "Paramètres",
     sections: "Sections des paramètres",
+    searchSettings: "Rechercher dans les paramètres",
+    searchResults: "Résultats de la recherche",
+    noResults: "Aucun paramètre trouvé",
     loading: "Chargement…",
     general: "Général",
     appearance: "Apparence",
@@ -124,6 +133,9 @@ export const settingsPage: Translations<typeof en> = {
   it: {
     settings: "Impostazioni",
     sections: "Sezioni delle impostazioni",
+    searchSettings: "Cerca nelle impostazioni",
+    searchResults: "Risultati della ricerca",
+    noResults: "Nessuna impostazione trovata",
     loading: "Caricamento…",
     general: "Generali",
     appearance: "Aspetto",
@@ -163,6 +175,9 @@ export const settingsPage: Translations<typeof en> = {
   es: {
     settings: "Configuración",
     sections: "Secciones de la configuración",
+    searchSettings: "Buscar en los ajustes",
+    searchResults: "Resultados de la búsqueda",
+    noResults: "No se encontró ningún ajuste",
     loading: "Cargando…",
     general: "General",
     appearance: "Apariencia",
@@ -202,6 +217,9 @@ export const settingsPage: Translations<typeof en> = {
   pt: {
     settings: "Configurações",
     sections: "Seções das configurações",
+    searchSettings: "Pesquisar nas definições",
+    searchResults: "Resultados da pesquisa",
+    noResults: "Nenhuma definição encontrada",
     loading: "Carregando…",
     general: "Geral",
     appearance: "Aparência",

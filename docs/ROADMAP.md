@@ -83,7 +83,7 @@ play time and last played from its account, and duplicate editions are imported 
 has a Tray group (tray icon choice) and the tray's Quick launch holds store launchers and picked
 apps in your order, dragged into place; the popup's quick launch has 1 to 3 rows and puts entries that do not fit into a menu behind its last tile (...); Explore shows games and apps by default. Apps say Start instead of Play. The window keeps its height when it is closed and reopened.
 
-Settings are restructured: pages grouped under App, Library and System, one page at a time (General, Appearance, Window and tray, Stores and accounts, Organizing, Artwork and metadata, Price comparison, Scripts, Plugins, Backups, Updates and about), settings in cards with switches for the ones that save at once, the content width capped, and Quick launch edited in a dialog.
+Settings are restructured: pages grouped under App, Library and System, one page at a time (General, Appearance, Window and tray, Stores and accounts, Organizing, Artwork and metadata, Price comparison, Scripts, Plugins, Backups, Updates and about), settings in cards with switches for the ones that save at once, the content width capped, Quick launch edited in a dialog, and a search box that jumps to a page or a single setting.
 
 Plugin browser: install and update community plugins from the registry. Questkeep checks for plugin
 updates at start and every 12 hours (switch and "Check now" in Settings > Plugins), keeps the

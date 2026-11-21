@@ -1,7 +1,9 @@
+import SearchIcon from "lucide-solid/icons/search";
 import { createEffect, createMemo, createSignal, For, Show, type Component } from "solid-js";
 import { Dynamic } from "solid-js/web";
 import { translator } from "../../i18n";
 import { settingsPage } from "../../i18n/settingsPage";
+import { searchEntries, type SearchEntry } from "../../lib/settingsSearch";
 import { store } from "../../lib/store";
 import { AboutSection } from "./AboutSection";
 import { AccountsSection } from "./AccountsSection";
@@ -19,6 +21,7 @@ import { PluginsSection } from "./PluginsSection";
 import { PluginUpdateCheck } from "./PluginUpdateCheck";
 import { PriceSitesSection } from "./PriceSitesSection";
 import { ScriptsSection } from "./ScriptsSection";
+import { settingEntries } from "./settingsIndex";
 import { SourcePriority } from "./SourcePriority";
 import { UpdatesSection } from "./UpdatesSection";
 import { createSettingsModel, type SettingsModel } from "./useSettings";
@@ -191,6 +194,25 @@ const visiblePages = () => [
   ...pluginsWithSettings().map(pluginPage),
 ];
 
+/** Scrolls to the text `label` on the page, flashes it and focuses its control. */
+function highlight(label: string) {
+  const root = document.querySelector(".settings__scroll");
+  const found = [...(root?.querySelectorAll<HTMLElement>("label, legend, span, h3, p") ?? [])].find(
+    (el) => el.textContent?.trim() === label,
+  );
+  if (!found) return;
+  found.scrollIntoView?.({ block: "center" });
+  found.classList.add("settings-found");
+  setTimeout(() => found.classList.remove("settings-found"), 1800);
+  const control = found instanceof HTMLLabelElement ? found.control : null;
+  control?.focus({ preventScroll: true });
+}
+
+const pageName = (id: string) => {
+  const page = visiblePages().find((p) => p.id === id);
+  return page ? pageTitle(page) : "";
+};
+
 /** The settings: one page at a time, the pages grouped in the nav. */
 export function SettingsPage() {
   const model = createSettingsModel();
@@ -207,6 +229,22 @@ export function SettingsPage() {
     queueMicrotask(() => document.getElementById(partDomId(id))?.scrollIntoView?.());
   }
 
+  const [query, setQuery] = createSignal("");
+  /** Pages and single settings, in the current language. */
+  const entries = createMemo<SearchEntry[]>(() => [
+    ...visiblePages().map((p) => ({ id: `page:${p.id}`, page: p.id, label: pageTitle(p) })),
+    ...settingEntries(),
+  ]);
+  const results = createMemo(() => searchEntries(entries(), query()));
+
+  /** Opens a search result: its page, scrolled to the setting, which flashes. */
+  function open(entry: SearchEntry) {
+    setQuery("");
+    show(entry.part ?? entry.page);
+    if (entry.id.startsWith("page:")) return;
+    setTimeout(() => highlight(entry.label), 60);
+  }
+
   // A section asked for from elsewhere (a link in the app, or one inside the settings).
   createEffect(() => {
     const section = store.takeSettingsSection();
@@ -220,30 +258,73 @@ export function SettingsPage() {
       </header>
       <div class="settings__body">
         <nav class="settings__nav" aria-label={tr("sections")}>
-          <For each={GROUPS}>
-            {(group) => (
-              <Show when={visiblePages().some((p) => p.group === group)}>
-                <h2 class="settings__group">{tr(GROUP_TITLES[group])}</h2>
-                <ul>
-                  <For each={visiblePages().filter((p) => p.group === group)}>
-                    {(page) => (
-                      <li>
-                        <button
-                          type="button"
-                          class="nav-item"
-                          classList={{ "nav-item--active": current()?.id === page.id }}
-                          aria-current={current()?.id === page.id ? "page" : undefined}
-                          onClick={() => setCurrentId(page.id)}
-                        >
-                          {pageTitle(page)}
-                        </button>
-                      </li>
-                    )}
-                  </For>
-                </ul>
-              </Show>
-            )}
-          </For>
+          <div class="settings__search">
+            <SearchIcon class="icon" aria-hidden="true" />
+            <input
+              type="search"
+              class="settings__search-input"
+              aria-label={tr("searchSettings")}
+              placeholder={tr("searchSettings")}
+              value={query()}
+              onInput={(e) => setQuery(e.currentTarget.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setQuery("");
+                else if (e.key === "Enter") {
+                  const first = results()[0];
+                  if (first) open(first);
+                }
+              }}
+            />
+          </div>
+          <Show when={query().trim() !== ""}>
+            <ul class="settings__results" aria-label={tr("searchResults")}>
+              <For
+                each={results()}
+                fallback={<li class="settings__no-results muted">{tr("noResults")}</li>}
+              >
+                {(entry) => (
+                  <li>
+                    <button
+                      type="button"
+                      class="nav-item settings__result"
+                      onClick={() => open(entry)}
+                    >
+                      <span>{entry.label}</span>
+                      <Show when={!entry.id.startsWith("page:")}>
+                        <small class="muted">{pageName(entry.page)}</small>
+                      </Show>
+                    </button>
+                  </li>
+                )}
+              </For>
+            </ul>
+          </Show>
+          <Show when={query().trim() === ""}>
+            <For each={GROUPS}>
+              {(group) => (
+                <Show when={visiblePages().some((p) => p.group === group)}>
+                  <h2 class="settings__group">{tr(GROUP_TITLES[group])}</h2>
+                  <ul>
+                    <For each={visiblePages().filter((p) => p.group === group)}>
+                      {(page) => (
+                        <li>
+                          <button
+                            type="button"
+                            class="nav-item"
+                            classList={{ "nav-item--active": current()?.id === page.id }}
+                            aria-current={current()?.id === page.id ? "page" : undefined}
+                            onClick={() => setCurrentId(page.id)}
+                          >
+                            {pageTitle(page)}
+                          </button>
+                        </li>
+                      )}
+                    </For>
+                  </ul>
+                </Show>
+              )}
+            </For>
+          </Show>
         </nav>
         <div class="settings__scroll">
           <Show when={current()} keyed>

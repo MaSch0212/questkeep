@@ -574,3 +574,35 @@ describe("Launch automation settings", () => {
     expect(prism ? within(prism).queryByRole("radiogroup") : null).toBeNull();
   });
 });
+
+describe("Settings search", () => {
+  it("finds a setting on another page, opens that page and says when nothing matches", async () => {
+    render(() => <SettingsPage />);
+    const search = screen.getByRole("searchbox", { name: "Search settings" });
+    await fireEvent.input(search, { target: { value: "minimize tray" } });
+    const results = within(screen.getByRole("list", { name: "Search results" }));
+    await fireEvent.click(results.getByRole("button", { name: /Minimize to the tray/ }));
+    // The page holding it is shown, the search is cleared and the pages are back.
+    expect(await screen.findByRole("switch", { name: "Minimize to the tray" })).toBeInTheDocument();
+    expect(search).toHaveValue("");
+    const nav = within(screen.getByRole("navigation", { name: "Settings sections" }));
+    expect(nav.getByRole("button", { name: "Window and tray" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+
+    await fireEvent.input(search, { target: { value: "zzzz" } });
+    expect(screen.getByText("No settings found")).toBeInTheDocument();
+    await fireEvent.keyDown(search, { key: "Escape" });
+    expect(search).toHaveValue("");
+  });
+
+  it("opens the first result with Enter, also for a page name", async () => {
+    render(() => <SettingsPage />);
+    const search = screen.getByRole("searchbox", { name: "Search settings" });
+    await fireEvent.input(search, { target: { value: "backups" } });
+    await fireEvent.keyDown(search, { key: "Enter" });
+    const nav = within(screen.getByRole("navigation", { name: "Settings sections" }));
+    expect(nav.getByRole("button", { name: "Backups" })).toHaveAttribute("aria-current", "page");
+  });
+});

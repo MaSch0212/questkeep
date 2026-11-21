@@ -8154,3 +8154,60 @@ label[for="quick-launch-add"] {
   flex: 1 1 0;
   width: 0;
 }
+
+/* The search at the top of the settings nav, and its results in place of the pages. */
+.settings__search {
+  display: flex;
+  align-items: center;
+  gap: var(--qk-space-2);
+  margin-bottom: var(--qk-space-3);
+  padding: 0 var(--qk-space-2);
+  border: 1px solid var(--qk-color-border);
+  border-radius: var(--qk-radius-md);
+  background: var(--qk-color-surface);
+  color: var(--qk-color-text-muted);
+}
+.settings__search:focus-within {
+  border-color: var(--qk-color-accent);
+}
+.settings__search-input {
+  flex: 1;
+  min-width: 0;
+  height: var(--qk-control-height);
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--qk-color-text);
+  font: inherit;
+}
+.settings__results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--qk-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.settings__result {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+}
+.settings__no-results {
+  padding: var(--qk-space-2) var(--qk-space-3);
+}
+.settings-found {
+  border-radius: var(--qk-radius-sm);
+  animation: settings-found 1.8s ease-out;
+}
+@keyframes settings-found {
+  from {
+    background: color-mix(in srgb, var(--qk-color-accent) 40%, transparent);
+    box-shadow: 0 0 0 var(--qk-space-1) color-mix(in srgb, var(--qk-color-accent) 40%, transparent);
+  }
+  to {
+    background: transparent;
+    box-shadow: 0 0 0 var(--qk-space-1) transparent;
+  }
+}
