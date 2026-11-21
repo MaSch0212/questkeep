@@ -281,90 +281,92 @@ export function SettingsPage() {
     <section class="settings" aria-label={tr("settings")}>
       <header class="topbar">
         <h1 class="topbar__title">{tr("settings")}</h1>
-        <div class="settings__search">
-          <SearchIcon class="icon" aria-hidden="true" />
-          <input
-            type="search"
-            role="combobox"
-            class="settings__search-input"
-            aria-label={tr("searchSettings")}
-            aria-expanded={showList()}
-            aria-controls="settings-search-results"
-            aria-autocomplete="list"
-            aria-activedescendant={
-              showList() && results().length > 0 ? `settings-result-${active()}` : undefined
-            }
-            placeholder={tr("searchSettings")}
-            value={query()}
-            onInput={(e) => {
-              setQuery(e.currentTarget.value);
-              setActive(0);
-              setListOpen(true);
-            }}
-            onFocus={() => setListOpen(true)}
-            onBlur={() => setListOpen(false)}
-            onKeyDown={onSearchKey}
-          />
-          <Show when={showList()}>
-            <ul
-              class="settings__results"
-              id="settings-search-results"
-              role="listbox"
-              aria-label={tr("searchResults")}
-            >
-              <For
-                each={results()}
-                fallback={<li class="settings__no-results muted">{tr("noResults")}</li>}
-              >
-                {(entry, index) => (
-                  <li
-                    id={`settings-result-${index()}`}
-                    role="option"
-                    class="settings__result"
-                    classList={{ "settings__result--active": active() === index() }}
-                    aria-selected={active() === index()}
-                    // Keeps the focus in the box, so the list stays open for the click.
-                    onMouseDown={(e) => e.preventDefault()}
-                    onMouseEnter={() => setActive(index())}
-                    onClick={() => open(entry)}
-                  >
-                    <span>{entry.label}</span>
-                    <Show when={!entry.id.startsWith("page:")}>
-                      <small class="muted">{pageName(entry.page)}</small>
-                    </Show>
-                  </li>
-                )}
-              </For>
-            </ul>
-          </Show>
-        </div>
       </header>
       <div class="settings__body">
         <nav class="settings__nav" aria-label={tr("sections")}>
-          <For each={GROUPS}>
-            {(group) => (
-              <Show when={visiblePages().some((p) => p.group === group)}>
-                <h2 class="settings__group">{tr(GROUP_TITLES[group])}</h2>
-                <ul>
-                  <For each={visiblePages().filter((p) => p.group === group)}>
-                    {(page) => (
-                      <li>
-                        <button
-                          type="button"
-                          class="nav-item"
-                          classList={{ "nav-item--active": current()?.id === page.id }}
-                          aria-current={current()?.id === page.id ? "page" : undefined}
-                          onClick={() => setCurrentId(page.id)}
-                        >
-                          {pageTitle(page)}
-                        </button>
-                      </li>
-                    )}
-                  </For>
-                </ul>
-              </Show>
-            )}
-          </For>
+          <div class="settings__search">
+            <SearchIcon class="icon" aria-hidden="true" />
+            <input
+              type="search"
+              role="combobox"
+              class="settings__search-input"
+              aria-label={tr("searchSettings")}
+              aria-expanded={showList()}
+              aria-controls="settings-search-results"
+              aria-autocomplete="list"
+              aria-activedescendant={
+                showList() && results().length > 0 ? `settings-result-${active()}` : undefined
+              }
+              placeholder={tr("searchSettings")}
+              value={query()}
+              onInput={(e) => {
+                setQuery(e.currentTarget.value);
+                setActive(0);
+                setListOpen(true);
+              }}
+              onFocus={() => setListOpen(true)}
+              onBlur={() => setListOpen(false)}
+              onKeyDown={onSearchKey}
+            />
+            <Show when={showList()}>
+              <ul
+                class="settings__results"
+                id="settings-search-results"
+                role="listbox"
+                aria-label={tr("searchResults")}
+              >
+                <For
+                  each={results()}
+                  fallback={<li class="settings__no-results muted">{tr("noResults")}</li>}
+                >
+                  {(entry, index) => (
+                    <li
+                      id={`settings-result-${index()}`}
+                      role="option"
+                      class="settings__result"
+                      classList={{ "settings__result--active": active() === index() }}
+                      aria-selected={active() === index()}
+                      // Keeps the focus in the box, so the list stays open for the click.
+                      onMouseDown={(e) => e.preventDefault()}
+                      onMouseEnter={() => setActive(index())}
+                      onClick={() => open(entry)}
+                    >
+                      <span>{entry.label}</span>
+                      <Show when={!entry.id.startsWith("page:")}>
+                        <small class="muted">{pageName(entry.page)}</small>
+                      </Show>
+                    </li>
+                  )}
+                </For>
+              </ul>
+            </Show>
+          </div>
+          <div class="settings__pages">
+            <For each={GROUPS}>
+              {(group) => (
+                <Show when={visiblePages().some((p) => p.group === group)}>
+                  <h2 class="settings__group">{tr(GROUP_TITLES[group])}</h2>
+                  <ul>
+                    <For each={visiblePages().filter((p) => p.group === group)}>
+                      {(page) => (
+                        <li>
+                          <button
+                            type="button"
+                            class="nav-item"
+                            classList={{ "nav-item--active": current()?.id === page.id }}
+                            aria-current={current()?.id === page.id ? "page" : undefined}
+                            onClick={() => setCurrentId(page.id)}
+                          >
+                            {pageTitle(page)}
+                          </button>
+                        </li>
+                      )}
+                    </For>
+                  </ul>
+                </Show>
+              )}
+            </For>
+          </div>
         </nav>
         <div class="settings__scroll">
           <Show when={current()} keyed>

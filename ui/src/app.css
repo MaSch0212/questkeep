@@ -8159,10 +8159,10 @@ label[for="quick-launch-add"] {
 .settings__search {
   position: relative;
   display: flex;
-  flex: 0 1 var(--qk-settings-search-width);
+  flex: none;
   align-items: center;
   gap: var(--qk-space-2);
-  margin-left: var(--qk-space-4);
+  margin-bottom: var(--qk-space-3);
   padding: 0 var(--qk-space-2);
   border: 1px solid var(--qk-color-border);
   border-radius: var(--qk-radius-md);
@@ -8185,9 +8185,9 @@ label[for="quick-launch-add"] {
 .settings__results {
   position: absolute;
   top: calc(100% + var(--qk-space-1));
-  right: 0;
   left: 0;
   z-index: 20;
+  width: max(100%, var(--qk-settings-results-width));
   display: flex;
   flex-direction: column;
   max-height: 60vh;
@@ -8227,4 +8227,16 @@ label[for="quick-launch-add"] {
     background: transparent;
     box-shadow: 0 0 0 var(--qk-space-1) transparent;
   }
+}
+
+/* The nav: the search stays on top, the pages scroll below it, the results float over the page. */
+.settings__nav {
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+}
+.settings__pages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
