@@ -10,11 +10,11 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   upgrade:
     uses: questkeep/workflows/.github/workflows/update-toolchain.yml@main
+    secrets: inherit
     with:
       tools: '{"node": "lts", "pnpm": "latest", "rust": "stable"}'
