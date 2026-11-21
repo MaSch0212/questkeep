@@ -3,7 +3,7 @@
 # Versions are pinned exactly so every machine and CI run uses the same toolchain; bump them here.
 [tools]
 node = "26.13.1"
-pnpm = "12.21.0"
+pnpm = "12.22.0"
 # clippy + rustfmt are the quality gates; wasm32-wasip2 builds the example store plugin that the
 # plugin tests load.
 rust = { version = "1.100.0", profile = "minimal", components = "clippy,rustfmt", targets = "wasm32-wasip2" }
