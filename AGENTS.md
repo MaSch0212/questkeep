@@ -177,6 +177,10 @@ ui/src/
   element (shown by `TooltipLayer`), never the native `title` attribute.
 - **Dependencies:** pnpm installs only versions at least 2 days old (`minimumReleaseAge`); Cargo
   has `min-publish-age = "2 days"`. Prefer major-only ranges in `package.json`.
+- **Toolchain pins:** `mise.toml` pins exact versions; `.github/workflows/update-toolchain.yml` (calls
+  `questkeep/workflows`) lists every pinned tool in its `tools` input with a version label (`lts`,
+  `latest` or a prefix). **When you add or remove a tool in `mise.toml`, update that list in the same
+  change**; the workflow fails when a pinned tool is missing from it.
 - **Releases:** changesets in `.changeset/` + the manual Release workflow; see `docs/RELEASING.md`.
   Docs/CI-only changes need no changeset.
 - Record non-obvious choices in `docs/DECISIONS.md` (one or two lines of rationale) and ideas in

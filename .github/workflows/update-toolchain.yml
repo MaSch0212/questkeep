@@ -1,0 +1,20 @@
+name: Update toolchain
+
+# Weekly pull request that bumps the exact versions pinned in mise.toml (releases at least two days
+# old). The logic lives in questkeep/workflows; `tools` maps every tool in mise.toml to a version
+# label (latest, lts or a version prefix). Keep it in sync with mise.toml.
+on:
+  schedule:
+    # Fridays, 13:00 UTC (afternoon in Europe).
+    - cron: "0 13 * * 5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  upgrade:
+    uses: questkeep/workflows/.github/workflows/update-toolchain.yml@main
+    with:
+      tools: '{"node": "lts", "pnpm": "latest", "rust": "stable"}'

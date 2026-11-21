@@ -29,6 +29,12 @@ Short log of choices made while building. Newest at the bottom of each section.
   Questkeep repository. The Visual Studio Build Tools stay a manual `winget` step (README): they need
   administrator rights, a Visual Studio license and several GB, and no maintained mise backend
   installs them. `pnpm deps:rust` still needs a nightly toolchain (`rustup toolchain install nightly`).
+- **mise.toml is bumped by a weekly workflow, not Dependabot** (`update-toolchain.yml`, Fridays 13:00
+  UTC): Dependabot has no mise ecosystem. The logic is a reusable workflow in `questkeep/workflows`
+  that every repository calls with a JSON map of tool to version label. It writes exact pins itself
+  from `mise ls-remote --minimum-release-age 2d` (Node: newest release of the LTS major;
+  `mise upgrade --bump` ignores LTS, jdx/mise#4051), keeping the 2-day minimum age used for npm and
+  Cargo. GITHUB_TOKEN pull requests do not start CI, so reopen the PR to run the checks.
 
 ## Architecture
 
