@@ -29,7 +29,7 @@ wasmtime-wasi = { version = "50.0.1", default-features = false, features = ["p2"
 zip = { version = "9.5.1", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 [dev-dependencies]
-rusqlite = { version = "0.40.2", features = ["bundled"] }
+rusqlite = { version = "0.43.0", features = ["bundled"] }
 tempfile = "3.27.0"
 
 [lints]

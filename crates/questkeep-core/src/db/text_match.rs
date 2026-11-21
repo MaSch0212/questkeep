@@ -73,7 +73,7 @@ pub(super) fn register(conn: &Connection) -> rusqlite::Result<()> {
     )
 }
 
-fn evaluate(ctx: &Context<'_>) -> rusqlite::Result<bool> {
+fn evaluate(ctx: &mut Context<'_>) -> rusqlite::Result<bool> {
     let Some(text) = ctx.get::<Option<String>>(0)? else {
         return Ok(false);
     };

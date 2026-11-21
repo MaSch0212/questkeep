@@ -99,7 +99,7 @@ fn run_query(conn: &Connection, sql: &str, params: &[String]) -> rusqlite::Resul
     if !stmt.readonly() {
         return Err(rusqlite::Error::InvalidQuery);
     }
-    let columns: Vec<String> = stmt.column_names().iter().map(|c| c.to_string()).collect();
+    let columns: Vec<String> = stmt.column_names().map(|c| c.to_string()).collect();
     let mut rows = stmt.query(rusqlite::params_from_iter(params.iter()))?;
     let mut out = Vec::new();
     while let Some(row) = rows.next()? {
