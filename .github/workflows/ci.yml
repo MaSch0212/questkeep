@@ -36,10 +36,12 @@ jobs:
 
       - uses: pnpm/action-setup@v6
 
+      # No `cache: pnpm` on the Windows jobs: setup-node asks pnpm for the store path from the
+      # original checkout (D:), but installs run in the Dev Drive copy, whose store is elsewhere.
+      # The cache never hit, and saving it failed the job's post step.
       - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -111,7 +113,6 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
 
       - uses: dtolnay/rust-toolchain@stable
 
