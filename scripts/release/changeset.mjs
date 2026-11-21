@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Changeset CLI. Dependency-free (Node 24, `node:` built-ins only).
+// Changeset CLI. Dependency-free (Node 26, `node:` built-ins only).
 //
 //   node scripts/release/changeset.mjs add <major|minor|patch> "<summary>"
 //   node scripts/release/changeset.mjs status

@@ -1,8 +1,9 @@
 # Toolchain of this repository, installed by `mise install` (https://mise.jdx.dev).
 # CI uses the same file (jdx/mise-action), so local and CI versions cannot drift.
+# Versions are pinned exactly so every machine and CI run uses the same toolchain; bump them here.
 [tools]
-node = "24"
-pnpm = "10"
+node = "26.13.1"
+pnpm = "12.21.0"
 # clippy + rustfmt are the quality gates; wasm32-wasip2 builds the example store plugin that the
 # plugin tests load.
 rust = { version = "stable", profile = "minimal", components = "clippy,rustfmt", targets = "wasm32-wasip2" }
