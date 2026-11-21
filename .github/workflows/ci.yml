@@ -16,7 +16,6 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-  NODE_VERSION: "24"
 
 jobs:
   # The Windows gates and the Windows release build run as two parallel jobs.
@@ -34,20 +33,11 @@ jobs:
           workspace-copy: true
           trusted-dev-drive: true
 
-      - uses: pnpm/action-setup@v6
-
-      # No `cache: pnpm` on the Windows jobs: setup-node asks pnpm for the store path from the
-      # original checkout (D:), but installs run in the Dev Drive copy, whose store is elsewhere.
-      # The cache never hit, and saving it failed the job's post step.
-      - uses: actions/setup-node@v7
+      # Node, pnpm and Rust (with clippy, rustfmt and wasm32-wasip2) come from mise.toml. The
+      # Dev Drive copy has its own mise.toml, so mise runs there.
+      - uses: jdx/mise-action@v5
         with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy, rustfmt
-          # The plugin tests build the example store plugin.
-          targets: wasm32-wasip2
+          working_directory: ${{ env.DEV_DRIVE_WORKSPACE }}
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -108,13 +98,9 @@ jobs:
           workspace-copy: true
           trusted-dev-drive: true
 
-      - uses: pnpm/action-setup@v6
-
-      - uses: actions/setup-node@v7
+      - uses: jdx/mise-action@v5
         with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - uses: dtolnay/rust-toolchain@stable
+          working_directory: ${{ env.DEV_DRIVE_WORKSPACE }}
 
       # Shared with the release workflow's Windows build, so releases start from a warm cache.
       - uses: Swatinem/rust-cache@v2
@@ -156,18 +142,7 @@ jobs:
             libayatana-appindicator3-dev librsvg2-dev build-essential file \
             libdbus-1-dev pkg-config
 
-      - uses: pnpm/action-setup@v6
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy, rustfmt
-          # The plugin tests build the example store plugin.
-          targets: wasm32-wasip2
+      - uses: jdx/mise-action@v5
 
       - uses: Swatinem/rust-cache@v2
         with:

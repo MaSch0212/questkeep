@@ -23,6 +23,12 @@ Short log of choices made while building. Newest at the bottom of each section.
   `core.autocrlf=true`.
 - **MSVC toolchain on Windows** (Visual Studio Build Tools, VC workload). The machine had none;
   installed via winget at the maintainer's request.
+- **Toolchain is installed by mise (`mise.toml`), not by the `packageManager` field.** One file
+  pins Node, pnpm and Rust (clippy, rustfmt, `wasm32-wasip2`) for contributors and for CI
+  (`jdx/mise-action`), so versions cannot drift between them; the same setup is used in every
+  Questkeep repository. The Visual Studio Build Tools stay a manual `winget` step (README): they need
+  administrator rights, a Visual Studio license and several GB, and no maintained mise backend
+  installs them. `pnpm deps:rust` still needs a nightly toolchain (`rustup toolchain install nightly`).
 
 ## Architecture
 

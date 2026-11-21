@@ -6,6 +6,7 @@ Guide for humans and coding agents working on Questkeep.
 
 | Task | Command |
 |---|---|
+| Install Node, pnpm and Rust (versions in `mise.toml`) | `mise install` |
 | Install JS deps | `pnpm install` |
 | Run the app (dev) | `pnpm dev` (= `tauri dev`) |
 | Build the app | `pnpm build` (= `tauri build`; needs the updater signing key, see `docs/RELEASING.md`) |
@@ -35,6 +36,7 @@ UI-only commands run from `ui/`: `pnpm lint`, `pnpm format`, `pnpm format:check`
 
 ### Windows notes
 
+- Install the VS Build Tools with `winget` (command in the README); mise cannot.
 - Run cargo from PowerShell or cmd, not Git Bash: Git Bash's `link` shadows MSVC's `link.exe`.
 - Requires Visual Studio Build Tools with the C++ workload.
 - Never invoke `python` in scripts: on stock Windows it's a Microsoft Store stub that hangs.

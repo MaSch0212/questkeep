@@ -53,13 +53,12 @@ tutorials for writing theme, extension and store plugins.
 
 ## Building from source
 
-Requirements:
-
-- Rust (stable) and, on Windows, the Visual Studio Build Tools with the C++ workload
-- Node.js 24+ and pnpm 10
-- Linux only: the [Tauri system dependencies](https://tauri.app/start/prerequisites/)
-  (`libwebkit2gtk-4.1-dev`, `librsvg2-dev`, ...) plus `libdbus-1-dev` and `pkg-config` (system
-  keyring for store sign-in)
+Node.js, pnpm and Rust (with clippy, rustfmt and the `wasm32-wasip2` target) are installed and
+pinned by [mise](https://mise.jdx.dev) from [mise.toml](mise.toml); see
+[Setting up as a contributor](#setting-up-as-a-contributor) at the end. Besides those you need a C
+toolchain: the Visual Studio Build Tools on Windows, and on Linux the
+[Tauri system dependencies](https://tauri.app/start/prerequisites/) (`libwebkit2gtk-4.1-dev`,
+`librsvg2-dev`, ...) plus `libdbus-1-dev` and `pkg-config` (system keyring for store sign-in).
 
 ```bash
 pnpm install
@@ -89,3 +88,35 @@ See [AGENTS.md](AGENTS.md) for the full command list, module map and conventions
 
 MIT, see [LICENSE](LICENSE). Questkeep re-implements ideas from Playnite (MIT), see
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## Setting up as a contributor
+
+1. **Install [mise](https://mise.jdx.dev)**, which installs the right Node.js, pnpm and Rust:
+
+   Linux and macOS:
+
+   ```bash
+   curl https://mise.run | sh
+   ```
+
+   macOS with Homebrew: `brew install mise`
+
+   Windows:
+
+   ```powershell
+   winget install jdx.mise
+   ```
+
+   Then [activate mise in your shell](https://mise.jdx.dev/getting-started.html#activate-mise) and
+   open a new terminal.
+
+2. **Run `mise install`** in the repository folder.
+
+3. **Windows only: install the Visual Studio Build Tools** with the C++ workload (needed to
+   compile Rust code; mise cannot install it). In an administrator terminal:
+
+   ```powershell
+   winget install --id Microsoft.VisualStudio.2022.BuildTools --exact --override "--passive --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+   ```
+
+After that, `pnpm install` and `pnpm dev` work.

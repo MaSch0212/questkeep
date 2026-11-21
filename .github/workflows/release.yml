@@ -20,7 +20,6 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-  NODE_VERSION: "24"
 
 jobs:
   prepare:
@@ -41,9 +40,10 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - uses: actions/setup-node@v7
+      # Only Node is needed here.
+      - uses: jdx/mise-action@v5
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          install_args: node
 
       - name: Compute version and notes
         id: plan
@@ -136,14 +136,9 @@ jobs:
             libayatana-appindicator3-dev librsvg2-dev build-essential file patchelf libfuse2 `
             libdbus-1-dev pkg-config
 
-      - uses: pnpm/action-setup@v6
-
-      - uses: actions/setup-node@v7
+      - uses: jdx/mise-action@v5
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-
-      - uses: dtolnay/rust-toolchain@stable
+          working_directory: ${{ env.DEV_DRIVE_WORKSPACE || github.workspace }}
 
       # Shared with CI's release builds on main, so a release starts from a warm cache.
       - uses: Swatinem/rust-cache@v2
@@ -224,9 +219,10 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - uses: actions/setup-node@v7
+      # Only Node is needed here.
+      - uses: jdx/mise-action@v5
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          install_args: node
 
       - name: Download release metadata and bundles
         uses: actions/download-artifact@v8
