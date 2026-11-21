@@ -178,7 +178,8 @@ ui/src/
 - **Releases:** changesets in `.changeset/` + the manual Release workflow; see `docs/RELEASING.md`.
   Docs/CI-only changes need no changeset.
 - Record non-obvious choices in `docs/DECISIONS.md` (one or two lines of rationale) and ideas in
-  `docs/ROADMAP.md`.
+  `docs/ROADMAP.md`. In DECISIONS.md, add the entry at the end of the section for its topic, never at
+  the end of the file (the last section is not a catch-all); start a new `##` section for a new topic.
 - **Roadmap:** when a change finishes a roadmap item or a notable feature, add a short line under
   `## Done in the next release` in `docs/ROADMAP.md` (create the heading above `## Next` if it's
   missing) and drop finished items from Next/Later. Never write a version number there: the
