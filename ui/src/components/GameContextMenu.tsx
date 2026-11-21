@@ -151,7 +151,7 @@ export function GameContextMenu(props: {
   const entries = (): MenuEntry[] => [
     game().installed
       ? {
-          label: running() ? tr("running") : tr("play"),
+          label: running() ? tr("running") : tr(game().kind === "app" ? "start" : "play"),
           icon: iconOf(Play),
           hint: tr("enterKey"),
           disabled: running(),

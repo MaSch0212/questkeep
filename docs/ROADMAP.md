@@ -77,11 +77,13 @@ dialog asks before Escape or a click outside discard changes.
 New store: Meta Horizon Link (the Meta Quest PC app): installed PC VR apps from its library
 folders, owned ones from its local cache without a sign-in, store art, details and PC playtime.
 
-Also: Edit game has a Time played field (a set time wins over store totals) and a Name for
+Also: Edit game has a Time played field (a store only raises it when its total is larger, so 0 plus a sync takes the store's time back) and a Name for
 metadata field (metadata and artwork searches; a trailing "(2010)" becomes the year); EA imports
 play time and last played from its account, and duplicate editions are imported once; Settings
 has a Tray group (tray icon choice) and the tray's Quick launch holds store launchers and picked
-apps in your order; Explore shows games and apps by default.
+apps in your order, dragged into place; the popup's quick launch has 1 to 3 rows and puts entries that do not fit into a menu behind its last tile (...); Explore shows games and apps by default. Apps say Start instead of Play. The window keeps its height when it is closed and reopened.
+
+Settings are restructured: pages grouped under App, Library and System, one page at a time (General, Appearance, Window and tray, Stores and accounts, Organizing, Artwork and metadata, Price comparison, Scripts, Plugins, Backups, Updates and about), settings in cards with switches for the ones that save at once, the content width capped, and Quick launch edited in a dialog.
 
 Plugin browser: install and update community plugins from the registry. Questkeep checks for plugin
 updates at start and every 12 hours (switch and "Check now" in Settings > Plugins), keeps the

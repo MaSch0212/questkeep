@@ -45,9 +45,10 @@ export function StoreOptions(props: {
           <For each={props.options}>
             {(option) => (
               <div class="account__options">
-                <label class="check">
+                <label class="check check--switch">
                   <input
                     type="checkbox"
+                    role="switch"
                     checked={providerFlag(current(), props.providerId, option.key)}
                     onChange={(e) =>
                       void props.model.setProviderOption(

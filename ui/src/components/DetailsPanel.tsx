@@ -539,7 +539,7 @@ export function DetailsPanel(props: DetailsPanelProps) {
                     disabled={running()}
                     onClick={() => void run(() => launchGame(props.game.id))}
                   >
-                    {running() ? tr("running") : tr("play")}
+                    {running() ? tr("running") : tr(props.game.kind === "app" ? "start" : "play")}
                   </button>
                 </Show>
                 <Show when={combined() || (profiles()?.profiles.length ?? 0) > 1}>

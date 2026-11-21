@@ -169,7 +169,8 @@ ui/src/
   both. Commands stay thin; logic goes into core with tests.
 - **UI:** no literal colors/sizes outside `theme.css` and the built-in themes in `ui/src/themes/`
   (the one other sanctioned place); labeled buttons; keyboard paths for every
-  action. Pure logic goes into `lib/` with vitest tests. Tooltips: `data-tooltip="…"` on the
+  action. **Reordering is done by drag and drop only**: a grip handle on the row, no up/down buttons
+  (Alt+Up/Down on the focused row stays as the keyboard path). Pure logic goes into `lib/` with vitest tests. Tooltips: `data-tooltip="…"` on the
   element (shown by `TooltipLayer`), never the native `title` attribute.
 - **Dependencies:** pnpm installs only versions at least 2 days old (`minimumReleaseAge`); Cargo
   has `min-publish-age = "2 days"`. Prefer major-only ranges in `package.json`.

@@ -37,7 +37,7 @@ const SETTINGS: Settings = {
   launcherCloseDelaySeconds: 60,
   launcherCloseMinMinutes: 2,
   systemNotifications: true,
-  tray: { icon: "questkeep", quickLaunch: null },
+  tray: { icon: "questkeep", quickLaunchRows: 3, quickLaunch: null },
   detectExternalLaunches: true,
   showStartPage: true,
   showStatistics: true,

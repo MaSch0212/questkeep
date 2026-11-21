@@ -24,7 +24,7 @@ export function DeveloperSection() {
   }
 
   return (
-    <div>
+    <div class="settings-card">
       <button type="button" class="btn" disabled={seeding()} onClick={() => void seed()}>
         {seeding() ? tr("seeding") : tr("seed")}
       </button>

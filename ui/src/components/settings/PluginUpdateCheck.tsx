@@ -42,9 +42,10 @@ export function PluginUpdateCheck(props: { model: SettingsModel }) {
     <div class="plugin-update-check" data-plugin-update-check>
       <Show when={props.model.settings()}>
         {(current) => (
-          <label class="check">
+          <label class="check check--switch">
             <input
               type="checkbox"
+              role="switch"
               checked={current().checkPluginUpdates}
               aria-describedby="plugin-update-check-hint"
               onChange={(e) =>

@@ -57,106 +57,108 @@ export function PriceSitesSection(props: { model: SettingsModel }) {
   };
 
   return (
-    <div class="price-sites">
+    <>
       <p class="muted">{tr("sitesIntro")}</p>
-      <Show when={sites().length > 0} fallback={<p class="muted">{tr("noSites")}</p>}>
-        <ul class="price-sites__list" aria-label={tr("sitesList")}>
-          <For each={sites()}>
-            {(site, index) => (
-              <li class="price-sites__item">
-                <Globe class="icon" aria-hidden="true" />
-                <span class="price-sites__text">
-                  <span class="price-sites__name">{site.name}</span>
-                  <small class="muted price-sites__url">{site.url}</small>
-                </span>
-                <button
-                  type="button"
-                  class="icon-btn"
-                  aria-label={tr("moveUp", { name: site.name })}
-                  data-tooltip={tr("moveUp", { name: site.name })}
-                  disabled={index() === 0}
-                  onClick={() => save(moveSite(sites(), index(), -1))}
-                >
-                  <ChevronUp class="icon" aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  class="icon-btn"
-                  aria-label={tr("moveDown", { name: site.name })}
-                  data-tooltip={tr("moveDown", { name: site.name })}
-                  disabled={index() === sites().length - 1}
-                  onClick={() => save(moveSite(sites(), index(), 1))}
-                >
-                  <ChevronDown class="icon" aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  class="icon-btn"
-                  aria-label={tr("removeSite", { name: site.name })}
-                  data-tooltip={tr("removeSite", { name: site.name })}
-                  onClick={() => save(sites().filter((_, i) => i !== index()))}
-                >
-                  <Trash class="icon" aria-hidden="true" />
-                </button>
-              </li>
-            )}
-          </For>
-        </ul>
-      </Show>
-      <form class="price-sites__add" onSubmit={add}>
-        <input
-          class="input price-sites__name-input"
-          aria-label={tr("siteName")}
-          placeholder={tr("siteName")}
-          value={name()}
-          onInput={(e) => setName(e.currentTarget.value)}
-        />
-        <input
-          class="input price-sites__address"
-          aria-label={tr("siteAddress")}
-          placeholder="https://isthereanydeal.com/"
-          aria-invalid={problem() !== null}
-          value={address()}
-          onInput={(e) => {
-            setAddress(e.currentTarget.value);
-            setProblem(null);
-          }}
-        />
-        <button type="submit" class="btn">
-          {tr("addSite")}
-        </button>
-      </form>
-      <Show when={problem()}>
-        {(p) => (
-          <p class="error-text" role="alert">
-            {problemText(p())}
+      <div class="price-sites settings-card">
+        <Show when={sites().length > 0} fallback={<p class="muted">{tr("noSites")}</p>}>
+          <ul class="price-sites__list" aria-label={tr("sitesList")}>
+            <For each={sites()}>
+              {(site, index) => (
+                <li class="price-sites__item">
+                  <Globe class="icon" aria-hidden="true" />
+                  <span class="price-sites__text">
+                    <span class="price-sites__name">{site.name}</span>
+                    <small class="muted price-sites__url">{site.url}</small>
+                  </span>
+                  <button
+                    type="button"
+                    class="icon-btn"
+                    aria-label={tr("moveUp", { name: site.name })}
+                    data-tooltip={tr("moveUp", { name: site.name })}
+                    disabled={index() === 0}
+                    onClick={() => save(moveSite(sites(), index(), -1))}
+                  >
+                    <ChevronUp class="icon" aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    class="icon-btn"
+                    aria-label={tr("moveDown", { name: site.name })}
+                    data-tooltip={tr("moveDown", { name: site.name })}
+                    disabled={index() === sites().length - 1}
+                    onClick={() => save(moveSite(sites(), index(), 1))}
+                  >
+                    <ChevronDown class="icon" aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    class="icon-btn"
+                    aria-label={tr("removeSite", { name: site.name })}
+                    data-tooltip={tr("removeSite", { name: site.name })}
+                    onClick={() => save(sites().filter((_, i) => i !== index()))}
+                  >
+                    <Trash class="icon" aria-hidden="true" />
+                  </button>
+                </li>
+              )}
+            </For>
+          </ul>
+        </Show>
+        <form class="price-sites__add" onSubmit={add}>
+          <input
+            class="input price-sites__name-input"
+            aria-label={tr("siteName")}
+            placeholder={tr("siteName")}
+            value={name()}
+            onInput={(e) => setName(e.currentTarget.value)}
+          />
+          <input
+            class="input price-sites__address"
+            aria-label={tr("siteAddress")}
+            placeholder="https://isthereanydeal.com/"
+            aria-invalid={problem() !== null}
+            value={address()}
+            onInput={(e) => {
+              setAddress(e.currentTarget.value);
+              setProblem(null);
+            }}
+          />
+          <button type="submit" class="btn">
+            {tr("addSite")}
+          </button>
+        </form>
+        <Show when={problem()}>
+          {(p) => (
+            <p class="error-text" role="alert">
+              {problemText(p())}
+            </p>
+          )}
+        </Show>
+        <Show when={open().length > 0}>
+          <p class="muted price-sites__suggested">
+            {suggestions()?.region
+              ? tr("suggestedFor", { region: regionName(suggestions()?.region ?? "") })
+              : tr("suggested")}
           </p>
-        )}
-      </Show>
-      <Show when={open().length > 0}>
-        <p class="muted price-sites__suggested">
-          {suggestions()?.region
-            ? tr("suggestedFor", { region: regionName(suggestions()?.region ?? "") })
-            : tr("suggested")}
-        </p>
-        <ul class="price-sites__suggestions" aria-label={tr("suggested")}>
-          <For each={open()}>
-            {(site) => (
-              <li>
-                <button
-                  type="button"
-                  class="btn btn--small btn--with-icon"
-                  data-tooltip={site.url}
-                  onClick={() => save([...sites(), site])}
-                >
-                  <Plus class="icon" aria-hidden="true" />
-                  {site.name}
-                </button>
-              </li>
-            )}
-          </For>
-        </ul>
-      </Show>
-    </div>
+          <ul class="price-sites__suggestions" aria-label={tr("suggested")}>
+            <For each={open()}>
+              {(site) => (
+                <li>
+                  <button
+                    type="button"
+                    class="btn btn--small btn--with-icon"
+                    data-tooltip={site.url}
+                    onClick={() => save([...sites(), site])}
+                  >
+                    <Plus class="icon" aria-hidden="true" />
+                    {site.name}
+                  </button>
+                </li>
+              )}
+            </For>
+          </ul>
+        </Show>
+      </div>
+    </>
   );
 }

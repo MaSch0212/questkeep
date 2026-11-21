@@ -78,116 +78,127 @@ export function BackupsSection(props: { model: SettingsModel }) {
     <Show when={props.model.settings()?.backups} fallback={<p class="muted">{tr("loading")}</p>}>
       {(current) => (
         <div class="form">
-          <label class="check">
-            <input
-              type="checkbox"
-              checked={current().enabled}
-              onChange={(e) => change({ enabled: e.currentTarget.checked })}
-            />
-            <span>{tr("auto")}</span>
-          </label>
-          <div class="settings-row" classList={{ "check--disabled": !current().enabled }}>
-            <label for="backup-frequency">{tr("howOften")}</label>
-            <select
-              id="backup-frequency"
-              class="input settings-row__input"
-              value={current().frequency}
-              disabled={!current().enabled}
-              onChange={(e) => change({ frequency: e.currentTarget.value as BackupFrequency })}
-            >
-              <For each={FREQUENCIES}>{(f) => <option value={f.value}>{tr(f.label)}</option>}</For>
-            </select>
-          </div>
-          <div class="settings-row">
-            <label for="backup-keep">{tr("keep")}</label>
-            <input
-              id="backup-keep"
-              class="input settings-row__number"
-              type="number"
-              min="1"
-              max={MAX_KEEP}
-              value={current().keep}
-              onChange={(e) => {
-                const keep = Math.round(Number(e.currentTarget.value));
-                if (Number.isFinite(keep) && keep >= 1 && keep <= MAX_KEEP) change({ keep });
-                else e.currentTarget.value = String(current().keep);
-              }}
-            />
-          </div>
-          <div class="settings-row">
-            <span id="backup-folder-label">{tr("folder")}</span>
-            <span
-              class="backup-folder"
-              aria-labelledby="backup-folder-label"
-              data-tooltip={folder()}
-            >
-              {folder()}
-            </span>
-            <button type="button" class="btn" onClick={() => void chooseFolder()}>
-              {tr("change")}
-            </button>
-            <Show when={current().folder !== null}>
-              <button type="button" class="btn" onClick={() => change({ folder: null })}>
-                {tr("useDefault")}
+          <fieldset class="fieldset settings-group">
+            <legend class="fieldset__legend">{tr("list")}</legend>
+            <label class="check check--switch">
+              <input
+                type="checkbox"
+                role="switch"
+                checked={current().enabled}
+                onChange={(e) => change({ enabled: e.currentTarget.checked })}
+              />
+              <span>{tr("auto")}</span>
+            </label>
+            <div class="settings-row" classList={{ "check--disabled": !current().enabled }}>
+              <label for="backup-frequency">{tr("howOften")}</label>
+              <select
+                id="backup-frequency"
+                class="input settings-row__input"
+                value={current().frequency}
+                disabled={!current().enabled}
+                onChange={(e) => change({ frequency: e.currentTarget.value as BackupFrequency })}
+              >
+                <For each={FREQUENCIES}>
+                  {(f) => <option value={f.value}>{tr(f.label)}</option>}
+                </For>
+              </select>
+            </div>
+            <div class="settings-row">
+              <label for="backup-keep">{tr("keep")}</label>
+              <input
+                id="backup-keep"
+                class="input settings-row__number"
+                type="number"
+                min="1"
+                max={MAX_KEEP}
+                value={current().keep}
+                onChange={(e) => {
+                  const keep = Math.round(Number(e.currentTarget.value));
+                  if (Number.isFinite(keep) && keep >= 1 && keep <= MAX_KEEP) change({ keep });
+                  else e.currentTarget.value = String(current().keep);
+                }}
+              />
+            </div>
+            <div class="settings-row">
+              <span id="backup-folder-label">{tr("folder")}</span>
+              <span
+                class="backup-folder"
+                aria-labelledby="backup-folder-label"
+                data-tooltip={folder()}
+              >
+                {folder()}
+              </span>
+              <button type="button" class="btn" onClick={() => void chooseFolder()}>
+                {tr("change")}
               </button>
-            </Show>
-          </div>
-          <p class="field__hint">{tr("hint")}</p>
-          <div class="scan-row">
-            <button
-              type="button"
-              class="btn"
-              disabled={store.backupRunning()}
-              onClick={() => void backUpNow()}
-            >
-              <DatabaseBackup class="icon" aria-hidden="true" /> {tr("backUpNow")}
-            </button>
-            <Show when={!store.backupRunning() && backups()[0]}>
-              {(last) => (
-                <span class="muted">
-                  {tr("lastBackup", {
-                    ago: formatAgo(last().createdAt),
-                    size: formatSize(last().size),
-                  })}
-                </span>
-              )}
-            </Show>
-            <Show when={store.backupRunning()}>
-              <span role="status">{store.backgroundWorkLabel()}</span>
-              <button type="button" class="btn" onClick={() => void api.cancelBackup()}>
-                {tr("cancel")}
+              <Show when={current().folder !== null}>
+                <button type="button" class="btn" onClick={() => change({ folder: null })}>
+                  {tr("useDefault")}
+                </button>
+              </Show>
+            </div>
+            <p class="field__hint">{tr("hint")}</p>
+          </fieldset>
+          <div class="settings-card">
+            <div class="scan-row">
+              <button
+                type="button"
+                class="btn"
+                disabled={store.backupRunning()}
+                onClick={() => void backUpNow()}
+              >
+                <DatabaseBackup class="icon" aria-hidden="true" /> {tr("backUpNow")}
               </button>
-            </Show>
-          </div>
-          <Show when={backups().length > 0} fallback={<p class="muted">{tr("none")}</p>}>
-            <ul class="backup-list" aria-label={tr("list")}>
-              <For each={backups()}>
-                {(backup) => (
-                  <li class="backup-list__item">
-                    <span class="backup-list__date" data-tooltip={formatDateTime(backup.createdAt)}>
-                      {formatAgo(backup.createdAt)}
-                    </span>
-                    <span class="muted">
-                      {formatSize(backup.size)}
-                      <Show when={backup.appVersion}>{(v) => ` · Questkeep ${v()}`}</Show>
-                    </span>
-                    <button
-                      type="button"
-                      class="btn btn--small"
-                      disabled={store.backupRunning() || restartPending()}
-                      aria-label={tr("restoreAria", { date: formatDateTime(backup.createdAt) })}
-                      onClick={() => setRestoring(backup)}
-                    >
-                      <ArchiveRestore class="icon" aria-hidden="true" /> {tr("restore")}
-                    </button>
-                  </li>
+              <Show when={!store.backupRunning() && backups()[0]}>
+                {(last) => (
+                  <span class="muted">
+                    {tr("lastBackup", {
+                      ago: formatAgo(last().createdAt),
+                      size: formatSize(last().size),
+                    })}
+                  </span>
                 )}
-              </For>
-            </ul>
-          </Show>
-          <Show when={restartPending()}>
-            <p role="status">{tr("restarting")}</p>
-          </Show>
+              </Show>
+              <Show when={store.backupRunning()}>
+                <span role="status">{store.backgroundWorkLabel()}</span>
+                <button type="button" class="btn" onClick={() => void api.cancelBackup()}>
+                  {tr("cancel")}
+                </button>
+              </Show>
+            </div>
+            <Show when={backups().length > 0} fallback={<p class="muted">{tr("none")}</p>}>
+              <ul class="backup-list" aria-label={tr("list")}>
+                <For each={backups()}>
+                  {(backup) => (
+                    <li class="backup-list__item">
+                      <span
+                        class="backup-list__date"
+                        data-tooltip={formatDateTime(backup.createdAt)}
+                      >
+                        {formatAgo(backup.createdAt)}
+                      </span>
+                      <span class="muted">
+                        {formatSize(backup.size)}
+                        <Show when={backup.appVersion}>{(v) => ` · Questkeep ${v()}`}</Show>
+                      </span>
+                      <button
+                        type="button"
+                        class="btn btn--small"
+                        disabled={store.backupRunning() || restartPending()}
+                        aria-label={tr("restoreAria", { date: formatDateTime(backup.createdAt) })}
+                        onClick={() => setRestoring(backup)}
+                      >
+                        <ArchiveRestore class="icon" aria-hidden="true" /> {tr("restore")}
+                      </button>
+                    </li>
+                  )}
+                </For>
+              </ul>
+            </Show>
+            <Show when={restartPending()}>
+              <p role="status">{tr("restarting")}</p>
+            </Show>
+          </div>
           <Show when={restoring()} keyed>
             {(backup) => (
               <ConfirmDialog

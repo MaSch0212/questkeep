@@ -436,12 +436,13 @@ export function PluginsSection(props: { updateCheck?: JSX.Element }) {
                       )}
                     </Show>
                     <label
-                      class="check"
+                      class="check check--switch"
                       classList={{ "check--disabled": !plugin.sourceExists }}
                       data-tooltip={plugin.sourceExists ? tr("watchHint") : tr("watchGone")}
                     >
                       <input
                         type="checkbox"
+                        role="switch"
                         checked={plugin.watch}
                         disabled={!plugin.sourceExists || working()}
                         onChange={(event) => void setWatch(plugin, event.currentTarget.checked)}

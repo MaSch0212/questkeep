@@ -385,6 +385,12 @@
   --qk-dialog-width: 520px;
   --qk-toast-width: 340px;
   --qk-focus-ring-width: 2px;
+  --qk-switch-width: 36px;
+  --qk-switch-height: 20px;
+  --qk-switch-knob-inset: 3px;
+  --qk-chevron-size: 7px;
+  --qk-switch-radius: 999px;
+  --qk-switch-duration: 120ms;
   --qk-focus-ring-offset: 2px;
   --qk-details-cover-width: 180px;
   --qk-scrollbar-size: 10px;

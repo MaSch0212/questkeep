@@ -179,7 +179,7 @@ describe("AppearanceSection", () => {
       scheme: "dark",
       params: { questkeep: { flat: true, corners: "sharp" }, fjord: { accent: "#123456" } },
     });
-    const flat = await screen.findByRole("checkbox", {
+    const flat = await screen.findByRole("switch", {
       name: "Reduce transparency and shadows",
     });
     const details = flat.closest("details");
@@ -206,7 +206,7 @@ describe("AppearanceSection", () => {
     expect(within(label).getByText("Plugin")).toBeInTheDocument();
     expect(within(label).getByText("by Ada")).toBeInTheDocument();
     expect(card).toHaveAccessibleDescription("Bright lights.");
-    const glow = screen.getByRole("checkbox", { name: "Glow" });
+    const glow = screen.getByRole("switch", { name: "Glow" });
     expect(glow).toHaveAccessibleDescription("Adds a glow.");
     await fireEvent.click(glow);
     await waitFor(() => expect(lastSaved()?.params).toEqual({ "plugin.neon": { glow: true } }));

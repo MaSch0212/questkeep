@@ -484,10 +484,10 @@ describe("PluginsSection", () => {
   it("toggles reloading on change, unless the source is gone", async () => {
     await show(makePlugin(), makePlugin({ id: "gone", name: "Gone", sourceExists: false }));
     vi.mocked(api.setPluginWatch).mockResolvedValue(makePlugin({ watch: true }));
-    const watch = row("Example Store").getByRole("checkbox", { name: "Reload on change" });
+    const watch = row("Example Store").getByRole("switch", { name: "Reload on change" });
     await fireEvent.click(watch);
     await waitFor(() => expect(api.setPluginWatch).toHaveBeenCalledWith("example-store", true));
-    expect(row("Gone").getByRole("checkbox", { name: "Reload on change" })).toBeDisabled();
+    expect(row("Gone").getByRole("switch", { name: "Reload on change" })).toBeDisabled();
   });
 
   it("removes a plugin, optionally with its data", async () => {

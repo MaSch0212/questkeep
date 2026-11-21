@@ -17,9 +17,10 @@ export function ArtworkSection(props: { model: SettingsModel }) {
 
   return (
     <Show when={props.model.settings()} fallback={<p class="muted">{tr("loading")}</p>}>
-      <label class="check">
+      <label class="check check--switch">
         <input
           type="checkbox"
+          role="switch"
           checked={props.model.settings()?.downloadCovers ?? false}
           onChange={(e) => void props.model.toggle("downloadCovers", e.currentTarget.checked)}
         />
